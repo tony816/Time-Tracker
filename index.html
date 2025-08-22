@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>타임시트 - 시간 관리</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>타임시트</h1>
+            <div class="date-selector">
+                <label for="date">날짜:</label>
+                <div class="date-navigation">
+                    <button id="prevDayBtn" class="nav-btn">◀</button>
+                    <button id="todayBtn" class="today-btn">오늘</button>
+                    <button id="nextDayBtn" class="nav-btn">▶</button>
+                </div>
+                <input type="date" id="date" name="date">
+            </div>
+        </header>
+        
+        <main>
+            <div class="timesheet">
+                <div class="header-row">
+                    <div class="planned-label">계획된 활동</div>
+                    <div class="time-label">시간</div>
+                    <div class="actual-label">실제 활동</div>
+                </div>
+                
+                <div class="time-entries" id="timeEntries">
+                    <!-- 시간대별 입력 필드들이 동적으로 생성됩니다 -->
+                </div>
+                
+                <div class="summary">
+                    <div class="summary-row">
+                        <div class="summary-planned" id="totalPlanned">0시간</div>
+                        <div class="summary-label">합계</div>
+                        <div class="summary-actual" id="totalActual">0시간</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <div class="actions">
+            <button id="saveBtn">저장</button>
+            <button id="loadBtn">불러오기</button>
+            <button id="clearBtn">초기화</button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
