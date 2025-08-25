@@ -117,6 +117,7 @@ h1 {
     border-bottom: 2px solid #ccc;
     background-color: white;
     user-select: none;
+    position: relative;
 }
 
 .time-entry:nth-child(even) .time-slot {
@@ -315,65 +316,108 @@ h1 {
 }
 
 .merged-secondary {
-    border: none !important;
-    background: transparent !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
+    background-color: white !important;
+    border: 1px solid #ddd !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    padding: 8px 12px !important;
     margin: 0 !important;
     overflow: hidden !important;
+    position: relative !important;
+    z-index: 1 !important;
+    cursor: pointer !important;
 }
+
 
 .merged-field {
-    border: 2px solid #3498db !important;
-    background-color: #f8f9fa !important;
+    background-color: white !important;
+    border: 1px solid #ddd !important;
+    border-bottom: none !important;
+    align-self: stretch !important;
+    justify-self: stretch !important;
 }
 
-.merged-secondary {
-    background: transparent !important;
+/* 병합된 main 필드가 선택되었을 때 */
+.merged-field.field-selected {
+    background-color: #3498db !important;
+    color: white !important;
     border: none !important;
-    cursor: default !important;
+    margin: 0 !important;
+    padding: 8px 12px !important;
 }
 
-.merged-secondary:focus {
-    outline: none !important;
+/* 병합된 secondary 필드들이 선택되었을 때 파란색 표시 */
+.merged-secondary.field-selected {
+    background-color: #3498db !important;
+    color: white !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 8px 12px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    box-shadow: none !important;
 }
 
-.planned-merged-row {
-    position: relative;
+/* 선택된 병합 필드들의 행에서 하단 border 제거 */
+.has-selected-merged-field {
+    border-bottom: none !important;
 }
 
-.planned-merged-row::after {
+/* 선택된 병합 필드들이 완전히 연결되도록 함 */
+.merged-field.field-selected,
+.merged-secondary.field-selected {
+    position: relative !important;
+}
+
+.merged-field.field-selected::after,
+.merged-secondary.field-selected::after {
     content: '';
     position: absolute;
-    bottom: 0;
+    bottom: -1px;
     left: 0;
-    right: 50%;
-    height: 0;
+    right: 0;
+    height: 1px;
+    background-color: #3498db;
 }
 
-.actual-merged-row {
+/* 병합된 필드가 있는 행의 하단 border를 pseudo-element로 부분적으로 가림 */
+.has-planned-merge {
     position: relative;
 }
 
-.actual-merged-row::before {
+.has-planned-merge::after {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: 50%;
+    bottom: -2px;
+    left: 0;
+    right: calc(50% + 40px); /* 시간 컬럼의 절반 + 여유분 */
+    height: 2px;
+    background-color: white;
+    z-index: 1;
+}
+
+.has-actual-merge {
+    position: relative;
+}
+
+.has-actual-merge::before {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: calc(50% + 40px); /* 시간 컬럼의 절반 + 여유분 */
     right: 0;
-    height: 0;
+    height: 2px;
+    background-color: white;
+    z-index: 1;
 }
 
-.planned-merged-row.actual-merged-row::after,
-.planned-merged-row.actual-merged-row::before {
-    display: none;
+/* 선택 영역을 통으로 덮는 파란 박스 */
+.selection-overlay {
+    position: absolute;
+    background-color: #3498db;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 500; /* merge 버튼(1000)보다 낮게 */
 }
 
-.planned-merged-row {
-    border-bottom: none !important;
-}
-
-.actual-merged-row {
-    border-bottom: none !important;
-}
+/* 병합된 필드의 시각적 표현만 처리 */

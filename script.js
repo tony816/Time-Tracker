@@ -10,6 +10,7 @@ class TimeTracker {
         this.currentColumnType = null;
         this.mergeButton = null;
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
+        this.selectionOverlay = { planned: null, actual: null };
         this.init();
     }
 
@@ -91,14 +92,12 @@ class TimeTracker {
             
             entryDiv.dataset.index = index;
             
-            // 병합 상태는 개별 필드에서 처리 (행 전체가 아닌)
-            
-            // 병합된 필드에 대한 행 구분선 처리
+            // 병합된 필드가 있는 행에 클래스 추가 (해당 열에만 적용)
             if (plannedMergeKey) {
                 const plannedStart = parseInt(plannedMergeKey.split('-')[1]);
                 const plannedEnd = parseInt(plannedMergeKey.split('-')[2]);
                 if (index >= plannedStart && index < plannedEnd) {
-                    entryDiv.classList.add('planned-merged-row');
+                    entryDiv.classList.add('has-planned-merge');
                 }
             }
             
@@ -106,7 +105,7 @@ class TimeTracker {
                 const actualStart = parseInt(actualMergeKey.split('-')[1]);
                 const actualEnd = parseInt(actualMergeKey.split('-')[2]);
                 if (index >= actualStart && index < actualEnd) {
-                    entryDiv.classList.add('actual-merged-row');
+                    entryDiv.classList.add('has-actual-merge');
                 }
             }
             
@@ -114,11 +113,8 @@ class TimeTracker {
             const plannedField = entryDiv.querySelector('.planned-input');
             const actualField = entryDiv.querySelector('.actual-input');
             
-            // 메인 병합 필드이거나 일반 필드일 때만 선택 리스너 추가
-            const hasSelectableField = (plannedField && !plannedField.classList.contains('merged-secondary')) ||
-                                      (actualField && !actualField.classList.contains('merged-secondary'));
-            
-            if (hasSelectableField) {
+            // 모든 필드에 선택 리스너 추가 (병합된 필드 포함)
+            if (plannedField || actualField) {
                 this.attachFieldSelectionListeners(entryDiv, index);
             }
             
@@ -186,6 +182,16 @@ class TimeTracker {
             this.isSelectingActual = false;
             this.dragStartIndex = -1;
             this.currentColumnType = null;
+        });
+
+        // 리사이즈/스크롤 시 오버레이 재계산
+        window.addEventListener('resize', () => {
+            this.updateSelectionOverlay('planned');
+            this.updateSelectionOverlay('actual');
+        });
+        window.addEventListener('scroll', () => {
+            this.updateSelectionOverlay('planned');
+            this.updateSelectionOverlay('actual');
         });
     }
 
@@ -258,38 +264,48 @@ class TimeTracker {
         // 계획된 활동 필드 선택 이벤트
         let plannedMouseMoved = false;
         
-        plannedField.addEventListener('mousedown', (e) => {
-            if (e.target === plannedField && !plannedField.matches(':focus')) {
-                e.preventDefault();
-                plannedMouseMoved = false;
-                this.dragStartIndex = index;
-                this.currentColumnType = 'planned';
-                this.isSelectingPlanned = true;
-            }
-        });
+        if (plannedField) {
+            plannedField.addEventListener('mousedown', (e) => {
+                if (e.target === plannedField && !plannedField.matches(':focus')) {
+                    e.preventDefault();
+                    plannedMouseMoved = false;
+                    this.dragStartIndex = index;
+                    this.currentColumnType = 'planned';
+                    this.isSelectingPlanned = true;
+                }
+            });
+        }
         
-        plannedField.addEventListener('mousemove', (e) => {
-            if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
-                plannedMouseMoved = true;
-            }
-        });
-        
-        plannedField.addEventListener('mouseup', (e) => {
+        if (plannedField) {
+            plannedField.addEventListener('mousemove', (e) => {
+                if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
+                    plannedMouseMoved = true;
+                }
+            });
+            
+            plannedField.addEventListener('mouseup', (e) => {
             if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
                 e.preventDefault();
                 e.stopPropagation();
                 
                 if (!plannedMouseMoved) {
-                    // 단일 클릭 - 복수 선택된 경우 모두 해제, 단일/비선택 상태면 토글
-                    if (this.selectedPlannedFields.size > 1) {
-                        this.clearSelection('planned');
-                    } else if (this.selectedPlannedFields.has(index)) {
-                        // 이미 선택된 필드 클릭 - 해제
-                        this.toggleFieldSelection('planned', index);
+                    // 병합된 필드인지 확인
+                    const mergeKey = this.findMergeKey('planned', index);
+                    if (mergeKey) {
+                        // 병합된 필드 클릭 시 전체 병합 영역 선택
+                        this.selectMergedRange('planned', mergeKey);
                     } else {
-                        // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
-                        this.clearSelection('planned');
-                        this.toggleFieldSelection('planned', index);
+                        // 일반 필드 클릭 처리
+                        if (this.selectedPlannedFields.size > 1) {
+                            this.clearSelection('planned');
+                        } else if (this.selectedPlannedFields.has(index)) {
+                            // 이미 선택된 필드 클릭 - 해제
+                            this.toggleFieldSelection('planned', index);
+                        } else {
+                            // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
+                            this.clearSelection('planned');
+                            this.toggleFieldSelection('planned', index);
+                        }
                     }
                 } else {
                     // 드래그 완료
@@ -303,52 +319,63 @@ class TimeTracker {
                 this.currentColumnType = null;
             }
         });
-        
-        plannedField.addEventListener('mouseenter', (e) => {
-            if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
-                plannedMouseMoved = true;
-                if (!e.ctrlKey && !e.metaKey) {
-                    this.clearSelection('planned');
+            
+            plannedField.addEventListener('mouseenter', (e) => {
+                if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
+                    plannedMouseMoved = true;
+                    if (!e.ctrlKey && !e.metaKey) {
+                        this.clearSelection('planned');
+                    }
+                    this.selectFieldRange('planned', this.dragStartIndex, index);
                 }
-                this.selectFieldRange('planned', this.dragStartIndex, index);
-            }
-        });
+            });
+        }
         
         // 실제 활동 필드 선택 이벤트
         let actualMouseMoved = false;
         
-        actualField.addEventListener('mousedown', (e) => {
-            if (e.target === actualField && !actualField.matches(':focus')) {
-                e.preventDefault();
-                actualMouseMoved = false;
-                this.dragStartIndex = index;
-                this.currentColumnType = 'actual';
-                this.isSelectingActual = true;
-            }
-        });
+        if (actualField) {
+            actualField.addEventListener('mousedown', (e) => {
+                if (e.target === actualField && !actualField.matches(':focus')) {
+                    e.preventDefault();
+                    actualMouseMoved = false;
+                    this.dragStartIndex = index;
+                    this.currentColumnType = 'actual';
+                    this.isSelectingActual = true;
+                }
+            });
+        }
         
-        actualField.addEventListener('mousemove', (e) => {
-            if (this.isSelectingActual && this.currentColumnType === 'actual') {
-                actualMouseMoved = true;
-            }
-        });
-        
-        actualField.addEventListener('mouseup', (e) => {
+        if (actualField) {
+            actualField.addEventListener('mousemove', (e) => {
+                if (this.isSelectingActual && this.currentColumnType === 'actual') {
+                    actualMouseMoved = true;
+                }
+            });
+            
+            actualField.addEventListener('mouseup', (e) => {
             if (e.target === actualField && !actualField.matches(':focus') && this.currentColumnType === 'actual') {
                 e.preventDefault();
                 e.stopPropagation();
                 
                 if (!actualMouseMoved) {
-                    // 단일 클릭 - 복수 선택된 경우 모두 해제, 단일/비선택 상태면 토글
-                    if (this.selectedActualFields.size > 1) {
-                        this.clearSelection('actual');
-                    } else if (this.selectedActualFields.has(index)) {
-                        // 이미 선택된 필드 클릭 - 해제
-                        this.toggleFieldSelection('actual', index);
+                    // 병합된 필드인지 확인
+                    const mergeKey = this.findMergeKey('actual', index);
+                    if (mergeKey) {
+                        // 병합된 필드 클릭 시 전체 병합 영역 선택
+                        this.selectMergedRange('actual', mergeKey);
                     } else {
-                        // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
-                        this.clearSelection('actual');
-                        this.toggleFieldSelection('actual', index);
+                        // 일반 필드 클릭 처리
+                        if (this.selectedActualFields.size > 1) {
+                            this.clearSelection('actual');
+                        } else if (this.selectedActualFields.has(index)) {
+                            // 이미 선택된 필드 클릭 - 해제
+                            this.toggleFieldSelection('actual', index);
+                        } else {
+                            // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
+                            this.clearSelection('actual');
+                            this.toggleFieldSelection('actual', index);
+                        }
                     }
                 } else {
                     // 드래그 완료
@@ -362,16 +389,17 @@ class TimeTracker {
                 this.currentColumnType = null;
             }
         });
-        
-        actualField.addEventListener('mouseenter', (e) => {
-            if (this.isSelectingActual && this.currentColumnType === 'actual' && this.dragStartIndex !== index) {
-                actualMouseMoved = true;
-                if (!e.ctrlKey && !e.metaKey) {
-                    this.clearSelection('actual');
+            
+            actualField.addEventListener('mouseenter', (e) => {
+                if (this.isSelectingActual && this.currentColumnType === 'actual' && this.dragStartIndex !== index) {
+                    actualMouseMoved = true;
+                    if (!e.ctrlKey && !e.metaKey) {
+                        this.clearSelection('actual');
+                    }
+                    this.selectFieldRange('actual', this.dragStartIndex, index);
                 }
-                this.selectFieldRange('actual', this.dragStartIndex, index);
-            }
-        });
+            });
+        }
     }
 
     startFieldSelection(type, index, e) {
@@ -422,6 +450,7 @@ class TimeTracker {
         }
         
         this.showMergeButton(type);
+        this.updateSelectionOverlay(type);
     }
     
     clearSelection(type) {
@@ -430,6 +459,10 @@ class TimeTracker {
                 const field = document.querySelector(`[data-index="${index}"] .planned-input`);
                 if (field) {
                     field.classList.remove('field-selected');
+                    const row = field.closest('.time-entry');
+                    if (row) {
+                        row.classList.remove('has-selected-merged-field');
+                    }
                 }
             });
             this.selectedPlannedFields.clear();
@@ -438,17 +471,24 @@ class TimeTracker {
                 const field = document.querySelector(`[data-index="${index}"] .actual-input`);
                 if (field) {
                     field.classList.remove('field-selected');
+                    const row = field.closest('.time-entry');
+                    if (row) {
+                        row.classList.remove('has-selected-merged-field');
+                    }
                 }
             });
             this.selectedActualFields.clear();
         }
         this.hideMergeButton();
+        this.removeSelectionOverlay(type);
     }
     
     clearAllSelections() {
         this.clearSelection('planned');
         this.clearSelection('actual');
         this.hideMergeButton();
+        this.removeSelectionOverlay('planned');
+        this.removeSelectionOverlay('actual');
     }
     
     showMergeButton(type) {
@@ -467,14 +507,30 @@ class TimeTracker {
                 const startRect = startField.getBoundingClientRect();
                 const endRect = endField.getBoundingClientRect();
                 
-                // 선택된 전체 영역의 정확한 중심 계산
-                const areaLeft = startRect.left;
-                const areaRight = endRect.left + endRect.width;
-                const areaTop = startRect.top;
-                const areaBottom = endRect.top + endRect.height;
+                let centerX, centerY;
                 
-                const centerX = (areaLeft + areaRight) / 2;
-                const centerY = (areaTop + areaBottom) / 2;
+                // 선택된 셀의 개수에 따른 중심축 계산
+                const selectedCount = selectedIndices.length;
+                
+                if (selectedCount % 2 === 1) {
+                    // 홀수 개: 중간 셀의 중심축에 위치
+                    const middleIndex = selectedIndices[Math.floor(selectedCount / 2)];
+                    const middleField = document.querySelector(`[data-index="${middleIndex}"] .${type}-input`);
+                    const middleRect = middleField.getBoundingClientRect();
+                    centerX = middleRect.left + (middleRect.width / 2);
+                    centerY = middleRect.top + (middleRect.height / 2);
+                } else {
+                    // 짝수 개: 중간 두 셀 사이의 구분선 중심에 위치
+                    const midIndex1 = Math.floor(selectedCount / 2) - 1;
+                    const midIndex2 = Math.floor(selectedCount / 2);
+                    const field1 = document.querySelector(`[data-index="${selectedIndices[midIndex1]}"] .${type}-input`);
+                    const field2 = document.querySelector(`[data-index="${selectedIndices[midIndex2]}"] .${type}-input`);
+                    const rect1 = field1.getBoundingClientRect();
+                    const rect2 = field2.getBoundingClientRect();
+                    
+                    centerX = (rect1.left + rect1.width / 2 + rect2.left + rect2.width / 2) / 2;
+                    centerY = (rect1.bottom + rect2.top) / 2; // 두 셀 사이의 경계선
+                }
                 
                 this.hideMergeButton();
                 
@@ -553,8 +609,8 @@ class TimeTracker {
         const end = parseInt(endStr);
         
         if (index === start) {
-            // 첫 번째 셀에만 병합된 필드 표시
-            return `<input type="text" class="input-field ${type}-input merged-field" 
+            // 첫 번째 셀에 병합된 메인 필드 표시 
+            return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
                            data-index="${index}" 
                            data-type="${type}" 
                            data-merge-key="${mergeKey}"
@@ -563,17 +619,105 @@ class TimeTracker {
                            value="${this.mergedFields.get(mergeKey)}"
                            placeholder="">`;
         } else {
-            // 병합된 범위의 다른 셀들은 일반 크기를 유지하되 비활성화
+            // 병합된 범위의 다른 셀들 - 병합된 데이터 표시하고 클릭 가능하게 함
             return `<input type="text" class="input-field ${type}-input merged-secondary" 
                            data-index="${index}" 
                            data-type="${type}" 
                            data-merge-key="${mergeKey}"
-                           value=""
+                           data-merge-start="${start}"
+                           data-merge-end="${end}"
+                           value="${this.mergedFields.get(mergeKey)}"
                            readonly
                            tabindex="-1"
-                           style="background: transparent; border: none; cursor: default;"
+                           style="cursor: pointer;"
                            placeholder="">`;
         }
+    }
+
+    selectMergedRange(type, mergeKey) {
+        const [, startStr, endStr] = mergeKey.split('-');
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        
+        // 해당 타입의 기존 선택만 해제 (다른 타입은 건드리지 않음)
+        this.clearSelection(type);
+        
+        // 병합된 전체 범위 선택 (해당 타입의 열만)
+        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
+        
+        for (let i = start; i <= end; i++) {
+            selectedSet.add(i);
+            const field = document.querySelector(`[data-index="${i}"] .${type}-input`);
+            if (field) {
+                // 모든 병합된 필드(main, secondary 포함)에 선택 스타일 적용
+                field.classList.add('field-selected');
+                // 해당 행에도 선택 표시 클래스 추가
+                const row = field.closest('.time-entry');
+                if (row) {
+                    row.classList.add('has-selected-merged-field');
+                }
+            }
+        }
+        
+        // 병합된 필드는 이미 병합되어 있으므로 병합 버튼을 표시하지 않음
+        // this.showMergeButton(type);
+        this.updateSelectionOverlay(type);
+    }
+
+    ensureSelectionOverlay(type) {
+        if (!this.selectionOverlay[type]) {
+            const el = document.createElement('div');
+            el.className = 'selection-overlay';
+            document.body.appendChild(el);
+            this.selectionOverlay[type] = el;
+        }
+        return this.selectionOverlay[type];
+    }
+
+    removeSelectionOverlay(type) {
+        const el = this.selectionOverlay[type];
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        this.selectionOverlay[type] = null;
+    }
+
+    // 현재 선택 집합을 한 박스로 덮도록 위치/크기 갱신
+    updateSelectionOverlay(type) {
+        const selectedSet = (type === 'planned') ? this.selectedPlannedFields : this.selectedActualFields;
+        if (!selectedSet || selectedSet.size < 1) {
+            this.removeSelectionOverlay(type);
+            return;
+        }
+
+        // 연속 구간 가정(드래그/병합 선택) — 비연속이면 첫~끝 구간으로 처리
+        const idx = Array.from(selectedSet).sort((a,b)=>a-b);
+        const startIndex = idx[0];
+        const endIndex   = idx[idx.length - 1];
+
+        const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
+        const endField   = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
+        if (!startField || !endField) {
+            this.removeSelectionOverlay(type);
+            return;
+        }
+
+        const startRect = startField.getBoundingClientRect();
+        const endRect   = endField.getBoundingClientRect();
+
+        // 하단 행 보더(기본 2px)를 마지막 행까지 덮기
+        const lastRow   = endField.closest('.time-entry');
+        const rowStyle  = lastRow ? window.getComputedStyle(lastRow) : null;
+        const bottomBW  = rowStyle ? parseFloat(rowStyle.borderBottomWidth || '0') : 0;
+
+        const overlay   = this.ensureSelectionOverlay(type);
+        const left      = startRect.left + window.scrollX;
+        const top       = startRect.top  + window.scrollY;
+        const width     = startRect.width; // 같은 열이므로 동일 폭
+        const height    = (endRect.bottom - startRect.top) + bottomBW;
+
+        overlay.style.left   = `${left}px`;
+        overlay.style.top    = `${top}px`;
+        overlay.style.width  = `${width}px`;
+        overlay.style.height = `${height}px`;
     }
 
     showNotification(message) {

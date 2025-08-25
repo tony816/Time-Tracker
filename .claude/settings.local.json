@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/c:\\Users\\tony960816\\Downloads/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
