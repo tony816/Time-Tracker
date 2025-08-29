@@ -118,6 +118,7 @@ class TimeTracker {
                 this.attachFieldSelectionListeners(entryDiv, index);
             }
             
+            this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
         });
     }
@@ -264,8 +265,35 @@ class TimeTracker {
         // 계획된 활동 필드 선택 이벤트
         let plannedMouseMoved = false;
         
+        // --- 계획(왼쪽) 열: 병합 블록 단일 클릭 토글 ---
+        if (plannedField) {
+            plannedField.addEventListener('click', (e) => {
+                const mergeKey = this.findMergeKey('planned', index);
+                if (!mergeKey) return; // 일반 셀은 기존 동작 유지
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (this.isMergeRangeSelected('planned', mergeKey)) {
+                    // 이미 전체 병합 범위가 선택되어 있으면 해제
+                    this.clearSelection('planned');
+                } else {
+                    // 병합 범위 전체를 선택
+                    this.selectMergedRange('planned', mergeKey);
+                }
+            });
+        }
+        
         if (plannedField) {
             plannedField.addEventListener('mousedown', (e) => {
+                const mergedKeyP = this.findMergeKey('planned', index);
+                if (mergedKeyP) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (e.target === plannedField && !plannedField.matches(':focus')) {
                     e.preventDefault();
                     plannedMouseMoved = false;
@@ -278,12 +306,28 @@ class TimeTracker {
         
         if (plannedField) {
             plannedField.addEventListener('mousemove', (e) => {
+                const mergedKeyP = this.findMergeKey('planned', index);
+                if (mergedKeyP) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
                     plannedMouseMoved = true;
                 }
             });
             
             plannedField.addEventListener('mouseup', (e) => {
+            const mergedKeyP = this.findMergeKey('planned', index);
+            if (mergedKeyP) {
+                // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            
             if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -321,6 +365,14 @@ class TimeTracker {
         });
             
             plannedField.addEventListener('mouseenter', (e) => {
+                const mergedKeyP = this.findMergeKey('planned', index);
+                if (mergedKeyP) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
                     plannedMouseMoved = true;
                     if (!e.ctrlKey && !e.metaKey) {
@@ -334,8 +386,33 @@ class TimeTracker {
         // 실제 활동 필드 선택 이벤트
         let actualMouseMoved = false;
         
+        // --- 실제(오른쪽) 열: 병합 블록 단일 클릭 토글 ---
+        if (actualField) {
+            actualField.addEventListener('click', (e) => {
+                const mergeKey = this.findMergeKey('actual', index);
+                if (!mergeKey) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (this.isMergeRangeSelected('actual', mergeKey)) {
+                    this.clearSelection('actual');
+                } else {
+                    this.selectMergedRange('actual', mergeKey);
+                }
+            });
+        }
+        
         if (actualField) {
             actualField.addEventListener('mousedown', (e) => {
+                const mergedKeyA = this.findMergeKey('actual', index);
+                if (mergedKeyA) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (e.target === actualField && !actualField.matches(':focus')) {
                     e.preventDefault();
                     actualMouseMoved = false;
@@ -348,12 +425,28 @@ class TimeTracker {
         
         if (actualField) {
             actualField.addEventListener('mousemove', (e) => {
+                const mergedKeyA = this.findMergeKey('actual', index);
+                if (mergedKeyA) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (this.isSelectingActual && this.currentColumnType === 'actual') {
                     actualMouseMoved = true;
                 }
             });
             
             actualField.addEventListener('mouseup', (e) => {
+            const mergedKeyA = this.findMergeKey('actual', index);
+            if (mergedKeyA) {
+                // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            
             if (e.target === actualField && !actualField.matches(':focus') && this.currentColumnType === 'actual') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -391,6 +484,14 @@ class TimeTracker {
         });
             
             actualField.addEventListener('mouseenter', (e) => {
+                const mergedKeyA = this.findMergeKey('actual', index);
+                if (mergedKeyA) {
+                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                
                 if (this.isSelectingActual && this.currentColumnType === 'actual' && this.dragStartIndex !== index) {
                     actualMouseMoved = true;
                     if (!e.ctrlKey && !e.metaKey) {
@@ -461,7 +562,7 @@ class TimeTracker {
                     field.classList.remove('field-selected');
                     const row = field.closest('.time-entry');
                     if (row) {
-                        row.classList.remove('has-selected-merged-field');
+                        row.classList.remove('selected-merged-planned', 'selected-merged-actual');
                     }
                 }
             });
@@ -473,7 +574,7 @@ class TimeTracker {
                     field.classList.remove('field-selected');
                     const row = field.closest('.time-entry');
                     if (row) {
-                        row.classList.remove('has-selected-merged-field');
+                        row.classList.remove('selected-merged-planned', 'selected-merged-actual');
                     }
                 }
             });
@@ -534,11 +635,15 @@ class TimeTracker {
                 
                 this.hideMergeButton();
                 
+                // 스크롤 오프셋 계산
+                const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+                const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+                
                 this.mergeButton = document.createElement('button');
                 this.mergeButton.className = 'merge-button';
                 this.mergeButton.textContent = '병합';
-                this.mergeButton.style.left = `${centerX - 25}px`;
-                this.mergeButton.style.top = `${centerY - 15}px`;
+                this.mergeButton.style.left = `${centerX + scrollX - 25}px`;
+                this.mergeButton.style.top = `${centerY + scrollY - 15}px`;
                 
                 this.mergeButton.addEventListener('click', () => {
                     this.mergeSelectedFields(type);
@@ -651,10 +756,10 @@ class TimeTracker {
             if (field) {
                 // 모든 병합된 필드(main, secondary 포함)에 선택 스타일 적용
                 field.classList.add('field-selected');
-                // 해당 행에도 선택 표시 클래스 추가
+                // 해당 행에도 선택 표시 클래스 추가 (타입별로)
                 const row = field.closest('.time-entry');
                 if (row) {
-                    row.classList.add('has-selected-merged-field');
+                    row.classList.add(type === 'planned' ? 'selected-merged-planned' : 'selected-merged-actual');
                 }
             }
         }
@@ -668,6 +773,15 @@ class TimeTracker {
         if (!this.selectionOverlay[type]) {
             const el = document.createElement('div');
             el.className = 'selection-overlay';
+            el.dataset.type = type;
+
+            // 중복 바인딩 방지: 항상 최신 핸들러로 교체
+            el.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.clearSelection(type);     // 해당 열(계획/실제)만 해제
+            };
+
             document.body.appendChild(el);
             this.selectionOverlay[type] = el;
         }
@@ -718,6 +832,67 @@ class TimeTracker {
         overlay.style.top    = `${top}px`;
         overlay.style.width  = `${width}px`;
         overlay.style.height = `${height}px`;
+    }
+
+    // 현재 선택 집합이 특정 병합 범위 전체를 정확히 담고 있는지 판정
+    isMergeRangeSelected(type, mergeKey) {
+        const [, startStr, endStr] = mergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        const end   = parseInt(endStr, 10);
+        const set   = (type === 'planned') ? this.selectedPlannedFields : this.selectedActualFields;
+
+        if (set.size !== (end - start + 1)) return false;
+        for (let i = start; i <= end; i++) {
+            if (!set.has(i)) return false;
+        }
+        return true;
+    }
+
+    attachRowWideClickTargets(entryDiv, index) {
+        entryDiv.addEventListener('click', (e) => {
+            // 인풋 자체에서 이미 처리한 클릭은 무시 (인풋 쪽에서 stopPropagation 호출)
+            // 행 바탕을 클릭했을 때만 동작하게 설계
+
+            const plannedField = entryDiv.querySelector('.planned-input');
+            const actualField  = entryDiv.querySelector('.actual-input');
+            if (!plannedField && !actualField) return;
+
+            const rowRect      = entryDiv.getBoundingClientRect();
+            const x = e.clientX, y = e.clientY;
+
+            // 왼쪽(계획) 컬럼 폭 안을 눌렀는지
+            if (plannedField) {
+                const pr = plannedField.getBoundingClientRect();
+                const inPlannedCol = (x >= pr.left && x <= pr.right && y >= rowRect.top && y <= rowRect.bottom);
+                if (inPlannedCol) {
+                    const mk = this.findMergeKey('planned', index);
+                    if (mk) {
+                        e.preventDefault();
+                        e.stopPropagation();      // ← 행에서 처리했으면 더 이상 인풋 핸들러로 가지 않게
+                        // 같은 병합범위가 이미 선택돼 있으면 해제, 아니면 선택
+                        if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
+                        else this.selectMergedRange('planned', mk);
+                        return;
+                    }
+                }
+            }
+
+            // 오른쪽(실제) 컬럼 폭 안을 눌렀는지
+            if (actualField) {
+                const ar = actualField.getBoundingClientRect();
+                const inActualCol = (x >= ar.left && x <= ar.right && y >= rowRect.top && y <= rowRect.bottom);
+                if (inActualCol) {
+                    const mk = this.findMergeKey('actual', index);
+                    if (mk) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (this.isMergeRangeSelected('actual', mk)) this.clearSelection('actual');
+                        else this.selectMergedRange('actual', mk);
+                        return;
+                    }
+                }
+            }
+        });       // bubble 단계 (기본값)
     }
 
     showNotification(message) {

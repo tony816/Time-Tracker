@@ -145,8 +145,10 @@ h1 {
     padding: 8px 12px;
     border: none;
     background: white;
+    display: block;          /* inline 특성 제거 */
     width: 100%;
     height: 100%;
+    min-height: 44px;        /* 행 높이 기준 클릭면적 확보 */
     text-align: center;
     font-size: 16px;
 }
@@ -316,16 +318,25 @@ h1 {
 }
 
 .merged-secondary {
-    background-color: white !important;
-    border: 1px solid #ddd !important;
+    /* 완전 숨김 → 투명 처리로 변경 */
+    opacity: 0;                  /* 화면에는 안 보이지만, 클릭은 받음 */
+    visibility: visible;         /* visibility: hidden 제거 */
+    pointer-events: auto;        /* 클릭 가능 */
+
+    /* 기존 시각적 구분선 제거 유지 */
+    border: none !important;
+    background: transparent !important;
+
+    /* 레이아웃 유지(병합 블록 높이 유지) */
     height: 44px !important;
     min-height: 44px !important;
-    padding: 8px 12px !important;
     margin: 0 !important;
-    overflow: hidden !important;
-    position: relative !important;
-    z-index: 1 !important;
-    cursor: pointer !important;
+    padding: 0 !important;
+
+    /* 포커스/드래그 부작용 방지(커서/캐럿/선택) */
+    caret-color: transparent;
+    user-select: none;
+    outline: none;
 }
 
 
@@ -358,9 +369,33 @@ h1 {
     box-shadow: none !important;
 }
 
-/* 선택된 병합 필드들의 행에서 하단 border 제거 */
-.has-selected-merged-field {
-    border-bottom: none !important;
+/* 선택 중 파란박스 시, 해당 열쪽 하단 경계선만 가리기 */
+.selected-merged-planned {
+    position: relative;
+}
+.selected-merged-planned::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: calc(50% + 40px); /* 시간 컬럼 절반 + 여유 */
+    height: 2px;
+    background: white;
+    z-index: 1;
+}
+
+.selected-merged-actual {
+    position: relative;
+}
+.selected-merged-actual::before {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: calc(50% + 40px);
+    right: 0;
+    height: 2px;
+    background: white;
+    z-index: 1;
 }
 
 /* 선택된 병합 필드들이 완전히 연결되도록 함 */
@@ -416,8 +451,20 @@ h1 {
     position: absolute;
     background-color: #3498db;
     border-radius: 4px;
+    /* 기존: pointer-events: none;  ->  클릭 받을 수 있게 변경 */
+    pointer-events: auto;
+    cursor: pointer;      /* 시각 피드백 */
+    z-index: 500;         /* 병합 버튼(1000)보다 낮게 유지 */
+}
+
+/* 선택/병합 시 내부선을 가리는 모든 pseudo-element는 클릭 비활성화 */
+.selected-merged-planned::after,
+.selected-merged-actual::before,
+.has-planned-merge::after,
+.has-actual-merge::before,
+.merged-field.field-selected::after,
+.merged-secondary.field-selected::after {
     pointer-events: none;
-    z-index: 500; /* merge 버튼(1000)보다 낮게 */
 }
 
 /* 병합된 필드의 시각적 표현만 처리 */
