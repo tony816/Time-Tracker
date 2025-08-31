@@ -313,6 +313,46 @@ h1 {
     background-color: #c0392b;
 }
 
+.undo-button {
+    position: absolute;
+    background-color: #f39c12;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.undo-button:hover {
+    background-color: #e67e22;
+}
+
+.undo-button::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    top: 7px;
+    left: 7px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M2 10 C2 15 6 18 10 18 C14 18 18 17 18 12 C18 7 14 5 10 5 C6 5 4 4 2 2 M2 2 L2 6 M2 2 L6 2' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.undo-button::after {
+    content: none !important;
+}
+
 .merged-field {
     border-bottom: none !important;
 }

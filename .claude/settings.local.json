@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Read(/c:\\Users\\tony960816\\Downloads/**)"
+      "Read(/c:\\Users\\tony960816\\Downloads/**)",
+      "Bash(python3:*)",
+      "WebFetch(domain:cdn-icons-png.flaticon.com)"
     ],
     "deny": [],
     "ask": []

@@ -9,6 +9,7 @@ class TimeTracker {
         this.dragStartIndex = -1;
         this.currentColumnType = null;
         this.mergeButton = null;
+        this.undoButton = null;
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
         this.init();
@@ -189,10 +190,12 @@ class TimeTracker {
         window.addEventListener('resize', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
+            this.hideUndoButton(); // 리사이즈 시 버튼 숨김
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
+            this.hideUndoButton(); // 스크롤 시 버튼 숨김
         });
     }
 
@@ -581,6 +584,7 @@ class TimeTracker {
             this.selectedActualFields.clear();
         }
         this.hideMergeButton();
+        this.hideUndoButton();
         this.removeSelectionOverlay(type);
     }
     
@@ -588,6 +592,7 @@ class TimeTracker {
         this.clearSelection('planned');
         this.clearSelection('actual');
         this.hideMergeButton();
+        this.hideUndoButton();
         this.removeSelectionOverlay('planned');
         this.removeSelectionOverlay('actual');
     }
@@ -661,6 +666,73 @@ class TimeTracker {
         }
     }
     
+    showUndoButton(type, mergeKey) {
+        const [, startStr, endStr] = mergeKey.split('-');
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        
+        // 병합된 영역의 중심 계산
+        const startField = document.querySelector(`[data-index="${start}"] .${type}-input`);
+        const endField = document.querySelector(`[data-index="${end}"] .${type}-input`);
+        
+        if (startField && endField) {
+            const startRect = startField.getBoundingClientRect();
+            const endRect = endField.getBoundingClientRect();
+            
+            // 중심점 계산
+            const centerX = startRect.left + (startRect.width / 2);
+            const centerY = startRect.top + ((endRect.bottom - startRect.top) / 2);
+            
+            this.hideUndoButton();
+            
+            // 스크롤 오프셋 계산
+            const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+            const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+            
+            this.undoButton = document.createElement('button');
+            this.undoButton.className = 'undo-button';
+            this.undoButton.style.left = `${centerX + scrollX - 15}px`;
+            this.undoButton.style.top = `${centerY + scrollY - 15}px`;
+            
+            this.undoButton.addEventListener('click', () => {
+                this.undoMerge(type, mergeKey);
+            });
+            
+            document.body.appendChild(this.undoButton);
+        }
+    }
+    
+    hideUndoButton() {
+        if (this.undoButton) {
+            document.body.removeChild(this.undoButton);
+            this.undoButton = null;
+        }
+    }
+    
+    undoMerge(type, mergeKey) {
+        const [, startStr, endStr] = mergeKey.split('-');
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        
+        // 병합 정보 제거
+        this.mergedFields.delete(mergeKey);
+        
+        // 각 셀을 개별 필드로 복원 (빈 값으로)
+        for (let i = start; i <= end; i++) {
+            if (type === 'planned') {
+                this.timeSlots[i].planned = '';
+            } else {
+                this.timeSlots[i].actual = '';
+            }
+        }
+        
+        // UI 다시 렌더링
+        this.renderTimeEntries();
+        this.clearAllSelections();
+        this.calculateTotals();
+        this.autoSave();
+    }
+
     mergeSelectedFields(type) {
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         
@@ -764,8 +836,8 @@ class TimeTracker {
             }
         }
         
-        // 병합된 필드는 이미 병합되어 있으므로 병합 버튼을 표시하지 않음
-        // this.showMergeButton(type);
+        // 병합된 필드는 이미 병합되어 있으므로 되돌리기 버튼을 표시
+        this.showUndoButton(type, mergeKey);
         this.updateSelectionOverlay(type);
     }
 
