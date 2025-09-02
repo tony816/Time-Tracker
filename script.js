@@ -12,6 +12,7 @@ class TimeTracker {
         this.undoButton = null;
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
+        this.scheduleButton = null;
         this.init();
     }
 
@@ -21,6 +22,7 @@ class TimeTracker {
         this.attachEventListeners();
         this.setCurrentDate();
         this.loadData();
+        this.attachModalEventListeners();
     }
 
     generateTimeSlots() {
@@ -62,12 +64,8 @@ class TimeTracker {
             const entryDiv = document.createElement('div');
             entryDiv.className = 'time-entry';
             
-            // 병합 상태 확인을 위한 클래스 추가
             const plannedMergeKey = this.findMergeKey('planned', index);
             const actualMergeKey = this.findMergeKey('actual', index);
-            
-            // 병합 관련 클래스는 제거 - CSS grid로 처리
-            
             
             const plannedContent = plannedMergeKey ? 
                 this.createMergedField(plannedMergeKey, 'planned', index, slot.planned) :
@@ -93,7 +91,6 @@ class TimeTracker {
             
             entryDiv.dataset.index = index;
             
-            // 병합된 필드가 있는 행에 클래스 추가 (해당 열에만 적용)
             if (plannedMergeKey) {
                 const plannedStart = parseInt(plannedMergeKey.split('-')[1]);
                 const plannedEnd = parseInt(plannedMergeKey.split('-')[2]);
@@ -110,13 +107,12 @@ class TimeTracker {
                 }
             }
             
-            // 병합되지 않은 필드에만 선택 리스너 추가
             const plannedField = entryDiv.querySelector('.planned-input');
             const actualField = entryDiv.querySelector('.actual-input');
             
-            // 모든 필드에 선택 리스너 추가 (병합된 필드 포함)
             if (plannedField || actualField) {
                 this.attachFieldSelectionListeners(entryDiv, index);
+                this.attachCellClickListeners(entryDiv, index);
             }
             
             this.attachRowWideClickTargets(entryDiv, index);
@@ -157,7 +153,6 @@ class TimeTracker {
             }
         });
 
-        // 날짜 네비게이션 버튼 이벤트
         document.getElementById('prevDayBtn').addEventListener('click', () => {
             this.changeDate(-1);
         });
@@ -172,7 +167,6 @@ class TimeTracker {
             this.changeDate(1);
         });
 
-        // 키보드 이벤트
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.clearAllSelections();
@@ -186,16 +180,16 @@ class TimeTracker {
             this.currentColumnType = null;
         });
 
-        // 리사이즈/스크롤 시 오버레이 재계산
         window.addEventListener('resize', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
-            this.hideUndoButton(); // 리사이즈 시 버튼 숨김
+            this.hideUndoButton();
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
-            this.hideUndoButton(); // 스크롤 시 버튼 숨김
+            this.hideUndoButton();
+            this.hideScheduleButton();
         });
     }
 
@@ -219,7 +213,8 @@ class TimeTracker {
     saveData() {
         const data = {
             date: this.currentDate,
-            timeSlots: this.timeSlots
+            timeSlots: this.timeSlots,
+            mergedFields: Object.fromEntries(this.mergedFields)
         };
         
         localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data));
@@ -231,8 +226,14 @@ class TimeTracker {
         if (savedData) {
             const data = JSON.parse(savedData);
             this.timeSlots = data.timeSlots || this.timeSlots;
+            if (data.mergedFields) {
+                this.mergedFields = new Map(Object.entries(data.mergedFields));
+            } else {
+                this.mergedFields.clear();
+            }
         } else {
             this.generateTimeSlots();
+            this.mergedFields.clear();
         }
         
         this.renderTimeEntries();
@@ -248,6 +249,7 @@ class TimeTracker {
 
     clearData() {
         this.generateTimeSlots();
+        this.mergedFields.clear();
         this.renderTimeEntries();
         this.calculateTotals();
         localStorage.removeItem(`timesheet_${this.currentDate}`);
@@ -265,131 +267,22 @@ class TimeTracker {
         const plannedField = entryDiv.querySelector('.planned-input');
         const actualField = entryDiv.querySelector('.actual-input');
         
-        // 계획된 활동 필드 선택 이벤트
-        let plannedMouseMoved = false;
-        
-        // --- 계획(왼쪽) 열: 병합 블록 단일 클릭 토글 ---
         if (plannedField) {
             plannedField.addEventListener('click', (e) => {
                 const mergeKey = this.findMergeKey('planned', index);
-                if (!mergeKey) return; // 일반 셀은 기존 동작 유지
+                if (!mergeKey) return;
 
                 e.preventDefault();
                 e.stopPropagation();
 
                 if (this.isMergeRangeSelected('planned', mergeKey)) {
-                    // 이미 전체 병합 범위가 선택되어 있으면 해제
                     this.clearSelection('planned');
                 } else {
-                    // 병합 범위 전체를 선택
+                    this.clearAllSelections();
                     this.selectMergedRange('planned', mergeKey);
                 }
             });
         }
-        
-        if (plannedField) {
-            plannedField.addEventListener('mousedown', (e) => {
-                const mergedKeyP = this.findMergeKey('planned', index);
-                if (mergedKeyP) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-                
-                if (e.target === plannedField && !plannedField.matches(':focus')) {
-                    e.preventDefault();
-                    plannedMouseMoved = false;
-                    this.dragStartIndex = index;
-                    this.currentColumnType = 'planned';
-                    this.isSelectingPlanned = true;
-                }
-            });
-        }
-        
-        if (plannedField) {
-            plannedField.addEventListener('mousemove', (e) => {
-                const mergedKeyP = this.findMergeKey('planned', index);
-                if (mergedKeyP) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-                
-                if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
-                    plannedMouseMoved = true;
-                }
-            });
-            
-            plannedField.addEventListener('mouseup', (e) => {
-            const mergedKeyP = this.findMergeKey('planned', index);
-            if (mergedKeyP) {
-                // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            
-            if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (!plannedMouseMoved) {
-                    // 병합된 필드인지 확인
-                    const mergeKey = this.findMergeKey('planned', index);
-                    if (mergeKey) {
-                        // 병합된 필드 클릭 시 전체 병합 영역 선택
-                        this.selectMergedRange('planned', mergeKey);
-                    } else {
-                        // 일반 필드 클릭 처리
-                        if (this.selectedPlannedFields.size > 1) {
-                            this.clearSelection('planned');
-                        } else if (this.selectedPlannedFields.has(index)) {
-                            // 이미 선택된 필드 클릭 - 해제
-                            this.toggleFieldSelection('planned', index);
-                        } else {
-                            // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
-                            this.clearSelection('planned');
-                            this.toggleFieldSelection('planned', index);
-                        }
-                    }
-                } else {
-                    // 드래그 완료
-                    if (!e.ctrlKey && !e.metaKey) {
-                        this.clearSelection('planned');
-                    }
-                    this.selectFieldRange('planned', this.dragStartIndex, index);
-                }
-                
-                this.isSelectingPlanned = false;
-                this.currentColumnType = null;
-            }
-        });
-            
-            plannedField.addEventListener('mouseenter', (e) => {
-                const mergedKeyP = this.findMergeKey('planned', index);
-                if (mergedKeyP) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-                
-                if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
-                    plannedMouseMoved = true;
-                    if (!e.ctrlKey && !e.metaKey) {
-                        this.clearSelection('planned');
-                    }
-                    this.selectFieldRange('planned', this.dragStartIndex, index);
-                }
-            });
-        }
-        
-        // 실제 활동 필드 선택 이벤트
-        let actualMouseMoved = false;
-        
-        // --- 실제(오른쪽) 열: 병합 블록 단일 클릭 토글 ---
         if (actualField) {
             actualField.addEventListener('click', (e) => {
                 const mergeKey = this.findMergeKey('actual', index);
@@ -401,21 +294,69 @@ class TimeTracker {
                 if (this.isMergeRangeSelected('actual', mergeKey)) {
                     this.clearSelection('actual');
                 } else {
+                    this.clearAllSelections();
                     this.selectMergedRange('actual', mergeKey);
                 }
             });
         }
-        
-        if (actualField) {
-            actualField.addEventListener('mousedown', (e) => {
-                const mergedKeyA = this.findMergeKey('actual', index);
-                if (mergedKeyA) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+
+        let plannedMouseMoved = false;
+        if (plannedField) {
+            plannedField.addEventListener('mousedown', (e) => {
+                if (this.findMergeKey('planned', index)) return;
+                if (e.target === plannedField && !plannedField.matches(':focus')) {
+                    e.preventDefault();
+                    plannedMouseMoved = false;
+                    this.dragStartIndex = index;
+                    this.currentColumnType = 'planned';
+                    this.isSelectingPlanned = true;
+                }
+            });
+            plannedField.addEventListener('mousemove', (e) => {
+                if (this.findMergeKey('planned', index)) return;
+                if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
+                    plannedMouseMoved = true;
+                }
+            });
+            plannedField.addEventListener('mouseup', (e) => {
+                if (this.findMergeKey('planned', index)) return;
+                if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
                     e.preventDefault();
                     e.stopPropagation();
-                    return;
+                    
+                    if (!plannedMouseMoved) {
+                        if (this.selectedPlannedFields.has(index) && this.selectedPlannedFields.size === 1) {
+                            this.clearSelection('planned');
+                        } else {
+                            this.clearAllSelections();
+                            this.selectFieldRange('planned', index, index);
+                        }
+                    } else {
+                        if (!e.ctrlKey && !e.metaKey) {
+                            this.clearSelection('planned');
+                        }
+                        this.selectFieldRange('planned', this.dragStartIndex, index);
+                    }
+                    this.isSelectingPlanned = false;
+                    this.currentColumnType = null;
                 }
-                
+            });
+            plannedField.addEventListener('mouseenter', (e) => {
+                if (this.findMergeKey('planned', index)) return;
+                if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
+                    plannedMouseMoved = true;
+                    if (!e.ctrlKey && !e.metaKey) {
+                        this.clearSelection('planned');
+                    }
+                    this.selectFieldRange('planned', this.dragStartIndex, index);
+                }
+            });
+        }
+        
+        let actualMouseMoved = false;
+        if (actualField) {
+            actualField.addEventListener('mousedown', (e) => {
+                if (this.findMergeKey('actual', index)) return;
                 if (e.target === actualField && !actualField.matches(':focus')) {
                     e.preventDefault();
                     actualMouseMoved = false;
@@ -424,77 +365,37 @@ class TimeTracker {
                     this.isSelectingActual = true;
                 }
             });
-        }
-        
-        if (actualField) {
             actualField.addEventListener('mousemove', (e) => {
-                const mergedKeyA = this.findMergeKey('actual', index);
-                if (mergedKeyA) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-                
+                if (this.findMergeKey('actual', index)) return;
                 if (this.isSelectingActual && this.currentColumnType === 'actual') {
                     actualMouseMoved = true;
                 }
             });
-            
             actualField.addEventListener('mouseup', (e) => {
-            const mergedKeyA = this.findMergeKey('actual', index);
-            if (mergedKeyA) {
-                // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            
-            if (e.target === actualField && !actualField.matches(':focus') && this.currentColumnType === 'actual') {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (!actualMouseMoved) {
-                    // 병합된 필드인지 확인
-                    const mergeKey = this.findMergeKey('actual', index);
-                    if (mergeKey) {
-                        // 병합된 필드 클릭 시 전체 병합 영역 선택
-                        this.selectMergedRange('actual', mergeKey);
-                    } else {
-                        // 일반 필드 클릭 처리
-                        if (this.selectedActualFields.size > 1) {
-                            this.clearSelection('actual');
-                        } else if (this.selectedActualFields.has(index)) {
-                            // 이미 선택된 필드 클릭 - 해제
-                            this.toggleFieldSelection('actual', index);
-                        } else {
-                            // 새로운 필드 클릭 - 기존 선택 해제하고 새로 선택
-                            this.clearSelection('actual');
-                            this.toggleFieldSelection('actual', index);
-                        }
-                    }
-                } else {
-                    // 드래그 완료
-                    if (!e.ctrlKey && !e.metaKey) {
-                        this.clearSelection('actual');
-                    }
-                    this.selectFieldRange('actual', this.dragStartIndex, index);
-                }
-                
-                this.isSelectingActual = false;
-                this.currentColumnType = null;
-            }
-        });
-            
-            actualField.addEventListener('mouseenter', (e) => {
-                const mergedKeyA = this.findMergeKey('actual', index);
-                if (mergedKeyA) {
-                    // 병합 블록은 드래그 선택 상태를 건드리지 않음 (클릭 토글만 사용)
+                if (this.findMergeKey('actual', index)) return;
+                if (e.target === actualField && !actualField.matches(':focus') && this.currentColumnType === 'actual') {
                     e.preventDefault();
                     e.stopPropagation();
-                    return;
+                    
+                    if (!actualMouseMoved) {
+                        if (this.selectedActualFields.has(index) && this.selectedActualFields.size === 1) {
+                            this.clearSelection('actual');
+                        } else {
+                            this.clearAllSelections();
+                            this.selectFieldRange('actual', index, index);
+                        }
+                    } else {
+                        if (!e.ctrlKey && !e.metaKey) {
+                            this.clearSelection('actual');
+                        }
+                        this.selectFieldRange('actual', this.dragStartIndex, index);
+                    }
+                    this.isSelectingActual = false;
+                    this.currentColumnType = null;
                 }
-                
+            });
+            actualField.addEventListener('mouseenter', (e) => {
+                if (this.findMergeKey('actual', index)) return;
                 if (this.isSelectingActual && this.currentColumnType === 'actual' && this.dragStartIndex !== index) {
                     actualMouseMoved = true;
                     if (!e.ctrlKey && !e.metaKey) {
@@ -553,48 +454,38 @@ class TimeTracker {
             }
         }
         
-        this.showMergeButton(type);
         this.updateSelectionOverlay(type);
+        
+        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
+        if (selectedSet.size > 1) {
+            this.showMergeButton(type);
+        }
+        this.showScheduleButtonForSelection(type);
     }
     
     clearSelection(type) {
-        if (type === 'planned') {
-            this.selectedPlannedFields.forEach(index => {
-                const field = document.querySelector(`[data-index="${index}"] .planned-input`);
-                if (field) {
-                    field.classList.remove('field-selected');
-                    const row = field.closest('.time-entry');
-                    if (row) {
-                        row.classList.remove('selected-merged-planned', 'selected-merged-actual');
-                    }
+        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
+        selectedSet.forEach(index => {
+            const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
+            if (field) {
+                field.classList.remove('field-selected');
+                const row = field.closest('.time-entry');
+                if (row) {
+                    row.classList.remove('selected-merged-planned', 'selected-merged-actual');
                 }
-            });
-            this.selectedPlannedFields.clear();
-        } else if (type === 'actual') {
-            this.selectedActualFields.forEach(index => {
-                const field = document.querySelector(`[data-index="${index}"] .actual-input`);
-                if (field) {
-                    field.classList.remove('field-selected');
-                    const row = field.closest('.time-entry');
-                    if (row) {
-                        row.classList.remove('selected-merged-planned', 'selected-merged-actual');
-                    }
-                }
-            });
-            this.selectedActualFields.clear();
-        }
+            }
+        });
+        selectedSet.clear();
+        
         this.hideMergeButton();
         this.hideUndoButton();
         this.removeSelectionOverlay(type);
+        this.hideScheduleButton();
     }
     
     clearAllSelections() {
         this.clearSelection('planned');
         this.clearSelection('actual');
-        this.hideMergeButton();
-        this.hideUndoButton();
-        this.removeSelectionOverlay('planned');
-        this.removeSelectionOverlay('actual');
     }
     
     showMergeButton(type) {
@@ -605,7 +496,6 @@ class TimeTracker {
             const startIndex = selectedIndices[0];
             const endIndex = selectedIndices[selectedIndices.length - 1];
             
-            // 선택된 영역의 시작과 끝 필드 찾기
             const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const endField = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
             
@@ -615,18 +505,15 @@ class TimeTracker {
                 
                 let centerX, centerY;
                 
-                // 선택된 셀의 개수에 따른 중심축 계산
                 const selectedCount = selectedIndices.length;
                 
                 if (selectedCount % 2 === 1) {
-                    // 홀수 개: 중간 셀의 중심축에 위치
                     const middleIndex = selectedIndices[Math.floor(selectedCount / 2)];
                     const middleField = document.querySelector(`[data-index="${middleIndex}"] .${type}-input`);
                     const middleRect = middleField.getBoundingClientRect();
                     centerX = middleRect.left + (middleRect.width / 2);
                     centerY = middleRect.top + (middleRect.height / 2);
                 } else {
-                    // 짝수 개: 중간 두 셀 사이의 구분선 중심에 위치
                     const midIndex1 = Math.floor(selectedCount / 2) - 1;
                     const midIndex2 = Math.floor(selectedCount / 2);
                     const field1 = document.querySelector(`[data-index="${selectedIndices[midIndex1]}"] .${type}-input`);
@@ -635,12 +522,11 @@ class TimeTracker {
                     const rect2 = field2.getBoundingClientRect();
                     
                     centerX = (rect1.left + rect1.width / 2 + rect2.left + rect2.width / 2) / 2;
-                    centerY = (rect1.bottom + rect2.top) / 2; // 두 셀 사이의 경계선
+                    centerY = (rect1.bottom + rect2.top) / 2;
                 }
                 
                 this.hideMergeButton();
                 
-                // 스크롤 오프셋 계산
                 const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
                 const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
                 
@@ -660,8 +546,8 @@ class TimeTracker {
     }
     
     hideMergeButton() {
-        if (this.mergeButton) {
-            document.body.removeChild(this.mergeButton);
+        if (this.mergeButton && this.mergeButton.parentNode) {
+            this.mergeButton.parentNode.removeChild(this.mergeButton);
             this.mergeButton = null;
         }
     }
@@ -671,7 +557,6 @@ class TimeTracker {
         const start = parseInt(startStr);
         const end = parseInt(endStr);
         
-        // 병합된 영역의 중심 계산
         const startField = document.querySelector(`[data-index="${start}"] .${type}-input`);
         const endField = document.querySelector(`[data-index="${end}"] .${type}-input`);
         
@@ -679,13 +564,11 @@ class TimeTracker {
             const startRect = startField.getBoundingClientRect();
             const endRect = endField.getBoundingClientRect();
             
-            // 중심점 계산
             const centerX = startRect.left + (startRect.width / 2);
             const centerY = startRect.top + ((endRect.bottom - startRect.top) / 2);
             
             this.hideUndoButton();
             
-            // 스크롤 오프셋 계산
             const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
             const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
             
@@ -703,8 +586,8 @@ class TimeTracker {
     }
     
     hideUndoButton() {
-        if (this.undoButton) {
-            document.body.removeChild(this.undoButton);
+        if (this.undoButton && this.undoButton.parentNode) {
+            this.undoButton.parentNode.removeChild(this.undoButton);
             this.undoButton = null;
         }
     }
@@ -714,10 +597,8 @@ class TimeTracker {
         const start = parseInt(startStr);
         const end = parseInt(endStr);
         
-        // 병합 정보 제거
         this.mergedFields.delete(mergeKey);
         
-        // 각 셀을 개별 필드로 복원 (빈 값으로)
         for (let i = start; i <= end; i++) {
             if (type === 'planned') {
                 this.timeSlots[i].planned = '';
@@ -726,7 +607,6 @@ class TimeTracker {
             }
         }
         
-        // UI 다시 렌더링
         this.renderTimeEntries();
         this.clearAllSelections();
         this.calculateTotals();
@@ -741,15 +621,12 @@ class TimeTracker {
             const startIndex = selectedIndices[0];
             const endIndex = selectedIndices[selectedIndices.length - 1];
             
-            // 첫 번째 필드의 값을 가져와서 병합된 값으로 사용
             const firstField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const mergedValue = firstField ? firstField.value : '';
             
-            // 병합 정보 저장
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
             this.mergedFields.set(mergeKey, mergedValue);
             
-            // 데이터는 첫 번째 셀에만 저장하고 나머지는 빈 값으로 유지
             for (let i = startIndex; i <= endIndex; i++) {
                 if (type === 'planned') {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
@@ -758,7 +635,6 @@ class TimeTracker {
                 }
             }
             
-            // UI 다시 렌더링
             this.renderTimeEntries();
             this.clearAllSelections();
             this.calculateTotals();
@@ -786,7 +662,6 @@ class TimeTracker {
         const end = parseInt(endStr);
         
         if (index === start) {
-            // 첫 번째 셀에 병합된 메인 필드 표시 
             return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
                            data-index="${index}" 
                            data-type="${type}" 
@@ -796,7 +671,6 @@ class TimeTracker {
                            value="${this.mergedFields.get(mergeKey)}"
                            placeholder="">`;
         } else {
-            // 병합된 범위의 다른 셀들 - 병합된 데이터 표시하고 클릭 가능하게 함
             return `<input type="text" class="input-field ${type}-input merged-secondary" 
                            data-index="${index}" 
                            data-type="${type}" 
@@ -816,19 +690,15 @@ class TimeTracker {
         const start = parseInt(startStr);
         const end = parseInt(endStr);
         
-        // 해당 타입의 기존 선택만 해제 (다른 타입은 건드리지 않음)
         this.clearSelection(type);
         
-        // 병합된 전체 범위 선택 (해당 타입의 열만)
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         
         for (let i = start; i <= end; i++) {
             selectedSet.add(i);
             const field = document.querySelector(`[data-index="${i}"] .${type}-input`);
             if (field) {
-                // 모든 병합된 필드(main, secondary 포함)에 선택 스타일 적용
                 field.classList.add('field-selected');
-                // 해당 행에도 선택 표시 클래스 추가 (타입별로)
                 const row = field.closest('.time-entry');
                 if (row) {
                     row.classList.add(type === 'planned' ? 'selected-merged-planned' : 'selected-merged-actual');
@@ -836,9 +706,9 @@ class TimeTracker {
             }
         }
         
-        // 병합된 필드는 이미 병합되어 있으므로 되돌리기 버튼을 표시
-        this.showUndoButton(type, mergeKey);
         this.updateSelectionOverlay(type);
+        this.showUndoButton(type, mergeKey);
+        this.showScheduleButtonForSelection(type);
     }
 
     ensureSelectionOverlay(type) {
@@ -847,11 +717,10 @@ class TimeTracker {
             el.className = 'selection-overlay';
             el.dataset.type = type;
 
-            // 중복 바인딩 방지: 항상 최신 핸들러로 교체
             el.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.clearSelection(type);     // 해당 열(계획/실제)만 해제
+                this.clearSelection(type);
             };
 
             document.body.appendChild(el);
@@ -866,7 +735,6 @@ class TimeTracker {
         this.selectionOverlay[type] = null;
     }
 
-    // 현재 선택 집합을 한 박스로 덮도록 위치/크기 갱신
     updateSelectionOverlay(type) {
         const selectedSet = (type === 'planned') ? this.selectedPlannedFields : this.selectedActualFields;
         if (!selectedSet || selectedSet.size < 1) {
@@ -874,7 +742,6 @@ class TimeTracker {
             return;
         }
 
-        // 연속 구간 가정(드래그/병합 선택) — 비연속이면 첫~끝 구간으로 처리
         const idx = Array.from(selectedSet).sort((a,b)=>a-b);
         const startIndex = idx[0];
         const endIndex   = idx[idx.length - 1];
@@ -889,7 +756,6 @@ class TimeTracker {
         const startRect = startField.getBoundingClientRect();
         const endRect   = endField.getBoundingClientRect();
 
-        // 하단 행 보더(기본 2px)를 마지막 행까지 덮기
         const lastRow   = endField.closest('.time-entry');
         const rowStyle  = lastRow ? window.getComputedStyle(lastRow) : null;
         const bottomBW  = rowStyle ? parseFloat(rowStyle.borderBottomWidth || '0') : 0;
@@ -897,7 +763,7 @@ class TimeTracker {
         const overlay   = this.ensureSelectionOverlay(type);
         const left      = startRect.left + window.scrollX;
         const top       = startRect.top  + window.scrollY;
-        const width     = startRect.width; // 같은 열이므로 동일 폭
+        const width     = startRect.width;
         const height    = (endRect.bottom - startRect.top) + bottomBW;
 
         overlay.style.left   = `${left}px`;
@@ -906,7 +772,6 @@ class TimeTracker {
         overlay.style.height = `${height}px`;
     }
 
-    // 현재 선택 집합이 특정 병합 범위 전체를 정확히 담고 있는지 판정
     isMergeRangeSelected(type, mergeKey) {
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr, 10);
@@ -922,9 +787,6 @@ class TimeTracker {
 
     attachRowWideClickTargets(entryDiv, index) {
         entryDiv.addEventListener('click', (e) => {
-            // 인풋 자체에서 이미 처리한 클릭은 무시 (인풋 쪽에서 stopPropagation 호출)
-            // 행 바탕을 클릭했을 때만 동작하게 설계
-
             const plannedField = entryDiv.querySelector('.planned-input');
             const actualField  = entryDiv.querySelector('.actual-input');
             if (!plannedField && !actualField) return;
@@ -932,7 +794,6 @@ class TimeTracker {
             const rowRect      = entryDiv.getBoundingClientRect();
             const x = e.clientX, y = e.clientY;
 
-            // 왼쪽(계획) 컬럼 폭 안을 눌렀는지
             if (plannedField) {
                 const pr = plannedField.getBoundingClientRect();
                 const inPlannedCol = (x >= pr.left && x <= pr.right && y >= rowRect.top && y <= rowRect.bottom);
@@ -940,8 +801,7 @@ class TimeTracker {
                     const mk = this.findMergeKey('planned', index);
                     if (mk) {
                         e.preventDefault();
-                        e.stopPropagation();      // ← 행에서 처리했으면 더 이상 인풋 핸들러로 가지 않게
-                        // 같은 병합범위가 이미 선택돼 있으면 해제, 아니면 선택
+                        e.stopPropagation();
                         if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
                         else this.selectMergedRange('planned', mk);
                         return;
@@ -949,7 +809,6 @@ class TimeTracker {
                 }
             }
 
-            // 오른쪽(실제) 컬럼 폭 안을 눌렀는지
             if (actualField) {
                 const ar = actualField.getBoundingClientRect();
                 const inActualCol = (x >= ar.left && x <= ar.right && y >= rowRect.top && y <= rowRect.bottom);
@@ -964,7 +823,160 @@ class TimeTracker {
                     }
                 }
             }
-        });       // bubble 단계 (기본값)
+        });
+    }
+
+    attachCellClickListeners(entryDiv, index) {
+        // This function is now intentionally left empty 
+        // to avoid conflicts with the unified mouseup/click handling logic
+        // in attachFieldSelectionListeners.
+    }
+
+    hideScheduleButton() {
+        if (this.scheduleButton) {
+            if (this.scheduleButton.parentNode) {
+                this.scheduleButton.parentNode.removeChild(this.scheduleButton);
+            }
+            this.scheduleButton = null;
+        }
+    }
+
+    showScheduleButtonForSelection(type) {
+        this.hideScheduleButton();
+    
+        const overlay = this.selectionOverlay[type];
+        if (!overlay) return;
+        
+        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
+        if (selectedSet.size === 0) return;
+    
+        const rect = overlay.getBoundingClientRect();
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        
+        this.scheduleButton = document.createElement('button');
+        this.scheduleButton.className = 'schedule-button';
+        this.scheduleButton.textContent = '스케줄 입력';
+        this.scheduleButton.style.left = `${rect.right + scrollX + 5}px`;
+        this.scheduleButton.style.top = `${rect.top + scrollY}px`;
+        
+        this.scheduleButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const firstIndex = Math.min(...selectedSet);
+            
+            const mergeKey = this.findMergeKey(type, firstIndex);
+            let dataIndex = firstIndex;
+            if(mergeKey){
+                const mainField = document.querySelector(`[data-merge-key="${mergeKey}"].merged-main`);
+                if(mainField) {
+                    dataIndex = parseInt(mainField.dataset.index);
+                }
+            }
+            this.openScheduleModal(type, dataIndex);
+        });
+        
+        document.body.appendChild(this.scheduleButton);
+    }
+    
+    openScheduleModal(type, index) {
+        const modal = document.getElementById('scheduleModal');
+        const timeField = document.getElementById('scheduleTime');
+        const activityField = document.getElementById('scheduleActivity');
+        
+        const mergeKey = this.findMergeKey(type, index);
+        const value = mergeKey ? this.mergedFields.get(mergeKey) : this.timeSlots[index][type];
+
+        timeField.value = this.timeSlots[index].time + '시';
+        if(mergeKey) {
+            const endIdx = parseInt(mergeKey.split('-')[2]);
+            const endTime = this.timeSlots[endIdx].time;
+            timeField.value += ` - ${parseInt(endTime) + 1}시`;
+        }
+
+        activityField.value = value || '';
+        
+        modal.style.display = 'flex';
+        
+        modal.dataset.type = type;
+        modal.dataset.index = index;
+        
+        setTimeout(() => {
+            activityField.focus();
+        }, 100);
+        
+        this.hideScheduleButton();
+    }
+    
+    closeScheduleModal() {
+        const modal = document.getElementById('scheduleModal');
+        modal.style.display = 'none';
+        
+        document.getElementById('scheduleTime').value = '';
+        document.getElementById('scheduleActivity').value = '';
+        
+        delete modal.dataset.type;
+        delete modal.dataset.index;
+    }
+    
+    saveScheduleFromModal() {
+        const modal = document.getElementById('scheduleModal');
+        const type = modal.dataset.type;
+        const index = parseInt(modal.dataset.index);
+        const activity = document.getElementById('scheduleActivity').value.trim();
+        
+        if (type && index !== undefined) {
+            const mergeKey = this.findMergeKey(type, index);
+            if (mergeKey) {
+                this.mergedFields.set(mergeKey, activity);
+            } else {
+                this.timeSlots[index][type] = activity;
+            }
+            
+            this.renderTimeEntries();
+            this.calculateTotals();
+            this.autoSave();
+        }
+        
+        this.closeScheduleModal();
+    }
+    
+    attachModalEventListeners() {
+        const modal = document.getElementById('scheduleModal');
+        const closeBtn = document.getElementById('closeModal');
+        const saveBtn = document.getElementById('saveSchedule');
+        const cancelBtn = document.getElementById('cancelSchedule');
+        const activityField = document.getElementById('scheduleActivity');
+        
+        closeBtn.addEventListener('click', () => {
+            this.closeScheduleModal();
+        });
+        
+        saveBtn.addEventListener('click', () => {
+            this.saveScheduleFromModal();
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            this.closeScheduleModal();
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeScheduleModal();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'flex') {
+                this.closeScheduleModal();
+            }
+        });
+        
+        activityField.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.saveScheduleFromModal();
+            }
+        });
     }
 
     showNotification(message) {
