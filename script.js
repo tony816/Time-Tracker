@@ -13,6 +13,9 @@ class TimeTracker {
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
         this.scheduleButton = null;
+        // 타이머 관련 속성 추가
+        this.timers = new Map(); // {index: {running, elapsed, startTime, intervalId}}
+        this.timerInterval = null;
         this.init();
     }
 
@@ -23,6 +26,7 @@ class TimeTracker {
         this.setCurrentDate();
         this.loadData();
         this.attachModalEventListeners();
+        this.attachActivityModalEventListeners();
     }
 
     generateTimeSlots() {
@@ -31,28 +35,38 @@ class TimeTracker {
             this.timeSlots.push({
                 time: `${hour}`,
                 planned: '',
-                actual: ''
+                actual: '',
+                timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+                activityLog: { title: '', details: '', outcome: '' }
             });
         }
         this.timeSlots.push({
             time: '00',
             planned: '',
-            actual: ''
+            actual: '',
+            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            activityLog: { title: '', details: '', outcome: '' }
         });
         this.timeSlots.push({
             time: '1',
             planned: '',
-            actual: ''
+            actual: '',
+            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            activityLog: { title: '', details: '', outcome: '' }
         });
         this.timeSlots.push({
             time: '2',
             planned: '',
-            actual: ''
+            actual: '',
+            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            activityLog: { title: '', details: '', outcome: '' }
         });
         this.timeSlots.push({
             time: '3',
             planned: '',
-            actual: ''
+            actual: '',
+            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            activityLog: { title: '', details: '', outcome: '' }
         });
     }
 
@@ -77,15 +91,25 @@ class TimeTracker {
                         
             const actualContent = actualMergeKey ? 
                 this.createMergedField(actualMergeKey, 'actual', index, slot.actual) :
-                `<input type="text" class="input-field actual-input" 
-                        data-index="${index}" 
-                        data-type="actual" 
-                        value="${slot.actual}"
-                        placeholder="">`;
+                this.createTimerField(index, slot);
+            
+            // 시간 열 병합 확인
+            const timeMergeKey = this.findMergeKey('time', index);
+            const timerControls = this.createTimerControls(index, slot);
+            
+            let timeContent;
+            if (timeMergeKey) {
+                timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
+            } else {
+                timeContent = `<div class="time-slot-container">
+                    <div class="time-label">${slot.time}</div>
+                    ${timerControls}
+                </div>`;
+            }
             
             entryDiv.innerHTML = `
                 ${plannedContent}
-                <div class="time-slot">${slot.time}</div>
+                ${timeContent}
                 ${actualContent}
             `;
             
@@ -114,6 +138,10 @@ class TimeTracker {
                 this.attachFieldSelectionListeners(entryDiv, index);
                 this.attachCellClickListeners(entryDiv, index);
             }
+            
+            // 타이머 이벤트 리스너 추가
+            this.attachTimerListeners(entryDiv, index);
+            this.attachActivityLogListener(entryDiv, index);
             
             this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
@@ -172,6 +200,16 @@ class TimeTracker {
                 this.clearAllSelections();
             }
         });
+        
+        // 타이머 결과 입력 필드 이벤트 리스너
+        document.getElementById('timeEntries').addEventListener('input', (e) => {
+            if (e.target.classList.contains('timer-result-input')) {
+                const index = parseInt(e.target.dataset.index);
+                this.timeSlots[index].actual = e.target.value;
+                this.calculateTotals();
+                this.autoSave();
+            }
+        });
 
         document.addEventListener('mouseup', () => {
             this.isSelectingPlanned = false;
@@ -200,14 +238,71 @@ class TimeTracker {
     calculateTotals() {
         let plannedTotal = 0;
         let actualTotal = 0;
+        let timerTotal = 0;
+        let executedPlans = 0;
 
         this.timeSlots.forEach(slot => {
-            if (slot.planned) plannedTotal++;
-            if (slot.actual) actualTotal++;
+            if (slot.planned && slot.planned.trim() !== '') {
+                plannedTotal++;
+                if (slot.actual && slot.actual.trim() !== '') {
+                    executedPlans++;
+                }
+            }
+            if (slot.actual && slot.actual.trim() !== '') {
+                actualTotal++;
+            }
+            if (slot.timer && slot.timer.elapsed > 0) {
+                timerTotal += slot.timer.elapsed;
+            }
         });
 
+        // 기본 합계 표시
         document.getElementById('totalPlanned').textContent = `${plannedTotal}시간`;
         document.getElementById('totalActual').textContent = `${actualTotal}시간`;
+
+        // 분석 데이터 계산 및 표시
+        this.updateAnalysis(plannedTotal, executedPlans, timerTotal);
+    }
+
+    updateAnalysis(plannedTotal, executedPlans, timerTotalSeconds) {
+        // 실행율 계산
+        const executionRate = plannedTotal > 0 ? Math.round((executedPlans / plannedTotal) * 100) : 0;
+        const executionRateElement = document.getElementById('executionRate');
+        executionRateElement.textContent = `${executionRate}%`;
+        
+        // 실행율에 따른 색상 변경
+        executionRateElement.className = 'analysis-value';
+        if (executionRate >= 80) {
+            executionRateElement.classList.add('good');
+        } else if (executionRate >= 60) {
+            executionRateElement.classList.add('warning');
+        } else if (executionRate > 0) {
+            executionRateElement.classList.add('poor');
+        }
+
+        // 타이머 사용 시간 계산
+        const timerHours = Math.floor(timerTotalSeconds / 3600);
+        const timerMinutes = Math.floor((timerTotalSeconds % 3600) / 60);
+        let timerDisplay = '';
+        
+        if (timerHours > 0) {
+            timerDisplay = `${timerHours}시간 ${timerMinutes}분`;
+        } else if (timerMinutes > 0) {
+            timerDisplay = `${timerMinutes}분`;
+        } else if (timerTotalSeconds > 0) {
+            timerDisplay = `${timerTotalSeconds}초`;
+        } else {
+            timerDisplay = '0분';
+        }
+        
+        const timerUsageElement = document.getElementById('timerUsage');
+        timerUsageElement.textContent = timerDisplay;
+        
+        // 타이머 사용 시간에 따른 색상 변경
+        timerUsageElement.className = 'analysis-value';
+        if (timerTotalSeconds > 0) {
+            timerUsageElement.classList.add('good');
+        }
     }
 
     saveData() {
@@ -226,6 +321,23 @@ class TimeTracker {
         if (savedData) {
             const data = JSON.parse(savedData);
             this.timeSlots = data.timeSlots || this.timeSlots;
+            
+            // 타이머 데이터 복원 시 실행중인 타이머는 정지
+            this.timeSlots.forEach(slot => {
+                if (slot.timer && slot.timer.running) {
+                    slot.timer.running = false;
+                    slot.timer.startTime = null;
+                }
+                // 타이머 객체가 없는 기존 데이터 호환성
+                if (!slot.timer) {
+                    slot.timer = { running: false, elapsed: 0, startTime: null, method: 'manual' };
+                }
+                // 활동 로그 객체가 없는 기존 데이터 호환성
+                if (!slot.activityLog) {
+                    slot.activityLog = { title: '', details: '', outcome: '' };
+                }
+            });
+            
             if (data.mergedFields) {
                 this.mergedFields = new Map(Object.entries(data.mergedFields));
             } else {
@@ -599,10 +711,21 @@ class TimeTracker {
         
         this.mergedFields.delete(mergeKey);
         
-        for (let i = start; i <= end; i++) {
-            if (type === 'planned') {
+        // 좌측 계획 열 병합 해제 시 모든 열 동기화 해제
+        if (type === 'planned') {
+            // 중앙 시간 열과 우측 실제 활동 열 병합도 함께 해제
+            const timeRangeKey = `time-${start}-${end}`;
+            const actualMergeKey = `actual-${start}-${end}`;
+            this.mergedFields.delete(timeRangeKey);
+            this.mergedFields.delete(actualMergeKey);
+            
+            for (let i = start; i <= end; i++) {
                 this.timeSlots[i].planned = '';
-            } else {
+                this.timeSlots[i].actual = '';
+            }
+        } else {
+            // 우측 열만 해제
+            for (let i = start; i <= end; i++) {
                 this.timeSlots[i].actual = '';
             }
         }
@@ -627,10 +750,29 @@ class TimeTracker {
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
             this.mergedFields.set(mergeKey, mergedValue);
             
-            for (let i = startIndex; i <= endIndex; i++) {
-                if (type === 'planned') {
+            // 좌측 계획 열이 병합될 때 모든 열을 동기화 병합
+            if (type === 'planned') {
+                // 중앙 시간 열 병합 (시간 범위 표시)
+                const timeRangeKey = `time-${startIndex}-${endIndex}`;
+                const startTime = this.timeSlots[startIndex].time;
+                const endTime = this.timeSlots[endIndex].time;
+                const timeRangeValue = `${startTime}-${endTime}`;
+                this.mergedFields.set(timeRangeKey, timeRangeValue);
+                
+                // 우측 실제 활동 열 병합 (기존 값이 있다면 유지, 없으면 빈 값)
+                const actualMergeKey = `actual-${startIndex}-${endIndex}`;
+                const firstActualField = document.querySelector(`[data-index="${startIndex}"] .timer-result-input`);
+                const actualMergedValue = firstActualField ? firstActualField.value : '';
+                this.mergedFields.set(actualMergeKey, actualMergedValue);
+                
+                // 데이터 업데이트
+                for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
-                } else {
+                    this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
+                }
+            } else {
+                // 우측 열만 병합하는 경우
+                for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                 }
             }
@@ -656,32 +798,187 @@ class TimeTracker {
         return null;
     }
     
-    createMergedField(mergeKey, type, index, value) {
+    createTimerField(index, slot) {
+        return `<div class="actual-field-container">
+                    <input type="text" class="input-field actual-input timer-result-input" 
+                           data-index="${index}" 
+                           data-type="actual" 
+                           value="${slot.actual}"
+                           placeholder="활동 기록">
+                    <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                </div>`;
+    }
+
+    createMergedTimeField(mergeKey, index, slot) {
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
         
         if (index === start) {
-            return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
-                           data-index="${index}" 
-                           data-type="${type}" 
+            // 병합된 시간 필드의 주 셀 - 시간 범위 표시 및 단일 타이머 컨트롤
+            const timerControls = this.createTimerControls(index, slot);
+            
+            // 시간 범위 생성 (12시-13시 형태)
+            const startTime = this.timeSlots[start].time;
+            const endTime = this.timeSlots[end].time;
+            const timeRangeDisplay = `${startTime}-${endTime}`;
+            
+            return `<div class="time-slot-container merged-time-main" 
                            data-merge-key="${mergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}"
-                           value="${this.mergedFields.get(mergeKey)}"
-                           placeholder="">`;
+                           data-merge-end="${end}">
+                        <div class="time-label">${timeRangeDisplay}</div>
+                        ${timerControls}
+                    </div>`;
         } else {
-            return `<input type="text" class="input-field ${type}-input merged-secondary" 
-                           data-index="${index}" 
-                           data-type="${type}" 
+            // 병합된 시간 필드의 보조 셀 - 완전히 숨김 처리하여 디자인 보존
+            return `<div class="time-slot-container merged-time-secondary" 
                            data-merge-key="${mergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}"
-                           value="${this.mergedFields.get(mergeKey)}"
-                           readonly
-                           tabindex="-1"
-                           style="cursor: pointer;"
-                           placeholder="">`;
+                           data-merge-end="${end}">
+                        <div class="time-label merged-secondary-hidden"></div>
+                    </div>`;
+        }
+    }
+
+    createTimerControls(index, slot) {
+        const currentHour = new Date().getHours();
+        const slotTime = parseInt(slot.time);
+        const hasPlannedActivity = slot.planned && slot.planned.trim() !== '';
+        const isCurrentTime = currentHour === slotTime;
+        const canStart = hasPlannedActivity && isCurrentTime;
+        const isRunning = slot.timer.running;
+        const hasElapsed = slot.timer.elapsed > 0;
+        
+        let buttonIcon = '▶️';
+        let buttonAction = 'start';
+        let buttonDisabled = !canStart && !isRunning;
+        
+        if (isRunning) {
+            buttonIcon = '⏸️';
+            buttonAction = 'pause';
+            buttonDisabled = false;
+        } else if (hasElapsed) {
+            buttonIcon = '▶️';
+            buttonAction = 'resume';
+            buttonDisabled = !canStart;
+        }
+        
+        const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
+        const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
+        const timerDisplay = this.formatTime(slot.timer.elapsed);
+        
+        return `
+            <div class="timer-controls-container ${isRunning ? 'timer-running' : ''}" data-index="${index}">
+                <div class="timer-controls">
+                    <button class="timer-btn timer-start-pause" 
+                            data-index="${index}" 
+                            data-action="${buttonAction}"
+                            ${buttonDisabled ? 'disabled' : ''}>
+                        ${buttonIcon}
+                    </button>
+                    <button class="timer-btn timer-stop" 
+                            data-index="${index}" 
+                            data-action="stop"
+                            style="${stopButtonStyle}">
+                        ⏹️
+                    </button>
+                </div>
+                <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
+            </div>
+        `;
+    }
+    
+    formatTime(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    getCurrentTimeIndex() {
+        const now = new Date();
+        const currentHour = now.getHours();
+        
+        // 4시-23시는 순서대로
+        if (currentHour >= 4 && currentHour <= 23) {
+            return currentHour - 4;
+        }
+        // 0시-3시는 마지막 부분
+        if (currentHour >= 0 && currentHour <= 3) {
+            return 20 + currentHour;
+        }
+        return -1; // 해당 시간 없음
+    }
+    
+    canStartTimer(index) {
+        const slot = this.timeSlots[index];
+        const currentTimeIndex = this.getCurrentTimeIndex();
+        const hasPlannedActivity = slot.planned && slot.planned.trim() !== '';
+        
+        return hasPlannedActivity && currentTimeIndex === index;
+    }
+    
+    createMergedField(mergeKey, type, index, value) {
+        const [, startStr, endStr] = mergeKey.split('-');
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        
+        if (type === 'actual') {
+            // 우측 실제 활동 열의 경우 입력 필드와 버튼을 포함하는 컨테이너로 처리
+            if (index === start) {
+                return `<div class="actual-field-container merged-actual-main" 
+                               data-merge-key="${mergeKey}"
+                               data-merge-start="${start}"
+                               data-merge-end="${end}">
+                            <input type="text" class="input-field actual-input timer-result-input merged-field" 
+                                   data-index="${index}" 
+                                   data-type="actual" 
+                                   data-merge-key="${mergeKey}"
+                                   value="${this.mergedFields.get(mergeKey)}"
+                                   placeholder="활동 기록">
+                            <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                        </div>`;
+            } else {
+                return `<div class="actual-field-container merged-actual-secondary" 
+                               data-merge-key="${mergeKey}"
+                               data-merge-start="${start}"
+                               data-merge-end="${end}">
+                            <input type="text" class="input-field actual-input merged-secondary" 
+                                   data-index="${index}" 
+                                   data-type="actual" 
+                                   data-merge-key="${mergeKey}"
+                                   value="${this.mergedFields.get(mergeKey)}"
+                                   readonly
+                                   tabindex="-1"
+                                   style="cursor: pointer; opacity: 0;"
+                                   placeholder="">
+                        </div>`;
+            }
+        } else {
+            // 좌측 계획 열의 경우 기존 로직 유지
+            if (index === start) {
+                return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
+                               data-index="${index}" 
+                               data-type="${type}" 
+                               data-merge-key="${mergeKey}"
+                               data-merge-start="${start}"
+                               data-merge-end="${end}"
+                               value="${this.mergedFields.get(mergeKey)}"
+                               placeholder="">`;
+            } else {
+                return `<input type="text" class="input-field ${type}-input merged-secondary" 
+                               data-index="${index}" 
+                               data-type="${type}" 
+                               data-merge-key="${mergeKey}"
+                               data-merge-start="${start}"
+                               data-merge-end="${end}"
+                               value="${this.mergedFields.get(mergeKey)}"
+                               readonly
+                               tabindex="-1"
+                               style="cursor: pointer;"
+                               placeholder="">`;
+            }
         }
     }
 
@@ -843,6 +1140,9 @@ class TimeTracker {
 
     showScheduleButtonForSelection(type) {
         this.hideScheduleButton();
+        
+        // 스케줄 입력 버튼은 계획(planned) 컬럼에서만 표시
+        if (type !== 'planned') return;
     
         const overlay = this.selectionOverlay[type];
         if (!overlay) return;
@@ -862,35 +1162,33 @@ class TimeTracker {
         
         this.scheduleButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            const firstIndex = Math.min(...selectedSet);
+            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
+            const firstIndex = selectedIndices[0];
+            const lastIndex = selectedIndices[selectedIndices.length - 1];
             
-            const mergeKey = this.findMergeKey(type, firstIndex);
-            let dataIndex = firstIndex;
-            if(mergeKey){
-                const mainField = document.querySelector(`[data-merge-key="${mergeKey}"].merged-main`);
-                if(mainField) {
-                    dataIndex = parseInt(mainField.dataset.index);
-                }
-            }
-            this.openScheduleModal(type, dataIndex);
+            this.openScheduleModal(type, firstIndex, lastIndex);
         });
         
         document.body.appendChild(this.scheduleButton);
     }
     
-    openScheduleModal(type, index) {
+    openScheduleModal(type, startIndex, endIndex = null) {
         const modal = document.getElementById('scheduleModal');
         const timeField = document.getElementById('scheduleTime');
         const activityField = document.getElementById('scheduleActivity');
         
-        const mergeKey = this.findMergeKey(type, index);
-        const value = mergeKey ? this.mergedFields.get(mergeKey) : this.timeSlots[index][type];
+        const actualEndIndex = endIndex !== null ? endIndex : startIndex;
+        const mergeKey = this.findMergeKey(type, startIndex);
+        const value = mergeKey ? this.mergedFields.get(mergeKey) : this.timeSlots[startIndex][type];
 
-        timeField.value = this.timeSlots[index].time + '시';
-        if(mergeKey) {
-            const endIdx = parseInt(mergeKey.split('-')[2]);
-            const endTime = this.timeSlots[endIdx].time;
-            timeField.value += ` - ${parseInt(endTime) + 1}시`;
+        // 시간 범위 표시
+        const startTime = this.timeSlots[startIndex].time;
+        if (actualEndIndex === startIndex) {
+            timeField.value = startTime + '시';
+        } else {
+            const endTime = parseInt(this.timeSlots[actualEndIndex].time);
+            const nextHour = endTime === 23 ? 0 : (endTime === 3 ? 4 : endTime + 1);
+            timeField.value = `${startTime}시 - ${nextHour}시`;
         }
 
         activityField.value = value || '';
@@ -898,7 +1196,8 @@ class TimeTracker {
         modal.style.display = 'flex';
         
         modal.dataset.type = type;
-        modal.dataset.index = index;
+        modal.dataset.startIndex = startIndex;
+        modal.dataset.endIndex = actualEndIndex;
         
         setTimeout(() => {
             activityField.focus();
@@ -915,21 +1214,30 @@ class TimeTracker {
         document.getElementById('scheduleActivity').value = '';
         
         delete modal.dataset.type;
-        delete modal.dataset.index;
+        delete modal.dataset.startIndex;
+        delete modal.dataset.endIndex;
     }
     
     saveScheduleFromModal() {
         const modal = document.getElementById('scheduleModal');
         const type = modal.dataset.type;
-        const index = parseInt(modal.dataset.index);
+        const startIndex = parseInt(modal.dataset.startIndex);
+        const endIndex = parseInt(modal.dataset.endIndex);
         const activity = document.getElementById('scheduleActivity').value.trim();
         
-        if (type && index !== undefined) {
-            const mergeKey = this.findMergeKey(type, index);
-            if (mergeKey) {
-                this.mergedFields.set(mergeKey, activity);
+        if (type && startIndex !== undefined && endIndex !== undefined) {
+            if (startIndex === endIndex) {
+                // 단일 셀
+                this.timeSlots[startIndex][type] = activity;
             } else {
-                this.timeSlots[index][type] = activity;
+                // 병합된 셀 - 병합 생성 또는 업데이트
+                const mergeKey = `${type}-${startIndex}-${endIndex}`;
+                this.mergedFields.set(mergeKey, activity);
+                
+                // 시간대별로 데이터 설정
+                for (let i = startIndex; i <= endIndex; i++) {
+                    this.timeSlots[i][type] = i === startIndex ? activity : '';
+                }
             }
             
             this.renderTimeEntries();
@@ -1003,6 +1311,233 @@ class TimeTracker {
                 document.body.removeChild(notification);
             }, 300);
         }, 3000);
+    }
+
+    // 타이머 관련 메서드들 추가
+    attachTimerListeners(entryDiv, index) {
+        const timerBtns = entryDiv.querySelectorAll('.timer-btn');
+        
+        timerBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const btnIndex = parseInt(btn.dataset.index);
+                
+                switch(action) {
+                    case 'start':
+                        this.startTimer(btnIndex);
+                        break;
+                    case 'pause':
+                        this.pauseTimer(btnIndex);
+                        break;
+                    case 'resume':
+                        this.resumeTimer(btnIndex);
+                        break;
+                    case 'stop':
+                        this.stopTimer(btnIndex);
+                        break;
+                }
+            });
+        });
+    }
+
+    startTimer(index) {
+        if (!this.canStartTimer(index)) return;
+        
+        // 다른 모든 타이머 정지
+        this.stopAllTimers();
+        
+        const slot = this.timeSlots[index];
+        slot.timer.running = true;
+        slot.timer.startTime = Date.now();
+        slot.timer.method = 'timer';
+        
+        this.startTimerInterval();
+        this.renderTimeEntries();
+    }
+
+    pauseTimer(index) {
+        const slot = this.timeSlots[index];
+        slot.timer.running = false;
+        slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+        slot.timer.startTime = null;
+        
+        this.stopTimerInterval();
+        this.renderTimeEntries();
+    }
+
+    resumeTimer(index) {
+        if (!this.canStartTimer(index)) return;
+        
+        // 다른 모든 타이머 정지
+        this.stopAllTimers();
+        
+        const slot = this.timeSlots[index];
+        slot.timer.running = true;
+        slot.timer.startTime = Date.now();
+        
+        this.startTimerInterval();
+        this.renderTimeEntries();
+    }
+
+    stopTimer(index) {
+        const slot = this.timeSlots[index];
+        
+        if (slot.timer.running) {
+            slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+        }
+        
+        slot.timer.running = false;
+        slot.timer.startTime = null;
+        
+        // 자동 기록: 타이머 시간을 actual 필드에 기록
+        if (slot.timer.elapsed > 0) {
+            const timeStr = this.formatTime(slot.timer.elapsed);
+            slot.actual = slot.planned ? `${slot.planned} (${timeStr})` : timeStr;
+        }
+        
+        this.stopTimerInterval();
+        this.renderTimeEntries();
+        this.calculateTotals();
+        this.autoSave();
+    }
+
+    stopAllTimers() {
+        this.timeSlots.forEach((slot, index) => {
+            if (slot.timer.running) {
+                slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+                slot.timer.running = false;
+                slot.timer.startTime = null;
+            }
+        });
+        this.stopTimerInterval();
+    }
+
+    startTimerInterval() {
+        if (this.timerInterval) return;
+        
+        this.timerInterval = setInterval(() => {
+            this.updateRunningTimers();
+        }, 1000);
+    }
+
+    stopTimerInterval() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
+
+    updateRunningTimers() {
+        let hasRunningTimer = false;
+        
+        this.timeSlots.forEach((slot, index) => {
+            if (slot.timer.running) {
+                hasRunningTimer = true;
+                const currentElapsed = slot.timer.elapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000);
+                const displayElement = document.querySelector(`[data-index="${index}"] .timer-display`);
+                if (displayElement) {
+                    displayElement.textContent = this.formatTime(currentElapsed);
+                }
+            }
+        });
+        
+        if (!hasRunningTimer) {
+            this.stopTimerInterval();
+        }
+    }
+
+    // 활동 로그 관련 메서드들
+    attachActivityLogListener(entryDiv, index) {
+        const activityBtn = entryDiv.querySelector('.activity-log-btn');
+        if (activityBtn) {
+            activityBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openActivityLogModal(index);
+            });
+        }
+    }
+
+    openActivityLogModal(index) {
+        const modal = document.getElementById('activityLogModal');
+        const slot = this.timeSlots[index];
+        
+        document.getElementById('activityTime').value = `${slot.time}시`;
+        document.getElementById('activityTitle').value = slot.activityLog.title || '';
+        document.getElementById('activityDetails').value = slot.activityLog.details || '';
+        document.getElementById('activityOutcome').value = slot.activityLog.outcome || '';
+        
+        modal.style.display = 'flex';
+        modal.dataset.index = index;
+        
+        setTimeout(() => {
+            document.getElementById('activityTitle').focus();
+        }, 100);
+    }
+
+    closeActivityLogModal() {
+        const modal = document.getElementById('activityLogModal');
+        modal.style.display = 'none';
+        
+        document.getElementById('activityTitle').value = '';
+        document.getElementById('activityDetails').value = '';
+        document.getElementById('activityOutcome').value = '';
+        
+        delete modal.dataset.index;
+    }
+
+    saveActivityLogFromModal() {
+        const modal = document.getElementById('activityLogModal');
+        const index = parseInt(modal.dataset.index);
+        
+        if (index !== undefined && index >= 0) {
+            const slot = this.timeSlots[index];
+            slot.activityLog.title = document.getElementById('activityTitle').value.trim();
+            slot.activityLog.details = document.getElementById('activityDetails').value.trim();
+            slot.activityLog.outcome = document.getElementById('activityOutcome').value.trim();
+            
+            // 활동 로그가 있으면 실제 활동 필드에 제목 표시
+            if (slot.activityLog.title) {
+                slot.actual = slot.activityLog.title;
+            }
+            
+            this.renderTimeEntries();
+            this.calculateTotals();
+            this.autoSave();
+        }
+        
+        this.closeActivityLogModal();
+    }
+
+    attachActivityModalEventListeners() {
+        const modal = document.getElementById('activityLogModal');
+        const closeBtn = document.getElementById('closeActivityModal');
+        const saveBtn = document.getElementById('saveActivityLog');
+        const cancelBtn = document.getElementById('cancelActivityLog');
+        
+        closeBtn.addEventListener('click', () => {
+            this.closeActivityLogModal();
+        });
+        
+        saveBtn.addEventListener('click', () => {
+            this.saveActivityLogFromModal();
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            this.closeActivityLogModal();
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeActivityLogModal();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'flex') {
+                this.closeActivityLogModal();
+            }
+        });
     }
 }
 

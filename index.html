@@ -39,6 +39,19 @@
               <div class="summary-label">합계</div>
               <div class="summary-actual" id="totalActual">0시간</div>
             </div>
+            <div class="analysis-row">
+              <div class="analysis-label">분석</div>
+              <div class="analysis-content" id="analysisContent">
+                <div class="analysis-item">
+                  <span class="analysis-metric">실행율:</span>
+                  <span class="analysis-value" id="executionRate">0%</span>
+                </div>
+                <div class="analysis-item">
+                  <span class="analysis-metric">타이머 사용:</span>
+                  <span class="analysis-value" id="timerUsage">0시간</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -69,6 +82,38 @@
           <div class="form-actions">
             <button id="saveSchedule" class="save-btn">저장</button>
             <button id="cancelSchedule" class="cancel-btn">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 활동 상세 기록 모달 -->
+    <div id="activityLogModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>활동 상세 기록</h3>
+          <button id="closeActivityModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="activityTime">시간:</label>
+            <input type="text" id="activityTime" readonly>
+          </div>
+          <div class="form-group">
+            <label for="activityTitle">활동 제목:</label>
+            <input type="text" id="activityTitle" placeholder="활동 제목을 입력하세요">
+          </div>
+          <div class="form-group">
+            <label for="activityDetails">상세 내용:</label>
+            <textarea id="activityDetails" placeholder="활동에 대한 상세한 내용을 입력하세요..." rows="8"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="activityOutcome">결과/성과:</label>
+            <textarea id="activityOutcome" placeholder="활동의 결과나 성과를 입력하세요..." rows="4"></textarea>
+          </div>
+          <div class="form-actions">
+            <button id="saveActivityLog" class="save-btn">저장</button>
+            <button id="cancelActivityLog" class="cancel-btn">취소</button>
           </div>
         </div>
       </div>

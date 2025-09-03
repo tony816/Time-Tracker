@@ -105,10 +105,18 @@ h1 {
     padding: 15px;
     text-align: center;
     border-right: 1px solid #2c3e50;
+    font-size: 1em;
+    font-weight: 600;
 }
 
 .header-row > div:last-child {
     border-right: none;
+}
+
+.planned-label, .time-label, .actual-label {
+    color: white;
+    font-size: inherit;
+    font-weight: inherit;
 }
 
 .time-entry {
@@ -128,16 +136,24 @@ h1 {
     background-color: white;
 }
 
-.time-slot {
-    padding: 12px;
+.time-slot-container {
+    padding: 8px;
     text-align: center;
     font-weight: 600;
     background-color: #ecf0f1;
     border-right: 1px solid #ddd;
     border-left: 1px solid #ddd;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 4px;
+}
+
+.time-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #2c3e50;
 }
 
 .input-field {
@@ -190,6 +206,63 @@ h1 {
 
 .summary-row > div:last-child {
     border-right: none;
+}
+
+.analysis-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    background-color: #34495e;
+    border-top: 1px solid #2c3e50;
+}
+
+.analysis-label {
+    padding: 12px;
+    text-align: center;
+    font-weight: 600;
+    color: white;
+    border-right: 1px solid #2c3e50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.analysis-content {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 8px;
+    gap: 20px;
+}
+
+.analysis-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.analysis-metric {
+    font-size: 12px;
+    color: #bdc3c7;
+    font-weight: 500;
+}
+
+.analysis-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+}
+
+.analysis-value.good {
+    color: #2ecc71;
+}
+
+.analysis-value.warning {
+    color: #f39c12;
+}
+
+.analysis-value.poor {
+    color: #e74c3c;
 }
 
 .actions {
@@ -477,11 +550,12 @@ h1 {
 
 .selection-overlay {
     position: absolute;
-    background-color: #3498db;
+    background-color: rgba(52, 152, 219, 0.3);
+    border: 2px solid #3498db;
     border-radius: 4px;
     pointer-events: auto;
     cursor: pointer;      
-    z-index: 500;         
+    z-index: 5;         
 }
 
 .selected-merged-planned::after,
@@ -640,4 +714,177 @@ h1 {
 
 .schedule-button:hover {
   background-color: #2980b9;
+}
+
+/* 타이머 UI 스타일 */
+.timer-controls-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.timer-controls-container.timer-running {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.timer-controls {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.timer-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(231, 76, 60, 0.3);
+}
+
+.timer-btn:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(231, 76, 60, 0.4);
+}
+
+.timer-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.timer-display {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #2c3e50;
+  background: #f8f9fa;
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid #ddd;
+  min-width: 50px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.timer-running .timer-display {
+  background: #ffffff;
+  border-color: #e74c3c;
+  color: #e74c3c;
+  font-weight: 700;
+}
+
+
+.timer-result-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 14px;
+  text-align: center;
+  background: white;
+  min-width: 0;
+}
+
+.timer-result-input:focus {
+  outline: 2px solid #3498db;
+  outline-offset: -2px;
+  border-color: #3498db;
+}
+
+.timer-result-input::placeholder {
+  color: #95a5a6;
+  font-style: italic;
+}
+
+.activity-log-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+  margin-left: 8px;
+}
+
+.activity-log-btn:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+}
+
+.actual-field-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-right: none;
+}
+
+/* 병합된 시간 필드 스타일 */
+.merged-time-main {
+  background-color: #ecf0f1 !important;
+  border: 1px solid #ddd !important;
+  border-bottom: none !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+.merged-time-secondary {
+  background: transparent !important;
+  border: none !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+.merged-secondary-hidden {
+  display: none !important;
+}
+
+/* 병합된 실제 활동 필드 스타일 */
+.merged-actual-main {
+  background-color: white !important;
+  border: 1px solid #ddd !important;
+  border-bottom: none !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+.merged-actual-secondary {
+  background: transparent !important;
+  border: none !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
 }
