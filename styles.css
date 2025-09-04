@@ -852,16 +852,25 @@ h1 {
   justify-self: stretch !important;
 }
 
+/* 병합된 시간열: 보조셀도 열의 배경/테두리를 유지해서
+   전체가 하나의 긴 블록처럼 보이도록 한다 */
 .merged-time-secondary {
-  background: transparent !important;
-  border: none !important;
+  background-color: #ecf0f1 !important;        /* 시간열 기본 배경 유지 */
+  border-left: 1px solid #ddd !important;      /* 좌우 경계 유지 */
+  border-right: 1px solid #ddd !important;
+
+  /* 셀 높이/정렬은 기존 행과 동일 */
   height: 44px !important;
   min-height: 44px !important;
   margin: 0 !important;
   padding: 0 !important;
-  opacity: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+
+  /* 더 이상 숨기지 않음 */
+  opacity: 1 !important;
   visibility: visible !important;
-  pointer-events: none !important;
+  pointer-events: none !important;             /* 클릭은 막되, 모양만 유지 */
 }
 
 .merged-secondary-hidden {
