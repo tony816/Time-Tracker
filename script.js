@@ -149,12 +149,21 @@ class TimeTracker {
 
         // 병합된 시간열 컨텐츠를 병합 블록의 세로 중앙으로 정렬
         this.centerMergedTimeContent();
+        // 병합된 실제/계획 입력의 시각적 높이를 병합 범위에 맞게 설정
+        this.resizeMergedActualContent();
+        this.resizeMergedPlannedContent();
     }
 
     attachEventListeners() {
         document.getElementById('date').addEventListener('change', (e) => {
             this.currentDate = e.target.value;
             this.loadData();
+        });
+        // 창 크기 변경 시 병합된 블록들의 시각적 높이를 재계산
+        window.addEventListener('resize', () => {
+            this.centerMergedTimeContent();
+            this.resizeMergedActualContent();
+            this.resizeMergedPlannedContent();
         });
 
         document.getElementById('timeEntries').addEventListener('input', (e) => {
@@ -896,6 +905,8 @@ class TimeTracker {
     }
     
     showUndoButton(type, mergeKey) {
+        // 우측(실제) 열은 병합 해제 기능 제거
+        if (type !== 'planned') return;
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
@@ -936,6 +947,12 @@ class TimeTracker {
     }
     
     undoMerge(type, mergeKey) {
+        // 우측(실제) 열은 병합 해제 불가
+        if (type !== 'planned') {
+            this.hideUndoButton();
+            this.clearSelection(type);
+            return;
+        }
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
@@ -952,11 +969,6 @@ class TimeTracker {
             
             for (let i = start; i <= end; i++) {
                 this.timeSlots[i].planned = '';
-                this.timeSlots[i].actual = '';
-            }
-        } else {
-            // 우측 열만 해제
-            for (let i = start; i <= end; i++) {
                 this.timeSlots[i].actual = '';
             }
         }
@@ -1049,10 +1061,10 @@ class TimeTracker {
             // 병합된 시간 필드의 주 셀 - 시간 범위 표시 및 단일 타이머 컨트롤
             const timerControls = this.createTimerControls(index, slot);
             
-            // 시간 범위 생성 (12시-13시 형태)
+            // 시간 범위 생성 (예: 12 ~ 13 형태)
             const startTime = this.timeSlots[start].time;
             const endTime = this.timeSlots[end].time;
-            const timeRangeDisplay = `${startTime}-${endTime}`;
+            const timeRangeDisplay = `${startTime} ~ ${endTime}`;
             
             return `<div class="time-slot-container merged-time-main" 
                            data-merge-key="${mergeKey}"
@@ -1172,16 +1184,19 @@ class TimeTracker {
                                data-merge-key="${mergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
-                            <input type="text" class="input-field actual-input timer-result-input merged-field" 
-                                   data-index="${index}" 
-                                   data-type="actual" 
-                                   data-merge-key="${mergeKey}"
-                                   value="${this.mergedFields.get(mergeKey)}"
-                                   placeholder="활동 기록">
-                            <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                            <div class="actual-merged-overlay">
+                                <input type="text" class="input-field actual-input timer-result-input merged-field" 
+                                       data-index="${index}" 
+                                       data-type="actual" 
+                                       data-merge-key="${mergeKey}"
+                                       value="${this.mergedFields.get(mergeKey)}"
+                                       placeholder="활동 기록">
+                                <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                            </div>
                         </div>`;
             } else {
-                return `<div class="actual-field-container merged-actual-secondary" 
+                const isLast = index === end;
+                return `<div class="actual-field-container merged-actual-secondary ${isLast ? 'merged-actual-last' : ''}" 
                                data-merge-key="${mergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
@@ -1197,18 +1212,26 @@ class TimeTracker {
                         </div>`;
             }
         } else {
-            // 좌측 계획 열의 경우 기존 로직 유지 (인풋은 편집 대신 선택/모달용으로만 사용)
+            // 좌측 계획 열도 절대배치 오버레이로 시각적 병합, 레이아웃 유지
             if (index === start) {
-                return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
-                               data-index="${index}" 
-                               data-type="${type}" 
+                return `<div class="planned-merged-main-container" 
                                data-merge-key="${mergeKey}"
                                data-merge-start="${start}"
-                               data-merge-end="${end}"
-                               value="${this.mergedFields.get(mergeKey)}"
-                               placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+                               data-merge-end="${end}">
+                            <div class="planned-merged-overlay">
+                                <input type="text" class="input-field ${type}-input merged-field merged-main" 
+                                       data-index="${index}" 
+                                       data-type="${type}" 
+                                       data-merge-key="${mergeKey}"
+                                       data-merge-start="${start}"
+                                       data-merge-end="${end}"
+                                       value="${this.mergedFields.get(mergeKey)}"
+                                       placeholder="" readonly tabindex="-1" style="cursor: default;">
+                            </div>
+                        </div>`;
             } else {
-                return `<input type="text" class="input-field ${type}-input merged-secondary" 
+                const isLast = index === end;
+                return `<input type="text" class="input-field ${type}-input merged-secondary ${isLast ? 'merged-planned-last' : ''}" 
                                data-index="${index}" 
                                data-type="${type}" 
                                data-merge-key="${mergeKey}"
@@ -1248,7 +1271,7 @@ class TimeTracker {
                 const mainRect = main.getBoundingClientRect();
                 const lastRect = last.getBoundingClientRect();
                 const blockCenterY = (mainRect.top + lastRect.bottom) / 2;
-                const blockHeight = Math.round((lastRect.bottom - mainRect.top) + 2); // 상하 1px 외곽선 포함
+                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
                 main.style.setProperty('--merged-block-height', `${blockHeight}px`);
 
                 const contentRect = content.getBoundingClientRect();
@@ -1261,6 +1284,59 @@ class TimeTracker {
             });
         } catch (e) {
             // 무시 (안전)
+        }
+    }
+
+    resizeMergedActualContent() {
+        try {
+            const mains = document.querySelectorAll('.actual-field-container.merged-actual-main');
+            mains.forEach((main) => {
+                const input = main.querySelector('.timer-result-input');
+                if (!input) return;
+
+                const start = parseInt(main.getAttribute('data-merge-start'), 10);
+                const end = parseInt(main.getAttribute('data-merge-end'), 10);
+                const mergeKey = main.getAttribute('data-merge-key');
+
+                const last = document.querySelector(`.actual-field-container.merged-actual-secondary.merged-actual-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
+                if (!last) return;
+
+                const mainRect = main.getBoundingClientRect();
+                const lastRect = last.getBoundingClientRect();
+                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
+
+                // 레이아웃은 고정, 시각적 외곽선 높이만 변수로 전달
+                main.style.setProperty('--merged-actual-block-height', `${blockHeight}px`);
+                // 혹시 남아있을 수 있는 인라인 높이 제거
+                main.style.removeProperty('height');
+                input.style.removeProperty('height');
+            });
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    resizeMergedPlannedContent() {
+        try {
+            const mains = document.querySelectorAll('.planned-merged-main-container');
+            if (!mains || mains.length === 0) return;
+
+            mains.forEach((main) => {
+                const start = parseInt(main.getAttribute('data-merge-start'), 10);
+                const end = parseInt(main.getAttribute('data-merge-end'), 10);
+                const mergeKey = main.getAttribute('data-merge-key');
+
+                const last = document.querySelector(`.input-field.planned-input.merged-secondary.merged-planned-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
+                if (!last) return;
+
+                const mainRect = main.getBoundingClientRect();
+                const lastRect = last.getBoundingClientRect();
+                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
+
+                main.style.setProperty('--merged-planned-block-height', `${blockHeight}px`);
+            });
+        } catch (e) {
+            // ignore
         }
     }
 
@@ -1282,7 +1358,12 @@ class TimeTracker {
         }
         
         this.updateSelectionOverlay(type);
-        this.showUndoButton(type, mergeKey);
+        // Undo 버튼은 좌측(계획) 열에서만 제공
+        if (type === 'planned') {
+            this.showUndoButton(type, mergeKey);
+        } else {
+            this.hideUndoButton();
+        }
         this.showScheduleButtonForSelection(type);
     }
 
@@ -1466,7 +1547,7 @@ class TimeTracker {
         } else {
             const endTime = parseInt(this.timeSlots[actualEndIndex].time);
             const nextHour = endTime === 23 ? 0 : (endTime === 3 ? 4 : endTime + 1);
-            timeField.value = `${startTime}시 - ${nextHour}시`;
+            timeField.value = `${startTime}시 ~ ${nextHour}시`;
         }
 
         activityField.value = value || '';

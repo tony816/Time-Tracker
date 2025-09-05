@@ -490,10 +490,43 @@ h1 {
 .planned-merged-main-container {
   position: relative;
   z-index: 7; /* 행 내부 오버레이 위 */
+  overflow: visible;
 }
 .planned-merged-main-container .merged-field {
   box-sizing: border-box !important;
   /* 높이, 위치는 JS에서 runtime으로 설정 */
+}
+
+/* 좌측(계획) 병합 블록의 시각적 외곽선(상/하)만 표시하여 레이아웃 높이 유지 */
+.planned-merged-main-container::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--merged-planned-block-height, 44px);
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 병합된 계획 입력을 전체 병합 높이에 맞춰 절대배치 */
+.planned-merged-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--merged-planned-block-height, 44px);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.planned-merged-overlay .merged-field {
+  height: 100%;
 }
 
 /* 좌측(계획) 병합 필드: 시간열과 맞닿는 우측 경계선 제거 */
@@ -813,6 +846,9 @@ h1 {
   text-align: center;
   background: white;
   min-width: 0;
+  /* 좌측열 병합 시 행 하단 가림요소(::after) 등보다 위에서 테두리를 보이도록 */
+  position: relative;
+  z-index: 4;
 }
 
 .timer-result-input:focus {
@@ -856,6 +892,10 @@ h1 {
   padding: 8px 12px;
   background: white;
   border-right: none;
+  /* 좌측열 병합 시 생성되는 하단 가림(overlay)보다 위에서 표시되어
+     우측 입력창(활동 기록)의 테두리가 사라져 보이지 않도록 보정 */
+  position: relative;
+  z-index: 3;
 }
 
 /* 병합된 시간 필드 스타일 */
@@ -866,6 +906,8 @@ h1 {
   border-right: 2px solid #ddd !important;
   border-top: none !important;
   border-bottom: none !important;
+  padding-top: 0 !important;      /* 오버레이 높이 계산과 일치시키기 위해 수직 패딩 제거 */
+  padding-bottom: 0 !important;
   align-self: stretch !important;
   justify-self: stretch !important;
   position: relative;           /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
@@ -912,17 +954,53 @@ h1 {
 /* 병합된 실제 활동 필드 스타일 */
 .merged-actual-main {
   background-color: white !important;
-  border: 1px solid #ddd !important;
-  border-bottom: none !important;
-  border-left: 0 !important;  /* 시간열과 겹치지 않도록 좌측 경계 제거 */
-  border-right: 0 !important; /* 외곽(타임시트) 우측 2px와 겹치지 않도록 제거 */
+  /* 컨테이너는 테두리를 그리지 않고, 내부 입력의 테두리를 사용 */
+  border: none !important;
+  padding: 0 !important;        /* 오버레이 높이 계산과 일치시키기 위해 패딩 제거 */
   align-self: stretch !important;
   justify-self: stretch !important;
+  position: relative;        /* 외곽선 오버레이 배치 기준 */
+  overflow: visible;         /* 오버레이가 아래 행으로 시각 확장되도록 */
 }
 
-/* 실제(우측) 병합 컨테이너 내부 인풋은 별도 테두리 제거 (이중선 방지) */
+/* 실제(우측) 병합 컨테이너 내부 인풋은 항상 자체 테두리를 표시 */
 .merged-actual-main .merged-field {
-  border: none !important;
+  border: 1px solid #ddd !important;  /* 실제 입력 자체의 테두리 */
+  position: relative;
+  z-index: 3;                         /* 외곽선 오버레이(2) 위, 선택오버레이(5) 아래 */
+}
+
+/* 병합된 실제 활동 블록의 시각적 외곽(상/하만 표시, 좌우는 각 셀 경계 유지) */
+.merged-actual-main::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--merged-actual-block-height, 100%);
+  border-top: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 실제(우측) 병합된 입력과 버튼을 전체 병합 높이에 맞춰 절대배치로 오버레이 */
+.actual-merged-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--merged-actual-block-height, 44px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.merged-actual-main .actual-merged-overlay .timer-result-input {
+  height: 100%;
 }
 
 .merged-actual-secondary {
