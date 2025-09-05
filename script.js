@@ -146,6 +146,9 @@ class TimeTracker {
             this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
         });
+
+        // 병합된 시간열 컨텐츠를 병합 블록의 세로 중앙으로 정렬
+        this.centerMergedTimeContent();
     }
 
     attachEventListeners() {
@@ -222,6 +225,7 @@ class TimeTracker {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
+            this.centerMergedTimeContent();
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
@@ -827,11 +831,21 @@ class TimeTracker {
                            data-merge-key="${mergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
-                        <div class="time-label">${timeRangeDisplay}</div>
-                        ${timerControls}
+                        <div class="merged-time-content">
+                            <div class="time-label">${timeRangeDisplay}</div>
+                            ${timerControls}
+                        </div>
+                    </div>`;
+        } else if (index === end) {
+            // 병합된 시간 필드의 마지막 보조 셀 - 하단 경계선 유지
+            return `<div class="time-slot-container merged-time-secondary merged-time-last" 
+                           data-merge-key="${mergeKey}"
+                           data-merge-start="${start}"
+                           data-merge-end="${end}">
+                        <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         } else {
-            // 병합된 시간 필드의 보조 셀 - 완전히 숨김 처리하여 디자인 보존
+            // 병합된 시간 필드의 중간 보조 셀 - 완전히 경계선 제거
             return `<div class="time-slot-container merged-time-secondary" 
                            data-merge-key="${mergeKey}"
                            data-merge-start="${start}"
@@ -979,6 +993,44 @@ class TimeTracker {
                                style="cursor: pointer;"
                                placeholder="">`;
             }
+        }
+    }
+
+    // 병합된 시간열의 컨텐츠(레이블+버튼)를 병합 블록의 세로 중앙으로 이동
+    centerMergedTimeContent() {
+        try {
+            const mains = document.querySelectorAll('.time-slot-container.merged-time-main');
+            if (!mains || mains.length === 0) return;
+
+            mains.forEach(main => {
+                const content = main.querySelector('.merged-time-content');
+                if (!content) return;
+
+                // 초기화: 위치 원복
+                content.style.transform = '';
+
+                const start = parseInt(main.getAttribute('data-merge-start'), 10);
+                const end = parseInt(main.getAttribute('data-merge-end'), 10);
+                const mergeKey = main.getAttribute('data-merge-key');
+
+                // 마지막 보조 셀 찾기 (경계 계산)
+                const last = document.querySelector(`.time-slot-container.merged-time-secondary.merged-time-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
+                if (!last) return;
+
+                const mainRect = main.getBoundingClientRect();
+                const lastRect = last.getBoundingClientRect();
+                const blockCenterY = (mainRect.top + lastRect.bottom) / 2;
+
+                const contentRect = content.getBoundingClientRect();
+                const contentCenterY = (contentRect.top + contentRect.bottom) / 2;
+
+                const deltaY = Math.round(blockCenterY - contentCenterY);
+                if (Math.abs(deltaY) > 1) {
+                    content.style.transform = `translateY(${deltaY}px)`;
+                }
+            });
+        } catch (e) {
+            // 무시 (안전)
         }
     }
 

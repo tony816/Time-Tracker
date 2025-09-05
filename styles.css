@@ -850,6 +850,9 @@ h1 {
   border-bottom: none !important;
   align-self: stretch !important;
   justify-self: stretch !important;
+  position: relative;           /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
+  overflow: visible;
+  z-index: 1;
 }
 
 /* 병합된 시간열: 보조셀도 열의 배경/테두리를 유지해서
@@ -858,6 +861,8 @@ h1 {
   background-color: #ecf0f1 !important;        /* 시간열 기본 배경 유지 */
   border-left: 1px solid #ddd !important;      /* 좌우 경계 유지 */
   border-right: 1px solid #ddd !important;
+  border-top: none !important;                 /* 상단 경계선 제거 */
+  border-bottom: none !important;              /* 하단 경계선 제거 */
 
   /* 셀 높이/정렬은 기존 행과 동일 */
   height: 44px !important;
@@ -871,6 +876,14 @@ h1 {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: none !important;             /* 클릭은 막되, 모양만 유지 */
+
+  /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
+  position: relative;
+}
+
+/* 병합된 시간열의 마지막 셀: 하단 경계선만 유지 */
+.merged-time-last {
+  border-bottom: 1px solid #ddd !important;
 }
 
 .merged-secondary-hidden {
@@ -896,4 +909,42 @@ h1 {
   opacity: 0 !important;
   visibility: visible !important;
   pointer-events: none !important;
+}
+
+/* 가운데 시간대 열 병합 시, 내부 가로 구분선 숨기기
+   - 각 병합 구간의 중간(마지막 제외) 보조셀 아래쪽에
+     배경색 바를 덮어써서 .time-entry 의 하단 테두리를 가린다 */
+.merged-time-secondary:not(.merged-time-last)::after {
+  content: '';
+  position: absolute;
+  left: -1px;                /* 좌우 경계선까지 덮기 */
+  right: -1px;
+  bottom: -2px;              /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
+  height: 2px;
+  background: #ecf0f1;       /* 시간열 배경과 동일 */
+  pointer-events: none;
+  z-index: 1;                /* 부모 행의 테두리 위에 표시 */
+}
+
+/* 병합된 시간열의 첫 번째(메인) 셀 아래 구분선도 가리기 */
+.merged-time-main::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -2px;
+  height: 2px;
+  background: #ecf0f1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */
+.merged-time-content {
+  position: relative;
+  z-index: 2;                /* 가림 오버레이보다 위 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
