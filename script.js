@@ -232,6 +232,7 @@ class TimeTracker {
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
             this.hideScheduleButton();
+            this.centerMergedTimeContent();
         });
     }
 
@@ -1008,6 +1009,7 @@ class TimeTracker {
 
                 // 초기화: 위치 원복
                 content.style.transform = '';
+                main.style.removeProperty('--merged-block-height');
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
@@ -1020,6 +1022,8 @@ class TimeTracker {
                 const mainRect = main.getBoundingClientRect();
                 const lastRect = last.getBoundingClientRect();
                 const blockCenterY = (mainRect.top + lastRect.bottom) / 2;
+                const blockHeight = Math.round((lastRect.bottom - mainRect.top) + 2); // 상하 1px 외곽선 포함
+                main.style.setProperty('--merged-block-height', `${blockHeight}px`);
 
                 const contentRect = content.getBoundingClientRect();
                 const contentCenterY = (contentRect.top + contentRect.bottom) / 2;

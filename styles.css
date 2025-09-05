@@ -119,6 +119,13 @@ h1 {
     font-weight: inherit;
 }
 
+/* 헤더의 '시간' 라벨이 본문 시간 라벨 스타일에 영향을 받지 않도록 명시 */
+.header-row .time-label {
+  color: white !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+}
+
 .time-entry {
     display: grid;
     grid-template-columns: 1fr 80px 1fr;
@@ -150,7 +157,7 @@ h1 {
     gap: 4px;
 }
 
-.time-label {
+.time-slot-container .time-label {
     font-size: 14px;
     font-weight: 700;
     color: #2c3e50;
@@ -846,21 +853,20 @@ h1 {
 /* 병합된 시간 필드 스타일 */
 .merged-time-main {
   background-color: #ecf0f1 !important;
-  border: 1px solid #ddd !important;
-  border-bottom: none !important;
+  border: none !important;                    /* 외곽선은 ::before에서 일괄 처리 */
   align-self: stretch !important;
   justify-self: stretch !important;
   position: relative;           /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
   overflow: visible;
-  z-index: 1;
+  z-index: 5;
 }
 
 /* 병합된 시간열: 보조셀도 열의 배경/테두리를 유지해서
    전체가 하나의 긴 블록처럼 보이도록 한다 */
 .merged-time-secondary {
   background-color: #ecf0f1 !important;        /* 시간열 기본 배경 유지 */
-  border-left: 1px solid #ddd !important;      /* 좌우 경계 유지 */
-  border-right: 1px solid #ddd !important;
+  border-left: none !important;                /* 외곽선은 main::before가 담당 */
+  border-right: none !important;
   border-top: none !important;                 /* 상단 경계선 제거 */
   border-bottom: none !important;              /* 하단 경계선 제거 */
 
@@ -883,7 +889,7 @@ h1 {
 
 /* 병합된 시간열의 마지막 셀: 하단 경계선만 유지 */
 .merged-time-last {
-  border-bottom: 1px solid #ddd !important;
+  /* 별도 하단 테두리 지정 없음: 행의 2px 경계선 노출로 두께 일관성 유지 */
 }
 
 .merged-secondary-hidden {
@@ -923,7 +929,7 @@ h1 {
   height: 2px;
   background: #ecf0f1;       /* 시간열 배경과 동일 */
   pointer-events: none;
-  z-index: 1;                /* 부모 행의 테두리 위에 표시 */
+  z-index: 2;                /* 부모 행의 테두리 위에 표시 */
 }
 
 /* 병합된 시간열의 첫 번째(메인) 셀 아래 구분선도 가리기 */
@@ -936,13 +942,26 @@ h1 {
   height: 2px;
   background: #ecf0f1;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
+}
+
+/* 병합된 시간열 전체를 감싸는 외곽선(사각형) */
+.merged-time-main::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: var(--merged-block-height, 100%);
+  border: 1px solid #ddd;
+  pointer-events: none;
+  z-index: 6;
 }
 
 /* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */
 .merged-time-content {
   position: relative;
-  z-index: 2;                /* 가림 오버레이보다 위 */
+  z-index: 10;               /* 외곽선/가림 오버레이보다 위 */
   display: flex;
   flex-direction: column;
   align-items: center;
