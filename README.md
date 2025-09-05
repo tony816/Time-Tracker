@@ -96,6 +96,16 @@ Time-Tracker/
 - 데이터는 브라우저의 로컬스토리지에 저장되므로 브라우저를 완전히 초기화하면 데이터가 사라질 수 있습니다
 - 다른 기기에서 동일한 데이터를 사용하려면 수동으로 내보내기/가져오기 기능을 사용하세요
 
+## 데이터 내보내기/가져오기
+
+- 내보내기: 화면 하단의 `내보내기` 버튼을 클릭하면 현재 브라우저의 모든 날짜(`timesheet_YYYY-MM-DD`) 데이터를 JSON 파일로 저장합니다.
+- 가져오기: `가져오기` 버튼을 클릭해 JSON 파일을 선택하면 데이터를 불러옵니다.
+  - 동일 날짜 데이터가 존재하면 덮어쓰기 여부를 확인합니다(취소 시 중복 날짜는 건너뜀).
+  - 지원 포맷
+    - 전체 내보내기 포맷: `{ version, exportedAt, dates: { 'YYYY-MM-DD': { date, timeSlots, mergedFields } } }`
+    - 단일 날짜 포맷: `{ date, timeSlots, mergedFields }`
+    - 배열 포맷: `[ { date, timeSlots, mergedFields }, ... ]`
+
 ---
 
 **개발**: Claude Code로 생성됨

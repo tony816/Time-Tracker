@@ -87,7 +87,7 @@ class TimeTracker {
                         data-index="${index}" 
                         data-type="planned" 
                         value="${slot.planned}"
-                        placeholder="">`;
+                        placeholder="" readonly tabindex="-1" style="cursor: default;">`;
                         
             const actualContent = actualMergeKey ? 
                 this.createMergedField(actualMergeKey, 'actual', index, slot.actual) :
@@ -198,6 +198,34 @@ class TimeTracker {
             this.changeDate(1);
         });
 
+        // 병합된 셀은 완전 일체화: 어느 위치를 클릭해도 전체 범위 선택
+        const timeEntries = document.getElementById('timeEntries');
+        if (timeEntries) {
+            // 캡처 단계에서 먼저 가로챔: 드래그/단일선택 로직보다 선행
+            const captureHandler = (e) => this.handleMergedClickCapture(e);
+            timeEntries.addEventListener('mousedown', captureHandler, true);
+            timeEntries.addEventListener('click', captureHandler, true);
+        }
+
+        // 데이터 내보내기/가져오기
+        const exportBtn = document.getElementById('exportBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportAllData();
+            });
+        }
+        const importBtn = document.getElementById('importBtn');
+        const importFileInput = document.getElementById('importFile');
+        if (importBtn && importFileInput) {
+            importBtn.addEventListener('click', () => {
+                importFileInput.value = '';
+                importFileInput.click();
+            });
+            importFileInput.addEventListener('change', (e) => {
+                this.handleImportFileChange(e);
+            });
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.clearAllSelections();
@@ -238,6 +266,99 @@ class TimeTracker {
 
     setCurrentDate() {
         document.getElementById('date').value = this.currentDate;
+    }
+
+    // 병합 셀 내부 어디를 클릭해도 전체 병합 범위를 선택하도록 캡처 처리
+    handleMergedClickCapture(e) {
+        const target = e.target;
+        // 예외: 실제 활동 상세 기록 버튼은 통과
+        if (target.closest && target.closest('.activity-log-btn')) return;
+
+        // 시간열(병합) 클릭은 선택과 무관하므로 이벤트만 차단
+        const timeMerged = target.closest && target.closest('.time-slot-container.merged-time-main, .time-slot-container.merged-time-secondary');
+        if (timeMerged) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
+        // 계획(좌측) 병합 클릭 처리
+        const plannedEl = target.closest && target.closest('.planned-input[data-merge-key]');
+        if (plannedEl) {
+            const mergeKey = plannedEl.getAttribute('data-merge-key');
+            if (!mergeKey) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.type === 'mousedown') return; // 클릭에서 처리
+            if (this.isMergeRangeSelected('planned', mergeKey)) this.clearSelection('planned');
+            else {
+                this.clearAllSelections();
+                this.selectMergedRange('planned', mergeKey);
+            }
+            return;
+        }
+
+        // 실제(우측) 병합 클릭 처리 - 메인/보조 컨테이너 모두 지원
+        const actualContainer = target.closest && target.closest('.actual-field-container.merged-actual-main[data-merge-key], .actual-field-container.merged-actual-secondary[data-merge-key]');
+        if (actualContainer) {
+            const mergeKey = actualContainer.getAttribute('data-merge-key');
+            if (!mergeKey) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.type === 'mousedown') return;
+            if (this.isMergeRangeSelected('actual', mergeKey)) this.clearSelection('actual');
+            else {
+                this.clearAllSelections();
+                this.selectMergedRange('actual', mergeKey);
+            }
+            return;
+        }
+
+        // 보조 요소(pointer-events: none) 등으로 위 검사에 걸리지 않는 경우 좌표 기반 판정
+        const row = target.closest && target.closest('.time-entry');
+        if (row && typeof e.clientX === 'number') {
+            const rowRect = row.getBoundingClientRect();
+            const index = parseInt(row.getAttribute('data-index'), 10);
+            const x = e.clientX, y = e.clientY;
+
+            // 좌측(계획) 컬럼 영역
+            const prEl = row.querySelector('.planned-input');
+            if (prEl) {
+                const pr = prEl.getBoundingClientRect();
+                const inPlanned = (x >= pr.left && x <= pr.right && y >= rowRect.top && y <= rowRect.bottom);
+                if (inPlanned) {
+                    const mk = this.findMergeKey('planned', index);
+                    if (mk) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.type === 'click') {
+                            if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
+                            else { this.clearAllSelections(); this.selectMergedRange('planned', mk); }
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // 우측(실제) 컬럼 영역
+            const arEl = row.querySelector('.actual-input');
+            if (arEl) {
+                const ar = arEl.getBoundingClientRect();
+                const inActual = (x >= ar.left && x <= ar.right && y >= rowRect.top && y <= rowRect.bottom);
+                if (inActual) {
+                    const mk = this.findMergeKey('actual', index);
+                    if (mk) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.type === 'click') {
+                            if (this.isMergeRangeSelected('actual', mk)) this.clearSelection('actual');
+                            else { this.clearAllSelections(); this.selectMergedRange('actual', mk); }
+                        }
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     calculateTotals() {
@@ -370,6 +491,113 @@ class TimeTracker {
         this.renderTimeEntries();
         this.calculateTotals();
         localStorage.removeItem(`timesheet_${this.currentDate}`);
+    }
+
+    // 내보내기: 로컬스토리지의 모든 날짜 데이터(JSON) 저장
+    exportAllData() {
+        try {
+            const prefix = 'timesheet_';
+            const dates = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith(prefix)) {
+                    try {
+                        const item = JSON.parse(localStorage.getItem(key));
+                        if (item && item.date) {
+                            dates[item.date] = item;
+                        }
+                    } catch (e) {
+                        // skip invalid entries
+                    }
+                }
+            }
+            const payload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                dates
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
+            a.href = url;
+            a.download = `timesheet-export-${ts}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showNotification('데이터를 JSON으로 내보냈습니다.');
+        } catch (err) {
+            alert('내보내기에 실패했습니다.');
+        }
+    }
+
+    // 가져오기: JSON 파일을 파싱하여 로컬스토리지에 병합/저장
+    handleImportFileChange(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = reader.result;
+                const obj = JSON.parse(text);
+                const importedCount = this.importDataObject(obj);
+                if (importedCount > 0) {
+                    this.showNotification(`가져오기 완료: ${importedCount}일 데이터`);
+                    // 현재 날짜 데이터 새로고침
+                    this.loadData();
+                } else {
+                    alert('가져올 유효한 데이터가 없습니다.');
+                }
+            } catch (err) {
+                alert('가져오기에 실패했습니다. 올바른 JSON 파일인지 확인하세요.');
+            }
+        };
+        reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다.');
+        reader.readAsText(file);
+    }
+
+    importDataObject(obj) {
+        const prefix = 'timesheet_';
+        let items = [];
+        if (!obj) return 0;
+
+        // 지원 포맷 1: { version, dates: { 'YYYY-MM-DD': {..} } }
+        if (obj.dates && typeof obj.dates === 'object') {
+            items = Object.values(obj.dates);
+        }
+        // 지원 포맷 2: 단일 날짜 객체 { date, timeSlots, mergedFields }
+        else if (obj.date && obj.timeSlots) {
+            items = [obj];
+        }
+        // 지원 포맷 3: 배열 형태
+        else if (Array.isArray(obj)) {
+            items = obj.filter(it => it && it.date && it.timeSlots);
+        }
+
+        if (items.length === 0) return 0;
+
+        // 중복 확인
+        const duplicates = items.filter(it => !!localStorage.getItem(`${prefix}${it.date}`)).map(it => it.date);
+        let overwrite = true;
+        if (duplicates.length > 0) {
+            overwrite = confirm(`동일한 날짜 데이터(${duplicates.length}건)가 존재합니다.\n덮어쓰시겠습니까? 취소하면 중복 날짜는 건너뜁니다.`);
+        }
+
+        let imported = 0;
+        items.forEach(it => {
+            const key = `${prefix}${it.date}`;
+            if (!localStorage.getItem(key) || overwrite) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(it));
+                    imported++;
+                } catch (e) {
+                    // ignore set error for this item
+                }
+            }
+        });
+       
+        return imported;
     }
 
     changeDate(days) {
@@ -549,10 +777,10 @@ class TimeTracker {
         
         if (selectedSet.has(index)) {
             selectedSet.delete(index);
-            field.classList.remove('field-selected');
+            if (field) field.classList.remove('field-selected');
         } else {
             selectedSet.add(index);
-            field.classList.add('field-selected');
+            // 시각 효과는 오버레이로만 처리
         }
     }
 
@@ -566,9 +794,7 @@ class TimeTracker {
             const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
             selectedSet.add(i);
             const field = document.querySelector(`[data-index="${i}"] .${type}-input`);
-            if (field) {
-                field.classList.add('field-selected');
-            }
+            // 필드 클래스 하이라이트는 사용하지 않음 (투명 오버레이만)
         }
         
         this.updateSelectionOverlay(type);
@@ -971,7 +1197,7 @@ class TimeTracker {
                         </div>`;
             }
         } else {
-            // 좌측 계획 열의 경우 기존 로직 유지
+            // 좌측 계획 열의 경우 기존 로직 유지 (인풋은 편집 대신 선택/모달용으로만 사용)
             if (index === start) {
                 return `<input type="text" class="input-field ${type}-input merged-field merged-main" 
                                data-index="${index}" 
@@ -980,7 +1206,7 @@ class TimeTracker {
                                data-merge-start="${start}"
                                data-merge-end="${end}"
                                value="${this.mergedFields.get(mergeKey)}"
-                               placeholder="">`;
+                               placeholder="" readonly tabindex="-1" style="cursor: default;">`;
             } else {
                 return `<input type="text" class="input-field ${type}-input merged-secondary" 
                                data-index="${index}" 
@@ -991,7 +1217,7 @@ class TimeTracker {
                                value="${this.mergedFields.get(mergeKey)}"
                                readonly
                                tabindex="-1"
-                               style="cursor: pointer;"
+                               style="cursor: default;"
                                placeholder="">`;
             }
         }
@@ -1038,6 +1264,9 @@ class TimeTracker {
         }
     }
 
+    // (의도 변경) 좌측 계획 입력은 모달로만 편집하며
+    // 인풋 필드는 표시/선택 용도로만 사용합니다.
+
     selectMergedRange(type, mergeKey) {
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
@@ -1049,14 +1278,7 @@ class TimeTracker {
         
         for (let i = start; i <= end; i++) {
             selectedSet.add(i);
-            const field = document.querySelector(`[data-index="${i}"] .${type}-input`);
-            if (field) {
-                field.classList.add('field-selected');
-                const row = field.closest('.time-entry');
-                if (row) {
-                    row.classList.add(type === 'planned' ? 'selected-merged-planned' : 'selected-merged-actual');
-                }
-            }
+            // 선택 시각 효과는 공통 오버레이로 대체
         }
         
         this.updateSelectionOverlay(type);
