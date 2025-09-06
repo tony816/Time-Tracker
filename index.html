@@ -75,12 +75,21 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="scheduleTime">시간:</label>
+            <label for="scheduleTime">시간</label>
             <input type="text" id="scheduleTime" readonly>
           </div>
           <div class="form-group">
-            <label for="scheduleActivity">활동:</label>
-            <textarea id="scheduleActivity" placeholder="활동을 입력하세요..."></textarea>
+            <label for="activityInput">활동 (다중 선택 가능)</label>
+            <div class="multi-select" id="activityMulti">
+              <div class="selected-chips" id="activityChips"></div>
+              <div class="multi-input-row">
+                <input type="text" id="activityInput" placeholder="활동 추가 또는 검색" />
+                <button type="button" id="addActivityOption" class="add-option-btn">추가</button>
+              </div>
+              <div class="dropdown" id="activityDropdown">
+                <ul id="activityOptions"></ul>
+              </div>
+            </div>
           </div>
           <div class="form-actions">
             <button id="saveSchedule" class="save-btn">저장</button>
@@ -99,20 +108,16 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="activityTime">시간:</label>
+            <label for="activityTime">시간</label>
             <input type="text" id="activityTime" readonly>
           </div>
           <div class="form-group">
-            <label for="activityTitle">활동 제목:</label>
-            <input type="text" id="activityTitle" placeholder="활동 제목을 입력하세요">
+            <label for="activityTitle">활동 기록</label>
+            <input type="text" id="activityTitle" placeholder="시간 기록/수정하기">
           </div>
           <div class="form-group">
-            <label for="activityDetails">상세 내용:</label>
-            <textarea id="activityDetails" placeholder="활동에 대한 상세한 내용을 입력하세요..." rows="8"></textarea>
-          </div>
-          <div class="form-group">
-            <label for="activityOutcome">결과/성과:</label>
-            <textarea id="activityOutcome" placeholder="활동의 결과나 성과를 입력하세요..." rows="4"></textarea>
+            <label for="activityDetails">피드백</label>
+            <textarea id="activityDetails" placeholder="스스로에게 피드백하기" rows="8"></textarea>
           </div>
           <div class="form-actions">
             <button id="saveActivityLog" class="save-btn">저장</button>

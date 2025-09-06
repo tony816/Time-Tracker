@@ -13,6 +13,8 @@ class TimeTracker {
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
         this.scheduleButton = null;
+        this.plannedActivities = [];
+        this.modalSelectedActivities = [];
         // 타이머 관련 속성 추가
         this.timers = new Map(); // {index: {running, elapsed, startTime, intervalId}}
         this.timerInterval = null;
@@ -26,6 +28,7 @@ class TimeTracker {
         this.setCurrentDate();
         this.loadData();
         this.attachModalEventListeners();
+        this.loadPlannedActivities();
         this.attachActivityModalEventListeners();
     }
 
@@ -214,6 +217,21 @@ class TimeTracker {
             const captureHandler = (e) => this.handleMergedClickCapture(e);
             timeEntries.addEventListener('mousedown', captureHandler, true);
             timeEntries.addEventListener('click', captureHandler, true);
+
+            // 좌측열 호버만으로도 스케줄 버튼이 자연스럽게 따라오도록 마우스 이동 추적
+            timeEntries.addEventListener('mousemove', (e) => {
+                if (this.isSelectingPlanned) return; // 드래그 중엔 표시 안 함
+                const idx = this.getIndexAtClientPosition('planned', e.clientX, e.clientY);
+                if (idx != null && !isNaN(idx)) {
+                    this.showScheduleButtonOnHover(idx);
+                }
+            });
+            timeEntries.addEventListener('mouseleave', (e) => {
+                const toEl = e.relatedTarget;
+                // 스케줄 버튼으로 이동할 때는 유지
+                if (toEl && toEl.closest && toEl.closest('.schedule-button')) return;
+                this.hideHoverScheduleButton && this.hideHoverScheduleButton();
+            });
         }
 
         // 데이터 내보내기/가져오기
@@ -241,11 +259,23 @@ class TimeTracker {
             }
         });
         
-        // 타이머 결과 입력 필드 이벤트 리스너
+        // 타이머 결과 입력 필드 이벤트 리스너 (우측 칸과 모달을 연결: 병합 포함 갱신)
         document.getElementById('timeEntries').addEventListener('input', (e) => {
             if (e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
-                this.timeSlots[index].actual = e.target.value;
+                const value = e.target.value;
+                const actualMergeKey = this.findMergeKey('actual', index);
+                if (actualMergeKey) {
+                    const [, startStr, endStr] = actualMergeKey.split('-');
+                    const start = parseInt(startStr, 10);
+                    const end = parseInt(endStr, 10);
+                    this.mergedFields.set(actualMergeKey, value);
+                    for (let i = start; i <= end; i++) {
+                        this.timeSlots[i].actual = (i === start) ? value : '';
+                    }
+                } else {
+                    this.timeSlots[index].actual = value;
+                }
                 this.calculateTotals();
                 this.autoSave();
             }
@@ -263,12 +293,13 @@ class TimeTracker {
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
             this.centerMergedTimeContent();
+            this.hideHoverScheduleButton && this.hideHoverScheduleButton();
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
-            this.hideScheduleButton();
+            this.hideHoverScheduleButton && this.hideHoverScheduleButton();
             this.centerMergedTimeContent();
         });
     }
@@ -283,9 +314,13 @@ class TimeTracker {
         // 예외: 실제 활동 상세 기록 버튼은 통과
         if (target.closest && target.closest('.activity-log-btn')) return;
 
-        // 시간열(병합) 클릭은 선택과 무관하므로 이벤트만 차단
+        // 시간열(병합) 클릭: 타이머 컨트롤은 통과, 그 외는 선택과 무관하므로 차단
         const timeMerged = target.closest && target.closest('.time-slot-container.merged-time-main, .time-slot-container.merged-time-secondary');
         if (timeMerged) {
+            // 타이머 버튼/컨트롤 영역 클릭이면 통과시킴
+            if (target.closest('.timer-controls-container') || target.closest('.timer-btn')) {
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
             return;
@@ -307,21 +342,7 @@ class TimeTracker {
             return;
         }
 
-        // 실제(우측) 병합 클릭 처리 - 메인/보조 컨테이너 모두 지원
-        const actualContainer = target.closest && target.closest('.actual-field-container.merged-actual-main[data-merge-key], .actual-field-container.merged-actual-secondary[data-merge-key]');
-        if (actualContainer) {
-            const mergeKey = actualContainer.getAttribute('data-merge-key');
-            if (!mergeKey) return;
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.type === 'mousedown') return;
-            if (this.isMergeRangeSelected('actual', mergeKey)) this.clearSelection('actual');
-            else {
-                this.clearAllSelections();
-                this.selectMergedRange('actual', mergeKey);
-            }
-            return;
-        }
+        // 실제(우측) 병합 클릭은 선택/병합 조작을 제공하지 않음
 
         // 보조 요소(pointer-events: none) 등으로 위 검사에 걸리지 않는 경우 좌표 기반 판정
         const row = target.closest && target.closest('.time-entry');
@@ -637,22 +658,7 @@ class TimeTracker {
                 }
             });
         }
-        if (actualField) {
-            actualField.addEventListener('click', (e) => {
-                const mergeKey = this.findMergeKey('actual', index);
-                if (!mergeKey) return;
-
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (this.isMergeRangeSelected('actual', mergeKey)) {
-                    this.clearSelection('actual');
-                } else {
-                    this.clearAllSelections();
-                    this.selectMergedRange('actual', mergeKey);
-                }
-            });
-        }
+        // 우측(실제) 열은 개별 선택/드래그/병합 조작을 제공하지 않음
 
         let plannedMouseMoved = false;
         if (plannedField) {
@@ -696,6 +702,11 @@ class TimeTracker {
                 }
             });
             plannedField.addEventListener('mouseenter', (e) => {
+                // 드래그 중이 아닐 때는 선택 유무와 관계없이 (단, 멀티선택/자기 자신은 내부 가드) 호버 버튼 표시
+                if (!this.isSelectingPlanned) {
+                    this.showScheduleButtonOnHover(index);
+                }
+                // 병합 셀에서는 드래그 확장 업데이트만 생략
                 if (this.findMergeKey('planned', index)) return;
                 if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
                     plannedMouseMoved = true;
@@ -705,63 +716,54 @@ class TimeTracker {
                     this.selectFieldRange('planned', this.dragStartIndex, index);
                 }
             });
+            plannedField.addEventListener('mouseleave', (e) => {
+                const toEl = e.relatedTarget;
+                // 1) 스케줄 버튼으로 이동하는 경우 유지
+                if (toEl && toEl.closest && toEl.closest('.schedule-button')) return;
+                // 2) 병합된 계획 블록 내부로 이동하는 경우(같은 mergeKey) 유지
+                const mk = this.findMergeKey('planned', index);
+                if (mk && toEl && toEl.closest) {
+                    if (
+                        toEl.closest(`.planned-merged-main-container[data-merge-key="${mk}"]`) ||
+                        toEl.closest('.planned-merged-overlay') ||
+                        toEl.closest(`.input-field.planned-input[data-merge-key="${mk}"]`)
+                    ) {
+                        return;
+                    }
+                }
+                // 3) 그 외에는 호버 버튼만 정리(선택 오버레이 버튼은 유지)
+                this.hideHoverScheduleButton();
+            });
+
+            // 병합된 계획(좌측) 메인 컨테이너에서도 호버 버튼을 제어
+            const mk2 = this.findMergeKey('planned', index);
+            if (mk2) {
+                const mergedMain = entryDiv.querySelector(`.planned-merged-main-container[data-merge-key="${mk2}"]`);
+                if (mergedMain) {
+                    const updateHover = (ev) => {
+                        if (this.isSelectingPlanned) return; // 드래그 중엔 표시 안 함
+                        const hoverIdx = this.getIndexAtClientPosition('planned', ev.clientX, ev.clientY);
+                        if (hoverIdx != null) this.showScheduleButtonOnHover(hoverIdx);
+                    };
+                    mergedMain.addEventListener('mouseenter', updateHover);
+                    mergedMain.addEventListener('mousemove', updateHover);
+                    mergedMain.addEventListener('mouseleave', (ev) => {
+                        const toEl2 = ev.relatedTarget;
+                        if (toEl2 && toEl2.closest && (
+                            toEl2.closest('.schedule-button') ||
+                            toEl2.closest(`.planned-merged-main-container[data-merge-key="${mk2}"]`)
+                        )) return;
+                        this.hideHoverScheduleButton();
+                    });
+                }
+            }
         }
         
-        let actualMouseMoved = false;
-        if (actualField) {
-            actualField.addEventListener('mousedown', (e) => {
-                if (this.findMergeKey('actual', index)) return;
-                if (e.target === actualField && !actualField.matches(':focus')) {
-                    e.preventDefault();
-                    actualMouseMoved = false;
-                    this.dragStartIndex = index;
-                    this.currentColumnType = 'actual';
-                    this.isSelectingActual = true;
-                }
-            });
-            actualField.addEventListener('mousemove', (e) => {
-                if (this.findMergeKey('actual', index)) return;
-                if (this.isSelectingActual && this.currentColumnType === 'actual') {
-                    actualMouseMoved = true;
-                }
-            });
-            actualField.addEventListener('mouseup', (e) => {
-                if (this.findMergeKey('actual', index)) return;
-                if (e.target === actualField && !actualField.matches(':focus') && this.currentColumnType === 'actual') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    if (!actualMouseMoved) {
-                        if (this.selectedActualFields.has(index) && this.selectedActualFields.size === 1) {
-                            this.clearSelection('actual');
-                        } else {
-                            this.clearAllSelections();
-                            this.selectFieldRange('actual', index, index);
-                        }
-                    } else {
-                        if (!e.ctrlKey && !e.metaKey) {
-                            this.clearSelection('actual');
-                        }
-                        this.selectFieldRange('actual', this.dragStartIndex, index);
-                    }
-                    this.isSelectingActual = false;
-                    this.currentColumnType = null;
-                }
-            });
-            actualField.addEventListener('mouseenter', (e) => {
-                if (this.findMergeKey('actual', index)) return;
-                if (this.isSelectingActual && this.currentColumnType === 'actual' && this.dragStartIndex !== index) {
-                    actualMouseMoved = true;
-                    if (!e.ctrlKey && !e.metaKey) {
-                        this.clearSelection('actual');
-                    }
-                    this.selectFieldRange('actual', this.dragStartIndex, index);
-                }
-            });
-        }
+        // actualField에 대해서는 어떤 드래그 선택 리스너도 추가하지 않음
     }
 
     startFieldSelection(type, index, e) {
+        if (type !== 'planned') return; // 우측 열에서 시작 조작 금지
         this.currentColumnType = type;
         this.dragStartIndex = index;
         
@@ -771,12 +773,6 @@ class TimeTracker {
                 this.clearSelection('planned');
             }
             this.toggleFieldSelection('planned', index);
-        } else if (type === 'actual') {
-            this.isSelectingActual = true;
-            if (!e.ctrlKey && !e.metaKey) {
-                this.clearSelection('actual');
-            }
-            this.toggleFieldSelection('actual', index);
         }
     }
 
@@ -794,6 +790,7 @@ class TimeTracker {
     }
 
     selectFieldRange(type, startIndex, endIndex) {
+        if (type !== 'planned') return; // 우측 열 멀티 선택 금지
         this.clearSelection(type);
         
         const start = Math.min(startIndex, endIndex);
@@ -808,9 +805,9 @@ class TimeTracker {
         
         this.updateSelectionOverlay(type);
         
-        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
+        const selectedSet = this.selectedPlannedFields;
         if (selectedSet.size > 1) {
-            this.showMergeButton(type);
+            this.showMergeButton('planned');
         }
         this.showScheduleButtonForSelection(type);
     }
@@ -841,6 +838,7 @@ class TimeTracker {
     }
     
     showMergeButton(type) {
+        if (type !== 'planned') return; // 우측 열 병합 버튼 금지
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         
         if (selectedSet.size > 1) {
@@ -885,6 +883,7 @@ class TimeTracker {
                 this.mergeButton = document.createElement('button');
                 this.mergeButton.className = 'merge-button';
                 this.mergeButton.textContent = '병합';
+                // 기본 배치(선택 중앙) 후, 스케줄 버튼이 있으면 우측으로 재배치
                 this.mergeButton.style.left = `${centerX + scrollX - 25}px`;
                 this.mergeButton.style.top = `${centerY + scrollY - 15}px`;
                 
@@ -893,6 +892,9 @@ class TimeTracker {
                 });
                 
                 document.body.appendChild(this.mergeButton);
+                // 병합 버튼과 스케줄 버튼은 동시 표기하지 않음
+                this.hideScheduleButton();
+                this.repositionButtonsNextToSchedule();
             }
         }
     }
@@ -928,14 +930,16 @@ class TimeTracker {
             
             this.undoButton = document.createElement('button');
             this.undoButton.className = 'undo-button';
-            this.undoButton.style.left = `${centerX + scrollX - 15}px`;
-            this.undoButton.style.top = `${centerY + scrollY - 15}px`;
+            // 기본 배치(중앙) 후, 스케줄 버튼이 있으면 우측으로 재배치
+            this.undoButton.style.left = `${centerX + scrollX - 17}px`;
+            this.undoButton.style.top = `${centerY + scrollY - 17}px`;
             
             this.undoButton.addEventListener('click', () => {
                 this.undoMerge(type, mergeKey);
             });
             
             document.body.appendChild(this.undoButton);
+            this.repositionButtonsNextToSchedule();
         }
     }
     
@@ -1095,18 +1099,40 @@ class TimeTracker {
     }
 
     createTimerControls(index, slot) {
-        const currentHour = new Date().getHours();
-        const slotTime = parseInt(slot.time);
-        const hasPlannedActivity = slot.planned && slot.planned.trim() !== '';
-        const isCurrentTime = currentHour === slotTime;
-        const canStart = hasPlannedActivity && isCurrentTime;
+        // 허용 여부 계산: 병합된 계획/시간 범위 고려
+        const currentIndex = this.getCurrentTimeIndex();
+        // 시간 병합 범위 확인 (없으면 현재 인덱스 단일 셀 취급)
+        let timeStart = index;
+        let timeEnd = index;
+        const timeMergeKey = this.findMergeKey('time', index);
+        if (timeMergeKey) {
+            const parts = timeMergeKey.split('-');
+            timeStart = parseInt(parts[1], 10);
+            timeEnd = parseInt(parts[2], 10);
+        }
+
+        // 계획 텍스트 존재 여부: 병합된 계획값을 우선 사용
+        let plannedText = '';
+        const plannedMergeKeyForIndex = this.findMergeKey('planned', index);
+        const plannedMergeKeyForCurrent = (currentIndex >= 0) ? this.findMergeKey('planned', currentIndex) : null;
+        if (plannedMergeKeyForIndex) {
+            plannedText = (this.mergedFields.get(plannedMergeKeyForIndex) || '').trim();
+        } else if (plannedMergeKeyForCurrent) {
+            plannedText = (this.mergedFields.get(plannedMergeKeyForCurrent) || '').trim();
+        } else {
+            plannedText = (slot.planned || '').trim();
+        }
+
+        const hasPlannedActivity = plannedText !== '';
+        const isCurrentTimeInRange = currentIndex >= timeStart && currentIndex <= timeEnd;
+        const canStart = hasPlannedActivity && isCurrentTimeInRange;
         const isRunning = slot.timer.running;
         const hasElapsed = slot.timer.elapsed > 0;
-        
+
         let buttonIcon = '▶️';
         let buttonAction = 'start';
         let buttonDisabled = !canStart && !isRunning;
-        
+
         if (isRunning) {
             buttonIcon = '⏸️';
             buttonAction = 'pause';
@@ -1116,11 +1142,11 @@ class TimeTracker {
             buttonAction = 'resume';
             buttonDisabled = !canStart;
         }
-        
+
         const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
         const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
         const timerDisplay = this.formatTime(slot.timer.elapsed);
-        
+
         return `
             <div class="timer-controls-container ${isRunning ? 'timer-running' : ''}" data-index="${index}">
                 <div class="timer-controls">
@@ -1167,9 +1193,33 @@ class TimeTracker {
     canStartTimer(index) {
         const slot = this.timeSlots[index];
         const currentTimeIndex = this.getCurrentTimeIndex();
-        const hasPlannedActivity = slot.planned && slot.planned.trim() !== '';
-        
-        return hasPlannedActivity && currentTimeIndex === index;
+        if (currentTimeIndex < 0) return false;
+
+        // 시간 병합 범위 고려
+        let timeStart = index;
+        let timeEnd = index;
+        const timeMergeKey = this.findMergeKey('time', index);
+        if (timeMergeKey) {
+            const parts = timeMergeKey.split('-');
+            timeStart = parseInt(parts[1], 10);
+            timeEnd = parseInt(parts[2], 10);
+        }
+
+        // 계획 텍스트 존재 여부: 병합된 계획값 포함해서 판단
+        let plannedText = '';
+        const plannedMergeKeyForIndex = this.findMergeKey('planned', index);
+        const plannedMergeKeyForCurrent = this.findMergeKey('planned', currentTimeIndex);
+        if (plannedMergeKeyForIndex) {
+            plannedText = (this.mergedFields.get(plannedMergeKeyForIndex) || '').trim();
+        } else if (plannedMergeKeyForCurrent) {
+            plannedText = (this.mergedFields.get(plannedMergeKeyForCurrent) || '').trim();
+        } else {
+            plannedText = (slot.planned || '').trim();
+        }
+
+        const hasPlannedActivity = plannedText !== '';
+        const isCurrentInRange = currentTimeIndex >= timeStart && currentTimeIndex <= timeEnd;
+        return hasPlannedActivity && isCurrentInRange;
     }
     
     createMergedField(mergeKey, type, index, value) {
@@ -1262,22 +1312,23 @@ class TimeTracker {
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                const mergeKey = main.getAttribute('data-merge-key');
-
-                // 마지막 보조 셀 찾기 (경계 계산)
-                const last = document.querySelector(`.time-slot-container.merged-time-secondary.merged-time-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
-                if (!last) return;
-
-                const mainRect = main.getBoundingClientRect();
-                const lastRect = last.getBoundingClientRect();
-                const blockCenterY = (mainRect.top + lastRect.bottom) / 2;
-                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
-                main.style.setProperty('--merged-block-height', `${blockHeight}px`);
+                // 블록 전체 높이를 각 행 높이의 합으로 계산
+                let totalHeight = 0;
+                let firstRowTop = null;
+                for (let i = start; i <= end; i++) {
+                    const row = document.querySelector(`.time-entry[data-index="${i}"]`);
+                    if (!row) continue;
+                    const r = row.getBoundingClientRect();
+                    if (firstRowTop === null) firstRowTop = r.top;
+                    totalHeight += (r.bottom - r.top);
+                }
+                if (firstRowTop === null) return;
+                main.style.setProperty('--merged-block-height', `${totalHeight}px`);
 
                 const contentRect = content.getBoundingClientRect();
                 const contentCenterY = (contentRect.top + contentRect.bottom) / 2;
-
-                const deltaY = Math.round(blockCenterY - contentCenterY);
+                const blockCenterY = firstRowTop + (totalHeight / 2);
+                const deltaY = blockCenterY - contentCenterY;
                 if (Math.abs(deltaY) > 1) {
                     content.style.transform = `translateY(${deltaY}px)`;
                 }
@@ -1296,17 +1347,17 @@ class TimeTracker {
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                const mergeKey = main.getAttribute('data-merge-key');
-
-                const last = document.querySelector(`.actual-field-container.merged-actual-secondary.merged-actual-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
-                if (!last) return;
-
-                const mainRect = main.getBoundingClientRect();
-                const lastRect = last.getBoundingClientRect();
-                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
-
+                // 각 행 높이의 합으로 블록 높이 계산
+                let totalHeight = 0;
+                for (let i = start; i <= end; i++) {
+                    const row = document.querySelector(`.time-entry[data-index="${i}"]`);
+                    if (!row) continue;
+                    const r = row.getBoundingClientRect();
+                    totalHeight += (r.bottom - r.top);
+                }
+                if (totalHeight <= 0) return;
                 // 레이아웃은 고정, 시각적 외곽선 높이만 변수로 전달
-                main.style.setProperty('--merged-actual-block-height', `${blockHeight}px`);
+                main.style.setProperty('--merged-actual-block-height', `${totalHeight}px`);
                 // 혹시 남아있을 수 있는 인라인 높이 제거
                 main.style.removeProperty('height');
                 input.style.removeProperty('height');
@@ -1324,16 +1375,16 @@ class TimeTracker {
             mains.forEach((main) => {
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                const mergeKey = main.getAttribute('data-merge-key');
-
-                const last = document.querySelector(`.input-field.planned-input.merged-secondary.merged-planned-last[data-merge-key="${mergeKey}"][data-merge-end="${end}"]`);
-                if (!last) return;
-
-                const mainRect = main.getBoundingClientRect();
-                const lastRect = last.getBoundingClientRect();
-                const blockHeight = Math.round(lastRect.bottom - mainRect.top);
-
-                main.style.setProperty('--merged-planned-block-height', `${blockHeight}px`);
+                // 각 행 높이의 합으로 블록 높이 계산
+                let totalHeight = 0;
+                for (let i = start; i <= end; i++) {
+                    const row = document.querySelector(`.time-entry[data-index="${i}"]`);
+                    if (!row) continue;
+                    const r = row.getBoundingClientRect();
+                    totalHeight += (r.bottom - r.top);
+                }
+                if (totalHeight <= 0) return;
+                main.style.setProperty('--merged-planned-block-height', `${totalHeight}px`);
             });
         } catch (e) {
             // ignore
@@ -1344,6 +1395,7 @@ class TimeTracker {
     // 인풋 필드는 표시/선택 용도로만 사용합니다.
 
     selectMergedRange(type, mergeKey) {
+        if (type !== 'planned') return; // 우측 열 병합 범위 선택 금지
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
@@ -1373,16 +1425,72 @@ class TimeTracker {
             el.className = 'selection-overlay';
             el.dataset.type = type;
 
-            el.onclick = (e) => {
+            // 오버레이 위에서 드래그 시작을 허용하여 단일 선택 상태에서도 드래그 확장 가능
+            let overlayDrag = { active: false, moved: false, startIndex: -1 };
+
+            const onOverlayMouseDown = (e) => {
+                if (e.button !== 0) return; // 좌클릭만 처리
+                // 오버레이 내부 버튼(스케줄/되돌리기/병합) 클릭은 통과
+                if (e.target.closest('.schedule-button') || e.target.closest('.undo-button') || e.target.closest('.merge-button')) {
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
-                this.clearSelection(type);
+                const idx = this.getIndexAtClientPosition(type, e.clientX, e.clientY);
+                if (idx == null || isNaN(idx)) return;
+                overlayDrag = { active: true, moved: false, startIndex: idx };
+                this.currentColumnType = type;
+                if (type === 'planned') this.isSelectingPlanned = true; else this.isSelectingActual = true;
+
+                // 드래그가 오버레이 밖으로 나가도 추적되도록 문서 레벨로 이동/업 핸들러 바인딩
+                this._overlayMouseMove = (ev) => {
+                    if (!overlayDrag.active) return;
+                    const curIdx = this.getIndexAtClientPosition(type, ev.clientX, ev.clientY);
+                    if (curIdx == null || isNaN(curIdx)) return;
+                    if (curIdx !== overlayDrag.startIndex) overlayDrag.moved = true;
+                    // 드래그 확장: 기존 선택을 드래그 범위로 갱신
+                    this.selectFieldRange(type, overlayDrag.startIndex, curIdx);
+                };
+                this._overlayMouseUp = (ev) => {
+                    if (!overlayDrag.active) return;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    // 드래그 없이 클릭만 했다면 기존 동작(선택 해제) 유지
+                    if (!overlayDrag.moved) {
+                        this.clearSelection(type);
+                    }
+                    overlayDrag = { active: false, moved: false, startIndex: -1 };
+                    if (type === 'planned') this.isSelectingPlanned = false; else this.isSelectingActual = false;
+                    this.currentColumnType = null;
+                    document.removeEventListener('mousemove', this._overlayMouseMove, true);
+                    document.removeEventListener('mouseup', this._overlayMouseUp, true);
+                    this._overlayMouseMove = null;
+                    this._overlayMouseUp = null;
+                };
+                document.addEventListener('mousemove', this._overlayMouseMove, true);
+                document.addEventListener('mouseup', this._overlayMouseUp, true);
             };
+
+            el.addEventListener('mousedown', onOverlayMouseDown, true);
+            // 클릭만의 경우(드래그 없음)는 mouseup 핸들러에서 clearSelection 처리
 
             document.body.appendChild(el);
             this.selectionOverlay[type] = el;
         }
         return this.selectionOverlay[type];
+    }
+
+    // 현재 좌표 위치에 있는 type 컬럼(.planned-input | .actual-input)의 인덱스를 반환
+    getIndexAtClientPosition(type, clientX, clientY) {
+        const selector = type === 'planned' ? '.planned-input' : '.actual-input';
+        const elements = document.elementsFromPoint(clientX, clientY) || [];
+        for (const el of elements) {
+            if (el.matches && el.matches(selector)) {
+                const idx = el.getAttribute('data-index');
+                if (idx !== null) return parseInt(idx, 10);
+            }
+        }
+        return null;
     }
 
     removeSelectionOverlay(type) {
@@ -1409,23 +1517,56 @@ class TimeTracker {
             return;
         }
 
-        const startRect = startField.getBoundingClientRect();
-        const endRect   = endField.getBoundingClientRect();
-
-        const lastRow   = endField.closest('.time-entry');
-        const rowStyle  = lastRow ? window.getComputedStyle(lastRow) : null;
-        const bottomBW  = rowStyle ? parseFloat(rowStyle.borderBottomWidth || '0') : 0;
+        // 좌/우 컬럼별 선택 기준 요소(rect)를 계산
+        const startRect = this.getSelectionCellRect(type, startIndex);
+        if (!startRect) {
+            this.removeSelectionOverlay(type);
+            return;
+        }
+        // 하단 기준 계산
+        let endBottom;
+        if (type === 'actual') {
+            // 우측은 "활동 기록" 입력창의 하단까지로 한정
+            const endRect = this.getSelectionCellRect(type, endIndex) || endField.getBoundingClientRect();
+            endBottom = endRect.bottom;
+        } else {
+            // 좌측은 행 경계 하단까지
+            const endRow = endField.closest('.time-entry');
+            const endRowRect = endRow ? endRow.getBoundingClientRect() : endField.getBoundingClientRect();
+            endBottom = endRowRect.bottom;
+        }
 
         const overlay   = this.ensureSelectionOverlay(type);
         const left      = startRect.left + window.scrollX;
         const top       = startRect.top  + window.scrollY;
         const width     = startRect.width;
-        const height    = (endRect.bottom - startRect.top) + bottomBW;
+        const height    = Math.max(0, (endBottom - startRect.top));
 
         overlay.style.left   = `${left}px`;
         overlay.style.top    = `${top}px`;
         overlay.style.width  = `${width}px`;
         overlay.style.height = `${height}px`;
+    }
+
+    // 선택 박스의 기준 사각형을 컬럼/병합 상태에 맞춰 반환
+    getSelectionCellRect(type, index) {
+        if (type === 'actual') {
+            const mergeKey = this.findMergeKey('actual', index);
+            if (mergeKey) {
+                const [ , startStr ] = mergeKey.split('-');
+                const start = parseInt(startStr, 10);
+                const input = document.querySelector(`[data-index="${start}"] .actual-field-container.merged-actual-main .timer-result-input`);
+                if (input) return input.getBoundingClientRect();
+            }
+            const input = document.querySelector(`[data-index="${index}"] .timer-result-input`);
+            if (input) return input.getBoundingClientRect();
+            // 폴백: 필드 자체
+            const field = document.querySelector(`[data-index="${index}"] .actual-input`);
+            return field ? field.getBoundingClientRect() : null;
+        } else {
+            const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
+            return field ? field.getBoundingClientRect() : null;
+        }
     }
 
     isMergeRangeSelected(type, mergeKey) {
@@ -1465,20 +1606,7 @@ class TimeTracker {
                 }
             }
 
-            if (actualField) {
-                const ar = actualField.getBoundingClientRect();
-                const inActualCol = (x >= ar.left && x <= ar.right && y >= rowRect.top && y <= rowRect.bottom);
-                if (inActualCol) {
-                    const mk = this.findMergeKey('actual', index);
-                    if (mk) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (this.isMergeRangeSelected('actual', mk)) this.clearSelection('actual');
-                        else this.selectMergedRange('actual', mk);
-                        return;
-                    }
-                }
-            }
+            // 우측 열은 행 전체 클릭으로 선택 조작을 제공하지 않음
         });
     }
 
@@ -1508,16 +1636,28 @@ class TimeTracker {
         
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         if (selectedSet.size === 0) return;
+
+        // 병합 버튼과 동시 표시는 하지 않음: 멀티 선택(병합 후보)에서는 스케줄 버튼 숨김
+        // 단, 이미 병합된 범위를 선택한 경우(Undo 가능)는 예외로 스케줄 버튼 표시
+        if (selectedSet.size > 1) {
+            const indices = Array.from(selectedSet).sort((a,b)=>a-b);
+            const firstIndex = indices[0];
+            const mk = this.findMergeKey('planned', firstIndex);
+            const isMergedSelection = mk ? this.isMergeRangeSelected('planned', mk) : false;
+            if (!isMergedSelection) {
+                // 멀티 선택이지만 병합 범위가 아닌 경우 → 병합 버튼만 필요
+                return;
+            }
+        }
     
         const rect = overlay.getBoundingClientRect();
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         
         this.scheduleButton = document.createElement('button');
         this.scheduleButton.className = 'schedule-button';
-        this.scheduleButton.textContent = '스케줄 입력';
-        this.scheduleButton.style.left = `${rect.right + scrollX + 5}px`;
-        this.scheduleButton.style.top = `${rect.top + scrollY}px`;
+        this.scheduleButton.textContent = '📅';
+        this.scheduleButton.title = '스케줄 입력';
+        this.scheduleButton.setAttribute('aria-label', '스케줄 입력');
+        // 위치는 CSS로 오버레이 정중앙에 표시 (hover 시 노출)
         
         this.scheduleButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1528,14 +1668,108 @@ class TimeTracker {
             this.openScheduleModal(type, firstIndex, lastIndex);
         });
         
-        document.body.appendChild(this.scheduleButton);
+        // 스케줄 버튼은 오버레이 내부에 배치
+        overlay.appendChild(this.scheduleButton);
+        // 되돌리기 버튼(병합된 범위 선택 시)이 있으면 스케줄 버튼 우측으로 정렬
+        this.repositionButtonsNextToSchedule();
+
+        // 클릭 시 현재 선택 범위에 대해 모달 오픈
+        this.scheduleButton.onclick = (e) => {
+            e.stopPropagation();
+            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
+            const firstIndex = selectedIndices[0];
+            const lastIndex = selectedIndices[selectedIndices.length - 1];
+            this.openScheduleModal(type, firstIndex, lastIndex);
+        };
+    }
+
+    // 좌측 열 셀에 마우스를 올렸을 때 단일/병합 대상의 스케줄 버튼을 표시
+    showScheduleButtonOnHover(index) {
+        // 멀티 선택 중(병합 후보)에는 스케줄 버튼을 표시하지 않음
+        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 1) {
+            const indices = Array.from(this.selectedPlannedFields).sort((a,b)=>a-b);
+            const firstIndex = indices[0];
+            const mk = this.findMergeKey('planned', firstIndex);
+            const isMergedSelection = mk ? this.isMergeRangeSelected('planned', mk) : false;
+            if (!isMergedSelection) return; // 병합 후보(아직 병합 아님)일 때만 차단
+        }
+        // 선택 중인 셀 자체에는 오버레이 내부 버튼이 있으므로 중복 표시하지 않음
+        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 0 && this.selectedPlannedFields.has(index)) return;
+
+        const field = document.querySelector(`[data-index="${index}"] .planned-input`);
+        if (!field) return;
+        const rect = field.getBoundingClientRect();
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+
+        // 생성/표시
+        this.hideHoverScheduleButton();
+        const btn = document.createElement('button');
+        btn.className = 'schedule-button';
+        btn.textContent = '📅';
+        btn.title = '스케줄 입력';
+        btn.setAttribute('aria-label', '스케줄 입력');
+        // 셀 정중앙에 배치
+        const btnW = 28, btnH = 28;
+        const centerX = rect.left + scrollX + (rect.width / 2);
+        const centerY = rect.top  + scrollY + (rect.height / 2);
+        btn.style.left = `${Math.round(centerX - (btnW/2))}px`;
+        btn.style.top  = `${Math.round(centerY - (btnH/2))}px`;
+
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const mk = this.findMergeKey('planned', index);
+            if (mk) {
+                const [, s, eIdx] = mk.split('-');
+                this.openScheduleModal('planned', parseInt(s,10), parseInt(eIdx,10));
+            } else {
+                this.openScheduleModal('planned', index, index);
+            }
+        };
+
+        // 호버 유지: 버튼 위로 올리면 유지, 버튼에서 벗어나면 숨김
+        let hideTimer = null;
+        const requestHide = () => {
+            hideTimer = setTimeout(() => {
+                this.hideHoverScheduleButton();
+            }, 150);
+        };
+        btn.addEventListener('mouseleave', requestHide);
+        btn.addEventListener('mouseenter', () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } });
+
+        document.body.appendChild(btn);
+        this.scheduleHoverButton = btn;
+    }
+
+    hideHoverScheduleButton() {
+        if (this.scheduleHoverButton && this.scheduleHoverButton.parentNode) {
+            this.scheduleHoverButton.parentNode.removeChild(this.scheduleHoverButton);
+            this.scheduleHoverButton = null;
+        }
+    }
+
+    // 스케줄 버튼 우측으로 병합/되돌리기 버튼 정렬
+    repositionButtonsNextToSchedule() {
+        if (!this.scheduleButton) return;
+        const spacing = 8;
+        const sbRect = this.scheduleButton.getBoundingClientRect();
+        const baseLeft = window.scrollX + sbRect.left + sbRect.width + spacing;
+        const baseTop  = window.scrollY + sbRect.top;
+
+        if (this.mergeButton) {
+            this.mergeButton.style.left = `${Math.round(baseLeft)}px`;
+            this.mergeButton.style.top  = `${Math.round(baseTop)}px`;
+        }
+        if (this.undoButton) {
+            this.undoButton.style.left = `${Math.round(baseLeft)}px`;
+            this.undoButton.style.top  = `${Math.round(baseTop)}px`;
+        }
     }
     
     openScheduleModal(type, startIndex, endIndex = null) {
         const modal = document.getElementById('scheduleModal');
         const timeField = document.getElementById('scheduleTime');
-        const activityField = document.getElementById('scheduleActivity');
-        
+
         const actualEndIndex = endIndex !== null ? endIndex : startIndex;
         const mergeKey = this.findMergeKey(type, startIndex);
         const value = mergeKey ? this.mergedFields.get(mergeKey) : this.timeSlots[startIndex][type];
@@ -1550,8 +1784,14 @@ class TimeTracker {
             timeField.value = `${startTime}시 ~ ${nextHour}시`;
         }
 
-        activityField.value = value || '';
-        
+        // 활동 멀티셀렉트 초기화: 기존 값에서 선택 복원
+        const parsed = (value || '')
+            .split(/[,·]/)
+            .map(v => this.normalizeActivityText(v))
+            .filter(v => v);
+        this.modalSelectedActivities = parsed;
+        this.renderPlannedActivityDropdown();
+
         modal.style.display = 'flex';
         
         modal.dataset.type = type;
@@ -1559,10 +1799,12 @@ class TimeTracker {
         modal.dataset.endIndex = actualEndIndex;
         
         setTimeout(() => {
-            activityField.focus();
+            const ai = document.getElementById('activityInput');
+            if (ai) ai.focus();
         }, 100);
         
         this.hideScheduleButton();
+        this.hideHoverScheduleButton && this.hideHoverScheduleButton();
     }
     
     closeScheduleModal() {
@@ -1570,7 +1812,11 @@ class TimeTracker {
         modal.style.display = 'none';
         
         document.getElementById('scheduleTime').value = '';
-        document.getElementById('scheduleActivity').value = '';
+        this.modalSelectedActivities = [];
+        const chips = document.getElementById('activityChips');
+        const list = document.getElementById('activityOptions');
+        if (chips) chips.innerHTML = '';
+        if (list) list.innerHTML = '';
         
         delete modal.dataset.type;
         delete modal.dataset.startIndex;
@@ -1582,8 +1828,8 @@ class TimeTracker {
         const type = modal.dataset.type;
         const startIndex = parseInt(modal.dataset.startIndex);
         const endIndex = parseInt(modal.dataset.endIndex);
-        const activity = document.getElementById('scheduleActivity').value.trim();
-        
+        const activity = (this.modalSelectedActivities || []).join(', ').trim();
+
         if (type && startIndex !== undefined && endIndex !== undefined) {
             if (startIndex === endIndex) {
                 // 단일 셀
@@ -1612,8 +1858,9 @@ class TimeTracker {
         const closeBtn = document.getElementById('closeModal');
         const saveBtn = document.getElementById('saveSchedule');
         const cancelBtn = document.getElementById('cancelSchedule');
-        const activityField = document.getElementById('scheduleActivity');
-        
+        const activityInput = document.getElementById('activityInput');
+        const addOptionBtn = document.getElementById('addActivityOption');
+
         closeBtn.addEventListener('click', () => {
             this.closeScheduleModal();
         });
@@ -1637,12 +1884,164 @@ class TimeTracker {
                 this.closeScheduleModal();
             }
         });
-        
-        activityField.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.saveScheduleFromModal();
+
+        if (activityInput) {
+            activityInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.isComposing) {
+                    e.preventDefault();
+                    const val = this.normalizeActivityText(activityInput.value);
+                    if (val) {
+                        this.addPlannedActivityOption(val, true);
+                        activityInput.value = '';
+                    }
+                }
+            });
+        }
+        if (addOptionBtn) {
+            addOptionBtn.addEventListener('click', () => {
+                const val = activityInput ? this.normalizeActivityText(activityInput.value) : '';
+                if (val) {
+                    this.addPlannedActivityOption(val, true);
+                    activityInput.value = '';
+                }
+            });
+        }
+    }
+
+    // Planned activities: load/save and render dropdown
+    loadPlannedActivities() {
+        try {
+            const raw = localStorage.getItem('planned_activities');
+            if (raw) {
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) {
+                    const norm = arr
+                        .filter(x => typeof x === 'string')
+                        .map(x => this.normalizeActivityText(x))
+                        .filter(Boolean);
+                    this.plannedActivities = Array.from(new Set(norm));
+                }
             }
+        } catch (e) {}
+        if (!Array.isArray(this.plannedActivities)) this.plannedActivities = [];
+    }
+    savePlannedActivities() {
+        try { localStorage.setItem('planned_activities', JSON.stringify(this.plannedActivities)); } catch (e) {}
+    }
+    addPlannedActivityOption(text, selectAfter = false) {
+        text = this.normalizeActivityText(text);
+        if (!text) return;
+        if (!this.plannedActivities.includes(text)) {
+            this.plannedActivities.push(text);
+            this.savePlannedActivities();
+        }
+        if (selectAfter) {
+            if (!this.modalSelectedActivities.includes(text)) this.modalSelectedActivities.push(text);
+        }
+        this.renderPlannedActivityDropdown();
+    }
+    removePlannedActivityOption(text) {
+        text = this.normalizeActivityText(text);
+        const idx = this.plannedActivities.indexOf(text);
+        if (idx >= 0) {
+            this.plannedActivities.splice(idx, 1);
+            this.savePlannedActivities();
+            // 선택되어 있으면 선택도 제거
+            const sidx = this.modalSelectedActivities.indexOf(text);
+            if (sidx >= 0) this.modalSelectedActivities.splice(sidx, 1);
+            this.renderPlannedActivityDropdown();
+        }
+    }
+    toggleSelectActivity(text) {
+        text = this.normalizeActivityText(text);
+        if (!text) return;
+        const i = this.modalSelectedActivities.indexOf(text);
+        if (i >= 0) this.modalSelectedActivities.splice(i, 1);
+        else this.modalSelectedActivities.push(text);
+        this.renderPlannedActivityDropdown();
+    }
+    editPlannedActivityOption(oldText, newText) {
+        newText = this.normalizeActivityText(newText);
+        if (!newText || oldText === newText) return;
+        const i = this.plannedActivities.indexOf(oldText);
+        if (i >= 0) {
+            // rename in list
+            this.plannedActivities[i] = newText;
+            // update selection
+            const si = this.modalSelectedActivities.indexOf(oldText);
+            if (si >= 0) this.modalSelectedActivities[si] = newText;
+            this.savePlannedActivities();
+            this.renderPlannedActivityDropdown();
+        }
+    }
+    normalizeActivityText(text) {
+        if (!text) return '';
+        // 제거: 줄바꿈/탭, 공백 축약
+        return String(text)
+            .replace(/[\r\n\t]+/g, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+    }
+    renderPlannedActivityDropdown() {
+        const chips = document.getElementById('activityChips');
+        const list = document.getElementById('activityOptions');
+        if (!chips || !list) return;
+        // chips
+        chips.innerHTML = '';
+        (this.modalSelectedActivities || []).forEach(t => {
+            const text = this.normalizeActivityText(t);
+            if (!text) return;
+            const chip = document.createElement('span');
+            chip.className = 'chip';
+            chip.textContent = text;
+            const btn = document.createElement('button');
+            btn.className = 'remove-chip';
+            btn.textContent = '×';
+            btn.title = '제거';
+            btn.onclick = () => {
+                this.toggleSelectActivity(text);
+            };
+            chip.appendChild(btn);
+            chips.appendChild(chip);
+        });
+        // list
+        list.innerHTML = '';
+        const set = new Set((this.modalSelectedActivities || []).map(t => this.normalizeActivityText(t)).filter(Boolean));
+        const all = Array.from(new Set([...(this.plannedActivities || []), ...Array.from(set)])).map(t => this.normalizeActivityText(t)).filter(Boolean);
+        all.forEach(text => {
+            const li = document.createElement('li');
+            const left = document.createElement('div');
+            left.style.display = 'flex';
+            left.style.alignItems = 'center';
+            left.style.gap = '6px';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = set.has(text);
+            cb.onchange = () => this.toggleSelectActivity(text);
+            const span = document.createElement('span');
+            span.textContent = text;
+            left.appendChild(cb);
+            left.appendChild(span);
+            li.appendChild(left);
+            const actions = document.createElement('div');
+            actions.className = 'option-actions';
+            const editBtn = document.createElement('button');
+            editBtn.className = 'opt-btn';
+            editBtn.textContent = '수정';
+            editBtn.onclick = () => {
+                const nt = prompt('활동명을 수정하세요', text);
+                if (nt && nt.trim()) this.editPlannedActivityOption(text, nt.trim());
+            };
+            const delBtn = document.createElement('button');
+            delBtn.className = 'opt-btn';
+            delBtn.textContent = '삭제';
+            delBtn.onclick = () => {
+                this.removePlannedActivityOption(text);
+            };
+            actions.appendChild(editBtn);
+            actions.appendChild(delBtn);
+            li.appendChild(actions);
+            list.appendChild(li);
         });
     }
 
@@ -1752,7 +2151,31 @@ class TimeTracker {
         // 자동 기록: 타이머 시간을 actual 필드에 기록
         if (slot.timer.elapsed > 0) {
             const timeStr = this.formatTime(slot.timer.elapsed);
-            slot.actual = slot.planned ? `${slot.planned} (${timeStr})` : timeStr;
+
+            // 병합된 계획 값이 있으면 그 값을 우선 사용하여 라벨 구성
+            let plannedLabel = '';
+            const plannedMergeKey = this.findMergeKey('planned', index);
+            if (plannedMergeKey) {
+                plannedLabel = (this.mergedFields.get(plannedMergeKey) || '').trim();
+            } else {
+                plannedLabel = (slot.planned || '').trim();
+            }
+            const resultText = plannedLabel ? `${plannedLabel} (${timeStr})` : timeStr;
+
+            // 실제(우측) 열이 병합 상태라면 병합 키 기준으로 값 업데이트
+            const actualMergeKey = this.findMergeKey('actual', index);
+            if (actualMergeKey) {
+                const [, startStr, endStr] = actualMergeKey.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                this.mergedFields.set(actualMergeKey, resultText);
+                for (let i = start; i <= end; i++) {
+                    this.timeSlots[i].actual = (i === start) ? resultText : '';
+                }
+            } else {
+                // 단일 셀인 경우 해당 인덱스만 기록
+                slot.actual = resultText;
+            }
         }
         
         this.stopTimerInterval();
@@ -1822,9 +2245,15 @@ class TimeTracker {
         const slot = this.timeSlots[index];
         
         document.getElementById('activityTime').value = `${slot.time}시`;
-        document.getElementById('activityTitle').value = slot.activityLog.title || '';
+        // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
+        // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
+        const actualMergeKey = this.findMergeKey('actual', index);
+        if (actualMergeKey) {
+            document.getElementById('activityTitle').value = this.mergedFields.get(actualMergeKey) || '';
+        } else {
+            document.getElementById('activityTitle').value = slot.actual || '';
+        }
         document.getElementById('activityDetails').value = slot.activityLog.details || '';
-        document.getElementById('activityOutcome').value = slot.activityLog.outcome || '';
         
         modal.style.display = 'flex';
         modal.dataset.index = index;
@@ -1840,7 +2269,6 @@ class TimeTracker {
         
         document.getElementById('activityTitle').value = '';
         document.getElementById('activityDetails').value = '';
-        document.getElementById('activityOutcome').value = '';
         
         delete modal.dataset.index;
     }
@@ -1851,13 +2279,23 @@ class TimeTracker {
         
         if (index !== undefined && index >= 0) {
             const slot = this.timeSlots[index];
-            slot.activityLog.title = document.getElementById('activityTitle').value.trim();
+            // 제목 필드는 이제 실제 칸(우측) 표시 텍스트를 직접 수정하는 용도
+            const actualText = document.getElementById('activityTitle').value.trim();
+            slot.activityLog.title = actualText; // 기존 구조 유지(로그 용)
             slot.activityLog.details = document.getElementById('activityDetails').value.trim();
-            slot.activityLog.outcome = document.getElementById('activityOutcome').value.trim();
-            
-            // 활동 로그가 있으면 실제 활동 필드에 제목 표시
-            if (slot.activityLog.title) {
-                slot.actual = slot.activityLog.title;
+
+            // 실제 칸 업데이트: 병합 상태면 병합 키 전체 반영, 아니면 단일 칸만
+            const actualMergeKey = this.findMergeKey('actual', index);
+            if (actualMergeKey) {
+                const [, startStr, endStr] = actualMergeKey.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                this.mergedFields.set(actualMergeKey, actualText);
+                for (let i = start; i <= end; i++) {
+                    this.timeSlots[i].actual = (i === start) ? actualText : '';
+                }
+            } else {
+                slot.actual = actualText;
             }
             
             this.renderTimeEntries();
