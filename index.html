@@ -128,6 +128,17 @@
       </div>
     </div>
 
+    <script>
+      // Optional: auto-wire Notion activities endpoint when served via the Node server
+      // Only set when running on the same origin/port as the Express server (default 3000)
+      (function(){
+        try {
+          if (location.protocol !== 'file:' && (location.port === '3000' || location.host.includes('localhost:3000'))) {
+            window.NOTION_ACTIVITIES_ENDPOINT = '/api/notion/activities';
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script src="script.js"></script>
   </body>
 </html>

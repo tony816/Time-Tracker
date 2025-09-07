@@ -1,0 +1,22 @@
+{
+  "name": "time-tracker-notion-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Optional Express bridge to use Notion API with the Time-Tracker SPA.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.3.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

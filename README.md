@@ -106,6 +106,39 @@ Time-Tracker/
     - 단일 날짜 포맷: `{ date, timeSlots, mergedFields }`
     - 배열 포맷: `[ { date, timeSlots, mergedFields }, ... ]`
 
+## Notion 연동 (선택)
+
+이 앱은 정적 SPA로 그대로 사용 가능합니다. 다만 Notion API는 보안상 토큰이 필요한 서버 사이드 호출이 권장되므로, 필요 시 Node 기반의 간단한 브리지 서버를 함께 사용할 수 있습니다.
+
+### 준비물
+- Notion 통합 토큰 (Internal Integration Secret)
+- 활동이 저장된 Notion 데이터베이스 ID
+
+`.env` 예시:
+
+```
+NOTION_API_KEY=secret_xxx            # Notion 통합 토큰
+NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NOTION_VERSION=2022-06-28            # (선택) SDK 기본값 사용 가능
+PORT=3000                            # (선택)
+```
+
+주의: `.env`에는 민감한 값이 담기므로 Git에 커밋하지 마세요.
+
+### 설치 및 실행
+```
+npm install
+npm start
+```
+
+브라우저에서 `http://localhost:3000/`로 접속하세요. `index.html`의 작은 스니펫이 해당 포트에서 실행 중일 때 `window.NOTION_ACTIVITIES_ENDPOINT = '/api/notion/activities'`를 자동 지정합니다.
+
+### 동작 개요
+- 프론트엔드: 계획 활동 모달에서 [동기화]를 누르면 `GET /api/notion/activities` 요청을 보내고, 응답의 `{ activities: [{ id, title }] }` 배열을 로컬 활동 목록에 병합합니다.
+- 서버(`server.js`): Notion 공식 API(`/v1/databases/{database_id}/query`)를 사용해 DB 전체 페이지를 페이지네이션으로 가져오고, 각 페이지의 title 속성을 추출해 반환합니다. 429 응답 시 `Retry-After` 헤더를 존중하여 재시도합니다.
+
+현재는 읽기(GET)만 구현되어 있습니다. 필요 시 Notion에 새로운 활동을 추가하는 쓰기 API(페이지 생성)도 확장 가능합니다.
+
 ---
 
 **개발**: Claude Code로 생성됨
