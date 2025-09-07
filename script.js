@@ -15,6 +15,11 @@ class TimeTracker {
         this.scheduleButton = null;
         this.plannedActivities = [];
         this.modalSelectedActivities = [];
+        // Notion integration (optional)
+        this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
+            try { return window.NOTION_ACTIVITIES_ENDPOINT || localStorage.getItem('notion_activities_endpoint') || null; } catch(e){ return null; }
+        })();
+        this.notionActivitiesCache = null;
         // 타이머 관련 속성 추가
         this.timers = new Map(); // {index: {running, elapsed, startTime, intervalId}}
         this.timerInterval = null;
@@ -1792,6 +1797,13 @@ class TimeTracker {
         this.modalSelectedActivities = parsed;
         this.renderPlannedActivityDropdown();
 
+        // Notion activities (optional): prefetch and merge, then re-render once
+        if (this.prefetchNotionActivitiesIfConfigured) {
+            this.prefetchNotionActivitiesIfConfigured()
+                .then((added) => { if (added) this.renderPlannedActivityDropdown(); })
+                .catch(() => {});
+        }
+
         modal.style.display = 'flex';
         
         modal.dataset.type = type;
@@ -1860,6 +1872,7 @@ class TimeTracker {
         const cancelBtn = document.getElementById('cancelSchedule');
         const activityInput = document.getElementById('activityInput');
         const addOptionBtn = document.getElementById('addActivityOption');
+        const syncBtn = document.getElementById('syncActivityOptions');
 
         closeBtn.addEventListener('click', () => {
             this.closeScheduleModal();
@@ -1903,6 +1916,23 @@ class TimeTracker {
                 if (val) {
                     this.addPlannedActivityOption(val, true);
                     activityInput.value = '';
+                }
+            });
+        }
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                if (!this.prefetchNotionActivitiesIfConfigured) return;
+                const prev = syncBtn.textContent;
+                syncBtn.disabled = true;
+                syncBtn.textContent = '동기화 중…';
+                try {
+                    const added = await this.prefetchNotionActivitiesIfConfigured();
+                    if (added) this.renderPlannedActivityDropdown();
+                } catch (e) {
+                    console.warn('활동 동기화 실패:', e);
+                } finally {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = prev || '동기화';
                 }
             });
         }
@@ -2043,6 +2073,47 @@ class TimeTracker {
             li.appendChild(actions);
             list.appendChild(li);
         });
+    }
+
+    // ===== Notion integration (optional) =====
+    loadNotionActivitiesEndpoint() {
+        try {
+            if (typeof window !== 'undefined' && window.NOTION_ACTIVITIES_ENDPOINT) {
+                return String(window.NOTION_ACTIVITIES_ENDPOINT);
+            }
+        } catch (e) {}
+        try {
+            const v = localStorage.getItem('notion_activities_endpoint');
+            return v ? String(v) : null;
+        } catch (e) { return null; }
+    }
+    async prefetchNotionActivitiesIfConfigured() {
+        const url = this.notionEndpoint;
+        if (!url) return false;
+        if (this.notionActivitiesCache) {
+            return this.mergeNotionActivities(this.notionActivitiesCache);
+        }
+        try {
+            const resp = await fetch(url, { method: 'GET' });
+            if (!resp.ok) throw new Error('Failed to fetch activities');
+            const json = await resp.json();
+            const items = Array.isArray(json?.activities) ? json.activities : [];
+            this.notionActivitiesCache = items.map(it => ({ id: it.id, title: this.normalizeActivityText(it.title) })).filter(it => it.title);
+            return this.mergeNotionActivities(this.notionActivitiesCache);
+        } catch (e) {
+            console.warn('Notion activities fetch failed:', e);
+            return false;
+        }
+    }
+    mergeNotionActivities(items) {
+        if (!Array.isArray(items) || items.length === 0) return false;
+        const before = this.plannedActivities.length;
+        const titles = items.map(it => this.normalizeActivityText(it.title)).filter(Boolean);
+        const set = new Set(this.plannedActivities);
+        titles.forEach(t => { if (!set.has(t)) set.add(t); });
+        this.plannedActivities = Array.from(set).sort((a,b)=>a.localeCompare(b));
+        // Do not persist Notion-sourced titles to localStorage (source of truth is Notion)
+        return this.plannedActivities.length !== before;
     }
 
     showNotification(message) {

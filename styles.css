@@ -1174,6 +1174,15 @@ h1 {
   cursor: pointer;
 }
 .add-option-btn:hover { background: #2980b9; }
+.sync-btn {
+  background: #7f8c8d;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.sync-btn:hover { background: #707b7c; }
 .dropdown {
   border: 1px solid #eee;
   border-radius: 6px;
