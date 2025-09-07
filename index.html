@@ -63,6 +63,7 @@
         <button id="importBtn">가져오기</button>
         <button id="clearBtn">초기화</button>
         <input type="file" id="importFile" accept="application/json" style="display:none" />
+        <button id="migrateBtn" title="LocalStorage → 서버 DB로 이전">서버로 마이그레이션</button>
       </div>
     </div>
 
@@ -130,10 +131,10 @@
 
     <script>
       // Optional: auto-wire Notion activities endpoint when served via the Node server
-      // Only set when running on the same origin/port as the Express server (default 3000)
+      // Use same-origin on any non-file context (works for any port/proxy)
       (function(){
         try {
-          if (location.protocol !== 'file:' && (location.port === '3000' || location.host.includes('localhost:3000'))) {
+          if (location.protocol !== 'file:') {
             window.NOTION_ACTIVITIES_ENDPOINT = '/api/notion/activities';
           }
         } catch (e) {}

@@ -51,6 +51,16 @@
 - 정적 서버(선택): `python -m http.server 8000` → `http://localhost:8000/`
 - Notion 연동 서버(선택): 아래 “Notion 연동” 참고
 
+## 서버 DB(선택) & 마이그레이션
+
+- 서버는 SQLite를 사용해 날짜별 문서를 그대로 저장합니다.
+  - 테이블: `timesheets(id, user_id, date, doc_json, exec_rate, total_seconds, created_at, updated_at)`
+  - `doc_json`은 `{ date, timeSlots, mergedFields }` 원형 그대로 저장되어 내보내기/가져오기와 1:1 대응합니다.
+- 계획 활동 카탈로그(로컬 추가분): `activity_catalog(title, source='local', external_id)`
+- 마이그레이션: 앱 하단의 “서버로 마이그레이션” 버튼으로 LocalStorage의 모든 날짜/활동을 서버 DB로 이전할 수 있습니다.
+  - 서버가 실행 중이어야 합니다(`npm start`).
+  - API: `POST /api/migrate`로 `{ timesheets: [...], activities: [...] }`를 전송합니다.
+
 ## 저장소 구조
 
 ```
@@ -114,4 +124,3 @@ npm start
 ---
 
 **개발**: Claude Code로 생성/개선됨
-

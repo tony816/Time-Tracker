@@ -258,6 +258,18 @@ class TimeTracker {
             });
         }
 
+        // 서버 마이그레이션(선택): LocalStorage → 서버 DB로 한 번에 이전
+        const migrateBtn = document.getElementById('migrateBtn');
+        if (migrateBtn) {
+            migrateBtn.addEventListener('click', async () => {
+                try {
+                    await this.migrateLocalToServer();
+                } catch (e) {
+                    alert('마이그레이션 중 오류가 발생했습니다. 서버 실행 여부를 확인하세요.');
+                }
+            });
+        }
+
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.clearAllSelections();
@@ -590,6 +602,40 @@ class TimeTracker {
         };
         reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다.');
         reader.readAsText(file);
+    }
+
+    // LocalStorage의 모든 날짜 문서와 계획 후보를 서버로 마이그레이션
+    async migrateLocalToServer() {
+        const prefix = 'timesheet_';
+        const timesheets = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(prefix)) {
+                try {
+                    const it = JSON.parse(localStorage.getItem(k));
+                    if (it && it.date && it.timeSlots) timesheets.push(it);
+                } catch (e) {}
+            }
+        }
+        let activities = [];
+        try {
+            const raw = localStorage.getItem('planned_activities');
+            const arr = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(arr)) {
+                activities = arr.filter(x => typeof x === 'string').map(x => this.normalizeActivityText(x)).filter(Boolean);
+            }
+        } catch (e) {}
+
+        const resp = await fetch('/api/migrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timesheets, activities })
+        });
+        if (!resp.ok) {
+            throw new Error('migration failed');
+        }
+        const json = await resp.json();
+        this.showNotification(`마이그레이션 완료: 날짜 ${json.imported}건, 활동 ${json.activities}건`);
     }
 
     importDataObject(obj) {
