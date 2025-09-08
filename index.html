@@ -5,11 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>타임시트 - 시간 관리</title>
     <link rel="stylesheet" href="styles.css" />
+    <!-- Supabase JS (client) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+      // TODO: 아래 두 값을 실제 프로젝트 값으로 교체하세요.
+      window.SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
+      window.SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+      if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+        window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+      }
+    </script>
   </head>
   <body>
     <div class="container">
       <header>
         <h1>타임시트</h1>
+        <!-- 간단 인증 UI -->
+        <div id="authBox" style="display:flex;gap:8px;align-items:center">
+          <button id="loginGoogle" title="구글로 로그인">구글 로그인</button>
+          <span id="userEmail" style="font-size:12px;opacity:.75"></span>
+          <button id="logout" style="display:none">로그아웃</button>
+        </div>
         <div class="date-selector">
           <label for="date">날짜:</label>
           <div class="date-navigation">
