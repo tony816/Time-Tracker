@@ -9,11 +9,13 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       // TODO: 아래 두 값을 실제 프로젝트 값으로 교체하세요.
-      window.SUPABASE_URL = "https://nummbaqwfdrlxezyvbhp.supabase.co";
-      window.SUPABASE_ANON_KEY = process.env.SUPABASE_KEY
+      window.SUPABASE_URL = process.env.SUPABASE_URL
+      window.SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bW1iYXF3ZmRybHhlenl2YmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMzA2ODUsImV4cCI6MjA3MjkwNjY4NX0.Q25kg8rW4npdmteR0OKAxearbOfutHIl96ZMTeH9ub4
       if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
         window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-      }
+      }else {
+    console.warn('Supabase env not loaded');
+  }
     </script>
   </head>
   <body>
