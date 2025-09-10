@@ -14,13 +14,46 @@ async function wireAuthUI() {
     if (!loginBtn || !logoutBtn || !emailSpan || !sb) return; // 로컬 모드
 
     const refresh = async () => {
-        const u = await getSupaUser();
-        if (u) { emailSpan.textContent = u.email || u.id; loginBtn.style.display='none'; logoutBtn.style.display=''; }
-        else   { emailSpan.textContent = '';            loginBtn.style.display='';    logoutBtn.style.display='none'; }
+        try {
+            const { data: { session } } = await sb.auth.getSession();
+            const u = session?.user || null;
+            if (u) { emailSpan.textContent = u.email || u.id; loginBtn.style.display='none'; logoutBtn.style.display=''; }
+            else   { emailSpan.textContent = '';            loginBtn.style.display='';    logoutBtn.style.display='none'; }
+        } catch (_) {
+            emailSpan.textContent = '';
+            loginBtn.style.display='';
+            logoutBtn.style.display='none';
+        }
     };
 
-    loginBtn.onclick  = async () => { const { error } = await sb.auth.signInWithOAuth({ provider: 'google' }); if (error) alert(error.message); };
-    logoutBtn.onclick = async () => { await sb.auth.signOut(); await refresh(); };
+    loginBtn.onclick  = async () => {
+        const redirectTo = `${location.origin}${location.pathname}`;
+        const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+        if (error) alert(error.message);
+    };
+    logoutBtn.onclick = async () => {
+        try {
+            await sb.auth.signOut();
+        } finally {
+            // 로그아웃 버튼 클릭 시 자동 새로고침
+            location.reload();
+        }
+    };
+
+    try {
+        sb.auth.onAuthStateChange(async (event, session) => {
+            const user = session?.user || null;
+            if (window.tracker && typeof window.tracker.onAuthChange === 'function') {
+                window.tracker.onAuthChange(user);
+            }
+            if (event === 'SIGNED_OUT') {
+                // 세션이 완전히 종료되면 안전하게 새로고침
+                location.reload();
+                return;
+            }
+            await refresh();
+        });
+    } catch (_) {}
 
     await refresh();
 }
@@ -62,6 +95,21 @@ class TimeTracker {
         this.attachModalEventListeners();
         this.loadPlannedActivities();
         this.attachActivityModalEventListeners();
+    }
+
+    // Supabase 인증 상태 변화 처리
+    onAuthChange(user) {
+        if (user) {
+            // 로그인: 현재 날짜 기준 서버 데이터 로드
+            this.loadData();
+        } else {
+            // 로그아웃: 화면 초기화(로컬 데이터도 무시)
+            this.stopTimerInterval && this.stopTimerInterval();
+            this.generateTimeSlots();
+            this.mergedFields.clear();
+            this.renderTimeEntries();
+            this.calculateTotals();
+        }
     }
 
     generateTimeSlots() {
@@ -211,15 +259,7 @@ class TimeTracker {
             }
         });
 
-        document.getElementById('saveBtn').addEventListener('click', () => {
-            this.saveData();
-            this.showNotification('데이터가 저장되었습니다!');
-        });
-
-        document.getElementById('loadBtn').addEventListener('click', () => {
-            this.loadData();
-            this.showNotification('데이터를 불러왔습니다!');
-        });
+        // 수동 저장/불러오기 제거(완전 자동 저장)
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             if (confirm('모든 데이터를 초기화하시겠습니까?')) {
@@ -505,21 +545,48 @@ class TimeTracker {
         }
     }
 
-    saveData() {
+    async saveData() {
         const data = {
             date: this.currentDate,
             timeSlots: this.timeSlots,
             mergedFields: Object.fromEntries(this.mergedFields)
         };
-        // 1) 로컬 저장
-        localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data));
-        // 2) 로그인 상태면 서버 동기화
-        if (sb) this.saveDataToServer(data);
+        // Supabase 사용 시: 로그인 상태면 서버에만 저장, 로그아웃 상태면 저장하지 않음
+        if (sb) {
+            const user = await getSupaUser();
+            if (user) {
+                this.saveDataToServer(data);
+            }
+            return;
+        }
+        // Supabase 미사용 환경(레거시)에서만 로컬 저장
+        try { localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data)); } catch (_) {}
     }
 
     async loadData() {
-        const savedData = localStorage.getItem(`timesheet_${this.currentDate}`);
+        // Supabase 우선: 로그인 상태면 서버에서 로드, 로그아웃이면 비움
+        if (sb) {
+            const user = await getSupaUser();
+            if (user) {
+                const ok = await this.loadDataFromServer();
+                if (!ok) {
+                    this.generateTimeSlots();
+                    this.mergedFields.clear();
+                    this.renderTimeEntries();
+                    this.calculateTotals();
+                }
+                return;
+            } else {
+                this.generateTimeSlots();
+                this.mergedFields.clear();
+                this.renderTimeEntries();
+                this.calculateTotals();
+                return;
+            }
+        }
 
+        // 레거시: Supabase 미사용 시 로컬에서 로드
+        const savedData = localStorage.getItem(`timesheet_${this.currentDate}`);
         if (savedData) {
             const data = JSON.parse(savedData);
             this.timeSlots = data.timeSlots || this.timeSlots;
@@ -544,9 +611,6 @@ class TimeTracker {
 
         this.renderTimeEntries();
         this.calculateTotals();
-
-        // 서버에 데이터가 있으면 서버 값으로 덮어쓰기
-        if (sb) { await this.loadDataFromServer(); }
     }
 
     // ===== Supabase 동기화 메서드 =====
@@ -600,7 +664,9 @@ class TimeTracker {
         this.mergedFields.clear();
         this.renderTimeEntries();
         this.calculateTotals();
-        localStorage.removeItem(`timesheet_${this.currentDate}`);
+        try { localStorage.removeItem(`timesheet_${this.currentDate}`); } catch (_) {}
+        // 자동 저장 시스템: 초기화 후에도 서버에 반영
+        this.autoSave();
     }
 
     // 내보내기: 로컬스토리지의 모든 날짜 데이터(JSON) 저장
@@ -2533,6 +2599,7 @@ style.textContent = `
 document.head.appendChild(style);
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 트래커를 먼저 초기화하고, 이후 인증 UI를 연결
+    window.tracker = new TimeTracker();
     wireAuthUI();
-    new TimeTracker();
 });

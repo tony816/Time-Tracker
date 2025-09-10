@@ -7,15 +7,21 @@
     <link rel="stylesheet" href="styles.css" />
     <!-- Supabase JS (client) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/config.js"></script>
     <script>
-      // TODO: 아래 두 값을 실제 프로젝트 값으로 교체하세요.
-      window.SUPABASE_URL = process.env.SUPABASE_URL
-      window.SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51bW1iYXF3ZmRybHhlenl2YmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMzA2ODUsImV4cCI6MjA3MjkwNjY4NX0.Q25kg8rW4npdmteR0OKAxearbOfutHIl96ZMTeH9ub4
+      // Supabase 클라이언트 생성 (세션 지속, 자동 토큰 갱신 보장)
       if (window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
-        window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-      }else {
-    console.warn('Supabase env not loaded');
-  }
+        window.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage,
+          },
+        });
+      } else {
+        console.warn('Supabase env not loaded');
+      }
     </script>
   </head>
   <body>
@@ -75,8 +81,6 @@
       </main>
 
       <div class="actions">
-        <button id="saveBtn">저장</button>
-        <button id="loadBtn">불러오기</button>
         <button id="exportBtn">내보내기</button>
         <button id="importBtn">가져오기</button>
         <button id="clearBtn">초기화</button>

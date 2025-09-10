@@ -7,7 +7,6 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const { Client } = require('@notionhq/client');
-const Database = require('better-sqlite3');
 
 const app = express();
 app.use(express.json());
@@ -125,42 +124,6 @@ app.listen(port, () => {
     console.log(`[server] Notion configured: key=${Boolean(NOTION_API_KEY)} db=${NOTION_DATABASE_ID ? '(set)' : '(missing)'}`);
 });
 
-// =========================
-// SQLite setup (local DB)
-// =========================
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-const db = new Database(path.join(dataDir, 'app.db'));
-db.pragma('journal_mode = WAL');
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  display_name TEXT
-);
-
--- 날짜별 문서를 현재 포맷 그대로 저장: { date, timeSlots, mergedFields }
-CREATE TABLE IF NOT EXISTS timesheets (
-  id TEXT PRIMARY KEY,          -- user_id||':'||date
-  user_id TEXT NOT NULL,
-  date TEXT NOT NULL,           -- 'YYYY-MM-DD'
-  doc_json TEXT NOT NULL,       -- JSON string (원본 그대로)
-  exec_rate REAL,               -- 캐시(선택)
-  total_seconds INTEGER,        -- 캐시(선택)
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_timesheets_user_date ON timesheets(user_id, date);
-
--- 계획 활동 카탈로그(로컬 소스만 저장; Notion은 원천으로 유지)
-CREATE TABLE IF NOT EXISTS activity_catalog (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  source TEXT NOT NULL DEFAULT 'local',   -- 'local' | 'notion'
-  external_id TEXT DEFAULT '',            -- Notion page id 등(없으면 빈문자열)
-  UNIQUE(title, source, external_id)
-);
-`);
 
 const DEFAULT_USER = 'default';
 
