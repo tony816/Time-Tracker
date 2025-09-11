@@ -619,14 +619,33 @@ class TimeTracker {
             const user = await getSupaUser();
             if (!user) return;
 
-            const planned = doc.timeSlots.filter(s => (s.planned||'').trim() !== '').length;
-            const executed = doc.timeSlots.filter(s => (s.planned||'').trim() !== '' && (s.actual||'').trim() !== '').length;
+            const slots = Array.isArray(doc?.timeSlots) ? doc.timeSlots : [];
+            const planned = slots.filter(s => (s.planned || '').trim() !== '').length;
+            const executed = slots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
             const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
-            const total_seconds = doc.timeSlots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed)||0), 0);
+            const total_seconds = slots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
 
-            const payload = { user_id: user.id, date: doc.date, doc_json: doc, exec_rate, total_seconds };
-            await sb.from('timesheets').upsert(payload, { onConflict: 'user_id,date' });
-        } catch (_) {}
+            const dateStr = String(doc?.date || this.currentDate || '').slice(0, 10);
+            const payload = {
+                user_id: user.id,
+                date: dateStr,
+                doc_json: doc,
+                exec_rate: exec_rate ?? null,
+                total_seconds: total_seconds ?? 0,
+            };
+
+            const { error } = await sb
+                .from('timesheets')
+                .upsert(payload, { onConflict: 'user_id,date' });
+
+            if (error) {
+                console.error('[supabase] upsert failed:', error, payload);
+                alert('저장 실패: ' + (error.message || 'unknown error'));
+            }
+        } catch (e) {
+            console.error('[supabase] unexpected save error:', e);
+            alert('저장 중 오류가 발생했습니다.');
+        }
     }
 
     async loadDataFromServer() {
