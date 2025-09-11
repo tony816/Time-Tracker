@@ -555,7 +555,7 @@ class TimeTracker {
         if (sb) {
             const user = await getSupaUser();
             if (user) {
-                this.saveDataToServer(data);
+                await this.saveDataToServer(data);
             }
             return;
         }
@@ -615,37 +615,45 @@ class TimeTracker {
 
     // ===== Supabase 동기화 메서드 =====
     async saveDataToServer(doc) {
-        try {
-            const user = await getSupaUser();
-            if (!user) return;
+      try {
+        const user = await getSupaUser();
+        if (!user) return;
 
-            const slots = Array.isArray(doc?.timeSlots) ? doc.timeSlots : [];
-            const planned = slots.filter(s => (s.planned || '').trim() !== '').length;
-            const executed = slots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
-            const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
-            const total_seconds = slots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
+        // 통계 계산
+        const slots = Array.isArray(doc?.timeSlots) ? doc.timeSlots : [];
+        const planned  = slots.filter(s => (s.planned || '').trim() !== '').length;
+        const executed = slots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
+        const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
+        const total_seconds = slots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
 
-            const dateStr = String(doc?.date || this.currentDate || '').slice(0, 10);
-            const payload = {
-                user_id: user.id,
-                date: dateStr,
-                doc_json: doc,
-                exec_rate: exec_rate ?? null,
-                total_seconds: total_seconds ?? 0,
-            };
+        const key = { user_id: user.id, date: doc.date };
 
-            const { error } = await sb
-                .from('timesheets')
-                .upsert(payload, { onConflict: 'user_id,date' });
+        // 1) UPDATE 시도 (해당 행이 있으면 갱신)
+        const { error: updateErr } = await sb
+          .from('timesheets')
+          .update({ doc_json: doc, exec_rate, total_seconds })
+          .eq('user_id', key.user_id)
+          .eq('date', key.date);
 
-            if (error) {
-                console.error('[supabase] upsert failed:', error, payload);
-                alert('저장 실패: ' + (error.message || 'unknown error'));
-            }
-        } catch (e) {
-            console.error('[supabase] unexpected save error:', e);
-            alert('저장 중 오류가 발생했습니다.');
+        // 2) INSERT 시도 (행이 없거나 UPDATE가 0행 갱신했을 가능성 대비)
+        //   - UPDATE가 성공/실패여도 INSERT는 존재하지 않을 때만 성공함(UNIQUE 제약으로 보장)
+        const { error: insertErr } = await sb
+          .from('timesheets')
+          .insert({ ...key, doc_json: doc, exec_rate, total_seconds })
+          .select('user_id')
+          .maybeSingle();
+
+        if (updateErr && !insertErr) {
+          console.warn('timesheets UPDATE error, but INSERT succeeded:', updateErr.message);
         }
+        if (insertErr && !/duplicate key|unique constraint/i.test(insertErr.message || '')) {
+          // 진짜 오류만 사용자에게 표시
+          alert('저장 오류: ' + insertErr.message);
+        }
+      } catch (e) {
+        console.error('saveDataToServer() failed:', e);
+        alert('저장 중 오류가 발생했습니다.');
+      }
     }
 
     async loadDataFromServer() {
