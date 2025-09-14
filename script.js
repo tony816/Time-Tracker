@@ -3,8 +3,16 @@ const sb = (typeof window !== 'undefined' && window.sb) ? window.sb : null;
 
 async function getSupaUser() {
     if (!sb) return null;
-    const { data: { user } } = await sb.auth.getUser();
-    return user || null;
+    // 세션 우선 → 없으면 getUser로 폴백
+    try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session?.user) return session.user;
+    } catch (_) {}
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (user) return user;
+    } catch (_) {}
+    return null;
 }
 
 async function wireAuthUI() {
@@ -58,6 +66,18 @@ async function wireAuthUI() {
     await refresh();
 }
 
+// 공용: 지정 시간(ms) 내에 settle되지 않으면 timeout 에러로 reject
+function withTimeout(promise, ms, label = 'op') {
+    let timer;
+    const timeout = new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error(`${label}-timeout`)), ms);
+    });
+    return Promise.race([
+        Promise.resolve(promise).finally(() => clearTimeout(timer)),
+        timeout,
+    ]);
+}
+
 class TimeTracker {
     constructor() {
         this.timeSlots = [];
@@ -83,6 +103,13 @@ class TimeTracker {
         // 타이머 관련 속성 추가
         this.timers = new Map(); // {index: {running, elapsed, startTime, intervalId}}
         this.timerInterval = null;
+        // 저장 직렬화를 위한 간단한 큐
+        this._saveQueue = Promise.resolve();
+        // 변경 감시 스냅샷
+        this._lastSavedSignature = '';
+        this._watcher = null;
+        this.currentUser = null; // 캐시된 사용자
+        // 저장 진행 중 플래그는 사용하지 않음(큐 직렬화만 사용)
         this.init();
     }
 
@@ -95,10 +122,27 @@ class TimeTracker {
         this.attachModalEventListeners();
         this.loadPlannedActivities();
         this.attachActivityModalEventListeners();
+        this.startChangeWatcher();
+
+        // Studio 탭 전환 등으로 hidden일 때 타이머 스로틀링을 피하고 불필요한 트리거를 줄임
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (this._watcher) clearInterval(this._watcher);
+            } else {
+                this.startChangeWatcher();
+            }
+        });
+    }
+
+    // 디버그 겸 편의 저장 호출 래퍼
+    saveNow(reason = 'manual') {
+        try { console.log('[saveNow]', reason); } catch (_) {}
+        return this.saveData();
     }
 
     // Supabase 인증 상태 변화 처리
     onAuthChange(user) {
+        this.currentUser = user || null;
         if (user) {
             // 로그인: 현재 날짜 기준 서버 데이터 로드
             this.loadData();
@@ -250,12 +294,14 @@ class TimeTracker {
         });
 
         document.getElementById('timeEntries').addEventListener('input', (e) => {
-            if (e.target.classList.contains('input-field')) {
+            if (e.target.classList.contains('input-field') && !e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
                 const type = e.target.dataset.type;
                 this.timeSlots[index][type] = e.target.value;
                 this.calculateTotals();
                 this.autoSave();
+                // 즉시 저장 한 번 더(큐로 직렬화)
+                this.saveNow('actual-input/input').catch(() => {});
             }
         });
 
@@ -346,6 +392,38 @@ class TimeTracker {
         // 타이머 결과 입력 필드 이벤트 리스너 (우측 칸과 모달을 연결: 병합 포함 갱신)
         document.getElementById('timeEntries').addEventListener('input', (e) => {
             if (e.target.classList.contains('timer-result-input')) {
+                try {
+                    const index = parseInt(e.target.dataset.index);
+                    const value = e.target.value;
+                    // 디버그: 입력 이벤트 수신
+                    // console.log('[actual-input] input', { index, value });
+                    const actualMergeKey = this.findMergeKey('actual', index);
+                    if (actualMergeKey) {
+                        const [, startStr, endStr] = actualMergeKey.split('-');
+                        const start = parseInt(startStr, 10);
+                        const end = parseInt(endStr, 10);
+                        this.mergedFields.set(actualMergeKey, value);
+                        for (let i = start; i <= end; i++) {
+                            this.timeSlots[i].actual = (i === start) ? value : '';
+                        }
+                    } else {
+                        this.timeSlots[index].actual = value;
+                    }
+                    // 텍스트에서 시간값을 인식해 타이머 경과 시간 동기화
+                    this.syncTimerElapsedFromActualInput(index, value);
+                    this.calculateTotals();
+                    this.autoSave();
+                    // 즉시 저장 한 번 더(큐로 직렬화)
+                    this.saveData().catch(() => {});
+                } catch (err) {
+                    console.error('[actual-input] input handler error:', err);
+                }
+            }
+        });
+
+        // 한글 IME 등 입력 조합 종료 시 저장 보조(일부 환경에서 input 이벤트 지연/누락 대비)
+        document.getElementById('timeEntries').addEventListener('compositionend', (e) => {
+            if (e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
                 const value = e.target.value;
                 const actualMergeKey = this.findMergeKey('actual', index);
@@ -360,8 +438,95 @@ class TimeTracker {
                 } else {
                     this.timeSlots[index].actual = value;
                 }
+                this.syncTimerElapsedFromActualInput(index, value);
                 this.calculateTotals();
                 this.autoSave();
+                this.saveNow('actual-input/compositionend').catch(() => {});
+            }
+        });
+
+        // 포커스가 빠질 때도 보조 저장 트리거 (blur는 버블링 안 됨 → focusout 사용)
+        document.getElementById('timeEntries').addEventListener('focusout', (e) => {
+            if (e.target.classList && e.target.classList.contains('timer-result-input')) {
+                const index = parseInt(e.target.dataset.index);
+                const value = e.target.value;
+                const actualMergeKey = this.findMergeKey('actual', index);
+                if (actualMergeKey) {
+                    const [, startStr, endStr] = actualMergeKey.split('-');
+                    const start = parseInt(startStr, 10);
+                    const end = parseInt(endStr, 10);
+                    this.mergedFields.set(actualMergeKey, value);
+                    for (let i = start; i <= end; i++) {
+                        this.timeSlots[i].actual = (i === start) ? value : '';
+                    }
+                } else {
+                    this.timeSlots[index].actual = value;
+                }
+                this.syncTimerElapsedFromActualInput(index, value);
+                this.calculateTotals();
+                this.autoSave();
+                this.saveNow('actual-input/focusout').catch(() => {});
+            }
+        });
+
+        // change 이벤트 보조 훅: 일부 환경에서 input 이벤트가 누락될 수 있음
+        document.getElementById('timeEntries').addEventListener('change', (e) => {
+            if (e.target.classList.contains('timer-result-input')) {
+                try {
+                    const index = parseInt(e.target.dataset.index);
+                    const value = e.target.value;
+                    // console.log('[actual-input] change', { index, value });
+                    const actualMergeKey = this.findMergeKey('actual', index);
+                    if (actualMergeKey) {
+                        const [, startStr, endStr] = actualMergeKey.split('-');
+                        const start = parseInt(startStr, 10);
+                        const end = parseInt(endStr, 10);
+                        this.mergedFields.set(actualMergeKey, value);
+                        for (let i = start; i <= end; i++) {
+                            this.timeSlots[i].actual = (i === start) ? value : '';
+                        }
+                    } else {
+                        this.timeSlots[index].actual = value;
+                    }
+                    this.syncTimerElapsedFromActualInput(index, value);
+                    this.calculateTotals();
+                    this.autoSave();
+                    this.saveNow('actual-input/change').catch(() => {});
+                } catch (err) {
+                    console.error('[actual-input] change handler error:', err);
+                }
+            }
+        });
+
+        // keyup 보조 훅: 특정 환경에서 input/change가 지연될 경우 대비
+        document.getElementById('timeEntries').addEventListener('keyup', (e) => {
+            if (e.target.classList.contains('timer-result-input')) {
+                try {
+                    const index = parseInt(e.target.dataset.index);
+                    const value = e.target.value;
+                    // console.log('[actual-input] keyup', e.key, { index, value });
+                    // 문자 입력/백스페이스/엔터 등 주요 키에서 커밋
+                    const key = e.key || '';
+                    if (!(key.length === 1 || key === 'Backspace' || key === 'Enter' || key === 'Delete')) return;
+                    const actualMergeKey = this.findMergeKey('actual', index);
+                    if (actualMergeKey) {
+                        const [, startStr, endStr] = actualMergeKey.split('-');
+                        const start = parseInt(startStr, 10);
+                        const end = parseInt(endStr, 10);
+                        this.mergedFields.set(actualMergeKey, value);
+                        for (let i = start; i <= end; i++) {
+                            this.timeSlots[i].actual = (i === start) ? value : '';
+                        }
+                    } else {
+                        this.timeSlots[index].actual = value;
+                    }
+                    this.syncTimerElapsedFromActualInput(index, value);
+                    this.calculateTotals();
+                    this.autoSave();
+                    this.saveNow('actual-input/keyup').catch(() => {});
+                } catch (err) {
+                    console.error('[actual-input] keyup handler error:', err);
+                }
             }
         });
 
@@ -553,9 +718,16 @@ class TimeTracker {
         };
         // Supabase 사용 시: 로그인 상태면 서버에만 저장, 로그아웃 상태면 저장하지 않음
         if (sb) {
-            const user = await getSupaUser();
+            const user = this.currentUser || await getSupaUser();
             if (user) {
-                await this.saveDataToServer(data);
+                // 직렬화 + 워치독 타임아웃: 앞선 저장이 비정상 대기해도 큐가 계속 진행되도록 보장
+                const run = () => withTimeout(this.saveDataToServer(data), 10000, 'save');
+                this._saveQueue = this._saveQueue.then(run).catch(err => {
+                    console.warn('[save] failed:', err?.message || err);
+                });
+                await this._saveQueue;
+            } else {
+                console.warn('[saveData] skip: no user/session');
             }
             return;
         }
@@ -616,44 +788,106 @@ class TimeTracker {
     // ===== Supabase 동기화 메서드 =====
     async saveDataToServer(doc) {
       try {
-        const user = await getSupaUser();
-        if (!user) return;
+        const user = this.currentUser || await getSupaUser();
+        if (!user) { return; }
 
-        // 통계 계산
+        // 저장 직전 강제 정규화: 실제 텍스트에서 시간값을 파싱해 timer.elapsed에 반영
         const slots = Array.isArray(doc?.timeSlots) ? doc.timeSlots : [];
-        const planned  = slots.filter(s => (s.planned || '').trim() !== '').length;
-        const executed = slots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
+        const normalizedSlots = slots.map((s) => {
+          const clone = { ...s, timer: { ...(s?.timer || {}) } };
+          try {
+            const sec = this.parseDurationFromText ? this.parseDurationFromText(String(clone?.actual || '')) : null;
+            if (sec != null) {
+              clone.timer.elapsed = Math.max(0, Math.floor(sec));
+              clone.timer.method = 'manual';
+              clone.timer.running = false;
+              clone.timer.startTime = null;
+            }
+          } catch (_) {}
+          return clone;
+        });
+
+        // 통계 계산(정규화된 슬롯 기준)
+        const planned  = normalizedSlots.filter(s => (s.planned || '').trim() !== '').length;
+        const executed = normalizedSlots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
         const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
-        const total_seconds = slots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
+        const total_seconds = normalizedSlots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
 
-        const key = { user_id: user.id, date: doc.date };
+        // 단일 업서트로 삽입/갱신 처리 (UNIQUE: user_id,date)
+        const row = {
+          user_id: user.id,
+          date: doc.date,
+          doc_json: { ...doc, timeSlots: normalizedSlots },
+          exec_rate,
+          total_seconds
+        };
 
-        // 1) UPDATE 시도 (해당 행이 있으면 갱신)
-        const { error: updateErr } = await sb
+        console.log('[pre-save]', {
+          date: row.date,
+          total_seconds,
+          exec_rate,
+          perSlotSeconds: normalizedSlots.map(s => Number(s?.timer?.elapsed) || 0)
+        });
+
+        const { data: upData, error } = await sb
           .from('timesheets')
-          .update({ doc_json: doc, exec_rate, total_seconds })
-          .eq('user_id', key.user_id)
-          .eq('date', key.date);
+          .upsert(row, { onConflict: 'user_id,date' })
+          .select('user_id,date,total_seconds,updated_at')
+          .single();
 
-        // 2) INSERT 시도 (행이 없거나 UPDATE가 0행 갱신했을 가능성 대비)
-        //   - UPDATE가 성공/실패여도 INSERT는 존재하지 않을 때만 성공함(UNIQUE 제약으로 보장)
-        const { error: insertErr } = await sb
-          .from('timesheets')
-          .insert({ ...key, doc_json: doc, exec_rate, total_seconds })
-          .select('user_id')
-          .maybeSingle();
-
-        if (updateErr && !insertErr) {
-          console.warn('timesheets UPDATE error, but INSERT succeeded:', updateErr.message);
-        }
-        if (insertErr && !/duplicate key|unique constraint/i.test(insertErr.message || '')) {
-          // 진짜 오류만 사용자에게 표시
-          alert('저장 오류: ' + insertErr.message);
+        if (error) {
+          alert('저장 실패: ' + (error?.message || '알 수 없는 오류'));
+        } else {
+          console.log('[UPSERT ok]', upData);
+          // 현재 상태를 마지막 저장 스냅샷으로 기록
+          try {
+            this._lastSavedSignature = JSON.stringify({
+              date: this.currentDate,
+              timeSlots: this.timeSlots,
+              mergedFields: Object.fromEntries(this.mergedFields)
+            });
+          } catch (_) {}
         }
       } catch (e) {
         console.error('saveDataToServer() failed:', e);
         alert('저장 중 오류가 발생했습니다.');
+      } finally {
+        // no-op
       }
+    }
+
+    // 주기적으로 변경 사항을 감지해 저장 (이벤트 누락 대비)
+    startChangeWatcher() {
+        if (this._watcher) clearInterval(this._watcher);
+        this._watcher = setInterval(() => {
+            try {
+                // DOM에서 실제 입력값을 읽어 상태와 불일치 시 보정(이벤트 누락 대비)
+                try {
+                    for (let i = 0; i < (this.timeSlots?.length || 0); i++) {
+                        const row = document.querySelector(`[data-index="${i}"]`);
+                        if (!row) continue;
+                        const inp = row.querySelector('.timer-result-input');
+                        if (!inp) continue;
+                        const v = String(inp.value || '');
+                        if (this.timeSlots[i].actual !== v) {
+                            this.timeSlots[i].actual = v;
+                            // 시간 텍스트로 timer.elapsed 동기화
+                            this.syncTimerElapsedFromActualInput(i, v);
+                        }
+                    }
+                } catch (_) {}
+
+                const sig = JSON.stringify({
+                    date: this.currentDate,
+                    timeSlots: this.timeSlots,
+                    mergedFields: Object.fromEntries(this.mergedFields)
+                });
+                if (sig !== this._lastSavedSignature) {
+                    // 저장 큐로 직렬화되므로 중복 호출은 안전
+                    this.saveNow('watcher').catch(() => {});
+                }
+            } catch (_) {}
+        }, 2000);
     }
 
     async loadDataFromServer() {
@@ -1380,6 +1614,69 @@ class TimeTracker {
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // 텍스트에서 시간값(HH:MM(:SS) 또는 1h/분/초 표기)을 초로 파싱
+    // 규칙: 문자열 어디에 있든 "마지막으로 등장한" 시간을 우선 사용
+    parseDurationFromText(text) {
+        if (!text || typeof text !== 'string') return null;
+        const t = text.trim();
+
+        // 1) HH:MM(:SS) 패턴 전체를 훑어서 마지막 매치를 사용
+        try {
+            const all = Array.from(t.matchAll(/(\d{1,2}):(\d{2})(?::(\d{2}))?/g));
+            if (all.length) {
+                const m = all[all.length - 1];
+                const h = parseInt(m[1] || '0', 10);
+                const mm = parseInt(m[2] || '0', 10);
+                const ss = parseInt(m[3] || '0', 10) || 0;
+                if (mm < 60 && ss < 60) return h * 3600 + mm * 60 + ss;
+            }
+        } catch (_) {}
+
+        // 2) 영문/한글 단위 토큰을 문자열 어디서나 탐지해 조합
+        let H = null, M = null, S = null;
+        try {
+            for (const m of t.matchAll(/(\d+)\s*(시간|h|hr|hrs)/gi)) { H = parseInt(m[1], 10); }
+            for (const m of t.matchAll(/(\d+)\s*(분|m|min|mins)/gi)) { M = parseInt(m[1], 10); }
+            for (const m of t.matchAll(/(\d+)\s*(초|s|sec|secs)/gi)) { S = parseInt(m[1], 10); }
+        } catch (_) {}
+        if (H != null || M != null || S != null) {
+            const hh = H || 0, mm = M || 0, ss = S || 0;
+            return hh * 3600 + mm * 60 + ss;
+        }
+
+        // 3) 단일 숫자 + 분/초 토큰 (문자열 내 어디든)
+        const onlyMin = Array.from(t.matchAll(/(\d+)\s*(분|m|min)/gi)).pop();
+        if (onlyMin) return parseInt(onlyMin[1], 10) * 60;
+        const onlySec = Array.from(t.matchAll(/(\d+)\s*(초|s|sec)/gi)).pop();
+        if (onlySec) return parseInt(onlySec[1], 10);
+
+        return null;
+    }
+
+    // 실제 활동 입력 변경 시, 텍스트에 포함된 시간값을 timer.elapsed로 반영
+    syncTimerElapsedFromActualInput(index, text) {
+        const secs = this.parseDurationFromText(text);
+        if (secs == null || isNaN(secs)) return;
+        const slot = this.timeSlots[index];
+        if (!slot || !slot.timer) return;
+        slot.timer.elapsed = Math.max(0, Math.floor(secs));
+        slot.timer.running = false;
+        slot.timer.startTime = null;
+        slot.timer.method = 'manual';
+
+        // 타이머 표시 즉시 갱신 (존재할 경우)
+        try {
+            const row = document.querySelector(`[data-index="${index}"]`);
+            if (row) {
+                const disp = row.querySelector('.timer-display');
+                if (disp) {
+                    disp.textContent = this.formatTime(slot.timer.elapsed);
+                    if (slot.timer.elapsed > 0) disp.style.display = 'block';
+                }
+            }
+        } catch (_) {}
     }
     
     getCurrentTimeIndex() {
@@ -2567,8 +2864,12 @@ class TimeTracker {
                 for (let i = start; i <= end; i++) {
                     this.timeSlots[i].actual = (i === start) ? actualText : '';
                 }
+                // 병합 시작 인덱스 기준으로 타이머 경과 동기화
+                this.syncTimerElapsedFromActualInput(start, actualText);
             } else {
                 slot.actual = actualText;
+                // 단일 셀의 경우 해당 인덱스 동기화
+                this.syncTimerElapsedFromActualInput(index, actualText);
             }
             
             this.renderTimeEntries();
