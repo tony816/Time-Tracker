@@ -58,10 +58,7 @@
       </main>
 
       <div class="actions">
-        <button id="exportBtn">내보내기</button>
-        <button id="importBtn">가져오기</button>
         <button id="clearBtn">초기화</button>
-        <input type="file" id="importFile" accept="application/json" style="display:none" />
       </div>
     </div>
 
@@ -138,6 +135,13 @@
         } catch (e) {}
       })();
     </script>
+    <!-- Hardcoded Supabase config (user-provided) -->
+    <script>
+      window.SUPABASE_URL = 'https://flhpjzfnjeqafrecggvr.supabase.co';
+      window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsaHBqemZuamVxYWZyZWNnZ3ZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4Mjc5NDksImV4cCI6MjA3MzQwMzk0OX0.Djtv1h6jIEpTC7GVSZ8rxoZ6mrwdQ__jNFh0ygA2jTE';
+    </script>
+    <!-- Supabase client (optional realtime sync). Safe to load even if unused. -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>

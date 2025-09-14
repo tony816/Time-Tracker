@@ -29,6 +29,13 @@ class TimeTracker {
         this._lastSavedSignature = '';
         this._watcher = null;
         // 저장 진행 중 플래그는 사용하지 않음(큐 직렬화만 사용)
+        // Supabase (optional)
+        this.supabase = null;
+        this.supabaseChannel = null;
+        this.supabaseConfigured = false;
+        this._sbSaveTimer = null;
+        this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
+            try { const k='device_id'; let v=localStorage.getItem(k); if(v) return v; const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); v=`${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; localStorage.setItem(k,v); return v; } catch(_) { return 'device-anon'; } })();
         this.init();
     }
 
@@ -42,6 +49,8 @@ class TimeTracker {
         this.loadPlannedActivities();
         this.attachActivityModalEventListeners();
         this.startChangeWatcher();
+        // Supabase(옵션) 초기화
+        try { this.initSupabaseIntegration && this.initSupabaseIntegration(); } catch(_) {}
 
         // 저장소 전체에 남아있을 수 있는 legacy outcome 필드 일괄 제거
         try {
@@ -262,24 +271,7 @@ class TimeTracker {
             });
         }
 
-        // 데이터 내보내기/가져오기
-        const exportBtn = document.getElementById('exportBtn');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                this.exportAllData();
-            });
-        }
-        const importBtn = document.getElementById('importBtn');
-        const importFileInput = document.getElementById('importFile');
-        if (importBtn && importFileInput) {
-            importBtn.addEventListener('click', () => {
-                importFileInput.value = '';
-                importFileInput.click();
-            });
-            importFileInput.addEventListener('change', (e) => {
-                this.handleImportFileChange(e);
-            });
-        }
+        // 가져오기/내보내기 기능 제거됨: 관련 UI 및 리스너 없음
 
         
 
@@ -628,6 +620,8 @@ class TimeTracker {
                 mergedFields: Object.fromEntries(this.mergedFields)
             });
         } catch (_) {}
+        // Supabase 동기화 스케줄링(옵션)
+        try { this.scheduleSupabaseSave && this.scheduleSupabaseSave(); } catch(_) {}
     }
 
     async loadData() {
@@ -673,6 +667,8 @@ class TimeTracker {
 
         this.renderTimeEntries();
         this.calculateTotals();
+        // Supabase에서 최신 데이터 가져오기(옵션)
+        try { this.fetchFromSupabaseForDate && this.fetchFromSupabaseForDate(this.currentDate); } catch(_) {}
     }
 
     
@@ -730,126 +726,134 @@ class TimeTracker {
         this.autoSave();
     }
 
-    // 내보내기: 로컬스토리지의 모든 날짜 데이터(JSON) 저장
-    exportAllData() {
+    // 가져오기/내보내기 기능 제거됨: 관련 함수 삭제
+
+    // ===== Supabase integration (optional) =====
+    loadOrCreateDeviceId() {
         try {
-            const prefix = 'timesheet_';
-            const dates = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(prefix)) {
-                    try {
-                        const item = JSON.parse(localStorage.getItem(key));
-                        if (item && item.date) {
-                            dates[item.date] = item;
-                        }
-                    } catch (e) {
-                        // skip invalid entries
-                    }
-                }
-            }
-            const payload = {
-                version: 1,
-                exportedAt: new Date().toISOString(),
-                dates
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
-            a.href = url;
-            a.download = `timesheet-export-${ts}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            this.showNotification('데이터를 JSON으로 내보냈습니다.');
-        } catch (err) {
-            alert('내보내기에 실패했습니다.');
+            const k = 'device_id';
+            let id = localStorage.getItem(k);
+            if (id) return id;
+            const rnd = crypto && crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(16)) : Array.from({length:16},()=>Math.floor(Math.random()*256));
+            rnd[6] = (rnd[6] & 0x0f) | 0x40;
+            rnd[8] = (rnd[8] & 0x3f) | 0x80;
+            const hex = Array.from(rnd).map(b=>b.toString(16).padStart(2,'0')).join('');
+            id = `${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`;
+            localStorage.setItem(k, id);
+            return id;
+        } catch(_) { return 'device-anon'; }
+    }
+    loadSupabaseConfig() {
+        try {
+            const url = (typeof window !== 'undefined' && window.SUPABASE_URL) || localStorage.getItem('supabase_url') || null;
+            const anon = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || localStorage.getItem('supabase_anon_key') || null;
+            if (url && anon) return { url: String(url), anonKey: String(anon) };
+        } catch(_) {}
+        return null;
+    }
+    initSupabaseIntegration() {
+        try { if (!(window && window.supabase)) return; } catch(_) { return; }
+        const cfg = this.loadSupabaseConfig();
+        if (!cfg) return;
+        try {
+            this.supabase = window.supabase.createClient(cfg.url, cfg.anonKey);
+            this.supabaseConfigured = true;
+            this.resubscribeSupabaseRealtime();
+            this.fetchFromSupabaseForDate(this.currentDate).catch(()=>{});
+        } catch(e) {
+            console.warn('[supabase] init failed:', e);
+            this.supabase = null;
+            this.supabaseConfigured = false;
         }
     }
-
-    // 가져오기: JSON 파일을 파싱하여 로컬스토리지에 병합/저장
-    handleImportFileChange(e) {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const text = reader.result;
-                const obj = JSON.parse(text);
-                const importedCount = this.importDataObject(obj);
-                if (importedCount > 0) {
-                    this.showNotification(`가져오기 완료: ${importedCount}일 데이터`);
-                    // 현재 날짜 데이터 새로고침
-                    this.loadData();
-                } else {
-                    alert('가져올 유효한 데이터가 없습니다.');
-                }
-            } catch (err) {
-                alert('가져오기에 실패했습니다. 올바른 JSON 파일인지 확인하세요.');
-            }
-        };
-        reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다.');
-        reader.readAsText(file);
-    }
-
-    
-
-    importDataObject(obj) {
-        const prefix = 'timesheet_';
-        let items = [];
-        if (!obj) return 0;
-
-        // 지원 포맷 1: { version, dates: { 'YYYY-MM-DD': {..} } }
-        if (obj.dates && typeof obj.dates === 'object') {
-            items = Object.values(obj.dates);
-        }
-        // 지원 포맷 2: 단일 날짜 객체 { date, timeSlots, mergedFields }
-        else if (obj.date && obj.timeSlots) {
-            items = [obj];
-        }
-        // 지원 포맷 3: 배열 형태
-        else if (Array.isArray(obj)) {
-            items = obj.filter(it => it && it.date && it.timeSlots);
-        }
-
-        if (items.length === 0) return 0;
-
-        // 중복 확인
-        const duplicates = items.filter(it => !!localStorage.getItem(`${prefix}${it.date}`)).map(it => it.date);
-        let overwrite = true;
-        if (duplicates.length > 0) {
-            overwrite = confirm(`동일한 날짜 데이터(${duplicates.length}건)가 존재합니다.\n덮어쓰시겠습니까? 취소하면 중복 날짜는 건너뜁니다.`);
-        }
-
-        let imported = 0;
-        items.forEach(it => {
-            const key = `${prefix}${it.date}`;
-            if (!localStorage.getItem(key) || overwrite) {
+    resubscribeSupabaseRealtime() {
+        if (!this.supabaseConfigured || !this.supabase) return;
+        try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch(_) {}
+        const filter = `device_id=eq.${this.deviceId},date=eq.${this.currentDate}`;
+        this.supabaseChannel = this.supabase
+            .channel(`timesheet_slots:${this.deviceId}:${this.currentDate}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_slots', filter }, (payload) => {
                 try {
-                    const sanitized = this.sanitizeImportedItem(it);
-                    localStorage.setItem(key, JSON.stringify(sanitized));
-                    imported++;
-                } catch (e) {
-                    // ignore set error for this item
-                }
-            }
-        });
-       
-        return imported;
+                    const row = payload.new || payload.old;
+                    if (!row || row.date !== this.currentDate) return;
+                    const idx = this.timeSlots.findIndex(s => String(s.time) === String(row.time_label));
+                    if (idx < 0) return;
+                    const slot = this.timeSlots[idx];
+                    let changed = false;
+                    if (typeof row.planned === 'string' && slot.planned !== row.planned) { slot.planned = row.planned; changed = true; }
+                    if (typeof row.actual === 'string' && slot.actual !== row.actual) { slot.actual = row.actual; changed = true; }
+                    if (row.details != null) {
+                        if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
+                        if (slot.activityLog.details !== row.details) { slot.activityLog.details = row.details; changed = true; }
+                    }
+                    if (changed) {
+                        this.renderTimeEntries();
+                        this.calculateTotals();
+                        this.autoSave();
+                    }
+                } catch(e) { console.warn('[supabase] apply change failed', e); }
+            })
+            .subscribe();
     }
-
-    // 가져오기/로딩 시 activityLog 표준화 헬퍼
-    sanitizeImportedItem(item) {
+    async fetchFromSupabaseForDate(date) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
         try {
-            const copy = { ...item };
-            if (Array.isArray(copy.timeSlots)) {
-                copy.timeSlots = copy.timeSlots.map((slot) => this.normalizeActivityLog(slot));
+            const { data, error } = await this.supabase
+                .from('timesheet_slots')
+                .select('time_label,planned,actual,details')
+                .eq('device_id', this.deviceId)
+                .eq('date', date)
+                .limit(200);
+            if (error) throw error;
+            if (!Array.isArray(data)) return false;
+            const byTime = new Map(data.map(r => [String(r.time_label), r]));
+            let changed = false;
+            this.timeSlots.forEach((slot) => {
+                const r = byTime.get(String(slot.time));
+                if (!r) return;
+                if (typeof r.planned === 'string' && slot.planned !== r.planned) { slot.planned = r.planned; changed = true; }
+                if (typeof r.actual === 'string' && slot.actual !== r.actual) { slot.actual = r.actual; changed = true; }
+                if (typeof r.details === 'string') {
+                    if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
+                    if (slot.activityLog.details !== r.details) { slot.activityLog.details = r.details; changed = true; }
+                }
+            });
+            if (changed) {
+                this.renderTimeEntries();
+                this.calculateTotals();
+                this.autoSave();
             }
-            return copy;
-        } catch (_) {
-            return item;
+            return true;
+        } catch(e) {
+            console.warn('[supabase] fetch failed:', e);
+            return false;
+        }
+    }
+    scheduleSupabaseSave() {
+        if (!this.supabaseConfigured || !this.supabase) return;
+        clearTimeout(this._sbSaveTimer);
+        this._sbSaveTimer = setTimeout(() => { try { this.saveToSupabase && this.saveToSupabase(); } catch(_) {} }, 500);
+    }
+    async saveToSupabase() {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        try {
+            const rows = this.timeSlots.map(slot => ({
+                device_id: this.deviceId,
+                date: this.currentDate,
+                time_label: String(slot.time),
+                planned: String(slot.planned || ''),
+                actual: String(slot.actual || ''),
+                details: String((slot.activityLog && slot.activityLog.details) || ''),
+                updated_at: new Date().toISOString(),
+            }));
+            const { error } = await this.supabase
+                .from('timesheet_slots')
+                .upsert(rows, { onConflict: 'device_id,date,time_label' });
+            if (error) throw error;
+            return true;
+        } catch(e) {
+            console.warn('[supabase] upsert failed:', e);
+            return false;
         }
     }
 
@@ -910,6 +914,7 @@ class TimeTracker {
         this.currentDate = currentDate.toISOString().split('T')[0];
         this.setCurrentDate();
         this.loadData();
+        try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch(_) {}
     }
 
     attachFieldSelectionListeners(entryDiv, index) {

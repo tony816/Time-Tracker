@@ -1,6 +1,6 @@
 # 타임시트 (Time Tracker)
 
-4시부터 다음날 3시까지를 한 화면에서 계획/시간/실제 3열로 관리하는 경량 시간 기록 도구입니다. 병합 기반 스케줄링, 실시간 타이머, 활동 로그, JSON 내보내기/가져오기, (선택) Notion 활동 동기화를 지원합니다.
+4시부터 다음날 3시까지를 한 화면에서 계획/시간/실제 3열로 관리하는 경량 시간 기록 도구입니다. 병합 기반 스케줄링, 실시간 타이머, 활동 로그, (선택) Notion 활동 동기화를 지원합니다.
 
 ## 주요 기능
 
@@ -12,8 +12,9 @@
 - 타이머: 현재 시간 범위+계획이 있을 때만 ▶️ 활성화, ⏸️/⏹️ 지원, 종료 시 실제 칸에 자동 기록(“공부 (00:25:10)” 등)
 - 활동 로그: 우측 칸의 📝 버튼으로 제목/피드백 모달, 제목은 실제 칸과 동기화
 - 성과 분석: 실행율(%)과 타이머 사용량(시/분/초) 표시, 색상으로 상태 구분
-- 데이터 관리: 날짜별 자동 저장(LocalStorage), JSON 내보내기/가져오기
+- 데이터 관리: 날짜별 자동 저장(LocalStorage)
 - Notion 동기화(선택): Notion DB의 페이지 제목을 “계획 활동” 후보 목록에 병합
+- Supabase 연동(선택): 각 시간 슬롯의 `time/planned/actual/activityLog.details`를 실시간 동기화
 
 ## 사용법
 
@@ -35,13 +36,7 @@
 - 컨트롤: ▶️ 시작/재개, ⏸️ 일시정지, ⏹️ 정지(한 번에 하나의 타이머만 실행)
 - 자동 기록: 정지 시 경과 시간 포맷(00:00:00)으로 우측 실제 칸에 자동 기록, 병합된 실제 칸이면 범위 전체 업데이트
 
-### 내보내기/가져오기
-- 내보내기: 하단 “내보내기” → 브라우저 LocalStorage의 모든 날짜 데이터를 하나의 JSON으로 저장
-- 가져오기: “가져오기” → JSON 선택 → 중복 날짜는 덮어쓰기 여부 확인
-- 지원 포맷
-  - 전체: `{ version, exportedAt, dates: { 'YYYY-MM-DD': { date, timeSlots, mergedFields } } }`
-  - 단일: `{ date, timeSlots, mergedFields }`
-  - 배열: `[ { date, timeSlots, mergedFields }, ... ]`
+<!-- 내보내기/가져오기는 현재 지원하지 않습니다. -->
 
 ## 실행 방법
 
@@ -50,12 +45,13 @@
   - Windows: `start index.html`
 - 정적 서버(선택): `python -m http.server 8000` → `http://localhost:8000/`
 - Notion 연동 서버(선택): 아래 “Notion 연동” 참고
+ - Supabase 연동(선택): 아래 “Supabase 연동” 참고
 
 ## 서버 DB(선택) & 마이그레이션
 
 - 서버는 SQLite를 사용해 날짜별 문서를 그대로 저장합니다.
   - 테이블: `timesheets(id, user_id, date, doc_json, exec_rate, total_seconds, created_at, updated_at)`
-  - `doc_json`은 `{ date, timeSlots, mergedFields }` 원형 그대로 저장되어 내보내기/가져오기와 1:1 대응합니다.
+  - `doc_json`은 `{ date, timeSlots, mergedFields }` 원형 그대로 저장되어 타임시트 문서 구조와 1:1 대응합니다.
 - 계획 활동 카탈로그(로컬 추가분): `activity_catalog(title, source='local', external_id)`
 - 마이그레이션: 앱 하단의 “서버로 마이그레이션” 버튼으로 LocalStorage의 모든 날짜/활동을 서버 DB로 이전할 수 있습니다.
   - 서버가 실행 중이어야 합니다(`npm start`).
@@ -67,7 +63,7 @@
 Time-Tracker/
 ├── index.html      # UI
 ├── styles.css      # 스타일
-├── script.js       # 로직(슬롯/병합/타이머/로그/모달/저장/가져오기)
+├── script.js       # 로직(슬롯/병합/타이머/로그/모달/저장)
 ├── server.js       # (선택) Notion 브리지 서버
 ├── package.json    # (선택) 서버 실행 스크립트/의존성
 └── README.md       # 문서
@@ -118,6 +114,43 @@ npm start
 ## 문제 해결(FAQ)
 
 - 동기화 버튼 반응 없음: 서버가 꺼져 있거나 엔드포인트 미설정일 수 있음. `npm start`로 서버 실행 후 `http://localhost:3000`에서 열어주세요.
+
+## Supabase 연동(선택)
+
+프론트엔드에서 Supabase SDK를 CDN으로 로드하여 시간 슬롯을 실시간 동기화합니다. 로컬스토리지는 그대로 유지되어 오프라인에서도 동작합니다.
+
+- 필요한 공개 설정(클라이언트에서 사용):
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+  - 설정 방법 1: 브라우저 콘솔에서 저장 후 새로고침
+    - `localStorage.setItem('supabase_url','https://YOUR-PROJECT.supabase.co')`
+    - `localStorage.setItem('supabase_anon_key','YOUR-ANON-KEY')`
+  - 설정 방법 2: `index.html`에서 전역 변수로 지정
+    - `<script>window.SUPABASE_URL='https://...'; window.SUPABASE_ANON_KEY='...';</script>`
+
+- 테이블 스키마(예시: SQL)
+```
+create table if not exists public.timesheet_slots (
+  id uuid primary key default gen_random_uuid(),
+  device_id text not null,
+  date text not null, -- 'YYYY-MM-DD'
+  time_label text not null, -- '4'..'23','00','1','2','3'
+  planned text not null default '',
+  actual text not null default '',
+  details text not null default '',
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists uq_timesheet_slots_key on public.timesheet_slots(device_id, date, time_label);
+```
+
+- Realtime 설정: Supabase UI → Realtime → `timesheet_slots` 테이블 Enable
+
+- RLS(권장 아님): 간편 테스트를 위해 RLS를 비활성화하거나, anon 역할에 대해서 읽기/쓰기 허용 정책을 구성하세요. 민감한 데이터 저장은 지양하세요.
+
+- 동작 방식
+  - 저장 시: 현재 날짜의 24개 슬롯을 `upsert(device_id,date,time_label)`로 저장합니다.
+  - 로드 시: 같은 키로 select하여 `planned/actual/details`를 반영합니다.
+  - 실시간: 해당 `(device_id,date)`로 필터링된 변경사항을 구독하여 모달/그리드를 갱신합니다.
+
 - 400 invalid_request_url: 데이터베이스 ID 형식/공유 설정 확인. DB 링크의 32자리 hex(또는 하이픈 포함 UUID)를 사용하고, 통합을 DB에 초대하세요.
 - 동기화 후 변화 없음: 새 제목이 없으면 목록 시각적 변화가 없을 수 있습니다.
 

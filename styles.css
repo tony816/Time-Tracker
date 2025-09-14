@@ -315,23 +315,6 @@ h1 {
   background-color: #2980b9;
 }
 
-#exportBtn {
-  background-color: #8e44ad;
-  color: white;
-}
-
-#exportBtn:hover {
-  background-color: #7d3c98;
-}
-
-#importBtn {
-  background-color: #16a085;
-  color: white;
-}
-
-#importBtn:hover {
-  background-color: #138d75;
-}
 
 #clearBtn {
   background-color: #e74c3c;
