@@ -729,6 +729,57 @@ class TimeTracker {
     // 가져오기/내보내기 기능 제거됨: 관련 함수 삭제
 
     // ===== Supabase integration (optional) =====
+    // 시간 라벨('00','1'..'23') <-> 정수 시(0..23) 변환 헬퍼
+    labelToHour(label) {
+        const s = String(label).trim();
+        if (s === '00' || s === '0') return 0;
+        const n = parseInt(s, 10);
+        return isNaN(n) ? 0 : (n % 24);
+    }
+    hourToLabel(hour) {
+        const n = Number(hour) % 24;
+        return n === 0 ? '00' : String(n);
+    }
+    // 메모리 -> DB 전송용 slots JSON 생성(비어있는 시간은 생략)
+    buildSlotsJson() {
+        const slots = {};
+        try {
+            this.timeSlots.forEach((slot) => {
+                const hour = this.labelToHour(slot.time);
+                const planned = String(slot.planned || '').trim();
+                const actual = String(slot.actual || '').trim();
+                const details = String((slot.activityLog && slot.activityLog.details) || '').trim();
+                if (planned !== '' || actual !== '' || details !== '') {
+                    slots[String(hour)] = { planned, actual, details };
+                }
+            });
+        } catch (_) {}
+        return slots;
+    }
+    // DB slots JSON -> 메모리 반영(존재하는 키만 반영)
+    applySlotsJson(slotsJson) {
+        if (!slotsJson || typeof slotsJson !== 'object') return false;
+        let changed = false;
+        try {
+            Object.keys(slotsJson).forEach((k) => {
+                const hour = parseInt(k, 10);
+                if (isNaN(hour)) return;
+                const label = this.hourToLabel(hour);
+                const idx = this.timeSlots.findIndex(s => String(s.time) === label);
+                if (idx < 0) return;
+                const row = slotsJson[k] || {};
+                const slot = this.timeSlots[idx];
+                const planned = typeof row.planned === 'string' ? row.planned : '';
+                const actual = typeof row.actual === 'string' ? row.actual : '';
+                const details = typeof row.details === 'string' ? row.details : '';
+                if (slot.planned !== planned) { slot.planned = planned; changed = true; }
+                if (slot.actual !== actual) { slot.actual = actual; changed = true; }
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
+                if (slot.activityLog.details !== details) { slot.activityLog.details = details; changed = true; }
+            });
+        } catch (_) {}
+        return changed;
+    }
     loadOrCreateDeviceId() {
         try {
             const k = 'device_id';
@@ -769,23 +820,14 @@ class TimeTracker {
     resubscribeSupabaseRealtime() {
         if (!this.supabaseConfigured || !this.supabase) return;
         try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch(_) {}
-        const filter = `device_id=eq.${this.deviceId},date=eq.${this.currentDate}`;
+        const filter = `device_id=eq.${this.deviceId},day=eq.${this.currentDate}`;
         this.supabaseChannel = this.supabase
-            .channel(`timesheet_slots:${this.deviceId}:${this.currentDate}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_slots', filter }, (payload) => {
+            .channel(`timesheet_days:${this.deviceId}:${this.currentDate}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter }, (payload) => {
                 try {
                     const row = payload.new || payload.old;
-                    if (!row || row.date !== this.currentDate) return;
-                    const idx = this.timeSlots.findIndex(s => String(s.time) === String(row.time_label));
-                    if (idx < 0) return;
-                    const slot = this.timeSlots[idx];
-                    let changed = false;
-                    if (typeof row.planned === 'string' && slot.planned !== row.planned) { slot.planned = row.planned; changed = true; }
-                    if (typeof row.actual === 'string' && slot.actual !== row.actual) { slot.actual = row.actual; changed = true; }
-                    if (row.details != null) {
-                        if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
-                        if (slot.activityLog.details !== row.details) { slot.activityLog.details = row.details; changed = true; }
-                    }
+                    if (!row || row.day !== this.currentDate) return;
+                    const changed = this.applySlotsJson(row.slots || {});
                     if (changed) {
                         this.renderTimeEntries();
                         this.calculateTotals();
@@ -799,25 +841,16 @@ class TimeTracker {
         if (!this.supabaseConfigured || !this.supabase) return false;
         try {
             const { data, error } = await this.supabase
-                .from('timesheet_slots')
-                .select('time_label,planned,actual,details')
+                .from('timesheet_days')
+                .select('slots')
                 .eq('device_id', this.deviceId)
-                .eq('date', date)
-                .limit(200);
-            if (error) throw error;
-            if (!Array.isArray(data)) return false;
-            const byTime = new Map(data.map(r => [String(r.time_label), r]));
+                .eq('day', date)
+                .maybeSingle();
+            if (error && error.code !== 'PGRST116') throw error; // PGRST116: No rows
             let changed = false;
-            this.timeSlots.forEach((slot) => {
-                const r = byTime.get(String(slot.time));
-                if (!r) return;
-                if (typeof r.planned === 'string' && slot.planned !== r.planned) { slot.planned = r.planned; changed = true; }
-                if (typeof r.actual === 'string' && slot.actual !== r.actual) { slot.actual = r.actual; changed = true; }
-                if (typeof r.details === 'string') {
-                    if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
-                    if (slot.activityLog.details !== r.details) { slot.activityLog.details = r.details; changed = true; }
-                }
-            });
+            if (data && data.slots) {
+                changed = this.applySlotsJson(data.slots);
+            }
             if (changed) {
                 this.renderTimeEntries();
                 this.calculateTotals();
@@ -837,18 +870,15 @@ class TimeTracker {
     async saveToSupabase() {
         if (!this.supabaseConfigured || !this.supabase) return false;
         try {
-            const rows = this.timeSlots.map(slot => ({
+            const payload = {
                 device_id: this.deviceId,
-                date: this.currentDate,
-                time_label: String(slot.time),
-                planned: String(slot.planned || ''),
-                actual: String(slot.actual || ''),
-                details: String((slot.activityLog && slot.activityLog.details) || ''),
+                day: this.currentDate,
+                slots: this.buildSlotsJson(),
                 updated_at: new Date().toISOString(),
-            }));
+            };
             const { error } = await this.supabase
-                .from('timesheet_slots')
-                .upsert(rows, { onConflict: 'device_id,date,time_label' });
+                .from('timesheet_days')
+                .upsert([payload], { onConflict: 'device_id,day' });
             if (error) throw error;
             return true;
         } catch(e) {
