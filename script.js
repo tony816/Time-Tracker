@@ -43,6 +43,11 @@ class TimeTracker {
         this.attachActivityModalEventListeners();
         this.startChangeWatcher();
 
+        // 저장소 전체에 남아있을 수 있는 legacy outcome 필드 일괄 제거
+        try {
+            setTimeout(() => { this.purgeOutcomeFromAllStoredData(); }, 0);
+        } catch (_) {}
+
         // Studio 탭 전환 등으로 hidden일 때 타이머 스로틀링을 피하고 불필요한 트리거를 줄임
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
@@ -69,7 +74,7 @@ class TimeTracker {
                 planned: '',
                 actual: '',
                 timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-                activityLog: { title: '', details: '', outcome: '' }
+                activityLog: { title: '', details: '' }
             });
         }
         this.timeSlots.push({
@@ -77,28 +82,28 @@ class TimeTracker {
             planned: '',
             actual: '',
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', outcome: '' }
+            activityLog: { title: '', details: '' }
         });
         this.timeSlots.push({
             time: '1',
             planned: '',
             actual: '',
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', outcome: '' }
+            activityLog: { title: '', details: '' }
         });
         this.timeSlots.push({
             time: '2',
             planned: '',
             actual: '',
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', outcome: '' }
+            activityLog: { title: '', details: '' }
         });
         this.timeSlots.push({
             time: '3',
             planned: '',
             actual: '',
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', outcome: '' }
+            activityLog: { title: '', details: '' }
         });
     }
 
@@ -630,7 +635,23 @@ class TimeTracker {
         const savedData = localStorage.getItem(`timesheet_${this.currentDate}`);
         if (savedData) {
             const data = JSON.parse(savedData);
-            this.timeSlots = data.timeSlots || this.timeSlots;
+            this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
+                // activityLog 구조 정규화 및 legacy 필드(outcome) 제거
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                    slot.activityLog = { title: '', details: '' };
+                } else {
+                    if (typeof slot.activityLog.title !== 'string') {
+                        slot.activityLog.title = String(slot.activityLog.title || '');
+                    }
+                    if (typeof slot.activityLog.details !== 'string') {
+                        slot.activityLog.details = String(slot.activityLog.details || '');
+                    }
+                    if ('outcome' in slot.activityLog) {
+                        try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
+                    }
+                }
+                return slot;
+            });
 
             // 실행중 타이머는 정지
             this.timeSlots.forEach(slot => {
@@ -807,7 +828,8 @@ class TimeTracker {
             const key = `${prefix}${it.date}`;
             if (!localStorage.getItem(key) || overwrite) {
                 try {
-                    localStorage.setItem(key, JSON.stringify(it));
+                    const sanitized = this.sanitizeImportedItem(it);
+                    localStorage.setItem(key, JSON.stringify(sanitized));
                     imported++;
                 } catch (e) {
                     // ignore set error for this item
@@ -816,6 +838,70 @@ class TimeTracker {
         });
        
         return imported;
+    }
+
+    // 가져오기/로딩 시 activityLog 표준화 헬퍼
+    sanitizeImportedItem(item) {
+        try {
+            const copy = { ...item };
+            if (Array.isArray(copy.timeSlots)) {
+                copy.timeSlots = copy.timeSlots.map((slot) => this.normalizeActivityLog(slot));
+            }
+            return copy;
+        } catch (_) {
+            return item;
+        }
+    }
+
+    normalizeActivityLog(slot) {
+        try {
+            if (!slot || typeof slot !== 'object') return slot;
+            if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                slot.activityLog = { title: '', details: '' };
+            } else {
+                if ('outcome' in slot.activityLog) {
+                    try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
+                }
+                if (typeof slot.activityLog.title !== 'string') {
+                    slot.activityLog.title = String(slot.activityLog.title || '');
+                }
+                if (typeof slot.activityLog.details !== 'string') {
+                    slot.activityLog.details = String(slot.activityLog.details || '');
+                }
+            }
+        } catch (_) {}
+        return slot;
+    }
+
+    // 저장소 전체 순회하여 기존 데이터에서 outcome 필드 제거
+    purgeOutcomeFromAllStoredData() {
+        try {
+            const prefix = 'timesheet_';
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(prefix)) keys.push(k);
+            }
+            keys.forEach((k) => {
+                try {
+                    const raw = localStorage.getItem(k);
+                    if (!raw) return;
+                    const obj = JSON.parse(raw);
+                    if (!obj || !Array.isArray(obj.timeSlots)) return;
+                    let changed = false;
+                    obj.timeSlots = obj.timeSlots.map((slot) => {
+                        const before = JSON.stringify(slot && slot.activityLog);
+                        const afterSlot = this.normalizeActivityLog(slot);
+                        const after = JSON.stringify(afterSlot && afterSlot.activityLog);
+                        if (before !== after) changed = true;
+                        return afterSlot;
+                    });
+                    if (changed) {
+                        try { localStorage.setItem(k, JSON.stringify(obj)); } catch (_) {}
+                    }
+                } catch (_) {}
+            });
+        } catch (_) {}
     }
 
     changeDate(days) {

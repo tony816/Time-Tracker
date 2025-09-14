@@ -34,7 +34,7 @@ This project was created with Claude Code, Anthropic's AI-powered development as
 - Keyboard shortcuts (ESC to clear selections)
 
 ### Activity Logging System
-- **Detailed Activity Modal**: Comprehensive activity logging with title, details, and outcomes
+- **Detailed Activity Modal**: Comprehensive activity logging with title and details
 - **Activity Log Button**: 📝 button in each actual activity row
 - **Structured Data**: Title, detailed description, and results/achievements
 - **Data Integration**: Activity log titles automatically populate actual activity fields
@@ -108,7 +108,7 @@ timeSlots: [{
   planned: "Study session",
   actual: "Completed study session (01:23:45)",
   timer: { running: false, elapsed: 5025, startTime: null, method: 'timer' },
-  activityLog: { title: "Study session", details: "...", outcome: "..." }
+  activityLog: { title: "Study session", details: "..." }
 }]
 ```
 
