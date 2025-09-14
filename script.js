@@ -612,7 +612,17 @@ class TimeTracker {
             mergedFields: Object.fromEntries(this.mergedFields)
         };
         // 로컬 저장
-        try { localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data)); } catch (_) {}
+        try {
+            localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data));
+        } catch (_) {}
+        // 마지막 저장 스냅샷 업데이트(워처 중복 저장 방지)
+        try {
+            this._lastSavedSignature = JSON.stringify({
+                date: this.currentDate,
+                timeSlots: this.timeSlots,
+                mergedFields: Object.fromEntries(this.mergedFields)
+            });
+        } catch (_) {}
     }
 
     async loadData() {
