@@ -101,15 +101,7 @@ app.get('/api/notion/activities', async (_req, res) => {
 
 // Serve the static SPA from repo root
 const staticDir = path.resolve(__dirname);
-// Inject runtime config for the SPA (must come before static middleware)
-app.get('/config.js', (_req, res) => {
-    res
-        .type('application/javascript')
-        .send(
-            `window.SUPABASE_URL=${JSON.stringify(process.env.SUPABASE_URL || '')};\n` +
-            `window.SUPABASE_ANON_KEY=${JSON.stringify(process.env.SUPABASE_KEY || '')};\n`
-        );
-});
+// Runtime config injection removed
 
 app.use(express.static(staticDir));
 

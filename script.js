@@ -1,83 +1,3 @@
-// ===== Supabase helpers =====
-const sb = (typeof window !== 'undefined' && window.sb) ? window.sb : null;
-
-async function getSupaUser() {
-    if (!sb) return null;
-    // 세션 우선 → 없으면 getUser로 폴백
-    try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session?.user) return session.user;
-    } catch (_) {}
-    try {
-        const { data: { user } } = await sb.auth.getUser();
-        if (user) return user;
-    } catch (_) {}
-    return null;
-}
-
-async function wireAuthUI() {
-    const loginBtn  = document.getElementById('loginGoogle');
-    const logoutBtn = document.getElementById('logout');
-    const emailSpan = document.getElementById('userEmail');
-    if (!loginBtn || !logoutBtn || !emailSpan || !sb) return; // 로컬 모드
-
-    const refresh = async () => {
-        try {
-            const { data: { session } } = await sb.auth.getSession();
-            const u = session?.user || null;
-            if (u) { emailSpan.textContent = u.email || u.id; loginBtn.style.display='none'; logoutBtn.style.display=''; }
-            else   { emailSpan.textContent = '';            loginBtn.style.display='';    logoutBtn.style.display='none'; }
-        } catch (_) {
-            emailSpan.textContent = '';
-            loginBtn.style.display='';
-            logoutBtn.style.display='none';
-        }
-    };
-
-    loginBtn.onclick  = async () => {
-        const redirectTo = `${location.origin}${location.pathname}`;
-        const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
-        if (error) alert(error.message);
-    };
-    logoutBtn.onclick = async () => {
-        try {
-            await sb.auth.signOut();
-        } finally {
-            // 로그아웃 버튼 클릭 시 자동 새로고침
-            location.reload();
-        }
-    };
-
-    try {
-        sb.auth.onAuthStateChange(async (event, session) => {
-            const user = session?.user || null;
-            if (window.tracker && typeof window.tracker.onAuthChange === 'function') {
-                window.tracker.onAuthChange(user);
-            }
-            if (event === 'SIGNED_OUT') {
-                // 세션이 완전히 종료되면 안전하게 새로고침
-                location.reload();
-                return;
-            }
-            await refresh();
-        });
-    } catch (_) {}
-
-    await refresh();
-}
-
-// 공용: 지정 시간(ms) 내에 settle되지 않으면 timeout 에러로 reject
-function withTimeout(promise, ms, label = 'op') {
-    let timer;
-    const timeout = new Promise((_, rej) => {
-        timer = setTimeout(() => rej(new Error(`${label}-timeout`)), ms);
-    });
-    return Promise.race([
-        Promise.resolve(promise).finally(() => clearTimeout(timer)),
-        timeout,
-    ]);
-}
-
 class TimeTracker {
     constructor() {
         this.timeSlots = [];
@@ -108,7 +28,6 @@ class TimeTracker {
         // 변경 감시 스냅샷
         this._lastSavedSignature = '';
         this._watcher = null;
-        this.currentUser = null; // 캐시된 사용자
         // 저장 진행 중 플래그는 사용하지 않음(큐 직렬화만 사용)
         this.init();
     }
@@ -140,21 +59,7 @@ class TimeTracker {
         return this.saveData();
     }
 
-    // Supabase 인증 상태 변화 처리
-    onAuthChange(user) {
-        this.currentUser = user || null;
-        if (user) {
-            // 로그인: 현재 날짜 기준 서버 데이터 로드
-            this.loadData();
-        } else {
-            // 로그아웃: 화면 초기화(로컬 데이터도 무시)
-            this.stopTimerInterval && this.stopTimerInterval();
-            this.generateTimeSlots();
-            this.mergedFields.clear();
-            this.renderTimeEntries();
-            this.calculateTotals();
-        }
-    }
+    
 
     generateTimeSlots() {
         this.timeSlots = [];
@@ -371,17 +276,7 @@ class TimeTracker {
             });
         }
 
-        // 서버 마이그레이션(선택): LocalStorage → 서버 DB로 한 번에 이전
-        const migrateBtn = document.getElementById('migrateBtn');
-        if (migrateBtn) {
-            migrateBtn.addEventListener('click', async () => {
-                try {
-                    await this.migrateLocalToServer();
-                } catch (e) {
-                    alert('마이그레이션 중 오류가 발생했습니다. 서버 실행 여부를 확인하세요.');
-                }
-            });
-        }
+        
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -716,48 +611,12 @@ class TimeTracker {
             timeSlots: this.timeSlots,
             mergedFields: Object.fromEntries(this.mergedFields)
         };
-        // Supabase 사용 시: 로그인 상태면 서버에만 저장, 로그아웃 상태면 저장하지 않음
-        if (sb) {
-            const user = this.currentUser || await getSupaUser();
-            if (user) {
-                // 직렬화 + 워치독 타임아웃: 앞선 저장이 비정상 대기해도 큐가 계속 진행되도록 보장
-                const run = () => withTimeout(this.saveDataToServer(data), 10000, 'save');
-                this._saveQueue = this._saveQueue.then(run).catch(err => {
-                    console.warn('[save] failed:', err?.message || err);
-                });
-                await this._saveQueue;
-            } else {
-                console.warn('[saveData] skip: no user/session');
-            }
-            return;
-        }
-        // Supabase 미사용 환경(레거시)에서만 로컬 저장
+        // 로컬 저장
         try { localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data)); } catch (_) {}
     }
 
     async loadData() {
-        // Supabase 우선: 로그인 상태면 서버에서 로드, 로그아웃이면 비움
-        if (sb) {
-            const user = await getSupaUser();
-            if (user) {
-                const ok = await this.loadDataFromServer();
-                if (!ok) {
-                    this.generateTimeSlots();
-                    this.mergedFields.clear();
-                    this.renderTimeEntries();
-                    this.calculateTotals();
-                }
-                return;
-            } else {
-                this.generateTimeSlots();
-                this.mergedFields.clear();
-                this.renderTimeEntries();
-                this.calculateTotals();
-                return;
-            }
-        }
-
-        // 레거시: Supabase 미사용 시 로컬에서 로드
+        // 로컬에서 로드
         const savedData = localStorage.getItem(`timesheet_${this.currentDate}`);
         if (savedData) {
             const data = JSON.parse(savedData);
@@ -785,76 +644,7 @@ class TimeTracker {
         this.calculateTotals();
     }
 
-    // ===== Supabase 동기화 메서드 =====
-    async saveDataToServer(doc) {
-      try {
-        const user = this.currentUser || await getSupaUser();
-        if (!user) { return; }
-
-        // 저장 직전 강제 정규화: 실제 텍스트에서 시간값을 파싱해 timer.elapsed에 반영
-        const slots = Array.isArray(doc?.timeSlots) ? doc.timeSlots : [];
-        const normalizedSlots = slots.map((s) => {
-          const clone = { ...s, timer: { ...(s?.timer || {}) } };
-          try {
-            const sec = this.parseDurationFromText ? this.parseDurationFromText(String(clone?.actual || '')) : null;
-            if (sec != null) {
-              clone.timer.elapsed = Math.max(0, Math.floor(sec));
-              clone.timer.method = 'manual';
-              clone.timer.running = false;
-              clone.timer.startTime = null;
-            }
-          } catch (_) {}
-          return clone;
-        });
-
-        // 통계 계산(정규화된 슬롯 기준)
-        const planned  = normalizedSlots.filter(s => (s.planned || '').trim() !== '').length;
-        const executed = normalizedSlots.filter(s => (s.planned || '').trim() !== '' && (s.actual || '').trim() !== '').length;
-        const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
-        const total_seconds = normalizedSlots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed) || 0), 0);
-
-        // 단일 업서트로 삽입/갱신 처리 (UNIQUE: user_id,date)
-        const row = {
-          user_id: user.id,
-          date: doc.date,
-          doc_json: { ...doc, timeSlots: normalizedSlots },
-          exec_rate,
-          total_seconds
-        };
-
-        console.log('[pre-save]', {
-          date: row.date,
-          total_seconds,
-          exec_rate,
-          perSlotSeconds: normalizedSlots.map(s => Number(s?.timer?.elapsed) || 0)
-        });
-
-        const { data: upData, error } = await sb
-          .from('timesheets')
-          .upsert(row, { onConflict: 'user_id,date' })
-          .select('user_id,date,total_seconds,updated_at')
-          .single();
-
-        if (error) {
-          alert('저장 실패: ' + (error?.message || '알 수 없는 오류'));
-        } else {
-          console.log('[UPSERT ok]', upData);
-          // 현재 상태를 마지막 저장 스냅샷으로 기록
-          try {
-            this._lastSavedSignature = JSON.stringify({
-              date: this.currentDate,
-              timeSlots: this.timeSlots,
-              mergedFields: Object.fromEntries(this.mergedFields)
-            });
-          } catch (_) {}
-        }
-      } catch (e) {
-        console.error('saveDataToServer() failed:', e);
-        alert('저장 중 오류가 발생했습니다.');
-      } finally {
-        // no-op
-      }
-    }
+    
 
     // 주기적으로 변경 사항을 감지해 저장 (이벤트 누락 대비)
     startChangeWatcher() {
@@ -890,28 +680,7 @@ class TimeTracker {
         }, 2000);
     }
 
-    async loadDataFromServer() {
-        try {
-            const user = await getSupaUser();
-            if (!user) return false;
-
-            const { data, error } = await sb
-                .from('timesheets')
-                .select('doc_json')
-                .eq('user_id', user.id)
-                .eq('date', this.currentDate)
-                .maybeSingle();
-
-            if (error || !data?.doc_json) return false;
-
-            const doc = data.doc_json;
-            this.timeSlots = Array.isArray(doc.timeSlots) ? doc.timeSlots : this.timeSlots;
-            this.mergedFields = new Map(Object.entries(doc.mergedFields || {}));
-            this.renderTimeEntries();
-            this.calculateTotals();
-            return true;
-        } catch (_) { return false; }
-    }
+    
 
     autoSave() {
         clearTimeout(this.autoSaveTimeout);
@@ -994,39 +763,7 @@ class TimeTracker {
         reader.readAsText(file);
     }
 
-    // LocalStorage의 모든 날짜 문서와 계획 후보를 서버로 마이그레이션
-    async migrateLocalToServer() {
-        if (!sb) return alert('Supabase가 설정되지 않았습니다.');
-        const user = await getSupaUser();
-        if (!user) return alert('로그인이 필요합니다.');
-
-        const prefix = 'timesheet_';
-        const docs = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (!k || !k.startsWith(prefix)) continue;
-            try {
-                const it = JSON.parse(localStorage.getItem(k));
-                if (it && it.date && Array.isArray(it.timeSlots)) docs.push(it);
-            } catch (_) {}
-        }
-        if (docs.length === 0) return alert('이전할 로컬 데이터가 없습니다.');
-
-        const toRows = (arr) => arr.map((doc) => {
-            const planned = doc.timeSlots.filter(s => (s.planned||'').trim() !== '').length;
-            const executed = doc.timeSlots.filter(s => (s.planned||'').trim() !== '' && (s.actual||'').trim() !== '').length;
-            const exec_rate = planned > 0 ? Math.round((executed / planned) * 100) : 0;
-            const total_seconds = doc.timeSlots.reduce((acc, s) => acc + (Number(s?.timer?.elapsed)||0), 0);
-            return { user_id: user.id, date: doc.date, doc_json: doc, exec_rate, total_seconds };
-        });
-
-        for (let i = 0; i < docs.length; i += 500) {
-            const chunk = toRows(docs.slice(i, i + 500));
-            const { error } = await sb.from('timesheets').upsert(chunk, { onConflict: 'user_id,date' });
-            if (error) return alert('마이그레이션 중 오류: ' + error.message);
-        }
-        this.showNotification(`마이그레이션 완료: 날짜 ${docs.length}건`);
-    }
+    
 
     importDataObject(obj) {
         const prefix = 'timesheet_';
@@ -2927,7 +2664,5 @@ style.textContent = `
 document.head.appendChild(style);
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 트래커를 먼저 초기화하고, 이후 인증 UI를 연결
     window.tracker = new TimeTracker();
-    wireAuthUI();
 });
