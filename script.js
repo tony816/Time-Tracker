@@ -34,12 +34,17 @@ class TimeTracker {
         this.supabaseChannel = null;
         this.supabaseConfigured = false;
         this._sbSaveTimer = null;
+        this.supabaseUser = null;
+        this._lastSupabaseIdentity = null;
+        this.authStatusElement = null;
+        this.authButton = null;
         this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
             try { const k='device_id'; let v=localStorage.getItem(k); if(v) return v; const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); v=`${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; localStorage.setItem(k,v); return v; } catch(_) { return 'device-anon'; } })();
         this.init();
     }
 
     init() {
+        this.cacheAuthElements();
         this.generateTimeSlots();
         this.renderTimeEntries();
         this.attachEventListeners();
@@ -49,6 +54,7 @@ class TimeTracker {
         this.loadPlannedActivities();
         this.attachActivityModalEventListeners();
         this.startChangeWatcher();
+        this.updateAuthUI();
         // Supabase(옵션) 초기화
         try { this.initSupabaseIntegration && this.initSupabaseIntegration(); } catch(_) {}
 
@@ -71,6 +77,35 @@ class TimeTracker {
     saveNow(reason = 'manual') {
         try { console.log('[saveNow]', reason); } catch (_) {}
         return this.saveData();
+    }
+
+    cacheAuthElements() {
+        try {
+            this.authStatusElement = document.getElementById('authStatus');
+            this.authButton = document.getElementById('googleAuthBtn');
+        } catch (_) {
+            this.authStatusElement = null;
+            this.authButton = null;
+        }
+    }
+
+    updateAuthUI() {
+        try {
+            if (this.authStatusElement) {
+                if (this.supabaseUser && (this.supabaseUser.email || this.supabaseUser.user_metadata)) {
+                    const meta = this.supabaseUser.user_metadata || {};
+                    const display = this.supabaseUser.email || meta.full_name || meta.name || '로그인됨';
+                    this.authStatusElement.textContent = display;
+                } else {
+                    this.authStatusElement.textContent = '로그인 필요';
+                }
+            }
+            if (this.authButton) {
+                this.authButton.textContent = this.supabaseUser ? '로그아웃' : 'Google 로그인';
+            }
+        } catch (e) {
+            console.warn('[auth-ui] update failed', e);
+        }
     }
 
     
@@ -201,6 +236,35 @@ class TimeTracker {
     }
 
     attachEventListeners() {
+        if (this.authButton) {
+            this.authButton.addEventListener('click', () => {
+                if (!this.supabaseConfigured || !this.supabase) {
+                    this.showNotification('Supabase 설정을 먼저 확인해주세요.');
+                    return;
+                }
+                if (this.supabaseUser) {
+                    this.supabase.auth.signOut().catch((err) => {
+                        console.warn('[auth] sign out failed', err);
+                        this.showNotification('로그아웃 중 오류가 발생했습니다.');
+                    });
+                } else {
+                    const options = {};
+                    try {
+                        if (location && location.protocol && location.protocol.startsWith('http')) {
+                            options.redirectTo = location.origin;
+                        }
+                    } catch (_) {}
+                    const params = { provider: 'google' };
+                    if (Object.keys(options).length > 0) {
+                        params.options = options;
+                    }
+                    this.supabase.auth.signInWithOAuth(params).catch((err) => {
+                        console.warn('[auth] sign in failed', err);
+                        this.showNotification('Google 로그인에 실패했습니다.');
+                    });
+                }
+            });
+        }
         document.getElementById('date').addEventListener('change', (e) => {
             this.currentDate = e.target.value;
             this.loadData();
@@ -729,6 +793,73 @@ class TimeTracker {
     // 가져오기/내보내기 기능 제거됨: 관련 함수 삭제
 
     // ===== Supabase integration (optional) =====
+    getSupabaseIdentity() {
+        const userId = (this.supabaseUser && this.supabaseUser.id) ? String(this.supabaseUser.id).trim() : '';
+        return userId || null;
+    }
+
+    handleSupabaseIdentityChange(force = false) {
+        if (!this.supabaseConfigured || !this.supabase) return;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) {
+            this._lastSupabaseIdentity = null;
+            try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch (_) {}
+            this.supabaseChannel = null;
+            return;
+        }
+        if (force || this._lastSupabaseIdentity !== identity) {
+            this._lastSupabaseIdentity = identity;
+            try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch (_) {}
+            try {
+                if (this.fetchFromSupabaseForDate) {
+                    const promise = this.fetchFromSupabaseForDate(this.currentDate);
+                    if (promise && typeof promise.catch === 'function') {
+                        promise.catch(() => {});
+                    }
+                }
+            } catch (_) {}
+        }
+    }
+
+    applySupabaseSession(session, opts = {}) {
+        const user = session && session.user ? session.user : null;
+        const previousId = this.supabaseUser && this.supabaseUser.id;
+        this.supabaseUser = user;
+        this.updateAuthUI();
+        const nextId = user && user.id;
+        if (previousId !== nextId) {
+            this.handleSupabaseIdentityChange(true);
+        }
+        if (user && user.id && !opts.fromGetSession && !previousId) {
+            this.showNotification('Google 로그인에 성공했습니다.');
+        }
+        if (!user && previousId && !opts.fromGetSession) {
+            this.showNotification('로그아웃되었습니다.');
+        }
+    }
+
+    initSupabaseAuthHandlers() {
+        if (!this.supabase) return;
+        try {
+            this.supabase.auth.getSession()
+                .then(({ data }) => {
+                    this.applySupabaseSession(data && data.session ? data.session : null, { fromGetSession: true });
+                })
+                .catch((err) => {
+                    console.warn('[auth] failed to fetch session', err);
+                });
+        } catch (e) {
+            console.warn('[auth] getSession error', e);
+        }
+        try {
+            this.supabase.auth.onAuthStateChange((_event, session) => {
+                this.applySupabaseSession(session);
+            });
+        } catch (e) {
+            console.warn('[auth] subscribe failed', e);
+        }
+    }
+
     // 시간 라벨('00','1'..'23') <-> 정수 시(0..23) 변환 헬퍼
     labelToHour(label) {
         const s = String(label).trim();
@@ -809,8 +940,8 @@ class TimeTracker {
         try {
             this.supabase = window.supabase.createClient(cfg.url, cfg.anonKey);
             this.supabaseConfigured = true;
-            this.resubscribeSupabaseRealtime();
-            this.fetchFromSupabaseForDate(this.currentDate).catch(()=>{});
+            this.handleSupabaseIdentityChange(true);
+            this.initSupabaseAuthHandlers();
         } catch(e) {
             console.warn('[supabase] init failed:', e);
             this.supabase = null;
@@ -819,10 +950,13 @@ class TimeTracker {
     }
     resubscribeSupabaseRealtime() {
         if (!this.supabaseConfigured || !this.supabase) return;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return;
         try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch(_) {}
-        const filter = `device_id=eq.${this.deviceId},day=eq.${this.currentDate}`;
+        const filter = `user_id=eq.${identity},day=eq.${this.currentDate}`;
+        const channelKey = `timesheet_days:${identity}:${this.currentDate}`;
         this.supabaseChannel = this.supabase
-            .channel(`timesheet_days:${this.deviceId}:${this.currentDate}`)
+            .channel(channelKey)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter }, (payload) => {
                 try {
                     const row = payload.new || payload.old;
@@ -839,11 +973,13 @@ class TimeTracker {
     }
     async fetchFromSupabaseForDate(date) {
         if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
         try {
             const { data, error } = await this.supabase
                 .from('timesheet_days')
                 .select('slots')
-                .eq('device_id', this.deviceId)
+                .eq('user_id', identity)
                 .eq('day', date)
                 .maybeSingle();
             if (error && error.code !== 'PGRST116') throw error; // PGRST116: No rows
@@ -864,21 +1000,25 @@ class TimeTracker {
     }
     scheduleSupabaseSave() {
         if (!this.supabaseConfigured || !this.supabase) return;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return;
         clearTimeout(this._sbSaveTimer);
         this._sbSaveTimer = setTimeout(() => { try { this.saveToSupabase && this.saveToSupabase(); } catch(_) {} }, 500);
     }
     async saveToSupabase() {
         if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
         try {
             const payload = {
-                device_id: this.deviceId,
+                user_id: identity,
                 day: this.currentDate,
                 slots: this.buildSlotsJson(),
                 updated_at: new Date().toISOString(),
             };
             const { error } = await this.supabase
                 .from('timesheet_days')
-                .upsert([payload], { onConflict: 'device_id,day' });
+                .upsert([payload], { onConflict: 'user_id,day' });
             if (error) throw error;
             return true;
         } catch(e) {

@@ -10,15 +10,20 @@
     <div class="container">
       <header>
         <h1>타임시트</h1>
-        
-        <div class="date-selector">
-          <label for="date">날짜:</label>
-          <div class="date-navigation">
-            <button id="prevDayBtn" class="nav-btn">◀</button>
-            <button id="todayBtn" class="today-btn">오늘</button>
-            <button id="nextDayBtn" class="nav-btn">▶</button>
+        <div class="header-controls">
+          <div class="auth-controls">
+            <span id="authStatus" class="auth-status">로그인 필요</span>
+            <button id="googleAuthBtn" type="button" class="auth-btn">Google 로그인</button>
           </div>
-          <input type="date" id="date" name="date" />
+          <div class="date-selector">
+            <label for="date">날짜:</label>
+            <div class="date-navigation">
+              <button id="prevDayBtn" class="nav-btn">◀</button>
+              <button id="todayBtn" class="today-btn">오늘</button>
+              <button id="nextDayBtn" class="nav-btn">▶</button>
+            </div>
+            <input type="date" id="date" name="date" />
+          </div>
         </div>
       </header>
 
