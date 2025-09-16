@@ -258,6 +258,7 @@ class TimeTracker {
                     if (Object.keys(options).length > 0) {
                         params.options = options;
                     }
+                    try { localStorage.setItem('login_intent', 'google'); } catch(_) {}
                     this.supabase.auth.signInWithOAuth(params).catch((err) => {
                         console.warn('[auth] sign in failed', err);
                         this.showNotification('Google 로그인에 실패했습니다.');
@@ -830,10 +831,20 @@ class TimeTracker {
         if (previousId !== nextId) {
             this.handleSupabaseIdentityChange(true);
         }
-        if (user && user.id && !opts.fromGetSession && !previousId) {
-            this.showNotification('Google 로그인에 성공했습니다.');
+        const ev = String(opts.event || '');
+        const hadPrev = Boolean(previousId);
+        const hasUser = Boolean(user && user.id);
+        // 로그인 성공 알림: 실제로 사용자 의도로 로그인 플로우를 시작한 경우에만
+        if (ev === 'SIGNED_IN' && hasUser) {
+            let startedByUser = false;
+            try { startedByUser = !!localStorage.getItem('login_intent'); } catch(_) {}
+            if (startedByUser) {
+                this.showNotification('Google 로그인에 성공했습니다.');
+            }
+            try { localStorage.removeItem('login_intent'); } catch(_) {}
         }
-        if (!user && previousId && !opts.fromGetSession) {
+        // 로그아웃 알림: 명시적 SIGNED_OUT 이벤트일 때만
+        if (ev === 'SIGNED_OUT' && hadPrev) {
             this.showNotification('로그아웃되었습니다.');
         }
     }
@@ -852,8 +863,8 @@ class TimeTracker {
             console.warn('[auth] getSession error', e);
         }
         try {
-            this.supabase.auth.onAuthStateChange((_event, session) => {
-                this.applySupabaseSession(session);
+            this.supabase.auth.onAuthStateChange((event, session) => {
+                this.applySupabaseSession(session, { event });
             });
         } catch (e) {
             console.warn('[auth] subscribe failed', e);
