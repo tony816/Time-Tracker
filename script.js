@@ -885,8 +885,45 @@ class TimeTracker {
     // 메모리 -> DB 전송용 slots JSON 생성(비어있는 시간은 생략)
     buildSlotsJson() {
         const slots = {};
+        const handledMerges = new Set();
         try {
-            this.timeSlots.forEach((slot) => {
+            this.timeSlots.forEach((slot, index) => {
+                const timeMergeKey = this.findMergeKey('time', index);
+                if (timeMergeKey) {
+                    if (handledMerges.has(timeMergeKey)) return;
+                    handledMerges.add(timeMergeKey);
+
+                    const [, startStr, endStr] = timeMergeKey.split('-');
+                    const start = parseInt(startStr, 10);
+                    const end = parseInt(endStr, 10);
+                    if (isNaN(start) || isNaN(end)) return;
+                    const startSlot = this.timeSlots[start];
+                    const endSlot = this.timeSlots[end];
+                    if (!startSlot || !endSlot) return;
+
+                    const startLabel = String(startSlot.time || '').trim();
+                    const endLabel = String(endSlot.time || '').trim();
+                    const plannedKey = `planned-${start}-${end}`;
+                    const actualKey = `actual-${start}-${end}`;
+                    const plannedValue = String((this.mergedFields.get(plannedKey) ?? startSlot.planned ?? '')).trim();
+                    const actualValue = String((this.mergedFields.get(actualKey) ?? startSlot.actual ?? '')).trim();
+                    const detailsValue = String((startSlot.activityLog && startSlot.activityLog.details) || '').trim();
+
+                    if (plannedValue === '' && actualValue === '' && detailsValue === '') {
+                        return;
+                    }
+
+                    const storageKey = String(this.labelToHour(startLabel));
+                    slots[storageKey] = {
+                        planned: plannedValue,
+                        actual: actualValue,
+                        details: detailsValue,
+                        merged: true,
+                        timeRange: `${startLabel} ~ ${endLabel}`
+                    };
+                    return;
+                }
+
                 const hour = this.labelToHour(slot.time);
                 const planned = String(slot.planned || '').trim();
                 const actual = String(slot.actual || '').trim();
@@ -902,6 +939,7 @@ class TimeTracker {
     applySlotsJson(slotsJson) {
         if (!slotsJson || typeof slotsJson !== 'object') return false;
         let changed = false;
+        const nextMergedFields = new Map();
         try {
             Object.keys(slotsJson).forEach((k) => {
                 const hour = parseInt(k, 10);
@@ -910,16 +948,63 @@ class TimeTracker {
                 const idx = this.timeSlots.findIndex(s => String(s.time) === label);
                 if (idx < 0) return;
                 const row = slotsJson[k] || {};
+
+                const plannedValue = typeof row.planned === 'string' ? row.planned : '';
+                const actualValue = typeof row.actual === 'string' ? row.actual : '';
+                const detailsValue = typeof row.details === 'string' ? row.details : '';
+
+                if (row && row.merged && typeof row.timeRange === 'string') {
+                    const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
+                    if (parts.length === 2) {
+                        const [startLabel, endLabel] = parts;
+                        const startIdx = this.timeSlots.findIndex(s => String(s.time) === startLabel);
+                        const endIdx = this.timeSlots.findIndex(s => String(s.time) === endLabel);
+                        if (startIdx >= 0 && endIdx >= startIdx) {
+                            const plannedKey = `planned-${startIdx}-${endIdx}`;
+                            const timeKey = `time-${startIdx}-${endIdx}`;
+                            const actualKey = `actual-${startIdx}-${endIdx}`;
+                            const plannedTrimmed = String(plannedValue || '').trim();
+                            const actualTrimmed = String(actualValue || '').trim();
+                            nextMergedFields.set(plannedKey, plannedTrimmed);
+                            nextMergedFields.set(timeKey, `${startLabel}-${endLabel}`);
+                            nextMergedFields.set(actualKey, actualTrimmed);
+
+                            for (let i = startIdx; i <= endIdx; i++) {
+                                const slot = this.timeSlots[i];
+                                const nextPlanned = i === startIdx ? plannedTrimmed : '';
+                                const nextActual = i === startIdx ? actualTrimmed : '';
+                                if (slot.planned !== nextPlanned) { slot.planned = nextPlanned; changed = true; }
+                                if (slot.actual !== nextActual) { slot.actual = nextActual; changed = true; }
+                                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                                    slot.activityLog = { title: '', details: '' };
+                                }
+                                const desiredDetails = (i === startIdx) ? detailsValue : '';
+                                if (slot.activityLog.details !== desiredDetails) {
+                                    slot.activityLog.details = desiredDetails;
+                                    changed = true;
+                                }
+                            }
+                            return;
+                        }
+                    }
+                }
+
                 const slot = this.timeSlots[idx];
-                const planned = typeof row.planned === 'string' ? row.planned : '';
-                const actual = typeof row.actual === 'string' ? row.actual : '';
-                const details = typeof row.details === 'string' ? row.details : '';
-                if (slot.planned !== planned) { slot.planned = planned; changed = true; }
-                if (slot.actual !== actual) { slot.actual = actual; changed = true; }
+                if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
+                if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '' };
-                if (slot.activityLog.details !== details) { slot.activityLog.details = details; changed = true; }
+                if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
             });
         } catch (_) {}
+
+        const currentMergedSignature = JSON.stringify(Object.fromEntries(this.mergedFields));
+        const nextMergedSignature = JSON.stringify(Object.fromEntries(nextMergedFields));
+        if (currentMergedSignature !== nextMergedSignature) {
+            this.mergedFields = nextMergedFields;
+            changed = true;
+        } else {
+            this.mergedFields = nextMergedFields;
+        }
         return changed;
     }
     loadOrCreateDeviceId() {
