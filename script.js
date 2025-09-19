@@ -2565,69 +2565,138 @@ class TimeTracker {
 
     // Planned activities: load/save and render dropdown
     loadPlannedActivities() {
+        this.plannedActivities = [];
         try {
             const raw = localStorage.getItem('planned_activities');
-            if (raw) {
-                const arr = JSON.parse(raw);
-                if (Array.isArray(arr)) {
-                    const norm = arr
-                        .filter(x => typeof x === 'string')
-                        .map(x => this.normalizeActivityText(x))
-                        .filter(Boolean);
-                    this.plannedActivities = Array.from(new Set(norm));
-                }
+            if (!raw) {
+                this.dedupeAndSortPlannedActivities();
+                return;
             }
+            const arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) {
+                this.dedupeAndSortPlannedActivities();
+                return;
+            }
+            arr.forEach((item) => {
+                if (typeof item === 'string') {
+                    const label = this.normalizeActivityText(item);
+                    if (label) this.plannedActivities.push({ label, source: 'local', priorityRank: null });
+                    return;
+                }
+                if (item && typeof item === 'object') {
+                    const label = this.normalizeActivityText(item.label || item.title || '');
+                    if (!label) return;
+                    const source = item.source === 'notion' ? 'notion' : 'local';
+                    const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+                    this.plannedActivities.push({ label, source, priorityRank });
+                }
+            });
         } catch (e) {}
-        if (!Array.isArray(this.plannedActivities)) this.plannedActivities = [];
+        this.dedupeAndSortPlannedActivities();
     }
     savePlannedActivities() {
-        try { localStorage.setItem('planned_activities', JSON.stringify(this.plannedActivities)); } catch (e) {}
+        try {
+            const locals = (this.plannedActivities || [])
+                .filter(item => item && item.source !== 'notion')
+                .map(item => item.label);
+            localStorage.setItem('planned_activities', JSON.stringify(locals));
+        } catch (e) {}
     }
     addPlannedActivityOption(text, selectAfter = false) {
-        text = this.normalizeActivityText(text);
-        if (!text) return;
-        if (!this.plannedActivities.includes(text)) {
-            this.plannedActivities.push(text);
-            this.savePlannedActivities();
+        const label = this.normalizeActivityText(text);
+        if (!label) return;
+        const idx = this.findPlannedActivityIndex(label);
+        if (idx >= 0) {
+            this.plannedActivities[idx] = { label, source: 'local', priorityRank: null };
+        } else {
+            this.plannedActivities.push({ label, source: 'local', priorityRank: null });
         }
+        this.dedupeAndSortPlannedActivities();
+        this.savePlannedActivities();
         if (selectAfter) {
-            if (!this.modalSelectedActivities.includes(text)) this.modalSelectedActivities.push(text);
+            if (!this.modalSelectedActivities.includes(label)) this.modalSelectedActivities.push(label);
         }
         this.renderPlannedActivityDropdown();
     }
     removePlannedActivityOption(text) {
-        text = this.normalizeActivityText(text);
-        const idx = this.plannedActivities.indexOf(text);
+        const label = this.normalizeActivityText(text);
+        const idx = this.findPlannedActivityIndex(label);
         if (idx >= 0) {
             this.plannedActivities.splice(idx, 1);
             this.savePlannedActivities();
             // 선택되어 있으면 선택도 제거
-            const sidx = this.modalSelectedActivities.indexOf(text);
+            const sidx = this.modalSelectedActivities.indexOf(label);
             if (sidx >= 0) this.modalSelectedActivities.splice(sidx, 1);
             this.renderPlannedActivityDropdown();
         }
     }
     toggleSelectActivity(text) {
-        text = this.normalizeActivityText(text);
-        if (!text) return;
-        const i = this.modalSelectedActivities.indexOf(text);
+        const label = this.normalizeActivityText(text);
+        if (!label) return;
+        const i = this.modalSelectedActivities.indexOf(label);
         if (i >= 0) this.modalSelectedActivities.splice(i, 1);
-        else this.modalSelectedActivities.push(text);
+        else this.modalSelectedActivities.push(label);
         this.renderPlannedActivityDropdown();
     }
     editPlannedActivityOption(oldText, newText) {
-        newText = this.normalizeActivityText(newText);
-        if (!newText || oldText === newText) return;
-        const i = this.plannedActivities.indexOf(oldText);
+        const oldLabel = this.normalizeActivityText(oldText);
+        const newLabel = this.normalizeActivityText(newText);
+        if (!newLabel || oldLabel === newLabel) return;
+        const i = this.findPlannedActivityIndex(oldLabel);
         if (i >= 0) {
-            // rename in list
-            this.plannedActivities[i] = newText;
+            // rename in list (편집 시에는 항상 로컬 항목으로 취급)
+            this.plannedActivities[i] = { label: newLabel, source: 'local', priorityRank: null };
             // update selection
-            const si = this.modalSelectedActivities.indexOf(oldText);
-            if (si >= 0) this.modalSelectedActivities[si] = newText;
+            const si = this.modalSelectedActivities.indexOf(oldLabel);
+            if (si >= 0) this.modalSelectedActivities[si] = newLabel;
+            this.dedupeAndSortPlannedActivities();
             this.savePlannedActivities();
             this.renderPlannedActivityDropdown();
         }
+    }
+    findPlannedActivityIndex(label) {
+        if (!Array.isArray(this.plannedActivities)) return -1;
+        return this.plannedActivities.findIndex(item => item && item.label === label);
+    }
+    dedupeAndSortPlannedActivities() {
+        const byLabel = new Map();
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText(item.label || '');
+            if (!label) return;
+            const source = item.source === 'notion' ? 'notion' : 'local';
+            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const entry = { label, source, priorityRank };
+            const existing = byLabel.get(label);
+            let replace = false;
+            if (!existing) {
+                replace = true;
+            } else if (existing.source === 'local' && source !== 'local') {
+                replace = false;
+            } else if (source === 'local' && existing.source !== 'local') {
+                replace = true;
+            } else {
+                replace = true;
+            }
+            if (replace) {
+                byLabel.set(label, entry);
+            }
+        });
+        this.plannedActivities = Array.from(byLabel.values()).sort((a, b) => {
+            const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
+            const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
+            if (ra !== rb) return ra - rb;
+            return a.label.localeCompare(b.label);
+        });
+    }
+    pruneSelectedActivitiesByAvailability() {
+        if (!Array.isArray(this.modalSelectedActivities)) return false;
+        const available = new Set((this.plannedActivities || []).map(item => item.label));
+        const before = this.modalSelectedActivities.length;
+        this.modalSelectedActivities = this.modalSelectedActivities
+            .map(label => this.normalizeActivityText(label))
+            .filter(label => label && available.has(label));
+        return this.modalSelectedActivities.length !== before;
     }
     normalizeActivityText(text) {
         if (!text) return '';
@@ -2636,6 +2705,28 @@ class TimeTracker {
             .replace(/[\r\n\t]+/g, '')
             .replace(/\s{2,}/g, ' ')
             .trim();
+    }
+    normalizeNotionActivities(items) {
+        if (!Array.isArray(items)) return [];
+        const normalized = [];
+        items.forEach((it) => {
+            if (!it) return;
+            const label = this.normalizeActivityText(it.title || '');
+            if (!label) return;
+            const priorityRank = Number.isFinite(it.priorityRank) ? Number(it.priorityRank) : null;
+            normalized.push({
+                id: it.id,
+                title: label,
+                priorityRank,
+            });
+        });
+        normalized.sort((a, b) => {
+            const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
+            const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
+            if (ra !== rb) return ra - rb;
+            return a.title.localeCompare(b.title);
+        });
+        return normalized;
     }
     renderPlannedActivityDropdown() {
         const chips = document.getElementById('activityChips');
@@ -2662,9 +2753,28 @@ class TimeTracker {
         // list
         list.innerHTML = '';
         const set = new Set((this.modalSelectedActivities || []).map(t => this.normalizeActivityText(t)).filter(Boolean));
-        const all = Array.from(new Set([...(this.plannedActivities || []), ...Array.from(set)])).map(t => this.normalizeActivityText(t)).filter(Boolean);
+        const sourceMap = new Map();
+        const ordered = [];
+        (this.plannedActivities || []).forEach(item => {
+            if (!item) return;
+            const label = this.normalizeActivityText(item.label || '');
+            if (!label) return;
+            const source = item.source === 'notion' ? 'notion' : 'local';
+            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            if (!sourceMap.has(label)) ordered.push(label);
+            sourceMap.set(label, { source, priorityRank });
+        });
+        const extras = Array.from(set).filter(label => label && !sourceMap.has(label));
+        const all = [...ordered, ...extras];
         all.forEach(text => {
             const li = document.createElement('li');
+            const meta = sourceMap.get(text) || { source: 'local', priorityRank: null };
+            li.dataset.source = meta.source;
+            if (Number.isFinite(meta.priorityRank)) {
+                li.dataset.priorityRank = String(meta.priorityRank);
+            } else {
+                delete li.dataset.priorityRank;
+            }
             const left = document.createElement('div');
             left.style.display = 'flex';
             left.style.alignItems = 'center';
@@ -2715,30 +2825,89 @@ class TimeTracker {
     async prefetchNotionActivitiesIfConfigured() {
         const url = this.notionEndpoint;
         if (!url) return false;
+
+        let changed = false;
+
         if (this.notionActivitiesCache) {
-            return this.mergeNotionActivities(this.notionActivitiesCache);
+            const cached = this.normalizeNotionActivities(this.notionActivitiesCache);
+            this.notionActivitiesCache = cached;
+            changed = this.mergeNotionActivities(cached) || changed;
+            if (changed) {
+                this.renderPlannedActivityDropdown();
+            }
         }
+
         try {
-            const resp = await fetch(url, { method: 'GET' });
+            const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
             if (!resp.ok) throw new Error('Failed to fetch activities');
             const json = await resp.json();
             const items = Array.isArray(json?.activities) ? json.activities : [];
-            this.notionActivitiesCache = items.map(it => ({ id: it.id, title: this.normalizeActivityText(it.title) })).filter(it => it.title);
-            return this.mergeNotionActivities(this.notionActivitiesCache);
+            const normalized = this.normalizeNotionActivities(items);
+            this.notionActivitiesCache = normalized;
+            const fetchChanged = this.mergeNotionActivities(normalized);
+            return changed || fetchChanged;
         } catch (e) {
             console.warn('Notion activities fetch failed:', e);
-            return false;
+            return changed;
         }
     }
     mergeNotionActivities(items) {
-        if (!Array.isArray(items) || items.length === 0) return false;
-        const before = this.plannedActivities.length;
-        const titles = items.map(it => this.normalizeActivityText(it.title)).filter(Boolean);
-        const set = new Set(this.plannedActivities);
-        titles.forEach(t => { if (!set.has(t)) set.add(t); });
-        this.plannedActivities = Array.from(set).sort((a,b)=>a.localeCompare(b));
-        // Do not persist Notion-sourced titles to localStorage (source of truth is Notion)
-        return this.plannedActivities.length !== before;
+        const normalizedItems = this.normalizeNotionActivities(items);
+        if (normalizedItems.length === 0) {
+            const before = (this.plannedActivities || []).length;
+            this.plannedActivities = (this.plannedActivities || []).filter(item => item && item.source !== 'notion');
+            this.dedupeAndSortPlannedActivities();
+            const selectionChanged = this.pruneSelectedActivitiesByAvailability();
+            return selectionChanged || ((this.plannedActivities || []).length !== before);
+        }
+
+        const next = [];
+        let changed = false;
+        const notionMap = new Map();
+
+        normalizedItems.forEach((item) => {
+            const label = this.normalizeActivityText(item.title || '');
+            if (!label) return;
+            const rank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const existing = notionMap.get(label);
+            if (!existing || (existing.priorityRank ?? Infinity) > (rank ?? Infinity)) {
+                notionMap.set(label, { priorityRank: rank });
+            }
+        });
+
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText(item.label || '');
+            if (!label) return;
+
+            if (item.source === 'notion') {
+                if (notionMap.has(label)) {
+                    const info = notionMap.get(label);
+                    const rank = info.priorityRank ?? null;
+                    if ((item.priorityRank ?? null) !== rank) changed = true;
+                    next.push({ label, source: 'notion', priorityRank: rank });
+                    notionMap.delete(label);
+                } else {
+                    changed = true; // stale notion entry removed
+                }
+                return;
+            }
+
+            next.push({ label, source: 'local', priorityRank: null });
+            if (notionMap.has(label)) notionMap.delete(label);
+        });
+
+        notionMap.forEach((info, label) => {
+            next.push({ label, source: 'notion', priorityRank: info.priorityRank ?? null });
+            changed = true;
+        });
+
+        this.plannedActivities = next;
+        this.dedupeAndSortPlannedActivities();
+        if (this.pruneSelectedActivitiesByAvailability()) {
+            changed = true;
+        }
+        return changed;
     }
 
     showNotification(message) {

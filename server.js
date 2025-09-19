@@ -67,6 +67,20 @@ function extractTitleFromPage(page) {
     return '';
 }
 
+function parsePriorityValue(value) {
+    if (!value) return null;
+    const match = /^Pr\.(\d+)$/.exec(String(value).trim());
+    if (!match) return null;
+    const rank = Number(match[1]);
+    return Number.isFinite(rank) ? rank : null;
+}
+
+function extractPriorityRank(page, propertyName = 'Pr') {
+    const prop = page?.properties?.[propertyName];
+    if (!prop || prop.type !== 'select') return null;
+    return parsePriorityValue(prop.select?.name);
+}
+
 // Health check (useful for front-end detection if needed)
 app.get('/api/notion/ping', (_req, res) => {
     res.json({ ok: true });
@@ -86,7 +100,11 @@ app.get('/api/notion/activities', async (_req, res) => {
         }
         const pages = await fetchAllDatabasePages(dbId);
         const activities = pages
-            .map((p) => ({ id: p.id, title: extractTitleFromPage(p) }))
+            .map((p) => ({
+                id: p.id,
+                title: extractTitleFromPage(p),
+                priorityRank: extractPriorityRank(p),
+            }))
             .filter((a) => a.title);
         res.json({ activities });
     } catch (e) {
