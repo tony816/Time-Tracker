@@ -584,6 +584,28 @@ class TimeTracker {
                 if (inActual) {
                     const mk = this.findMergeKey('actual', index);
                     if (mk) {
+                        const [, startStr] = mk.split('-');
+                        const startIdx = parseInt(startStr, 10);
+                        const mainContainer = target.closest && target.closest('.actual-field-container.merged-actual-main');
+                        const clickedInput = target.closest && target.closest('.timer-result-input');
+
+                        if (mainContainer && index === startIdx && !this.isSelectingPlanned && !this.isSelectingActual) {
+                            if (clickedInput) {
+                                return;
+                            }
+                            if (e.type === 'click') {
+                                const inputEl = mainContainer.querySelector('.timer-result-input');
+                                if (inputEl) {
+                                    inputEl.focus();
+                                    try {
+                                        const len = inputEl.value.length;
+                                        inputEl.setSelectionRange(len, len);
+                                    } catch (_) {}
+                                }
+                            }
+                            return;
+                        }
+
                         e.preventDefault();
                         e.stopPropagation();
                         if (e.type === 'click') {
