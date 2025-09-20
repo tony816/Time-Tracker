@@ -2728,6 +2728,25 @@ class TimeTracker {
         });
         return normalized;
     }
+    makePriorityBadge(rank) {
+        if (!Number.isFinite(rank)) return null;
+        const badge = document.createElement('span');
+        badge.className = 'pr-badge';
+        badge.dataset.pr = String(rank);
+        badge.textContent = `Pr.${rank}`;
+        badge.setAttribute('aria-label', `우선순위 ${rank}`);
+        return badge;
+    }
+    getPriorityRankForLabel(label) {
+        const normalized = this.normalizeActivityText(label);
+        if (!normalized) return null;
+        const match = (this.plannedActivities || []).find((item) => {
+            if (!item) return false;
+            return this.normalizeActivityText(item.label || '') === normalized;
+        });
+        const rank = match && Number.isFinite(match.priorityRank) ? Number(match.priorityRank) : null;
+        return Number.isFinite(rank) ? rank : null;
+    }
     renderPlannedActivityDropdown() {
         const chips = document.getElementById('activityChips');
         const list = document.getElementById('activityOptions');
@@ -2739,7 +2758,12 @@ class TimeTracker {
             if (!text) return;
             const chip = document.createElement('span');
             chip.className = 'chip';
-            chip.textContent = text;
+            const chipBadge = this.makePriorityBadge(this.getPriorityRankForLabel(text));
+            if (chipBadge) chip.appendChild(chipBadge);
+            const chipLabel = document.createElement('span');
+            chipLabel.className = 'chip-label';
+            chipLabel.textContent = text;
+            chip.appendChild(chipLabel);
             const btn = document.createElement('button');
             btn.className = 'remove-chip';
             btn.textContent = '×';
@@ -2784,8 +2808,11 @@ class TimeTracker {
             cb.checked = set.has(text);
             cb.onchange = () => this.toggleSelectActivity(text);
             const span = document.createElement('span');
+            span.className = 'option-label';
             span.textContent = text;
             left.appendChild(cb);
+            const badge = this.makePriorityBadge(meta.priorityRank);
+            if (badge) left.appendChild(badge);
             left.appendChild(span);
             li.appendChild(left);
             const actions = document.createElement('div');
