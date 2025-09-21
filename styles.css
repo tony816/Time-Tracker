@@ -1154,6 +1154,39 @@ h1 {
   gap: 6px;
   margin-bottom: 6px;
 }
+.plan-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.plan-tab {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #f4f6f8;
+  color: #2c3e50;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.plan-tab:hover {
+  background: #e9edf2;
+}
+.plan-tab.active {
+  background: #fff;
+  border-color: #2980b9;
+  color: #1f2d3d;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.plan-tab.empty {
+  opacity: 0.7;
+}
+.plan-tab:focus {
+  outline: 2px solid #2980b9;
+  outline-offset: 2px;
+}
 .chip {
   background: #ecf5ff;
   color: #2c3e50;
@@ -1241,6 +1274,12 @@ h1 {
 }
 #activityOptions li:hover { background: #f5f9ff; }
 .option-actions { display: flex; gap: 4px; }
+.empty-option {
+  padding: 10px;
+  color: #7f8c8d;
+  font-size: 13px;
+  text-align: center;
+}
 .opt-btn { border: none; background: #ecf0f1; color: #2c3e50; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 12px; }
 .opt-btn:hover { background: #dfe6e9; }
 #activityOptions li span { white-space: nowrap; }

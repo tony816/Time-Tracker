@@ -15,6 +15,8 @@ class TimeTracker {
         this.scheduleButton = null;
         this.plannedActivities = [];
         this.modalSelectedActivities = [];
+        this.currentPlanSource = 'local';
+        this.planTabsContainer = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
             try { return window.NOTION_ACTIVITIES_ENDPOINT || localStorage.getItem('notion_activities_endpoint') || null; } catch(e){ return null; }
@@ -2420,6 +2422,7 @@ class TimeTracker {
             .map(v => this.normalizeActivityText(v))
             .filter(v => v);
         this.modalSelectedActivities = parsed;
+        this.currentPlanSource = 'local';
         this.renderPlannedActivityDropdown();
 
         // Notion activities (optional): prefetch and merge, then re-render once
@@ -2498,6 +2501,8 @@ class TimeTracker {
         const activityInput = document.getElementById('activityInput');
         const addOptionBtn = document.getElementById('addActivityOption');
         const syncBtn = document.getElementById('syncActivityOptions');
+        const planTabs = document.getElementById('planTabs');
+        this.planTabsContainer = planTabs || null;
 
         closeBtn.addEventListener('click', () => {
             this.closeScheduleModal();
@@ -2559,6 +2564,16 @@ class TimeTracker {
                     syncBtn.disabled = false;
                     syncBtn.textContent = prev || '동기화';
                 }
+            });
+        }
+        if (planTabs) {
+            planTabs.addEventListener('click', (event) => {
+                const target = event.target.closest('.plan-tab');
+                if (!target || !planTabs.contains(target)) return;
+                const source = target.dataset.source === 'notion' ? 'notion' : 'local';
+                if (this.currentPlanSource === source) return;
+                this.currentPlanSource = source;
+                this.renderPlannedActivityDropdown();
             });
         }
     }
@@ -2776,26 +2791,53 @@ class TimeTracker {
         });
         // list
         list.innerHTML = '';
-        const set = new Set((this.modalSelectedActivities || []).map(t => this.normalizeActivityText(t)).filter(Boolean));
-        const sourceMap = new Map();
-        const ordered = [];
-        (this.plannedActivities || []).forEach(item => {
+        const normalizedSelections = (this.modalSelectedActivities || [])
+            .map(t => this.normalizeActivityText(t))
+            .filter(Boolean);
+        const selectedSet = new Set(normalizedSelections);
+        const grouped = { local: [], notion: [] };
+        const seen = new Set();
+
+        (this.plannedActivities || []).forEach((item) => {
             if (!item) return;
             const label = this.normalizeActivityText(item.label || '');
-            if (!label) return;
+            if (!label || seen.has(label)) return;
+            seen.add(label);
             const source = item.source === 'notion' ? 'notion' : 'local';
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-            if (!sourceMap.has(label)) ordered.push(label);
-            sourceMap.set(label, { source, priorityRank });
+            grouped[source].push({ label, source, priorityRank });
         });
-        const extras = Array.from(set).filter(label => label && !sourceMap.has(label));
-        const all = [...ordered, ...extras];
-        all.forEach(text => {
+
+        normalizedSelections.forEach((label) => {
+            if (!label || seen.has(label)) return;
+            grouped.local.push({ label, source: 'local', priorityRank: null });
+        });
+
+        this.updatePlanSourceTabs({
+            local: grouped.local.length,
+            notion: grouped.notion.length
+        });
+
+        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        const visibleItems = grouped[activeSource] || [];
+
+        if (visibleItems.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'empty-option';
+            empty.textContent = activeSource === 'notion'
+                ? '노션에서 불러온 활동이 없습니다.'
+                : '직접 추가한 활동이 없습니다.';
+            empty.dataset.source = activeSource;
+            list.appendChild(empty);
+            return;
+        }
+
+        visibleItems.forEach((item) => {
+            const { label, source, priorityRank } = item;
             const li = document.createElement('li');
-            const meta = sourceMap.get(text) || { source: 'local', priorityRank: null };
-            li.dataset.source = meta.source;
-            if (Number.isFinite(meta.priorityRank)) {
-                li.dataset.priorityRank = String(meta.priorityRank);
+            li.dataset.source = source;
+            if (Number.isFinite(priorityRank)) {
+                li.dataset.priorityRank = String(priorityRank);
             } else {
                 delete li.dataset.priorityRank;
             }
@@ -2805,13 +2847,13 @@ class TimeTracker {
             left.style.gap = '6px';
             const cb = document.createElement('input');
             cb.type = 'checkbox';
-            cb.checked = set.has(text);
-            cb.onchange = () => this.toggleSelectActivity(text);
+            cb.checked = selectedSet.has(label);
+            cb.onchange = () => this.toggleSelectActivity(label);
             const span = document.createElement('span');
             span.className = 'option-label';
-            span.textContent = text;
+            span.textContent = label;
             left.appendChild(cb);
-            const badge = this.makePriorityBadge(meta.priorityRank);
+            const badge = this.makePriorityBadge(priorityRank);
             if (badge) left.appendChild(badge);
             left.appendChild(span);
             li.appendChild(left);
@@ -2821,19 +2863,32 @@ class TimeTracker {
             editBtn.className = 'opt-btn';
             editBtn.textContent = '수정';
             editBtn.onclick = () => {
-                const nt = prompt('활동명을 수정하세요', text);
-                if (nt && nt.trim()) this.editPlannedActivityOption(text, nt.trim());
+                const nt = prompt('활동명을 수정하세요', label);
+                if (nt && nt.trim()) this.editPlannedActivityOption(label, nt.trim());
             };
             const delBtn = document.createElement('button');
             delBtn.className = 'opt-btn';
             delBtn.textContent = '삭제';
             delBtn.onclick = () => {
-                this.removePlannedActivityOption(text);
+                this.removePlannedActivityOption(label);
             };
             actions.appendChild(editBtn);
             actions.appendChild(delBtn);
             li.appendChild(actions);
             list.appendChild(li);
+        });
+    }
+
+    updatePlanSourceTabs(counts = {}) {
+        const container = this.planTabsContainer || document.getElementById('planTabs');
+        if (!container) return;
+        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        container.querySelectorAll('.plan-tab').forEach((button) => {
+            const source = button.dataset.source === 'notion' ? 'notion' : 'local';
+            const isActive = source === activeSource;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            button.classList.toggle('empty', !(counts[source] > 0));
         });
     }
 

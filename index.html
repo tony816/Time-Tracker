@@ -83,6 +83,10 @@
             <label for="activityInput">활동 (다중 선택 가능)</label>
             <div class="multi-select" id="activityMulti">
               <div class="selected-chips" id="activityChips"></div>
+              <div class="plan-tabs" id="planTabs" role="tablist">
+                <button type="button" class="plan-tab active" data-source="local" role="tab" aria-selected="true">직접 추가</button>
+                <button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>
+              </div>
               <div class="multi-input-row">
                 <input type="text" id="activityInput" placeholder="활동 추가 또는 검색" />
                 <button type="button" id="addActivityOption" class="add-option-btn">추가</button>
