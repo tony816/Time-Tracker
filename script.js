@@ -33,11 +33,14 @@ class TimeTracker {
         // 저장 진행 중 플래그는 사용하지 않음(큐 직렬화만 사용)
         // Supabase (optional)
         this.supabase = null;
-        this.supabaseChannel = null;
+        this.supabaseChannels = { timesheet: null, planned: null };
         this.supabaseConfigured = false;
         this._sbSaveTimer = null;
         this.supabaseUser = null;
         this._lastSupabaseIdentity = null;
+        this.PLANNED_SENTINEL_DAY = '1970-01-01';
+        this._plannedSaveTimer = null;
+        this._lastSupabasePlannedSignature = '';
         this.authStatusElement = null;
         this.authButton = null;
         this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
@@ -828,18 +831,29 @@ class TimeTracker {
         const identity = this.getSupabaseIdentity();
         if (!identity) {
             this._lastSupabaseIdentity = null;
-            try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch (_) {}
-            this.supabaseChannel = null;
+            this.clearSupabaseChannels();
+            clearTimeout(this._sbSaveTimer);
+            clearTimeout(this._plannedSaveTimer);
+            this._lastSupabasePlannedSignature = '';
             return;
         }
         if (force || this._lastSupabaseIdentity !== identity) {
             this._lastSupabaseIdentity = identity;
+            this._lastSupabasePlannedSignature = '';
             try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch (_) {}
             try {
                 if (this.fetchFromSupabaseForDate) {
                     const promise = this.fetchFromSupabaseForDate(this.currentDate);
                     if (promise && typeof promise.catch === 'function') {
                         promise.catch(() => {});
+                    }
+                }
+            } catch (_) {}
+            try {
+                if (this.fetchPlannedCatalogFromSupabase) {
+                    const p = this.fetchPlannedCatalogFromSupabase();
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(() => {});
                     }
                 }
             } catch (_) {}
@@ -1068,16 +1082,31 @@ class TimeTracker {
             this.supabaseConfigured = false;
         }
     }
+    clearSupabaseChannels() {
+        if (!this.supabase || !this.supabaseChannels) return;
+        try {
+            if (this.supabaseChannels.timesheet) {
+                this.supabase.removeChannel(this.supabaseChannels.timesheet);
+            }
+        } catch (_) {}
+        try {
+            if (this.supabaseChannels.planned) {
+                this.supabase.removeChannel(this.supabaseChannels.planned);
+            }
+        } catch (_) {}
+        this.supabaseChannels = { timesheet: null, planned: null };
+    }
     resubscribeSupabaseRealtime() {
         if (!this.supabaseConfigured || !this.supabase) return;
         const identity = this.getSupabaseIdentity();
         if (!identity) return;
-        try { if (this.supabaseChannel) this.supabase.removeChannel(this.supabaseChannel); } catch(_) {}
-        const filter = `user_id=eq.${identity},day=eq.${this.currentDate}`;
-        const channelKey = `timesheet_days:${identity}:${this.currentDate}`;
-        this.supabaseChannel = this.supabase
-            .channel(channelKey)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter }, (payload) => {
+        this.clearSupabaseChannels();
+
+        const timesheetFilter = `user_id=eq.${identity},day=eq.${this.currentDate}`;
+        const timesheetChannelKey = `timesheet_days:${identity}:${this.currentDate}`;
+        this.supabaseChannels.timesheet = this.supabase
+            .channel(timesheetChannelKey)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter: timesheetFilter }, (payload) => {
                 try {
                     const row = payload.new || payload.old;
                     if (!row || row.day !== this.currentDate) return;
@@ -1088,6 +1117,22 @@ class TimeTracker {
                         this.autoSave();
                     }
                 } catch(e) { console.warn('[supabase] apply change failed', e); }
+            })
+            .subscribe();
+
+        const plannedFilter = `user_id=eq.${identity},day=eq.${this.PLANNED_SENTINEL_DAY}`;
+        const plannedChannelKey = `timesheet_days:${identity}:planned`; // 센티널 행 전용 채널 키
+        this.supabaseChannels.planned = this.supabase
+            .channel(plannedChannelKey)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter: plannedFilter }, (payload) => {
+                try {
+                    const row = payload.new || payload.old;
+                    if (!row || row.day !== this.PLANNED_SENTINEL_DAY) return;
+                    const changed = this.applyPlannedCatalogFromRow ? this.applyPlannedCatalogFromRow(row) : false;
+                    if (changed) {
+                        this.renderPlannedActivityDropdown && this.renderPlannedActivityDropdown();
+                    }
+                } catch (e) { console.warn('[supabase] planned catalog change failed', e); }
             })
             .subscribe();
     }
@@ -1143,6 +1188,155 @@ class TimeTracker {
             return true;
         } catch(e) {
             console.warn('[supabase] upsert failed:', e);
+            return false;
+        }
+    }
+    applyPlannedCatalogFromRow(row) {
+        if (!row || typeof row !== 'object') return false;
+        const slots = row.slots || {};
+        return this.applyPlannedCatalogJson(slots);
+    }
+    getLocalPlannedLabels() {
+        const labels = [];
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item || item.source === 'notion') return;
+            const label = this.normalizeActivityText(item.label || '');
+            if (!label) return;
+            if (!labels.includes(label)) labels.push(label);
+        });
+        return labels;
+    }
+    computePlannedSignature(labels) {
+        if (!Array.isArray(labels)) return '';
+        const normalized = labels
+            .map(label => this.normalizeActivityText(label))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+        return JSON.stringify(normalized);
+    }
+    applyPlannedCatalogJson(slotsJson) {
+        if (!slotsJson || typeof slotsJson !== 'object') return false;
+        const catalog = (slotsJson && typeof slotsJson.catalog === 'object') ? slotsJson.catalog : null;
+        const locals = Array.isArray(catalog && catalog.locals) ? catalog.locals : [];
+        const normalizedLocals = locals
+            .map(label => this.normalizeActivityText(label))
+            .filter(Boolean);
+        const remoteSignature = this.computePlannedSignature(normalizedLocals);
+        if (remoteSignature && remoteSignature === this._lastSupabasePlannedSignature) {
+            return false;
+        }
+
+        const before = JSON.stringify(this.plannedActivities || []);
+        const merged = [];
+        const seen = new Set();
+
+        normalizedLocals.forEach((label) => {
+            if (seen.has(label)) return;
+            seen.add(label);
+            merged.push({ label, source: 'local', priorityRank: null });
+        });
+
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText(item.label || '');
+            if (!label) return;
+            if (item.source === 'notion') {
+                merged.push({ label, source: 'notion', priorityRank: Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null });
+                seen.add(label);
+            }
+        });
+
+        this.plannedActivities = merged;
+        this.dedupeAndSortPlannedActivities();
+        const after = JSON.stringify(this.plannedActivities || []);
+        const selectionChanged = this.pruneSelectedActivitiesByAvailability ? this.pruneSelectedActivitiesByAvailability() : false;
+        const changed = before !== after || selectionChanged;
+        this.savePlannedActivities({ skipSupabase: true });
+        if (remoteSignature) {
+            this._lastSupabasePlannedSignature = remoteSignature;
+        }
+        return changed;
+    }
+    async fetchPlannedCatalogFromSupabase() {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        try {
+            const { data, error } = await this.supabase
+                .from('timesheet_days')
+                .select('slots')
+                .eq('user_id', identity)
+                .eq('day', this.PLANNED_SENTINEL_DAY)
+                .maybeSingle();
+            if (error && error.code !== 'PGRST116') throw error;
+            if (data && data.slots) {
+                const changed = this.applyPlannedCatalogJson(data.slots);
+                if (this.renderPlannedActivityDropdown) {
+                    this.renderPlannedActivityDropdown();
+                }
+                return true;
+            }
+            // 센티널 행이 없는데 로컬 데이터가 있으면 서버로 업로드 스케줄링
+            const localLabels = this.getLocalPlannedLabels();
+            if (localLabels.length > 0) {
+                this.scheduleSupabasePlannedSave(true);
+            }
+            return true;
+        } catch (e) {
+            console.warn('[supabase] planned catalog fetch failed:', e);
+            return false;
+        }
+    }
+    scheduleSupabasePlannedSave(force = false) {
+        if (!this.supabaseConfigured || !this.supabase) return;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return;
+        clearTimeout(this._plannedSaveTimer);
+        const executor = () => {
+            this._plannedSaveTimer = null;
+            try {
+                const promise = this.savePlannedCatalogToSupabase(force);
+                if (promise && typeof promise.catch === 'function') {
+                    promise.catch(() => {});
+                }
+            } catch (_) {}
+        };
+        if (force) {
+            executor();
+        } else {
+            this._plannedSaveTimer = setTimeout(executor, 500);
+        }
+    }
+    async savePlannedCatalogToSupabase(force = false) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        const locals = this.getLocalPlannedLabels();
+        const signature = this.computePlannedSignature(locals);
+        if (!force && signature && signature === this._lastSupabasePlannedSignature) {
+            return true;
+        }
+        try {
+            const catalog = {
+                version: 1,
+                locals,
+                updatedAt: new Date().toISOString(),
+                updatedBy: this.deviceId || null,
+            };
+            const payload = {
+                user_id: identity,
+                day: this.PLANNED_SENTINEL_DAY,
+                slots: { catalog },
+                updated_at: new Date().toISOString(),
+            };
+            const { error } = await this.supabase
+                .from('timesheet_days')
+                .upsert([payload], { onConflict: 'user_id,day' });
+            if (error) throw error;
+            this._lastSupabasePlannedSignature = signature;
+            return true;
+        } catch (e) {
+            console.warn('[supabase] planned catalog upsert failed:', e);
             return false;
         }
     }
@@ -2609,13 +2803,25 @@ class TimeTracker {
         } catch (e) {}
         this.dedupeAndSortPlannedActivities();
     }
-    savePlannedActivities() {
+    savePlannedActivities(options = {}) {
+        const opts = options || {};
+        const locals = this.persistPlannedActivitiesLocally();
+        if (!opts.skipSupabase) {
+            try { this.scheduleSupabasePlannedSave && this.scheduleSupabasePlannedSave(); } catch (_) {}
+        }
+        return locals;
+    }
+    persistPlannedActivitiesLocally() {
         try {
             const locals = (this.plannedActivities || [])
                 .filter(item => item && item.source !== 'notion')
-                .map(item => item.label);
+                .map(item => this.normalizeActivityText(item.label || ''))
+                .filter(Boolean);
             localStorage.setItem('planned_activities', JSON.stringify(locals));
-        } catch (e) {}
+            return locals;
+        } catch (e) {
+            return [];
+        }
     }
     addPlannedActivityOption(text, selectAfter = false) {
         const label = this.normalizeActivityText(text);
