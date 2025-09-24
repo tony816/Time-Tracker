@@ -289,8 +289,6 @@ class TimeTracker {
                 this.timeSlots[index][type] = e.target.value;
                 this.calculateTotals();
                 this.autoSave();
-                // 즉시 저장 한 번 더(큐로 직렬화)
-                this.saveNow('actual-input/input').catch(() => {});
             }
         });
 
@@ -403,7 +401,6 @@ class TimeTracker {
                 this.syncTimerElapsedFromActualInput(index, value);
                 this.calculateTotals();
                 this.autoSave();
-                this.saveNow('actual-input/compositionend').catch(() => {});
             }
         });
 
@@ -427,7 +424,6 @@ class TimeTracker {
                 this.syncTimerElapsedFromActualInput(index, value);
                 this.calculateTotals();
                 this.autoSave();
-                this.saveNow('actual-input/focusout').catch(() => {});
             }
         });
 
@@ -453,7 +449,6 @@ class TimeTracker {
                     this.syncTimerElapsedFromActualInput(index, value);
                     this.calculateTotals();
                     this.autoSave();
-                    this.saveNow('actual-input/change').catch(() => {});
                 } catch (err) {
                     console.error('[actual-input] change handler error:', err);
                 }
@@ -485,7 +480,6 @@ class TimeTracker {
                     this.syncTimerElapsedFromActualInput(index, value);
                     this.calculateTotals();
                     this.autoSave();
-                    this.saveNow('actual-input/keyup').catch(() => {});
                 } catch (err) {
                     console.error('[actual-input] keyup handler error:', err);
                 }
@@ -625,41 +619,92 @@ class TimeTracker {
     }
 
     calculateTotals() {
-        let plannedTotal = 0;
-        let actualTotal = 0;
-        let timerTotal = 0;
-        let executedPlans = 0;
+        let plannedSeconds = 0;
+        let actualSeconds = 0;
 
-        this.timeSlots.forEach(slot => {
-            if (slot.planned && slot.planned.trim() !== '') {
-                plannedTotal++;
-                if (slot.actual && slot.actual.trim() !== '') {
-                    executedPlans++;
+        const handledPlannedMerges = new Set();
+        const handledActualMerges = new Set();
+
+        const sumTimerElapsedInRange = (start, end) => {
+            let total = 0;
+            for (let i = start; i <= end; i++) {
+                const slot = this.timeSlots[i];
+                if (!slot || !slot.timer) continue;
+                const elapsed = Number(slot.timer.elapsed) || 0;
+                if (elapsed > 0) total += elapsed;
+            }
+            return total;
+        };
+
+        this.timeSlots.forEach((slot, index) => {
+            const plannedMergeKey = this.findMergeKey('planned', index);
+            if (plannedMergeKey) {
+                if (handledPlannedMerges.has(plannedMergeKey)) return;
+                handledPlannedMerges.add(plannedMergeKey);
+
+                const [, startStr, endStr] = plannedMergeKey.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                const length = Number.isFinite(end) && Number.isFinite(start) ? Math.max(1, end - start + 1) : 1;
+                const plannedValue = String((this.mergedFields.get(plannedMergeKey) || (this.timeSlots[start] && this.timeSlots[start].planned) || '')).trim();
+                if (plannedValue) {
+                    plannedSeconds += length * 3600;
                 }
+                return;
             }
-            if (slot.actual && slot.actual.trim() !== '') {
-                actualTotal++;
-            }
-            if (slot.timer && slot.timer.elapsed > 0) {
-                timerTotal += slot.timer.elapsed;
+
+            if (slot && slot.planned && slot.planned.trim() !== '') {
+                plannedSeconds += 3600;
             }
         });
 
-        // 기본 합계 표시
-        document.getElementById('totalPlanned').textContent = `${plannedTotal}시간`;
-        document.getElementById('totalActual').textContent = `${actualTotal}시간`;
+        this.timeSlots.forEach((slot, index) => {
+            const actualMergeKey = this.findMergeKey('actual', index);
+            if (actualMergeKey) {
+                if (handledActualMerges.has(actualMergeKey)) return;
+                handledActualMerges.add(actualMergeKey);
 
-        // 분석 데이터 계산 및 표시
-        this.updateAnalysis(plannedTotal, executedPlans, timerTotal);
+                const [, startStr, endStr] = actualMergeKey.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                const baseSlot = this.timeSlots[start] || {};
+                const mergedValue = String((this.mergedFields.get(actualMergeKey) || baseSlot.actual || '')).trim();
+                let seconds = this.parseDurationFromText(mergedValue);
+                if (seconds == null || Number.isNaN(seconds)) {
+                    seconds = sumTimerElapsedInRange(start, end);
+                }
+                if (Number.isFinite(seconds) && seconds > 0) {
+                    actualSeconds += Math.floor(seconds);
+                }
+                return;
+            }
+
+            if (!slot) return;
+            const actualValue = String(slot.actual || '').trim();
+            if (actualValue) {
+                let seconds = this.parseDurationFromText(actualValue);
+                if (seconds == null || Number.isNaN(seconds)) {
+                    seconds = slot.timer && Number.isFinite(slot.timer.elapsed) ? slot.timer.elapsed : 0;
+                }
+                if (Number.isFinite(seconds) && seconds > 0) {
+                    actualSeconds += Math.floor(seconds);
+                }
+            } else if (slot.timer && Number.isFinite(slot.timer.elapsed) && slot.timer.elapsed > 0) {
+                actualSeconds += Math.floor(slot.timer.elapsed);
+            }
+        });
+
+        document.getElementById('totalPlanned').textContent = this.formatDurationSummary(plannedSeconds);
+        document.getElementById('totalActual').textContent = this.formatDurationSummary(actualSeconds);
+
+        this.updateAnalysis(plannedSeconds, actualSeconds, actualSeconds);
     }
 
-    updateAnalysis(plannedTotal, executedPlans, timerTotalSeconds) {
-        // 실행율 계산
-        const executionRate = plannedTotal > 0 ? Math.round((executedPlans / plannedTotal) * 100) : 0;
+    updateAnalysis(plannedSeconds, actualSeconds, recordedSeconds) {
+        const executionRate = plannedSeconds > 0 ? Math.round((actualSeconds / plannedSeconds) * 100) : 0;
         const executionRateElement = document.getElementById('executionRate');
         executionRateElement.textContent = `${executionRate}%`;
-        
-        // 실행율에 따른 색상 변경
+
         executionRateElement.className = 'analysis-value';
         if (executionRate >= 80) {
             executionRateElement.classList.add('good');
@@ -669,27 +714,11 @@ class TimeTracker {
             executionRateElement.classList.add('poor');
         }
 
-        // 타이머 사용 시간 계산
-        const timerHours = Math.floor(timerTotalSeconds / 3600);
-        const timerMinutes = Math.floor((timerTotalSeconds % 3600) / 60);
-        let timerDisplay = '';
-        
-        if (timerHours > 0) {
-            timerDisplay = `${timerHours}시간 ${timerMinutes}분`;
-        } else if (timerMinutes > 0) {
-            timerDisplay = `${timerMinutes}분`;
-        } else if (timerTotalSeconds > 0) {
-            timerDisplay = `${timerTotalSeconds}초`;
-        } else {
-            timerDisplay = '0분';
-        }
-        
         const timerUsageElement = document.getElementById('timerUsage');
-        timerUsageElement.textContent = timerDisplay;
-        
-        // 타이머 사용 시간에 따른 색상 변경
+        timerUsageElement.textContent = this.formatDurationSummary(recordedSeconds);
+
         timerUsageElement.className = 'analysis-value';
-        if (timerTotalSeconds > 0) {
+        if (recordedSeconds > 0) {
             timerUsageElement.classList.add('good');
         }
     }
@@ -770,6 +799,7 @@ class TimeTracker {
         if (this._watcher) clearInterval(this._watcher);
         this._watcher = setInterval(() => {
             try {
+                let shouldPersist = false;
                 // DOM에서 실제 입력값을 읽어 상태와 불일치 시 보정(이벤트 누락 대비)
                 try {
                     for (let i = 0; i < (this.timeSlots?.length || 0); i++) {
@@ -782,6 +812,7 @@ class TimeTracker {
                             this.timeSlots[i].actual = v;
                             // 시간 텍스트로 timer.elapsed 동기화
                             this.syncTimerElapsedFromActualInput(i, v);
+                            shouldPersist = true;
                         }
                     }
                 } catch (_) {}
@@ -792,11 +823,13 @@ class TimeTracker {
                     mergedFields: Object.fromEntries(this.mergedFields)
                 });
                 if (sig !== this._lastSavedSignature) {
-                    // 저장 큐로 직렬화되므로 중복 호출은 안전
-                    this.saveNow('watcher').catch(() => {});
+                    shouldPersist = true;
+                }
+                if (shouldPersist) {
+                    this.autoSave();
                 }
             } catch (_) {}
-        }, 2000);
+        }, 5000);
     }
 
     
@@ -805,7 +838,7 @@ class TimeTracker {
         clearTimeout(this.autoSaveTimeout);
         this.autoSaveTimeout = setTimeout(() => {
             this.saveData();
-        }, 2000);
+        }, 1500);
     }
 
     clearData() {
@@ -1888,13 +1921,15 @@ class TimeTracker {
 
         const hasPlannedActivity = plannedText !== '';
         const isCurrentTimeInRange = currentIndex >= timeStart && currentIndex <= timeEnd;
+        const disabledByDate = !this.isCurrentDateToday();
         const canStart = hasPlannedActivity && isCurrentTimeInRange;
         const isRunning = slot.timer.running;
         const hasElapsed = slot.timer.elapsed > 0;
 
         let buttonIcon = '▶️';
         let buttonAction = 'start';
-        let buttonDisabled = !canStart && !isRunning;
+        let buttonDisabled = (!canStart && !isRunning) || disabledByDate;
+        let buttonTitle = '';
 
         if (isRunning) {
             buttonIcon = '⏸️';
@@ -1903,8 +1938,23 @@ class TimeTracker {
         } else if (hasElapsed) {
             buttonIcon = '▶️';
             buttonAction = 'resume';
-            buttonDisabled = !canStart;
+            buttonDisabled = !canStart || disabledByDate;
         }
+
+        if (buttonDisabled) {
+            if (disabledByDate) {
+                buttonTitle = '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
+            } else if (!hasPlannedActivity) {
+                buttonTitle = '계획을 먼저 입력해주세요.';
+            } else if (!isCurrentTimeInRange) {
+                buttonTitle = '현재 시간 범위에서만 시작할 수 있습니다.';
+            }
+        }
+
+        const startButtonAttributes = [];
+        if (buttonDisabled) startButtonAttributes.push('disabled');
+        if (buttonTitle) startButtonAttributes.push(`title="${buttonTitle}"`);
+        const startButtonAttrString = startButtonAttributes.length ? ' ' + startButtonAttributes.join(' ') : '';
 
         const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
         const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
@@ -1915,8 +1965,7 @@ class TimeTracker {
                 <div class="timer-controls">
                     <button class="timer-btn timer-start-pause" 
                             data-index="${index}" 
-                            data-action="${buttonAction}"
-                            ${buttonDisabled ? 'disabled' : ''}>
+                            data-action="${buttonAction}"${startButtonAttrString}>
                         ${buttonIcon}
                     </button>
                     <button class="timer-btn timer-stop" 
@@ -1936,6 +1985,25 @@ class TimeTracker {
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    formatDurationSummary(rawSeconds) {
+        if (!Number.isFinite(rawSeconds) || rawSeconds <= 0) {
+            return '0시간';
+        }
+        const seconds = Math.floor(rawSeconds);
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+        const parts = [];
+        if (hours > 0) parts.push(`${hours}시간`);
+        if (minutes > 0) parts.push(`${minutes}분`);
+        if (secs > 0 && parts.length === 0) {
+            parts.push(`${secs}초`);
+        } else if (secs > 0 && parts.length > 0) {
+            parts.push(`${secs}초`);
+        }
+        return parts.join(' ') || '0시간';
     }
 
     // 텍스트에서 시간값(HH:MM(:SS) 또는 1h/분/초 표기)을 초로 파싱
@@ -2002,6 +2070,9 @@ class TimeTracker {
     }
     
     getCurrentTimeIndex() {
+        if (!this.isCurrentDateToday()) {
+            return -1;
+        }
         const now = new Date();
         const currentHour = now.getHours();
         
@@ -2015,8 +2086,20 @@ class TimeTracker {
         }
         return -1; // 해당 시간 없음
     }
-    
+
+    isCurrentDateToday() {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            return this.currentDate === today;
+        } catch (_) {
+            return false;
+        }
+    }
+
     canStartTimer(index) {
+        if (!this.isCurrentDateToday()) {
+            return false;
+        }
         const slot = this.timeSlots[index];
         const currentTimeIndex = this.getCurrentTimeIndex();
         if (currentTimeIndex < 0) return false;
@@ -3265,6 +3348,7 @@ class TimeTracker {
         
         this.startTimerInterval();
         this.renderTimeEntries();
+        this.autoSave();
     }
 
     pauseTimer(index) {
@@ -3275,6 +3359,7 @@ class TimeTracker {
         
         this.stopTimerInterval();
         this.renderTimeEntries();
+        this.autoSave();
     }
 
     resumeTimer(index) {
@@ -3289,6 +3374,7 @@ class TimeTracker {
         
         this.startTimerInterval();
         this.renderTimeEntries();
+        this.autoSave();
     }
 
     stopTimer(index) {
