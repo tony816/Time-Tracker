@@ -51,6 +51,7 @@ class TimeTracker {
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
+        this.modalPlanActiveRow = -1;
         this.modalSplitMaxSeconds = 0;
         this.modalActualBaseIndex = null;
         this.modalPlanStartIndex = null;
@@ -1394,7 +1395,7 @@ class TimeTracker {
         normalizedLocals.forEach((label) => {
             if (seen.has(label)) return;
             seen.add(label);
-            merged.push({ label, source: 'local', priorityRank: null });
+            merged.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
         });
 
         (this.plannedActivities || []).forEach((item) => {
@@ -1402,7 +1403,12 @@ class TimeTracker {
             const label = this.normalizeActivityText(item.label || '');
             if (!label) return;
             if (item.source === 'notion') {
-                merged.push({ label, source: 'notion', priorityRank: Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null });
+                merged.push({
+                    label,
+                    source: 'notion',
+                    priorityRank: Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null,
+                    recommendedSeconds: Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null
+                });
                 seen.add(label);
             }
         });
@@ -2617,6 +2623,7 @@ class TimeTracker {
             row.className = 'sub-activity-row';
             row.dataset.index = String(idx);
             if (item.invalid) row.classList.add('invalid');
+            if (idx === this.modalPlanActiveRow) row.classList.add('active');
 
             const labelInput = document.createElement('input');
             labelInput.type = 'text';
@@ -2650,6 +2657,99 @@ class TimeTracker {
 
         this.updatePlanActivitiesSummary();
         this.refreshSpinnerStates('plan');
+        this.updatePlanRowActiveStyles();
+    }
+
+    isValidPlanRow(index) {
+        return Number.isInteger(index)
+            && index >= 0
+            && index < (this.modalPlanActivities ? this.modalPlanActivities.length : 0);
+    }
+
+    updatePlanRowActiveStyles() {
+        const list = document.getElementById('planActivitiesList');
+        if (!list) return;
+        const activeIndex = this.isValidPlanRow(this.modalPlanActiveRow) ? this.modalPlanActiveRow : -1;
+        list.querySelectorAll('.sub-activity-row').forEach((rowEl) => {
+            const idx = parseInt(rowEl.dataset.index, 10);
+            rowEl.classList.toggle('active', idx === activeIndex);
+        });
+    }
+
+    setPlanActiveRow(index, options = {}) {
+        const validIndex = this.isValidPlanRow(index) ? index : -1;
+        this.modalPlanActiveRow = validIndex;
+        this.updatePlanRowActiveStyles();
+        if (options.focusLabel && this.isValidPlanRow(validIndex)) {
+            this.focusPlanRowLabel(validIndex);
+        }
+    }
+
+    focusPlanRowLabel(index) {
+        if (!this.isValidPlanRow(index)) return;
+        try {
+            const list = document.getElementById('planActivitiesList');
+            if (!list) return;
+            const row = list.querySelector(`.sub-activity-row[data-index="${index}"]`);
+            if (!row) return;
+            const input = row.querySelector('.plan-activity-label');
+            if (input) input.focus();
+        } catch (e) {}
+    }
+
+    syncSelectedActivitiesFromPlan(options = {}) {
+        const planLabels = Array.from(new Set(
+            (this.modalPlanActivities || [])
+                .map(item => this.normalizeActivityText ? this.normalizeActivityText(item?.label || '') : (item?.label || '').trim())
+                .filter(Boolean)
+        ));
+        const changed = planLabels.length !== (this.modalSelectedActivities || []).length
+            || planLabels.some((label, idx) => label !== this.modalSelectedActivities[idx]);
+        if (changed) {
+            this.modalSelectedActivities = planLabels;
+        }
+        if (options.rerenderDropdown) {
+            this.renderPlannedActivityDropdown();
+        }
+        return changed;
+    }
+
+    resolveRecommendedPlanSeconds(meta = {}) {
+        if (!meta || typeof meta !== 'object') return 0;
+        const secondKeys = [
+            'recommendedSeconds',
+            'suggestedSeconds',
+            'seconds',
+            'estimatedSeconds',
+            'expectedSeconds',
+            'plannedSeconds',
+            'defaultSeconds',
+            'durationSeconds'
+        ];
+        for (const key of secondKeys) {
+            if (!Object.prototype.hasOwnProperty.call(meta, key)) continue;
+            const value = Number(meta[key]);
+            if (Number.isFinite(value) && value > 0) {
+                return value;
+            }
+        }
+        const minuteKeys = [
+            'recommendedMinutes',
+            'suggestedMinutes',
+            'minutes',
+            'estimatedMinutes',
+            'expectedMinutes',
+            'plannedMinutes',
+            'durationMinutes'
+        ];
+        for (const key of minuteKeys) {
+            if (!Object.prototype.hasOwnProperty.call(meta, key)) continue;
+            const value = Number(meta[key]);
+            if (Number.isFinite(value) && value > 0) {
+                return value * 60;
+            }
+        }
+        return 0;
     }
 
     createDurationSpinner({ kind, index, seconds }) {
@@ -2815,6 +2915,10 @@ class TimeTracker {
         this.modalPlanSectionOpen = true;
         section.hidden = false;
         this.updatePlanActivitiesToggleLabel();
+        if (!this.isValidPlanRow(this.modalPlanActiveRow) && (this.modalPlanActivities || []).length > 0) {
+            this.modalPlanActiveRow = 0;
+        }
+        this.updatePlanRowActiveStyles();
     }
 
     closePlanActivitiesSection() {
@@ -2823,13 +2927,19 @@ class TimeTracker {
         this.modalPlanSectionOpen = false;
         section.hidden = true;
         this.updatePlanActivitiesToggleLabel();
+        this.modalPlanActiveRow = -1;
+        this.updatePlanRowActiveStyles();
     }
 
     addPlanActivityRow(defaults = {}) {
         const seconds = this.normalizeDurationStep(Number.isFinite(defaults.seconds) ? Number(defaults.seconds) : 0) || 0;
         const label = typeof defaults.label === 'string' ? defaults.label : '';
-        this.modalPlanActivities.push({ label, seconds, invalid: !!defaults.invalid });
+        const newIndex = this.modalPlanActivities.push({ label, seconds, invalid: !!defaults.invalid }) - 1;
+        this.modalPlanActiveRow = newIndex;
         this.renderPlanActivitiesList();
+        if (defaults.focusLabel !== false) {
+            this.focusPlanRowLabel(newIndex);
+        }
     }
 
     handlePlanActivitiesInput(event) {
@@ -2846,6 +2956,7 @@ class TimeTracker {
         }
 
         this.updatePlanActivitiesSummary();
+        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
     }
 
     handlePlanActivitiesRemoval(event) {
@@ -2854,7 +2965,175 @@ class TimeTracker {
         const idx = parseInt(row.dataset.index, 10);
         if (!Number.isFinite(idx)) return;
         this.modalPlanActivities.splice(idx, 1);
+        if (this.modalPlanActivities.length === 0) {
+            this.modalPlanActiveRow = -1;
+        } else if (this.modalPlanActiveRow === idx) {
+            this.modalPlanActiveRow = Math.min(idx, this.modalPlanActivities.length - 1);
+        } else if (this.modalPlanActiveRow > idx) {
+            this.modalPlanActiveRow = Math.max(0, this.modalPlanActiveRow - 1);
+        }
         this.renderPlanActivitiesList();
+        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+    }
+
+    insertPlanLabelToRow(label, meta = {}) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : (label || '').trim();
+        if (!normalizedLabel) return;
+
+        if (!Array.isArray(this.modalPlanActivities)) {
+            this.modalPlanActivities = [];
+        }
+
+        const planActivities = this.modalPlanActivities;
+        const totalLimit = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
+        const usedSeconds = this.getValidPlanActivitiesSeconds();
+        const recommendedRaw = this.resolveRecommendedPlanSeconds(meta);
+        const recommendedNormalized = recommendedRaw > 0
+            ? (this.normalizeDurationStep(recommendedRaw) || recommendedRaw)
+            : 0;
+
+        const normalizeWithin = (value, limit) => {
+            if (!(value > 0)) return 0;
+            let candidate = Number.isFinite(value) ? value : 0;
+            if (candidate > 0 && Number.isFinite(candidate)) {
+                const rounded = this.normalizeDurationStep(candidate);
+                if (rounded != null) candidate = rounded;
+            }
+            if (Number.isFinite(limit) && limit > 0 && candidate > limit) {
+                const floored = Math.floor(limit / 600) * 600;
+                candidate = floored > 0 ? floored : Math.min(limit, candidate);
+            }
+            if (Number.isFinite(limit) && limit > 0 && candidate > limit) {
+                candidate = limit;
+            }
+            return candidate > 0 ? candidate : 0;
+        };
+
+        const defaultIncrement = (available) => {
+            if (!(available > 0)) return 0;
+            if (recommendedNormalized > 0) {
+                return Math.min(available, recommendedNormalized);
+            }
+            if (available >= 600) return 600;
+            return available;
+        };
+
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : (value || '').trim();
+
+        const existingIndex = planActivities.findIndex(item => normalize(item?.label) === normalizedLabel);
+        let targetIndex = this.isValidPlanRow(this.modalPlanActiveRow) ? this.modalPlanActiveRow : -1;
+
+        if (existingIndex >= 0 && existingIndex !== targetIndex) {
+            this.setPlanActiveRow(existingIndex);
+            this.showNotification('이미 동일한 라벨이 있어 해당 행으로 이동했어요.');
+            return;
+        }
+
+        if (existingIndex >= 0) {
+            targetIndex = existingIndex;
+        }
+
+        if (targetIndex >= 0) {
+            const item = planActivities[targetIndex] || { label: '', seconds: 0, invalid: false };
+            const currentSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const otherSum = Math.max(0, usedSeconds - currentSeconds);
+            const rowLimit = totalLimit > 0 ? Math.max(0, totalLimit - otherSum) : Infinity;
+            if (!(rowLimit > 0)) {
+                this.setPlanActiveRow(targetIndex);
+                this.showNotification('잔여 시간이 없어 더 이상 시간을 늘릴 수 없습니다.');
+                return;
+            }
+
+            const sameLabel = normalize(item.label) === normalizedLabel;
+            let nextSeconds = currentSeconds;
+
+            if (sameLabel) {
+                const availableIncrease = Math.max(0, rowLimit - currentSeconds);
+                if (availableIncrease <= 0) {
+                    this.setPlanActiveRow(targetIndex);
+                    this.showNotification('잔여 시간이 없어 더 이상 시간을 늘릴 수 없습니다.');
+                    return;
+                }
+                const increment = normalizeWithin(defaultIncrement(availableIncrease), availableIncrease);
+                if (!(increment > 0)) {
+                    this.setPlanActiveRow(targetIndex);
+                    this.showNotification('10분 단위로 배분할 수 있는 잔여 시간이 없어요.');
+                    return;
+                }
+                nextSeconds = currentSeconds + increment;
+            } else {
+                item.label = normalizedLabel;
+                if (currentSeconds === 0) {
+                    const candidate = normalizeWithin(defaultIncrement(rowLimit), rowLimit);
+                    if (candidate > 0) {
+                        nextSeconds = candidate;
+                    } else {
+                        item.seconds = 0;
+                        item.invalid = false;
+                        planActivities[targetIndex] = item;
+                        this.setPlanActiveRow(targetIndex);
+                        this.renderPlanActivitiesList();
+                        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+                        return;
+                    }
+                } else if (Number.isFinite(rowLimit) && currentSeconds > rowLimit) {
+                    nextSeconds = rowLimit;
+                }
+            }
+
+            nextSeconds = normalizeWithin(nextSeconds, rowLimit);
+            item.label = normalizedLabel;
+            item.seconds = nextSeconds;
+            item.invalid = false;
+            planActivities[targetIndex] = item;
+            this.setPlanActiveRow(targetIndex);
+            this.renderPlanActivitiesList();
+            this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+            return;
+        }
+
+        const remaining = totalLimit > 0 ? Math.max(0, totalLimit - usedSeconds) : defaultIncrement(Infinity);
+        if (!(remaining > 0)) {
+            this.showNotification('잔여 계획 시간이 없어 새 행을 만들 수 없어요.');
+            return;
+        }
+        const assigned = normalizeWithin(defaultIncrement(remaining), remaining);
+        if (!(assigned > 0)) {
+            this.showNotification('잔여 시간이 너무 적어 새 행을 만들 수 없어요.');
+            return;
+        }
+        planActivities.push({ label: normalizedLabel, seconds: assigned, invalid: false });
+        this.modalPlanActiveRow = planActivities.length - 1;
+        this.renderPlanActivitiesList();
+        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+    }
+
+    removePlanActivitiesByLabel(label) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : (label || '').trim();
+        if (!normalizedLabel || !Array.isArray(this.modalPlanActivities)) return false;
+        const beforeLength = this.modalPlanActivities.length;
+        const previousActive = this.modalPlanActiveRow;
+        if (beforeLength === 0) return false;
+        this.modalPlanActivities = this.modalPlanActivities.filter((item) => {
+            if (!item) return false;
+            const current = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
+            return current !== normalizedLabel;
+        });
+        if (this.modalPlanActivities.length === beforeLength) {
+            return false;
+        }
+        if (this.modalPlanActivities.length === 0) {
+            this.modalPlanActiveRow = -1;
+        } else if (previousActive >= 0) {
+            this.modalPlanActiveRow = Math.min(previousActive, this.modalPlanActivities.length - 1);
+        } else {
+            this.modalPlanActiveRow = -1;
+        }
+        this.renderPlanActivitiesList();
+        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+        return true;
     }
 
     fillRemainingPlanActivity() {
@@ -2880,6 +3159,7 @@ class TimeTracker {
         this.modalPlanActivities = activities.map(item => ({ ...item, invalid: false }));
         const shouldOpen = this.modalPlanActivities.length > 0;
         this.modalPlanSectionOpen = shouldOpen;
+        this.modalPlanActiveRow = shouldOpen ? 0 : -1;
         section.hidden = !shouldOpen;
         this.updatePlanActivitiesToggleLabel();
         this.renderPlanActivitiesList();
@@ -3569,6 +3849,7 @@ class TimeTracker {
         } else {
             this.modalPlanStartIndex = null;
             this.modalPlanEndIndex = null;
+            this.modalPlanActiveRow = -1;
         }
 
         // 시간 범위 표시
@@ -3586,6 +3867,7 @@ class TimeTracker {
             this.modalPlanTotalSeconds = durationHours * 3600;
             this.modalPlanActivities = [];
             this.modalPlanSectionOpen = false;
+            this.modalPlanActiveRow = -1;
             this.preparePlanActivitiesSection(startIndex, actualEndIndex);
         }
 
@@ -3644,6 +3926,7 @@ class TimeTracker {
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
+        this.modalPlanActiveRow = -1;
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
         const planSection = document.getElementById('planActivitiesSection');
@@ -3776,12 +4059,22 @@ class TimeTracker {
             togglePlanBtn.addEventListener('click', () => {
                 this.modalPlanSectionOpen = !this.modalPlanSectionOpen;
                 planSection.hidden = !this.modalPlanSectionOpen;
-                this.updatePlanActivitiesToggleLabel();
-                if (this.modalPlanSectionOpen && this.modalPlanActivities.length === 0) {
-                    this.addPlanActivityRow();
-                } else if (this.modalPlanSectionOpen) {
-                    this.renderPlanActivitiesList();
+                if (this.modalPlanSectionOpen) {
+                    if ((this.modalPlanActivities || []).length === 0) {
+                        this.addPlanActivityRow();
+                    } else {
+                        if (!this.isValidPlanRow(this.modalPlanActiveRow)) {
+                            this.modalPlanActiveRow = 0;
+                        }
+                        this.renderPlanActivitiesList();
+                    }
+                } else {
+                    this.modalPlanActiveRow = -1;
+                    this.updatePlanRowActiveStyles();
                 }
+                this.updatePlanActivitiesToggleLabel();
+                this.syncSelectedActivitiesFromPlan();
+                this.renderPlannedActivityDropdown();
             });
         }
 
@@ -3810,13 +4103,27 @@ class TimeTracker {
                     const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
                     const idx = parseInt(spinnerBtn.dataset.index, 10);
                     if (Number.isFinite(idx)) {
+                        this.setPlanActiveRow(idx);
                         this.adjustActivityDuration('plan', idx, direction);
                     }
                     return;
                 }
-                if (event.target.classList.contains('remove-sub-activity')) {
+                const removeBtn = event.target.closest('.remove-sub-activity');
+                if (removeBtn) {
                     this.handlePlanActivitiesRemoval(event);
+                    return;
                 }
+                const row = event.target.closest('.sub-activity-row');
+                if (row && planList.contains(row)) {
+                    const idx = parseInt(row.dataset.index, 10);
+                    if (Number.isFinite(idx)) this.setPlanActiveRow(idx);
+                }
+            });
+            planList.addEventListener('focusin', (event) => {
+                const row = event.target.closest('.sub-activity-row');
+                if (!row || !planList.contains(row)) return;
+                const idx = parseInt(row.dataset.index, 10);
+                if (Number.isFinite(idx)) this.setPlanActiveRow(idx);
             });
         }
 
@@ -3887,7 +4194,7 @@ class TimeTracker {
             arr.forEach((item) => {
                 if (typeof item === 'string') {
                     const label = this.normalizeActivityText(item);
-                    if (label) this.plannedActivities.push({ label, source: 'local', priorityRank: null });
+                    if (label) this.plannedActivities.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
                     return;
                 }
                 if (item && typeof item === 'object') {
@@ -3895,7 +4202,8 @@ class TimeTracker {
                     if (!label) return;
                     const source = item.source === 'notion' ? 'notion' : 'local';
                     const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-                    this.plannedActivities.push({ label, source, priorityRank });
+                    const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+                    this.plannedActivities.push({ label, source, priorityRank, recommendedSeconds });
                 }
             });
         } catch (e) {}
@@ -3926,9 +4234,9 @@ class TimeTracker {
         if (!label) return;
         const idx = this.findPlannedActivityIndex(label);
         if (idx >= 0) {
-            this.plannedActivities[idx] = { label, source: 'local', priorityRank: null };
+            this.plannedActivities[idx] = { label, source: 'local', priorityRank: null, recommendedSeconds: null };
         } else {
-            this.plannedActivities.push({ label, source: 'local', priorityRank: null });
+            this.plannedActivities.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
         }
         this.dedupeAndSortPlannedActivities();
         this.savePlannedActivities();
@@ -3949,12 +4257,40 @@ class TimeTracker {
             this.renderPlannedActivityDropdown();
         }
     }
-    toggleSelectActivity(text) {
+    toggleSelectActivity(text, options = {}) {
         const label = this.normalizeActivityText(text);
         if (!label) return;
-        const i = this.modalSelectedActivities.indexOf(label);
-        if (i >= 0) this.modalSelectedActivities.splice(i, 1);
-        else this.modalSelectedActivities.push(label);
+
+        if (this.modalPlanSectionOpen) {
+            const shouldRemove = options.fromChip || options.checked === false;
+            if (shouldRemove) {
+                const removed = this.removePlanActivitiesByLabel(label);
+                if (!removed) {
+                    const idx = (this.modalPlanActivities || []).findIndex(item => {
+                        const current = this.normalizeActivityText(item?.label || '');
+                        return current === label;
+                    });
+                    if (idx >= 0) {
+                        this.setPlanActiveRow(idx);
+                        this.showNotification('이미 동일한 라벨이 있어 해당 행으로 이동했어요.');
+                    } else {
+                        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+                    }
+                }
+                return;
+            }
+            this.insertPlanLabelToRow(label, options || {});
+            return;
+        }
+
+        const selections = Array.isArray(this.modalSelectedActivities) ? this.modalSelectedActivities : [];
+        const existing = selections.indexOf(label);
+        if (existing >= 0) {
+            selections.splice(existing, 1);
+        } else {
+            selections.push(label);
+        }
+        this.modalSelectedActivities = selections;
         this.renderPlannedActivityDropdown();
     }
     editPlannedActivityOption(oldText, newText) {
@@ -3964,7 +4300,7 @@ class TimeTracker {
         const i = this.findPlannedActivityIndex(oldLabel);
         if (i >= 0) {
             // rename in list (편집 시에는 항상 로컬 항목으로 취급)
-            this.plannedActivities[i] = { label: newLabel, source: 'local', priorityRank: null };
+            this.plannedActivities[i] = { label: newLabel, source: 'local', priorityRank: null, recommendedSeconds: null };
             // update selection
             const si = this.modalSelectedActivities.indexOf(oldLabel);
             if (si >= 0) this.modalSelectedActivities[si] = newLabel;
@@ -3985,7 +4321,8 @@ class TimeTracker {
             if (!label) return;
             const source = item.source === 'notion' ? 'notion' : 'local';
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-            const entry = { label, source, priorityRank };
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            const entry = { label, source, priorityRank, recommendedSeconds };
             const existing = byLabel.get(label);
             let replace = false;
             if (!existing) {
@@ -3995,7 +4332,14 @@ class TimeTracker {
             } else if (source === 'local' && existing.source !== 'local') {
                 replace = true;
             } else {
-                replace = true;
+                const existingRecommended = Number.isFinite(existing.recommendedSeconds) ? existing.recommendedSeconds : null;
+                if (existingRecommended > 0 && !(recommendedSeconds > 0)) {
+                    replace = false;
+                } else if (!(existingRecommended > 0) && recommendedSeconds > 0) {
+                    replace = true;
+                } else {
+                    replace = true;
+                }
             }
             if (replace) {
                 byLabel.set(label, entry);
@@ -4033,10 +4377,12 @@ class TimeTracker {
             const label = this.normalizeActivityText(it.title || '');
             if (!label) return;
             const priorityRank = Number.isFinite(it.priorityRank) ? Number(it.priorityRank) : null;
+            const recommendedSeconds = this.resolveRecommendedPlanSeconds ? this.resolveRecommendedPlanSeconds(it) : 0;
             normalized.push({
                 id: it.id,
                 title: label,
                 priorityRank,
+                recommendedSeconds: recommendedSeconds > 0 ? recommendedSeconds : null,
             });
         });
         normalized.sort((a, b) => {
@@ -4088,7 +4434,7 @@ class TimeTracker {
             btn.textContent = '×';
             btn.title = '제거';
             btn.onclick = () => {
-                this.toggleSelectActivity(text);
+                this.toggleSelectActivity(text, { fromChip: true });
             };
             chip.appendChild(btn);
             chips.appendChild(chip);
@@ -4109,12 +4455,13 @@ class TimeTracker {
             seen.add(label);
             const source = item.source === 'notion' ? 'notion' : 'local';
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-            grouped[source].push({ label, source, priorityRank });
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            grouped[source].push({ label, source, priorityRank, recommendedSeconds });
         });
 
         normalizedSelections.forEach((label) => {
             if (!label || seen.has(label)) return;
-            grouped.local.push({ label, source: 'local', priorityRank: null });
+            grouped.local.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
         });
 
         this.updatePlanSourceTabs({
@@ -4124,6 +4471,10 @@ class TimeTracker {
 
         const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
         const visibleItems = grouped[activeSource] || [];
+        const planTotalSeconds = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
+        const planUsedSeconds = this.getValidPlanActivitiesSeconds();
+        const planRemainingSeconds = Math.max(0, planTotalSeconds - planUsedSeconds);
+        const hasActivePlanRow = this.isValidPlanRow(this.modalPlanActiveRow);
 
         if (visibleItems.length === 0) {
             const empty = document.createElement('li');
@@ -4138,12 +4489,18 @@ class TimeTracker {
 
         visibleItems.forEach((item) => {
             const { label, source, priorityRank } = item;
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Math.floor(item.recommendedSeconds)) : null;
             const li = document.createElement('li');
             li.dataset.source = source;
             if (Number.isFinite(priorityRank)) {
                 li.dataset.priorityRank = String(priorityRank);
             } else {
                 delete li.dataset.priorityRank;
+            }
+            if (Number.isFinite(recommendedSeconds) && recommendedSeconds > 0) {
+                li.dataset.recommendedSeconds = String(recommendedSeconds);
+            } else {
+                delete li.dataset.recommendedSeconds;
             }
             const left = document.createElement('div');
             left.style.display = 'flex';
@@ -4152,7 +4509,13 @@ class TimeTracker {
             const cb = document.createElement('input');
             cb.type = 'checkbox';
             cb.checked = selectedSet.has(label);
-            cb.onchange = () => this.toggleSelectActivity(label);
+            const disableInsert = this.modalPlanSectionOpen && !hasActivePlanRow && planRemainingSeconds <= 0 && !selectedSet.has(label);
+            cb.disabled = disableInsert;
+            cb.onchange = (event) => this.toggleSelectActivity(label, {
+                source,
+                recommendedSeconds,
+                checked: event.target.checked
+            });
             const span = document.createElement('span');
             span.className = 'option-label';
             span.textContent = label;
@@ -4161,6 +4524,24 @@ class TimeTracker {
             if (badge) left.appendChild(badge);
             left.appendChild(span);
             li.appendChild(left);
+            const recommendedDisplay = Number.isFinite(recommendedSeconds) && recommendedSeconds > 0
+                ? (this.normalizeDurationStep(recommendedSeconds) || recommendedSeconds)
+                : null;
+            let tooltip = '선택/해제';
+            if (this.modalPlanSectionOpen) {
+                if (hasActivePlanRow) {
+                    tooltip = '활성 행으로 추가';
+                } else if (planRemainingSeconds > 0) {
+                    tooltip = '새 행으로 추가';
+                } else {
+                    tooltip = '잔여 시간이 없어 추가할 수 없어요';
+                }
+            }
+            if (recommendedDisplay) {
+                tooltip += ` · 추천 ${this.formatDurationSummary(recommendedDisplay)}`;
+            }
+            li.title = tooltip;
+            li.classList.toggle('disabled-option', cb.disabled);
             const actions = document.createElement('div');
             actions.className = 'option-actions';
             const editBtn = document.createElement('button');
@@ -4255,9 +4636,25 @@ class TimeTracker {
             const label = this.normalizeActivityText(item.title || '');
             if (!label) return;
             const rank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
             const existing = notionMap.get(label);
-            if (!existing || (existing.priorityRank ?? Infinity) > (rank ?? Infinity)) {
-                notionMap.set(label, { priorityRank: rank });
+            if (!existing) {
+                notionMap.set(label, { priorityRank: rank, recommendedSeconds });
+                return;
+            }
+            const existingRank = existing.priorityRank ?? Infinity;
+            const incomingRank = rank ?? Infinity;
+            let replace = false;
+            if (existingRank > incomingRank) {
+                replace = true;
+            } else if (existingRank === incomingRank) {
+                const existingRecommended = Number.isFinite(existing.recommendedSeconds) ? existing.recommendedSeconds : null;
+                if (!(existingRecommended > 0) && recommendedSeconds > 0) {
+                    replace = true;
+                }
+            }
+            if (replace) {
+                notionMap.set(label, { priorityRank: rank, recommendedSeconds });
             }
         });
 
@@ -4270,8 +4667,10 @@ class TimeTracker {
                 if (notionMap.has(label)) {
                     const info = notionMap.get(label);
                     const rank = info.priorityRank ?? null;
-                    if ((item.priorityRank ?? null) !== rank) changed = true;
-                    next.push({ label, source: 'notion', priorityRank: rank });
+                    const recommended = Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null;
+                    const prevRecommended = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+                    if ((item.priorityRank ?? null) !== rank || (prevRecommended ?? null) !== (recommended ?? null)) changed = true;
+                    next.push({ label, source: 'notion', priorityRank: rank, recommendedSeconds: recommended });
                     notionMap.delete(label);
                 } else {
                     changed = true; // stale notion entry removed
@@ -4279,12 +4678,18 @@ class TimeTracker {
                 return;
             }
 
-            next.push({ label, source: 'local', priorityRank: null });
+            const localRecommended = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            next.push({ label, source: 'local', priorityRank: null, recommendedSeconds: localRecommended });
             if (notionMap.has(label)) notionMap.delete(label);
         });
 
         notionMap.forEach((info, label) => {
-            next.push({ label, source: 'notion', priorityRank: info.priorityRank ?? null });
+            next.push({
+                label,
+                source: 'notion',
+                priorityRank: info.priorityRank ?? null,
+                recommendedSeconds: Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null
+            });
             changed = true;
         });
 
