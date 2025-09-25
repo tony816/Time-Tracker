@@ -97,6 +97,21 @@
               </div>
             </div>
           </div>
+          <div class="form-group plan-sub-activities-group">
+            <button type="button" id="togglePlanActivities" class="split-toggle-btn">세부 활동 분해</button>
+            <div id="planActivitiesSection" class="sub-activities-section" hidden>
+              <div class="sub-activities-summary">
+                <div>총 시간: <span id="planSplitTotalTime">0시간</span></div>
+                <div>분해 합계: <span id="planSplitUsedTime">0시간</span></div>
+              </div>
+              <div id="planActivitiesList" class="sub-activities-list"></div>
+              <div class="sub-activities-actions">
+                <button type="button" id="addPlanActivityRow" class="sub-activity-action-btn">행 추가</button>
+                <button type="button" id="fillRemainingPlanActivity" class="sub-activity-action-btn">잔여 시간 추가</button>
+                <span id="planActivitiesNotice" class="sub-activities-notice"></span>
+              </div>
+            </div>
+          </div>
           <div class="form-actions">
             <button id="saveSchedule" class="save-btn">저장</button>
             <button id="cancelSchedule" class="cancel-btn">취소</button>
@@ -124,6 +139,21 @@
           <div class="form-group">
             <label for="activityDetails">피드백</label>
             <textarea id="activityDetails" placeholder="스스로에게 피드백하기" rows="8"></textarea>
+          </div>
+          <div class="form-group sub-activities-group">
+            <button type="button" id="toggleSubActivities" class="split-toggle-btn">세부 활동 분해</button>
+            <div id="subActivitiesSection" class="sub-activities-section" hidden>
+              <div class="sub-activities-summary">
+                <div>총 시간: <span id="splitTotalTime">0시간</span></div>
+                <div>분해 합계: <span id="splitUsedTime">0시간</span></div>
+              </div>
+              <div id="subActivitiesList" class="sub-activities-list"></div>
+              <div class="sub-activities-actions">
+                <button type="button" id="addSubActivityRow" class="sub-activity-action-btn">행 추가</button>
+                <button type="button" id="fillRemainingSubActivity" class="sub-activity-action-btn">잔여 시간 추가</button>
+                <span id="subActivitiesNotice" class="sub-activities-notice"></span>
+              </div>
+            </div>
           </div>
           <div class="form-actions">
             <button id="saveActivityLog" class="save-btn">저장</button>

@@ -952,10 +952,9 @@ h1 {
   opacity: 1;
   pointer-events: auto;
 }
-
 /* 입력 텍스트가 버튼 영역과 겹치지 않도록 우측 패딩 확보 */
 .actual-field-container .timer-result-input {
-  padding-right: 52px; /* 버튼(36px) + 여백 고려하여 텍스트와 겹치지 않게 */
+  padding-right: 52px; /* 활동 상세 버튼 공간 */
 }
 
 .actual-field-container {
@@ -970,6 +969,7 @@ h1 {
   position: relative;
   z-index: 3;
 }
+
 
 /* 병합된 시간 필드 스타일 */
 .merged-time-main {
@@ -1072,6 +1072,10 @@ h1 {
   gap: 8px;
   padding: 8px 12px;
   box-sizing: border-box;
+}
+
+.actual-merged-overlay .timer-result-input {
+  padding-right: 52px;
 }
 
 .merged-actual-main .actual-merged-overlay .timer-result-input {
@@ -1283,3 +1287,158 @@ h1 {
 .opt-btn { border: none; background: #ecf0f1; color: #2c3e50; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 12px; }
 .opt-btn:hover { background: #dfe6e9; }
 #activityOptions li span { white-space: nowrap; }
+
+.sub-activities-group {
+  border: 1px solid #eef1f4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
+.split-toggle-btn {
+  width: 100%;
+  background: #ecf5ff;
+  border: 1px solid #b6dbff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #1f2d3d;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.split-toggle-btn:hover {
+  background: #dcefff;
+}
+
+.sub-activities-section {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sub-activities-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #34495e;
+}
+
+.sub-activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sub-activities-empty {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.sub-activity-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(110px, auto) 60px;
+  gap: 8px;
+  align-items: center;
+}
+
+.sub-activity-row input {
+  padding: 6px 8px;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.sub-activity-row.invalid .spinner-display {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.time-spinner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spinner-display {
+  min-width: 70px;
+  padding: 6px 10px;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.spinner-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spinner-btn {
+  width: 24px;
+  height: 18px;
+  background: #f4f6f8;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.spinner-btn:hover {
+  background: #e9edf2;
+}
+
+.spinner-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.remove-sub-activity {
+  background: transparent;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.remove-sub-activity:hover {
+  text-decoration: underline;
+}
+
+.sub-activities-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sub-activity-action-btn {
+  background: #f4f6f8;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.sub-activity-action-btn:hover {
+  background: #e9edf2;
+}
+
+.sub-activities-notice {
+  font-size: 12px;
+  color: #e67e22;
+}
+
+.sub-activities-notice.ok {
+  color: #2ecc71;
+}
