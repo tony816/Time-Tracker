@@ -1158,6 +1158,24 @@ h1 {
   gap: 6px;
   margin-bottom: 6px;
 }
+.title-band-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.title-band-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+.title-band-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
 .plan-tabs {
   display: flex;
   gap: 6px;
@@ -1423,6 +1441,121 @@ h1 {
 .spinner-btn:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+.split-cell-wrapper {
+  position: relative;
+  min-height: 56px;
+}
+
+.split-cell-wrapper.split-has-data > :first-child {
+  position: relative;
+  z-index: 2;
+}
+
+.split-cell-wrapper.split-has-data .input-field {
+  border-color: transparent;
+  background: transparent;
+}
+
+.split-cell-wrapper.split-type-planned.split-has-data .input-field {
+  color: transparent;
+  caret-color: transparent;
+  opacity: 0;
+}
+
+.split-cell-wrapper.split-type-planned.split-has-data .input-field::placeholder {
+  color: transparent;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.split-cell-wrapper .split-visualization {
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
+  z-index: 1;
+}
+
+.split-visualization-planned {
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.5);
+  z-index: 3;
+}
+
+.split-visualization-actual {
+  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.28);
+  background: rgba(255, 255, 255, 0.88);
+  z-index: 1;
+}
+
+.split-visualization.no-title {
+  justify-content: center;
+}
+
+.split-title-band,
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+}
+
+.split-title-band {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.split-title-segment {
+  background: var(--split-segment-color, rgba(223, 228, 234, 0.6));
+  border-radius: 4px;
+  padding: 2px 4px;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-title-segment.split-empty {
+  background: rgba(236, 240, 241, 0.35);
+  color: transparent;
+}
+
+.split-grid-segment {
+  min-height: 14px;
+  border-radius: 3px;
+  background: var(--split-segment-color, rgba(223, 228, 234, 0.5));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.split-visualization-actual .split-grid-segment {
+  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.25);
+}
+
+.split-grid-segment.split-empty {
+  background: rgba(236, 240, 241, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.35);
+}
+
+.split-visualization-actual .split-grid-segment.split-empty {
+  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.18);
 }
 
 .remove-sub-activity {
