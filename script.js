@@ -52,12 +52,14 @@ class TimeTracker {
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
         this.modalPlanActiveRow = -1;
+        this.modalPlanTitle = '';
         this.modalPlanTitleBandOn = false;
         this.modalActualTitleBandOn = false;
         this.modalSplitMaxSeconds = 0;
         this.modalActualBaseIndex = null;
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
+        this.lastPlanOptionInput = 'activity';
         this.init();
     }
 
@@ -136,6 +138,7 @@ class TimeTracker {
                 planned: '',
                 actual: '',
                 planActivities: [],
+                planTitle: '',
                 planTitleBandOn: false,
                 timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
                 activityLog: { title: '', details: '', subActivities: [], titleBandOn: false }
@@ -146,6 +149,7 @@ class TimeTracker {
             planned: '',
             actual: '',
             planActivities: [],
+            planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false }
@@ -155,6 +159,7 @@ class TimeTracker {
             planned: '',
             actual: '',
             planActivities: [],
+            planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false }
@@ -164,6 +169,7 @@ class TimeTracker {
             planned: '',
             actual: '',
             planActivities: [],
+            planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false }
@@ -173,6 +179,7 @@ class TimeTracker {
             planned: '',
             actual: '',
             planActivities: [],
+            planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false }
@@ -845,6 +852,16 @@ class TimeTracker {
                 } else {
                     slot.planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
                 }
+                if (typeof slot.planTitle === 'string') {
+                    slot.planTitle = this.normalizeActivityText
+                        ? this.normalizeActivityText(slot.planTitle)
+                        : slot.planTitle.trim();
+                } else {
+                    const fallbackTitle = typeof slot.planned === 'string'
+                        ? (this.normalizeActivityText ? this.normalizeActivityText(slot.planned) : slot.planned.trim())
+                        : '';
+                    slot.planTitle = fallbackTitle;
+                }
                 slot.planTitleBandOn = Boolean(slot.planTitleBandOn);
                 slot.activityLog.titleBandOn = Boolean(slot.activityLog.titleBandOn);
                 return slot;
@@ -1063,10 +1080,18 @@ class TimeTracker {
                     const detailsValue = String((startSlot.activityLog && startSlot.activityLog.details) || '').trim();
                     const activitiesValue = this.normalizeActivitiesArray(startSlot.activityLog && startSlot.activityLog.subActivities);
                     const planActivitiesValue = this.normalizePlanActivitiesArray(startSlot.planActivities);
-                    const planTitleBand = Boolean(startSlot.planTitleBandOn);
+                    const planTitleValue = this.normalizeActivityText
+                        ? this.normalizeActivityText(startSlot.planTitle || '')
+                        : String(startSlot.planTitle || '').trim();
+                    const planTitleBand = Boolean(startSlot.planTitleBandOn && planTitleValue);
                     const actualTitleBand = Boolean(startSlot.activityLog && startSlot.activityLog.titleBandOn);
 
-                    if (plannedValue === '' && actualValue === '' && detailsValue === '' && activitiesValue.length === 0 && planActivitiesValue.length === 0) {
+                    if (plannedValue === ''
+                        && actualValue === ''
+                        && detailsValue === ''
+                        && activitiesValue.length === 0
+                        && planActivitiesValue.length === 0
+                        && !planTitleValue) {
                         return;
                     }
 
@@ -1084,6 +1109,9 @@ class TimeTracker {
                     if (planActivitiesValue.length > 0) {
                         slots[storageKey].planActivities = planActivitiesValue.map(item => ({ ...item }));
                     }
+                    if (planTitleValue) {
+                        slots[storageKey].planTitle = planTitleValue;
+                    }
                     if (planTitleBand) {
                         slots[storageKey].planTitleBandOn = true;
                     }
@@ -1099,15 +1127,26 @@ class TimeTracker {
                 const details = String((slot.activityLog && slot.activityLog.details) || '').trim();
                 const activitiesValue = this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities);
                 const planActivitiesValue = this.normalizePlanActivitiesArray(slot.planActivities);
-                const planTitleBand = Boolean(slot.planTitleBandOn);
+                const planTitleValue = this.normalizeActivityText
+                    ? this.normalizeActivityText(slot.planTitle || '')
+                    : String(slot.planTitle || '').trim();
+                const planTitleBand = Boolean(slot.planTitleBandOn && planTitleValue);
                 const actualTitleBand = Boolean(slot.activityLog && slot.activityLog.titleBandOn);
-                if (planned !== '' || actual !== '' || details !== '' || activitiesValue.length > 0 || planActivitiesValue.length > 0) {
+                if (planned !== ''
+                    || actual !== ''
+                    || details !== ''
+                    || activitiesValue.length > 0
+                    || planActivitiesValue.length > 0
+                    || planTitleValue) {
                     const entry = { planned, actual, details };
                     if (activitiesValue.length > 0) {
                         entry.activities = activitiesValue.map(item => ({ ...item }));
                     }
                     if (planActivitiesValue.length > 0) {
                         entry.planActivities = planActivitiesValue.map(item => ({ ...item }));
+                    }
+                    if (planTitleValue) {
+                        entry.planTitle = planTitleValue;
                     }
                     if (planTitleBand) {
                         entry.planTitleBandOn = true;
@@ -1140,6 +1179,9 @@ class TimeTracker {
                 const detailsValue = typeof row.details === 'string' ? row.details : '';
                 const hasActivities = Array.isArray(row.activities);
                 const hasPlanActivities = Array.isArray(row.planActivities);
+                const planTitleValue = typeof row.planTitle === 'string'
+                    ? (this.normalizeActivityText ? this.normalizeActivityText(row.planTitle) : row.planTitle.trim())
+                    : '';
                 const planTitleBand = Boolean(row.planTitleBandOn);
                 const actualTitleBand = Boolean(row.actualTitleBandOn);
 
@@ -1175,7 +1217,12 @@ class TimeTracker {
                                     slot.activityLog.details = desiredDetails;
                                     changed = true;
                                 }
-                                const shouldPlanBand = (i === startIdx) && planTitleBand && Array.isArray(planActivitiesValue) && planActivitiesValue.length > 0;
+                                const desiredPlanTitle = (i === startIdx) ? planTitleValue : '';
+                                if (slot.planTitle !== desiredPlanTitle) {
+                                    slot.planTitle = desiredPlanTitle;
+                                    changed = true;
+                                }
+                                const shouldPlanBand = (i === startIdx) && planTitleBand && Boolean(planTitleValue);
                                 if (slot.planTitleBandOn !== shouldPlanBand) {
                                     slot.planTitleBandOn = shouldPlanBand;
                                     changed = true;
@@ -1218,7 +1265,8 @@ class TimeTracker {
                 if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
                 const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
                 const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
-                const appliedPlanBand = planTitleBand && normalizedPlanActivities.length > 0;
+                if (slot.planTitle !== planTitleValue) { slot.planTitle = planTitleValue; changed = true; }
+                const appliedPlanBand = planTitleBand && Boolean(planTitleValue);
                 if (slot.planTitleBandOn !== appliedPlanBand) { slot.planTitleBandOn = appliedPlanBand; changed = true; }
                 const appliedTitleBand = actualTitleBand && normalizedActivities.length > 0;
                 if (slot.activityLog.titleBandOn !== appliedTitleBand) { slot.activityLog.titleBandOn = appliedTitleBand; changed = true; }
@@ -1957,6 +2005,7 @@ class TimeTracker {
                 if (Array.isArray(this.timeSlots[i].planActivities)) {
                     this.timeSlots[i].planActivities = [];
                 }
+                this.timeSlots[i].planTitle = '';
                 this.timeSlots[i].planTitleBandOn = false;
             }
         }
@@ -1997,12 +2046,16 @@ class TimeTracker {
                 this.mergedFields.set(actualMergeKey, actualMergedValue);
                 
                 // 데이터 업데이트
+                const basePlanTitle = (this.timeSlots[startIndex] && typeof this.timeSlots[startIndex].planTitle === 'string')
+                    ? this.timeSlots[startIndex].planTitle
+                    : '';
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
                         this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false };
                     }
+                    this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     if (this.timeSlots[i].activityLog.subActivities && this.timeSlots[i].activityLog.subActivities.length) {
@@ -2095,14 +2148,17 @@ class TimeTracker {
     buildSplitVisualization(type, index) {
         const context = this.computeSplitSegments(type, index);
         if (!context) return '';
-        const { segments, showTitleBand } = context;
-        if (!Array.isArray(segments) || segments.length === 0) return '';
+        const { gridSegments, titleSegments, showTitleBand } = context;
+        if (!Array.isArray(gridSegments) || gridSegments.length === 0) return '';
 
         const classes = ['split-visualization', showTitleBand ? 'has-title' : 'no-title'];
         classes.push(type === 'planned' ? 'split-visualization-planned' : 'split-visualization-actual');
+        if (type === 'planned' && showTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
+            classes.push('split-visualization-single-title');
+        }
 
         const titleHtml = showTitleBand
-            ? `<div class="split-title-band">${segments.map((segment) => {
+            ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
                 const color = this.getSplitColor(type, segment.label);
                 const emptyClass = segment.label ? '' : ' split-empty';
@@ -2110,7 +2166,7 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
-        const gridHtml = `<div class="split-grid">${segments.map((segment) => {
+        const gridHtml = `<div class="split-grid">${gridSegments.map((segment) => {
             const color = this.getSplitColor(type, segment.label);
             const emptyClass = segment.label ? '' : ' split-empty';
             return `<div class="split-grid-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};"></div>`;
@@ -2134,31 +2190,36 @@ class TimeTracker {
         if (!range || index < range.start || index > range.end) return null;
 
         const activities = this.getSplitActivities(type, baseIndex);
-        if (!Array.isArray(activities) || activities.length === 0) return null;
 
         const units = [];
-        activities.forEach((item) => {
-            if (!item) return;
-            const label = typeof item.label === 'string' ? item.label.trim() : '';
-            const seconds = Number(item.seconds || 0);
-            const unitsCount = Math.max(0, Math.floor(seconds / 600));
-            for (let i = 0; i < unitsCount; i++) {
-                units.push(label);
-            }
-        });
-
-        if (units.length === 0) return null;
+        if (Array.isArray(activities)) {
+            activities.forEach((item) => {
+                if (!item) return;
+                const label = typeof item.label === 'string' ? item.label.trim() : '';
+                const seconds = Number(item.seconds || 0);
+                const unitsCount = Math.max(0, Math.floor(seconds / 600));
+                for (let i = 0; i < unitsCount; i++) {
+                    units.push(label);
+                }
+            });
+        }
 
         const unitsPerRow = 6;
         const offset = index - baseIndex;
         if (offset < 0) return null;
 
         const maxOffset = Math.ceil(units.length / unitsPerRow) - 1;
-        if (offset > maxOffset) return null;
+        if (units.length === 0 && type !== 'planned') {
+            return null;
+        }
+        if (units.length === 0 && index !== baseIndex) {
+            return null;
+        }
+        if (units.length > 0 && offset > maxOffset) return null;
 
         const startUnit = offset * unitsPerRow;
         const endUnit = startUnit + unitsPerRow;
-        const slice = units.slice(startUnit, endUnit);
+        const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
 
         const segments = [];
         const pushSegment = (label, span) => {
@@ -2193,11 +2254,28 @@ class TimeTracker {
             }
         }
 
+        const normalizedPlanTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(slot.planTitle || '')
+            : (slot.planTitle || '').trim();
+
         const showTitleBand = type === 'planned'
-            ? Boolean(slot.planTitleBandOn)
+            ? Boolean(slot.planTitleBandOn && normalizedPlanTitle)
             : Boolean(slot.activityLog && slot.activityLog.titleBandOn);
 
-        return { segments, showTitleBand };
+        let titleSegments = [];
+        if (type === 'planned') {
+            if (showTitleBand && normalizedPlanTitle) {
+                titleSegments = [{ label: normalizedPlanTitle, span: unitsPerRow }];
+            }
+        } else {
+            titleSegments = segments.map((segment) => ({ ...segment }));
+        }
+
+        if (!segments.length) {
+            return null;
+        }
+
+        return { gridSegments: segments, titleSegments, showTitleBand };
     }
 
     getSplitRange(type, index) {
@@ -2873,8 +2951,11 @@ class TimeTracker {
     syncPlanTitleBandToggleState() {
         const toggle = document.getElementById('planTitleBandToggle');
         if (!toggle) return;
-        const hasActivities = Array.isArray(this.modalPlanActivities) && this.modalPlanActivities.length > 0;
-        if (!hasActivities) {
+        const normalizedTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(this.modalPlanTitle || '')
+            : (this.modalPlanTitle || '').trim();
+        const hasTitle = Boolean(normalizedTitle);
+        if (!hasTitle) {
             this.modalPlanTitleBandOn = false;
             toggle.checked = false;
             toggle.disabled = true;
@@ -3423,6 +3504,121 @@ class TimeTracker {
         this.updatePlanActivitiesSummary();
     }
 
+    setPlanTitle(text) {
+        const normalized = this.normalizeActivityText
+            ? this.normalizeActivityText(text)
+            : (text || '').trim();
+        this.modalPlanTitle = normalized;
+        const input = document.getElementById('planTitleInput');
+        if (input) input.value = normalized;
+        this.syncPlanTitleBandToggleState();
+        if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown();
+    }
+
+    confirmPlanTitleSelection() {
+        const input = document.getElementById('planTitleInput');
+        if (!input) return;
+        const value = input.value;
+        if (!value) {
+            this.modalPlanTitle = '';
+            this.modalPlanTitleBandOn = false;
+            this.syncPlanTitleBandToggleState();
+            const dropdown = document.getElementById('planTitleDropdown');
+            if (dropdown) dropdown.classList.remove('open');
+            return;
+        }
+        this.setPlanTitle(value);
+        const dropdown = document.getElementById('planTitleDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+    }
+
+    renderPlanTitleDropdown(options = {}) {
+        const dropdown = document.getElementById('planTitleDropdown');
+        const list = document.getElementById('planTitleOptions');
+        const input = document.getElementById('planTitleInput');
+        if (!dropdown || !list || !input) return;
+
+        const { open = false } = options || {};
+        const rawSearch = input.value || '';
+        const search = this.normalizeActivityText
+            ? this.normalizeActivityText(rawSearch)
+            : rawSearch.trim();
+        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+
+        const suggestions = [];
+        const seen = new Set();
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
+            if (!label || seen.has(label)) return;
+            const source = item.source === 'notion' ? 'notion' : 'local';
+            if (source !== activeSource) return;
+            if (search && !label.toLowerCase().includes(search.toLowerCase())) return;
+            seen.add(label);
+            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            suggestions.push({ label, priorityRank, recommendedSeconds });
+        });
+
+        list.innerHTML = '';
+
+        const normalizedTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(this.modalPlanTitle || '')
+            : (this.modalPlanTitle || '').trim();
+
+        if (search && !seen.has(search)) {
+            const li = document.createElement('li');
+            li.dataset.label = search;
+            li.className = 'use-input-option';
+            const labelWrap = document.createElement('div');
+            labelWrap.className = 'title-option-label';
+            labelWrap.textContent = `"${search}" 제목 사용`;
+            li.appendChild(labelWrap);
+            list.appendChild(li);
+        }
+
+        suggestions.slice(0, 20).forEach((item) => {
+            const li = document.createElement('li');
+            li.dataset.label = item.label;
+            if (normalizedTitle && normalizedTitle === item.label) {
+                li.classList.add('active');
+            }
+            const labelWrap = document.createElement('div');
+            labelWrap.className = 'title-option-label';
+            const badge = this.makePriorityBadge ? this.makePriorityBadge(item.priorityRank) : null;
+            if (badge) labelWrap.appendChild(badge);
+            const textSpan = document.createElement('span');
+            textSpan.textContent = item.label;
+            labelWrap.appendChild(textSpan);
+            li.appendChild(labelWrap);
+
+            if (Number.isFinite(item.recommendedSeconds) && item.recommendedSeconds > 0 && this.formatDurationSummary) {
+                const meta = document.createElement('span');
+                meta.className = 'title-option-meta';
+                meta.textContent = this.formatDurationSummary(item.recommendedSeconds);
+                li.appendChild(meta);
+            }
+            list.appendChild(li);
+        });
+
+        if (!list.children.length) {
+            const empty = document.createElement('li');
+            empty.className = 'empty-option';
+            empty.textContent = activeSource === 'notion'
+                ? '노션에서 사용할 제목이 없습니다.'
+                : '추가된 활동 제목이 없습니다.';
+            list.appendChild(empty);
+        }
+
+        const isFocused = document.activeElement === input;
+        const shouldOpen = open || isFocused || Boolean(rawSearch);
+        if (shouldOpen) {
+            dropdown.classList.add('open');
+        } else {
+            dropdown.classList.remove('open');
+        }
+    }
+
     preparePlanActivitiesSection(startIndex, endIndex) {
         const section = document.getElementById('planActivitiesSection');
         if (!section) return;
@@ -3434,7 +3630,10 @@ class TimeTracker {
         section.hidden = !shouldOpen;
         const baseSlot = this.timeSlots[startIndex] || {};
         const storedBand = Boolean(baseSlot.planTitleBandOn);
-        this.modalPlanTitleBandOn = storedBand && this.modalPlanActivities.length > 0;
+        const normalizedTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(this.modalPlanTitle || '')
+            : (this.modalPlanTitle || '').trim();
+        this.modalPlanTitleBandOn = storedBand && Boolean(normalizedTitle);
         this.syncPlanTitleBandToggleState();
         this.updatePlanActivitiesToggleLabel();
         this.renderPlanActivitiesList();
@@ -4121,10 +4320,19 @@ class TimeTracker {
         if (type === 'planned') {
             this.modalPlanStartIndex = startIndex;
             this.modalPlanEndIndex = actualEndIndex;
+            const baseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', startIndex) : startIndex;
+            const baseSlot = (Number.isFinite(baseIndex) && baseIndex >= 0 && baseIndex < this.timeSlots.length)
+                ? this.timeSlots[baseIndex]
+                : (this.timeSlots[startIndex] || {});
+            const storedTitle = baseSlot && typeof baseSlot.planTitle === 'string'
+                ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
+                : '';
+            this.modalPlanTitle = storedTitle;
         } else {
             this.modalPlanStartIndex = null;
             this.modalPlanEndIndex = null;
             this.modalPlanActiveRow = -1;
+            this.modalPlanTitle = '';
         }
 
         // 시간 범위 표시
@@ -4144,6 +4352,11 @@ class TimeTracker {
             this.modalPlanSectionOpen = false;
             this.modalPlanActiveRow = -1;
             this.preparePlanActivitiesSection(startIndex, actualEndIndex);
+            const planTitleInput = document.getElementById('planTitleInput');
+            if (planTitleInput) {
+                planTitleInput.value = this.modalPlanTitle || '';
+            }
+            this.syncPlanTitleBandToggleState();
         }
 
         // 활동 멀티셀렉트 초기화: 기존 값에서 선택 복원
@@ -4224,6 +4437,13 @@ class TimeTracker {
             planTitleToggle.checked = false;
             planTitleToggle.disabled = true;
         }
+        const planTitleInput = document.getElementById('planTitleInput');
+        if (planTitleInput) planTitleInput.value = '';
+        const planTitleList = document.getElementById('planTitleOptions');
+        if (planTitleList) planTitleList.innerHTML = '';
+        const planTitleDropdown = document.getElementById('planTitleDropdown');
+        if (planTitleDropdown) planTitleDropdown.classList.remove('open');
+        this.modalPlanTitle = '';
     }
     
     saveScheduleFromModal() {
@@ -4233,6 +4453,9 @@ class TimeTracker {
         const endIndex = parseInt(modal.dataset.endIndex);
         const activity = (this.modalSelectedActivities || []).join(', ').trim();
         const isPlanned = type === 'planned';
+        const planTitleText = isPlanned
+            ? (this.normalizeActivityText ? this.normalizeActivityText(this.modalPlanTitle || '') : (this.modalPlanTitle || '').trim())
+            : '';
         const sanitizedPlanActivities = isPlanned ? (this.modalPlanActivities || [])
             .filter(item => item && !item.invalid && (item.label.trim() !== '' || (Number.isFinite(item.seconds) && item.seconds > 0)))
             .map(item => {
@@ -4243,7 +4466,7 @@ class TimeTracker {
         const planTotalSeconds = isPlanned ? Math.max(0, Number(this.modalPlanTotalSeconds) || 0) : 0;
         const planUsedSeconds = sanitizedPlanActivities.reduce((sum, item) => sum + item.seconds, 0);
         const hasPlanInvalid = isPlanned && (this.modalPlanActivities || []).some(item => item && item.invalid);
-        const planTitleBandEnabled = Boolean(this.modalPlanTitleBandOn && sanitizedPlanActivities.length > 0);
+        const planTitleBandEnabled = Boolean(this.modalPlanTitleBandOn && planTitleText);
 
         if (type && startIndex !== undefined && endIndex !== undefined) {
             if (hasPlanInvalid) {
@@ -4265,6 +4488,7 @@ class TimeTracker {
                     this.timeSlots[startIndex].planActivities = sanitizedPlanActivities.length > 0
                         ? sanitizedPlanActivities.map(item => ({ ...item }))
                         : [];
+                    this.timeSlots[startIndex].planTitle = planTitleText;
                     this.timeSlots[startIndex].planTitleBandOn = planTitleBandEnabled;
                 }
             } else {
@@ -4280,12 +4504,18 @@ class TimeTracker {
                         this.timeSlots[i].planActivities = i === startIndex && sanitizedPlanActivities.length > 0
                             ? sanitizedPlanActivities.map(item => ({ ...item }))
                             : [];
+                        if (i === startIndex) {
+                            this.timeSlots[i].planTitle = planTitleText;
+                        } else {
+                            this.timeSlots[i].planTitle = '';
+                        }
                         this.timeSlots[i].planTitleBandOn = i === startIndex ? planTitleBandEnabled : false;
                     }
                 }
             }
 
             if (isPlanned) {
+                this.modalPlanTitle = planTitleText;
                 if (sanitizedPlanActivities.length > 0) {
                     this.modalSelectedActivities = sanitizedPlanActivities.map(item => item.label);
                 }
@@ -4314,6 +4544,10 @@ class TimeTracker {
         const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
         const planList = document.getElementById('planActivitiesList');
         const planTitleToggle = document.getElementById('planTitleBandToggle');
+        const planTitleInput = document.getElementById('planTitleInput');
+        const planTitleDropdown = document.getElementById('planTitleDropdown');
+        const planTitleOptions = document.getElementById('planTitleOptions');
+        const clearPlanTitleBtn = document.getElementById('clearPlanTitle');
         this.planTabsContainer = planTabs || null;
 
         closeBtn.addEventListener('click', () => {
@@ -4418,7 +4652,59 @@ class TimeTracker {
             });
         }
 
+        if (planTitleInput) {
+            planTitleInput.addEventListener('input', (event) => {
+                this.modalPlanTitle = event.target.value;
+                this.syncPlanTitleBandToggleState();
+                if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown();
+            });
+            planTitleInput.addEventListener('focus', () => {
+                this.lastPlanOptionInput = 'title';
+                if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown({ open: true });
+            });
+            planTitleInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    if (planTitleDropdown) planTitleDropdown.classList.remove('open');
+                    return;
+                }
+                if (event.key === 'Enter' && !event.isComposing) {
+                    event.preventDefault();
+                    this.confirmPlanTitleSelection();
+                }
+            });
+            planTitleInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    if (planTitleDropdown) planTitleDropdown.classList.remove('open');
+                }, 120);
+            });
+        }
+
+        if (planTitleOptions) {
+            planTitleOptions.addEventListener('mousedown', (event) => {
+                const option = event.target.closest('li');
+                if (!option || !planTitleOptions.contains(option)) return;
+                const label = option.dataset.label;
+                if (label) {
+                    this.setPlanTitle(label);
+                    if (planTitleDropdown) planTitleDropdown.classList.remove('open');
+                }
+            });
+        }
+
+        if (clearPlanTitleBtn) {
+            clearPlanTitleBtn.addEventListener('click', () => {
+                this.modalPlanTitle = '';
+                if (planTitleInput) planTitleInput.value = '';
+                this.modalPlanTitleBandOn = false;
+                this.syncPlanTitleBandToggleState();
+                if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown();
+            });
+        }
+
         if (activityInput) {
+            activityInput.addEventListener('focus', () => {
+                this.lastPlanOptionInput = 'activity';
+            });
             activityInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.isComposing) {
                     e.preventDefault();
@@ -4432,10 +4718,25 @@ class TimeTracker {
         }
         if (addOptionBtn) {
             addOptionBtn.addEventListener('click', () => {
-                const val = activityInput ? this.normalizeActivityText(activityInput.value) : '';
-                if (val) {
-                    this.addPlannedActivityOption(val, true);
-                    activityInput.value = '';
+                const preferTitle = this.lastPlanOptionInput === 'title';
+                const primaryInput = preferTitle ? planTitleInput : activityInput;
+                const secondaryInput = preferTitle ? activityInput : planTitleInput;
+
+                const primaryVal = primaryInput ? this.normalizeActivityText(primaryInput.value) : '';
+                const secondaryVal = (!primaryVal && secondaryInput)
+                    ? this.normalizeActivityText(secondaryInput.value)
+                    : '';
+                const targetInput = primaryVal ? primaryInput : (secondaryVal ? secondaryInput : null);
+                const value = primaryVal || secondaryVal;
+
+                if (!value) return;
+
+                const fromTitle = targetInput === planTitleInput;
+                this.addPlannedActivityOption(value, !fromTitle);
+                if (fromTitle) {
+                    this.setPlanTitle(value);
+                } else if (targetInput) {
+                    targetInput.value = '';
                 }
             });
         }
@@ -4464,6 +4765,7 @@ class TimeTracker {
                 if (this.currentPlanSource === source) return;
                 this.currentPlanSource = source;
                 this.renderPlannedActivityDropdown();
+                if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown({ open: true });
             });
         }
     }
@@ -4853,6 +5155,8 @@ class TimeTracker {
             li.appendChild(actions);
             list.appendChild(li);
         });
+
+        if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown();
     }
 
     updatePlanSourceTabs(counts = {}) {
