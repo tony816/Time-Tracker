@@ -520,6 +520,7 @@ h1 {
   position: relative;
   z-index: 7; /* 행 내부 오버레이 위 */
   overflow: visible;
+  min-height: var(--merged-planned-block-height, 44px);
 }
 .planned-merged-main-container .merged-field {
   box-sizing: border-box !important;
@@ -546,17 +547,21 @@ h1 {
   top: 0;
   left: 0;
   right: 0;
-  /* 하단 2px(행 경계선)을 가리지 않도록 높이를 2px 줄임 */
-  height: calc(var(--merged-planned-block-height, 44px) - 2px);
-  display: flex;
-  align-items: center;
-  padding: 0;
+  height: var(--merged-planned-block-height, 44px);
+  padding: 8px 12px 10px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  /* 상단에서부터 붙여 그리도록 정렬 (가운데 정렬 시 아래로 밀리는 문제 방지) */
+  justify-content: flex-start;
 }
 
+
 .planned-merged-overlay .merged-field {
-  height: 100%;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 좌측(계획) 병합 필드: 시간열과 맞닿는 우측 경계선 제거 */
@@ -1155,6 +1160,16 @@ h1 {
 .plan-title-group {
   margin-top: 16px;
 }
+.plan-sub-activities-group .plan-title-group {
+  margin-top: 12px;
+  width: 100%;
+}
+.plan-sub-activities-group .plan-title-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #555;
+}
 .title-input-wrapper {
   display: flex;
   align-items: center;
@@ -1509,12 +1524,23 @@ h1 {
 
 .split-cell-wrapper {
   position: relative;
-  min-height: 56px;
+  min-height: calc(44px + (var(--plan-row-count, 1) - 1) * 36px);
 }
 
 .split-cell-wrapper.split-has-data > :first-child {
   position: relative;
   z-index: 2;
+}
+
+.split-cell-wrapper.split-type-planned.split-has-data > :first-child {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  height: 44px;
+  min-height: 44px;
+  pointer-events: none;
 }
 
 .split-cell-wrapper.split-has-data .input-field {
@@ -1526,6 +1552,15 @@ h1 {
   color: transparent;
   caret-color: transparent;
   opacity: 0;
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  border: none;
+  pointer-events: none;
 }
 
 .split-cell-wrapper.split-type-planned.split-has-data .input-field::placeholder {
@@ -1542,28 +1577,28 @@ h1 {
   background: rgba(255, 255, 255, 0.78);
 }
 
-.split-cell-wrapper .split-visualization {
-  position: absolute;
-  inset: 6px;
+.split-visualization {
+  position: relative;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-radius: 6px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
+  display: grid;
+  grid-auto-rows: min-content;
+  row-gap: 4px;
+  /* 가운데 정렬 시 특정 시간대(예: 12시)에서 시각적으로 아래로 밀려 보이는 현상 방지 */
+  align-content: start;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
   z-index: 1;
 }
 
 .split-visualization-planned {
-  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.5);
+  box-shadow: none;
   z-index: 3;
 }
 
 .split-visualization-actual {
-  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.28);
-  background: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
+  background: transparent;
   z-index: 1;
 }
 
@@ -1586,44 +1621,97 @@ h1 {
   gap: 3px;
 }
 
+.split-grid {
+  position: relative;
+}
+
+.split-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 10px;
+  z-index: 0;
+}
+
+.split-grid-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.split-visualization-planned .split-grid-group {
+  padding: 6px 10px;
+  border: 2px solid rgba(220, 223, 227, 0.85);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  gap: 4px;
+}
+
+.split-visualization-planned .split-title-band + .split-grid-group {
+  margin-top: 2px;
+}
+
 .split-title-band {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #2c3e50;
 }
 
 .split-title-segment {
-  background: var(--split-segment-color, rgba(223, 228, 234, 0.6));
-  border-radius: 4px;
-  padding: 2px 4px;
-  min-height: 18px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.4);
+  border: 2px solid rgba(220, 223, 227, 0.85);
+  border-radius: 8px;
+  padding: 2px 10px;
+  min-height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #2c3e50;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .split-title-segment.split-empty {
-  background: rgba(236, 240, 241, 0.35);
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(189, 195, 199, 0.4);
   color: transparent;
 }
 
+
 .split-grid-segment {
-  min-height: 14px;
-  border-radius: 3px;
+  min-height: 22px;
+  border-radius: 8px;
   background: var(--split-segment-color, rgba(223, 228, 234, 0.5));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .split-visualization-actual .split-grid-segment {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.25);
+  font-weight: 500;
+  color: rgba(44, 62, 80, 0.9);
 }
 
 .split-grid-segment.split-empty {
   background: rgba(236, 240, 241, 0.25);
   box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.35);
+  color: transparent;
 }
 
 .split-visualization-actual .split-grid-segment.split-empty {

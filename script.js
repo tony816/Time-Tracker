@@ -2136,20 +2136,38 @@ class TimeTracker {
     }
 
     wrapWithSplitVisualization(type, index, content) {
-        const splitMarkup = this.buildSplitVisualization(type, index);
+        const context = this.computeSplitSegments(type, index);
+        if (!context) return content;
+
+        if (type === 'planned') {
+            // 병합된 계획인 경우, 베이스 슬롯 내부의 병합 오버레이에 분해 그래픽을 그리므로
+            // 여기서는 추가 래퍼를 생성하지 않는다.
+            const mk = this.findMergeKey('planned', index);
+            if (mk) return content;
+            const baseIndex = this.getSplitBaseIndex(type, index);
+            if (baseIndex !== index) return content;
+        }
+
+        const splitMarkup = this.buildSplitVisualization(type, context);
         if (!splitMarkup) return content;
         const typeClass = type === 'planned' ? 'split-type-planned' : 'split-type-actual';
-        return `<div class="split-cell-wrapper ${typeClass} split-has-data" data-split-type="${type}" data-index="${index}">
+        const rowStyle = (type === 'planned' && Array.isArray(context.allRows))
+            ? ` style="--plan-row-count: ${Math.max(1, context.allRows.length)};"`
+            : '';
+        return `<div class="split-cell-wrapper ${typeClass} split-has-data" data-split-type="${type}" data-index="${index}"${rowStyle}>
                     ${content}
                     ${splitMarkup}
                 </div>`;
     }
 
-    buildSplitVisualization(type, index) {
-        const context = this.computeSplitSegments(type, index);
+    buildSplitVisualization(type, context) {
         if (!context) return '';
-        const { gridSegments, titleSegments, showTitleBand } = context;
+        const { gridSegments, titleSegments, showTitleBand, allRows } = context;
         if (!Array.isArray(gridSegments) || gridSegments.length === 0) return '';
+
+        if (type === 'planned' && !showTitleBand) {
+            return '';
+        }
 
         const classes = ['split-visualization', showTitleBand ? 'has-title' : 'no-title'];
         classes.push(type === 'planned' ? 'split-visualization-planned' : 'split-visualization-actual');
@@ -2166,11 +2184,24 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
-        const gridHtml = `<div class="split-grid">${gridSegments.map((segment) => {
+        const renderRow = (segments) => segments.map((segment) => {
             const color = this.getSplitColor(type, segment.label);
             const emptyClass = segment.label ? '' : ' split-empty';
-            return `<div class="split-grid-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};"></div>`;
-        }).join('')}</div>`;
+            const labelText = (type === 'planned' && segment.label)
+                ? this.escapeHtml(segment.label)
+                : '';
+            return `<div class="split-grid-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelText}</div>`;
+        }).join('');
+
+        let gridHtml = '';
+        if (type === 'planned') {
+            const rows = Array.isArray(allRows) && allRows.length > 0 ? allRows : [gridSegments];
+            gridHtml = `<div class="split-grid-group">${rows.map((rowSegments) => {
+                return `<div class="split-grid">${renderRow(rowSegments)}</div>`;
+            }).join('')}</div>`;
+        } else {
+            gridHtml = `<div class="split-grid">${renderRow(gridSegments)}</div>`;
+        }
 
         return `<div class="${classes.join(' ')}" aria-hidden="true">
                     ${titleHtml}
@@ -2212,47 +2243,60 @@ class TimeTracker {
         if (units.length === 0 && type !== 'planned') {
             return null;
         }
-        if (units.length === 0 && index !== baseIndex) {
-            return null;
+        if (units.length > 0 && offset > maxOffset) {
+            if (type !== 'planned') return null;
         }
-        if (units.length > 0 && offset > maxOffset) return null;
+
+        const buildSegmentsForSlice = (slice) => {
+            const segments = [];
+            const pushSegment = (label, span) => {
+                if (span <= 0) return;
+                segments.push({ label, span });
+            };
+
+            if (slice.length > 0) {
+                let currentLabel = slice[0];
+                let count = 0;
+                slice.forEach((label) => {
+                    if (label === currentLabel) {
+                        count += 1;
+                    } else {
+                        pushSegment(currentLabel, count);
+                        currentLabel = label;
+                        count = 1;
+                    }
+                });
+                pushSegment(currentLabel, count);
+            }
+
+            const filledUnits = slice.length;
+            if (filledUnits === 0) {
+                pushSegment('', unitsPerRow);
+            } else if (filledUnits < unitsPerRow) {
+                const remaining = unitsPerRow - filledUnits;
+                if (segments.length && segments[segments.length - 1].label === '') {
+                    segments[segments.length - 1].span += remaining;
+                } else {
+                    pushSegment('', remaining);
+                }
+            }
+
+            return segments;
+        };
+
+        const totalRows = Math.max(1, Math.ceil(units.length / unitsPerRow));
+        const allRows = [];
+        for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+            const startUnit = rowIndex * unitsPerRow;
+            const endUnit = startUnit + unitsPerRow;
+            const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
+            allRows.push(buildSegmentsForSlice(slice));
+        }
 
         const startUnit = offset * unitsPerRow;
         const endUnit = startUnit + unitsPerRow;
         const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
-
-        const segments = [];
-        const pushSegment = (label, span) => {
-            if (span <= 0) return;
-            segments.push({ label, span });
-        };
-
-        if (slice.length > 0) {
-            let currentLabel = slice[0];
-            let count = 0;
-            slice.forEach((label) => {
-                if (label === currentLabel) {
-                    count += 1;
-                } else {
-                    pushSegment(currentLabel, count);
-                    currentLabel = label;
-                    count = 1;
-                }
-            });
-            pushSegment(currentLabel, count);
-        }
-
-        const filledUnits = slice.length;
-        if (filledUnits === 0) {
-            pushSegment('', unitsPerRow);
-        } else if (filledUnits < unitsPerRow) {
-            const remaining = unitsPerRow - filledUnits;
-            if (segments.length && segments[segments.length - 1].label === '') {
-                segments[segments.length - 1].span += remaining;
-            } else {
-                pushSegment('', remaining);
-            }
-        }
+        const segments = buildSegmentsForSlice(slice);
 
         const normalizedPlanTitle = this.normalizeActivityText
             ? this.normalizeActivityText(slot.planTitle || '')
@@ -2275,7 +2319,7 @@ class TimeTracker {
             return null;
         }
 
-        return { gridSegments: segments, titleSegments, showTitleBand };
+        return { gridSegments: segments, titleSegments, showTitleBand, allRows };
     }
 
     getSplitRange(type, index) {
@@ -2950,19 +2994,20 @@ class TimeTracker {
 
     syncPlanTitleBandToggleState() {
         const toggle = document.getElementById('planTitleBandToggle');
+        const titleField = document.getElementById('planTitleField');
+        const dropdown = document.getElementById('planTitleDropdown');
         if (!toggle) return;
-        const normalizedTitle = this.normalizeActivityText
-            ? this.normalizeActivityText(this.modalPlanTitle || '')
-            : (this.modalPlanTitle || '').trim();
-        const hasTitle = Boolean(normalizedTitle);
-        if (!hasTitle) {
-            this.modalPlanTitleBandOn = false;
-            toggle.checked = false;
-            toggle.disabled = true;
-            return;
-        }
+
         toggle.disabled = false;
-        toggle.checked = this.modalPlanTitleBandOn;
+        toggle.checked = Boolean(this.modalPlanTitleBandOn);
+
+        if (titleField) {
+            const shouldReveal = Boolean(this.modalPlanTitleBandOn);
+            titleField.hidden = !shouldReveal;
+            if (!shouldReveal && dropdown) {
+                dropdown.classList.remove('open');
+            }
+        }
     }
 
     renderPlanActivitiesList() {
@@ -3807,6 +3852,13 @@ class TimeTracker {
         } else {
             // 좌측 계획 열도 절대배치 오버레이로 시각적 병합, 레이아웃 유지
             if (index === start) {
+                // 병합된 계획 블록 전체 높이를 사용하는 오버레이 내부에
+                // 분해 그래픽(제목 밴드 + 세부활동 칩)을 함께 렌더링한다.
+                let splitMarkup = '';
+                try {
+                    const ctx = this.computeSplitSegments('planned', index);
+                    if (ctx) splitMarkup = this.buildSplitVisualization('planned', ctx);
+                } catch(_) {}
                 return `<div class="planned-merged-main-container" 
                                data-merge-key="${mergeKey}"
                                data-merge-start="${start}"
@@ -3820,6 +3872,7 @@ class TimeTracker {
                                        data-merge-end="${end}"
                                        value="${this.mergedFields.get(mergeKey)}"
                                        placeholder="" readonly tabindex="-1" style="cursor: default;">
+                                ${splitMarkup || ''}
                             </div>
                         </div>`;
             } else {
@@ -4432,10 +4485,10 @@ class TimeTracker {
         if (planUsedLabel) planUsedLabel.textContent = '0시간';
         this.updatePlanActivitiesToggleLabel();
         this.modalPlanTitleBandOn = false;
+        this.modalPlanTitle = '';
         const planTitleToggle = document.getElementById('planTitleBandToggle');
         if (planTitleToggle) {
             planTitleToggle.checked = false;
-            planTitleToggle.disabled = true;
         }
         const planTitleInput = document.getElementById('planTitleInput');
         if (planTitleInput) planTitleInput.value = '';
@@ -4443,7 +4496,7 @@ class TimeTracker {
         if (planTitleList) planTitleList.innerHTML = '';
         const planTitleDropdown = document.getElementById('planTitleDropdown');
         if (planTitleDropdown) planTitleDropdown.classList.remove('open');
-        this.modalPlanTitle = '';
+        this.syncPlanTitleBandToggleState();
     }
     
     saveScheduleFromModal() {
@@ -4649,6 +4702,12 @@ class TimeTracker {
             planTitleToggle.addEventListener('change', () => {
                 this.modalPlanTitleBandOn = planTitleToggle.checked;
                 this.syncPlanTitleBandToggleState();
+                if (planTitleToggle.checked) {
+                    setTimeout(() => {
+                        const inputEl = document.getElementById('planTitleInput');
+                        if (inputEl) inputEl.focus();
+                    }, 0);
+                }
             });
         }
 

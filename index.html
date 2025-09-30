@@ -97,22 +97,22 @@
               </div>
             </div>
           </div>
-          <div class="form-group plan-title-group">
-            <label for="planTitleInput">활동 제목</label>
-            <div class="title-input-wrapper">
-              <input type="text" id="planTitleInput" placeholder="활동 제목 추가 또는 선택" />
-              <button type="button" id="clearPlanTitle" class="title-clear-btn">지우기</button>
-            </div>
-            <div class="dropdown title-dropdown" id="planTitleDropdown">
-              <ul id="planTitleOptions"></ul>
-            </div>
-          </div>
           <div class="form-group plan-sub-activities-group">
             <div class="title-band-toggle">
               <label>
                 <input type="checkbox" id="planTitleBandToggle">
                 활동 제목 밴드 표시
               </label>
+            </div>
+            <div id="planTitleField" class="plan-title-group" hidden>
+              <label for="planTitleInput">활동 제목</label>
+              <div class="title-input-wrapper">
+                <input type="text" id="planTitleInput" placeholder="활동 제목 추가 또는 선택" />
+                <button type="button" id="clearPlanTitle" class="title-clear-btn">지우기</button>
+              </div>
+              <div class="dropdown title-dropdown" id="planTitleDropdown">
+                <ul id="planTitleOptions"></ul>
+              </div>
             </div>
             <button type="button" id="togglePlanActivities" class="split-toggle-btn">세부 활동 분해</button>
             <div id="planActivitiesSection" class="sub-activities-section" hidden>
