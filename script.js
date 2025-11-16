@@ -2191,6 +2191,16 @@ class TimeTracker {
 
         const activities = this.getSplitActivities(type, baseIndex);
 
+        const isPlanMergedRange = (type === 'planned') &&
+            range &&
+            Number.isInteger(range.start) &&
+            Number.isInteger(range.end) &&
+            range.end > range.start;
+
+        if (isPlanMergedRange && index !== baseIndex) {
+            return null;
+        }
+
         const units = [];
         if (Array.isArray(activities)) {
             activities.forEach((item) => {
@@ -2217,8 +2227,9 @@ class TimeTracker {
         }
         if (units.length > 0 && offset > maxOffset) return null;
 
-        const startUnit = offset * unitsPerRow;
-        const endUnit = startUnit + unitsPerRow;
+        const useFullUnits = isPlanMergedRange && index === baseIndex;
+        const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
+        const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
         const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
 
         const segments = [];
@@ -2245,12 +2256,15 @@ class TimeTracker {
         const filledUnits = slice.length;
         if (filledUnits === 0) {
             pushSegment('', unitsPerRow);
-        } else if (filledUnits < unitsPerRow) {
-            const remaining = unitsPerRow - filledUnits;
-            if (segments.length && segments[segments.length - 1].label === '') {
-                segments[segments.length - 1].span += remaining;
-            } else {
-                pushSegment('', remaining);
+        } else {
+            const remainder = filledUnits % unitsPerRow;
+            if (remainder !== 0) {
+                const remaining = unitsPerRow - remainder;
+                if (segments.length && segments[segments.length - 1].label === '') {
+                    segments[segments.length - 1].span += remaining;
+                } else {
+                    pushSegment('', remaining);
+                }
             }
         }
 
@@ -3950,6 +3964,17 @@ class TimeTracker {
                     const overlayHeight = Math.max(0, totalHeight - 2);
                     overlay.style.setProperty('--merged-planned-block-height', `${totalHeight}px`);
                     overlay.style.height = `${overlayHeight}px`;
+                }
+
+                const wrapper = main.closest('.split-cell-wrapper');
+                if (wrapper) {
+                    const splitViz = wrapper.querySelector('.split-visualization');
+                    if (splitViz) {
+                        const vizHeight = Math.max(0, totalHeight - 12);
+                        splitViz.classList.add('split-plan-merged-visualization');
+                        splitViz.style.setProperty('--split-plan-merged-height', `${vizHeight}px`);
+                        splitViz.style.height = `${vizHeight}px`;
+                    }
                 }
             });
         } catch (e) {

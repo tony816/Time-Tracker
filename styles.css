@@ -1556,6 +1556,12 @@ h1 {
   z-index: 1;
 }
 
+.split-plan-merged-visualization {
+  top: 6px;
+  bottom: auto;
+  height: var(--split-plan-merged-height, auto);
+}
+
 .split-visualization-planned {
   box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.5);
   z-index: 3;
