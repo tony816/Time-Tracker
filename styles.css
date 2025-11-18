@@ -1598,7 +1598,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   grid-auto-rows: 1fr;  /* 각 시간 행 높이를 균일하게 분배 */
-  gap: 3px;
+  row-gap: 3px;
+  column-gap: 0;        /* 가로 칩 내부가 세로 줄로 갈라지지 않도록 */
   flex: 1;              /* 제목 밴드를 제외한 나머지 세로 공간을 모두 사용 */
 }
 
@@ -1624,20 +1625,39 @@ h1 {
   min-height: 14px;
   border-radius: 3px;
   background: var(--split-segment-color, rgba(223, 228, 234, 0.5));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.1);
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .split-visualization-actual .split-grid-segment {
-  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.2);
 }
 
 .split-grid-segment.split-empty {
   background: rgba(236, 240, 241, 0.25);
-  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.25);
+  color: transparent;
 }
 
 .split-visualization-actual .split-grid-segment.split-empty {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.18);
+}
+
+.split-grid-label {
+  width: 100%;
+  text-align: center;
 }
 
 .remove-sub-activity {

@@ -2169,7 +2169,13 @@ class TimeTracker {
         const gridHtml = `<div class="split-grid">${gridSegments.map((segment) => {
             const color = this.getSplitColor(type, segment.label);
             const emptyClass = segment.label ? '' : ' split-empty';
-            return `<div class="split-grid-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};"></div>`;
+            const safeLabel = segment.label ? this.escapeHtml(segment.label) : '';
+            const labelHtml = safeLabel
+                ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
+                : '';
+            return `<div class="split-grid-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};">
+                        ${labelHtml}
+                    </div>`;
         }).join('')}</div>`;
 
         return `<div class="${classes.join(' ')}" aria-hidden="true">
