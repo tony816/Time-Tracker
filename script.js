@@ -2214,6 +2214,7 @@ class TimeTracker {
             });
         }
 
+        const hasUnits = units.length > 0;
         const unitsPerRow = 6;
         const offset = index - baseIndex;
         if (offset < 0) return null;
@@ -2279,6 +2280,10 @@ class TimeTracker {
         const baseShowTitleBand = type === 'planned'
             ? Boolean(slot.planTitleBandOn && normalizedPlanTitle)
             : Boolean(slot.activityLog && slot.activityLog.titleBandOn);
+
+        if (!hasUnits && !baseShowTitleBand) {
+            return null;
+        }
 
         // 제목 밴드는 항상 분해 범위의 첫 번째 행에만 한 번 표시
         const showTitleBand = (index === baseIndex) && baseShowTitleBand;
