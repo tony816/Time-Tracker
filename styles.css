@@ -1597,11 +1597,22 @@ h1 {
 .split-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  grid-auto-rows: 1fr;  /* 각 시간 행 높이를 균일하게 분배 */
-  row-gap: 3px;
-  column-gap: 0;        /* 가로 칩 내부가 세로 줄로 갈라지지 않도록 */
-  flex: 1;              /* 제목 밴드를 제외한 나머지 세로 공간을 모두 사용 */
+  grid-auto-rows: minmax(18px, 1fr);  /* 줄 간격 최소 18px, 여분 공간은 균등 분배 */
+  row-gap: 0;
+  column-gap: 0;
+  align-content: stretch;
+  flex: 1;              /* Fill extra space within the overlay */
 }
+
+.split-grid-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
 
 .split-title-segment {
   background: var(--split-segment-color, rgba(223, 228, 234, 0.6));
@@ -1622,7 +1633,7 @@ h1 {
 }
 
 .split-grid-segment {
-  min-height: 14px;
+  min-height: 0;
   border-radius: 3px;
   background: var(--split-segment-color, rgba(223, 228, 234, 0.5));
   display: flex;
@@ -1635,10 +1646,23 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.1);
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+  border-bottom: 3px solid #fff;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.08);
+}
+
+.split-grid-segment.connect-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.split-grid-segment.connect-bottom {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: var(--split-segment-color);
 }
 
 .split-visualization-actual .split-grid-segment {
@@ -1647,7 +1671,8 @@ h1 {
 
 .split-grid-segment.split-empty {
   background: rgba(236, 240, 241, 0.25);
-  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.25);
+  border-bottom-color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.2);
   color: transparent;
 }
 
@@ -1655,10 +1680,10 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.18);
 }
 
-.split-grid-label {
-  width: 100%;
-  text-align: center;
+.split-grid > .split-grid-segment:last-child {
+  border-bottom-width: 0;
 }
+
 
 .remove-sub-activity {
   background: transparent;
