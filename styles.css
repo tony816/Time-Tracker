@@ -546,12 +546,23 @@ h1 {
   top: 0;
   left: 0;
   right: 0;
+  z-index: 1; /* 덮개/막대 용 스택 컨텍스트를 만들어 자식 z-index를 제어 */
   /* 하단 2px(행 경계선)을 가리지 않도록 높이를 2px 줄임 */
   height: calc(var(--merged-planned-block-height, 44px) - 2px);
   display: flex;
   align-items: center;
   padding: 0;
   box-sizing: border-box;
+}
+
+.planned-merged-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 2px 0 2px 0; /* 상·하 테두리를 남기고 내부 행 경계선만 덮음 */
+  background: #fff;
+  border-radius: inherit;
+  z-index: 0; /* 덮개는 가장 뒤, 막대는 위로 올림 */
+  pointer-events: none;
 }
 
 .planned-merged-overlay .merged-field {
@@ -1553,7 +1564,7 @@ h1 {
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
-  z-index: 1;
+  z-index: 2; /* 덮개(::before) 위에 오도록 올림 */
 }
 
 .split-plan-merged-visualization {
@@ -1652,6 +1663,12 @@ h1 {
   border-bottom: 3px solid #fff;
   background-clip: padding-box;
   box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.08);
+}
+
+.split-visualization .split-title-segment,
+.split-visualization .split-grid-segment {
+  position: relative;
+  z-index: 2; /* 덮개(::before)보다 위에 표시해 막대가 가려지지 않도록 */
 }
 
 .split-grid-segment.connect-top {
