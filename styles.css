@@ -1679,7 +1679,8 @@ h1 {
 .split-grid-segment.connect-bottom {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
-  border-bottom-color: var(--split-segment-color);
+  /* 하단 분리선 색을 고정해 이어지는 막대도 동일한 높이로 보이도록 */
+  border-bottom-color: #fff;
 }
 
 .split-visualization-actual .split-grid-segment {
