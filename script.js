@@ -5493,16 +5493,109 @@ class TimeTracker {
 
     stopTimer(index) {
         const slot = this.timeSlots[index];
+        let additionalSeconds = 0;
         
         if (slot.timer.running) {
-            slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+            additionalSeconds = Math.max(0, Math.floor((Date.now() - slot.timer.startTime) / 1000));
+            slot.timer.elapsed += additionalSeconds;
         }
         
         slot.timer.running = false;
         slot.timer.startTime = null;
-        
-        // 자동 기록: 타이머 시간을 actual 필드에 기록
-        if (slot.timer.elapsed > 0) {
+
+        let recordedWithPlan = false;
+
+        // 자동 기록: 타이머 시간을 실제 활동의 세부활동으로 바로 분배 (시간대 기준 한 항목만)
+        if (additionalSeconds > 0) {
+            const plannedMergeKey = this.findMergeKey('planned', index);
+            const planBaseIndex = plannedMergeKey ? parseInt(plannedMergeKey.split('-')[1], 10) : index;
+            const planActivities = this.getPlanActivitiesForIndex(planBaseIndex) || [];
+
+            const blockLengthHours = this.getBlockLength('planned', planBaseIndex);
+            const defaultPlanSeconds = Math.max(3600, Math.floor((blockLengthHours * 3600) / Math.max(1, planActivities.length || 1)));
+            const normalizedPlans = (planActivities || []).map((item) => {
+                const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
+                const seconds = Number.isFinite(item.seconds) && item.seconds > 0
+                    ? Math.floor(item.seconds)
+                    : defaultPlanSeconds;
+                return { label, seconds };
+            }).filter(item => item.label);
+
+            let targetLabel = '';
+            if (normalizedPlans.length > 0) {
+                const offsetSeconds = Math.max(0, (index - planBaseIndex) * 3600);
+                let acc = 0;
+                let chosen = normalizedPlans[normalizedPlans.length - 1];
+                for (const p of normalizedPlans) {
+                    acc += p.seconds;
+                    if (offsetSeconds < acc) {
+                        chosen = p;
+                        break;
+                    }
+                }
+                targetLabel = chosen.label;
+            }
+
+            if (targetLabel) {
+                const actualMergeKey = this.findMergeKey('actual', index);
+                const actualBaseIndex = actualMergeKey ? parseInt(actualMergeKey.split('-')[1], 10) : index;
+                const limitSeconds = Math.max(0, this.getBlockLength('actual', actualBaseIndex) * 3600);
+
+                const baseSlot = this.timeSlots[actualBaseIndex];
+                if (!baseSlot.activityLog || typeof baseSlot.activityLog !== 'object') {
+                    baseSlot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false };
+                }
+                const activities = this.normalizeActivitiesArray(baseSlot.activityLog.subActivities);
+                const currentTotal = activities.reduce((sum, item) => sum + (Number.isFinite(item.seconds) ? item.seconds : 0), 0);
+
+                let allocSeconds = additionalSeconds;
+                if (limitSeconds > 0 && currentTotal + allocSeconds > limitSeconds) {
+                    allocSeconds = Math.max(0, limitSeconds - currentTotal);
+                }
+
+                if (allocSeconds > 0) {
+                    const existingIdx = activities.findIndex((a) => (a.label === targetLabel));
+                    if (existingIdx >= 0) {
+                        activities[existingIdx].seconds = Math.max(0, (Number.isFinite(activities[existingIdx].seconds) ? activities[existingIdx].seconds : 0) + allocSeconds);
+                        if (!activities[existingIdx].source) activities[existingIdx].source = 'timer';
+                    } else {
+                        activities.push({ label: targetLabel, seconds: allocSeconds, source: 'timer' });
+                    }
+                }
+
+                const summary = this.formatActivitiesSummary(activities);
+                baseSlot.activityLog.subActivities = activities.map(item => ({ ...item }));
+                baseSlot.activityLog.titleBandOn = baseSlot.activityLog.titleBandOn || activities.length > 0;
+
+                if (actualMergeKey) {
+                    const [, startStr, endStr] = actualMergeKey.split('-');
+                    const start = parseInt(startStr, 10);
+                    const end = parseInt(endStr, 10);
+                    this.mergedFields.set(actualMergeKey, summary);
+                    for (let i = start; i <= end; i++) {
+                        const targetSlot = this.timeSlots[i];
+                        if (!targetSlot.activityLog || typeof targetSlot.activityLog !== 'object') {
+                            targetSlot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false };
+                        }
+                        targetSlot.actual = (i === start) ? summary : '';
+                        if (i === start) {
+                            targetSlot.activityLog.subActivities = activities.map(item => ({ ...item }));
+                            targetSlot.activityLog.titleBandOn = baseSlot.activityLog.titleBandOn;
+                        } else {
+                            targetSlot.activityLog.subActivities = [];
+                            targetSlot.activityLog.titleBandOn = false;
+                        }
+                    }
+                } else {
+                    baseSlot.actual = summary;
+                }
+
+                recordedWithPlan = true;
+            }
+        }
+
+        // 계획 분배에 실패했을 때의 기본 동작(기존 텍스트 기록 유지)
+        if (!recordedWithPlan && additionalSeconds > 0) {
             const timeStr = this.formatTime(slot.timer.elapsed);
 
             // 병합된 계획 값이 있으면 그 값을 우선 사용하여 라벨 구성
