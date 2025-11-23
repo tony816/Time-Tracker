@@ -2216,7 +2216,7 @@ class TimeTracker {
                 if (!item) return;
                 const label = typeof item.label === 'string' ? item.label.trim() : '';
                 const seconds = Number(item.seconds || 0);
-                const unitsCount = Math.max(0, Math.floor(seconds / 600));
+                const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
                 for (let i = 0; i < unitsCount; i++) {
                     units.push(label);
                 }
@@ -2368,31 +2368,62 @@ class TimeTracker {
         if (type === 'planned') {
             return this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
         }
+
         const sub = slot.activityLog && slot.activityLog.subActivities;
         const normalizedActual = this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
-        const hasActualTime = normalizedActual.some(item => Number.isFinite(item.seconds) && item.seconds > 0);
-        if (hasActualTime || normalizedActual.length > 0) {
-            return normalizedActual;
+        const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
+
+        // 계획 분해가 존재하면 항상 그 레이아웃을 기준으로 그리드를 만들고,
+        // 실제 기록 시간은 라벨 텍스트에만 반영한다.
+        if (planActs && planActs.length > 0) {
+            const blockSeconds = Math.max(3600, this.getBlockLength('actual', baseIndex) * 3600);
+            const fallbackSeconds = Math.max(600, Math.floor(blockSeconds / Math.max(1, planActs.length)));
+
+            const actualByLabel = new Map();
+            normalizedActual.forEach((item) => {
+                if (!item || !item.label) return;
+                const key = item.label;
+                const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                if (secs <= 0) return;
+                actualByLabel.set(key, (actualByLabel.get(key) || 0) + secs);
+            });
+
+            return planActs
+                .map((item) => {
+                    if (!item) return null;
+                    const baseLabel = this.normalizeActivityText
+                        ? this.normalizeActivityText(item.label || '')
+                        : (item.label || '').trim();
+                    if (!baseLabel) return null;
+                    const planSeconds = Number.isFinite(item.seconds) && item.seconds > 0
+                        ? Math.floor(item.seconds)
+                        : fallbackSeconds;
+                    const actualSeconds = actualByLabel.get(baseLabel) || 0;
+                    const labelWithTime = actualSeconds > 0
+                        ? `${baseLabel} ${this.formatDurationSummary(actualSeconds)}`
+                        : baseLabel;
+                    return { label: labelWithTime, seconds: planSeconds, source: 'plan-template' };
+                })
+                .filter(Boolean);
         }
 
-        // 실제 기록이 없을 때는 계획 분해를 그대로 시각화에 사용해 동일한 그리드를 보여준다.
-        const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
-        if (!planActs || planActs.length === 0) return [];
-
-        const blockSeconds = Math.max(3600, this.getBlockLength('actual', baseIndex) * 3600);
-        const fallbackSeconds = Math.max(600, Math.floor(blockSeconds / Math.max(1, planActs.length)));
-        return planActs.map((item) => {
-            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
-            const seconds = Number.isFinite(item.seconds) && item.seconds > 0
-                ? Math.floor(item.seconds)
-                : fallbackSeconds;
-            return { label, seconds, source: 'plan-template' };
-        });
+        // 계획이 없을 때는 실제 분해만으로 그리드 생성
+        return normalizedActual;
     }
 
     getSplitColor(type, label) {
         if (!label) {
             return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
+        }
+
+        // 실제(우측)에서는 색상 키에서 시간 요약(예: "5초", "1시간 30분")을 제거하여
+        // 좌측 계획과 동일한 라벨에 항상 같은 색을 사용한다.
+        let colorKey = label;
+        if (type === 'actual') {
+            const m = String(label).match(/^(.+?)\s+\d+(시간|분|초)(\s+\d+(분|초))?$/);
+            if (m && m[1]) {
+                colorKey = m[1].trim();
+            }
         }
 
         // 더 넓은 색상 분산을 위해 해시 기반 팔레트 선택
@@ -2403,7 +2434,7 @@ class TimeTracker {
         // 우측 실제도 동일 팔레트로 맞춰 좌우 색상을 통일
         const actualPalette = plannedPalette;
         const palette = (type === 'planned') ? plannedPalette : actualPalette;
-        const base = Math.abs(this.hashStringColor(label));
+        const base = Math.abs(this.hashStringColor(colorKey));
         return palette[base % palette.length];
     }
 
@@ -2615,7 +2646,8 @@ class TimeTracker {
 
     normalizeDurationStep(seconds) {
         if (!Number.isFinite(seconds)) return null;
-        return Math.max(0, Math.round(seconds / 600) * 600);
+        // 더 작은 단위(초)도 보존하도록 변경
+        return Math.max(0, Math.floor(seconds));
     }
 
     normalizeActivitiesArray(raw) {

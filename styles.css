@@ -1525,7 +1525,7 @@ h1 {
 
 .split-cell-wrapper.split-has-data > :first-child {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 
 .split-cell-wrapper.split-has-data .input-field {
@@ -1545,12 +1545,21 @@ h1 {
 
 .split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
   position: relative;
-  z-index: 2;
+  z-index: 1;
   background: transparent;
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input {
-  background: rgba(255, 255, 255, 0.78);
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  pointer-events: none; /* 그리드가 있을 때 기본 텍스트 입력창과 상호작용 불가 */
+}
+
+/* 실제 열에 그리드가 있을 때는 상세 기록 버튼을 항상 노출 */
+.split-cell-wrapper.split-type-actual.split-has-data .activity-log-btn {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .split-cell-wrapper .split-visualization {
@@ -1564,7 +1573,7 @@ h1 {
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
-  z-index: 2; /* 덮개(::before) 위에 오도록 올림 */
+  z-index: 2; /* 기본적으로 컨텐츠 위에 표시 */
 }
 
 .split-plan-merged-visualization {
@@ -1581,7 +1590,7 @@ h1 {
 .split-visualization-actual {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.28);
   background: rgba(255, 255, 255, 0.88);
-  z-index: 1;
+  z-index: 3; /* 실제도 계획과 동일한 레벨로 덮어씌움 */
 }
 
 .split-visualization.no-title {
