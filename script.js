@@ -2285,13 +2285,25 @@ class TimeTracker {
             }
         }
 
-        const normalizedPlanTitle = this.normalizeActivityText
-            ? this.normalizeActivityText(slot.planTitle || '')
-            : (slot.planTitle || '').trim();
+        const planBaseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', baseIndex) : baseIndex;
+        const planSlot = (Number.isInteger(planBaseIndex) && planBaseIndex >= 0 && planBaseIndex < this.timeSlots.length)
+            ? this.timeSlots[planBaseIndex]
+            : slot;
 
-        const baseShowTitleBand = type === 'planned'
-            ? Boolean(slot.planTitleBandOn && normalizedPlanTitle)
-            : Boolean(slot.activityLog && slot.activityLog.titleBandOn);
+        const normalizedPlanTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(planSlot.planTitle || '')
+            : (planSlot.planTitle || '').trim();
+
+        const plannedMergeKey = this.findMergeKey ? this.findMergeKey('planned', planBaseIndex) : null;
+        const mergedPlanLabel = plannedMergeKey ? (this.mergedFields.get(plannedMergeKey) || '') : '';
+
+        const normalizedPlannedLabel = this.normalizeActivityText
+            ? this.normalizeActivityText(mergedPlanLabel || planSlot.planTitle || planSlot.planned || '')
+            : String(mergedPlanLabel || planSlot.planTitle || planSlot.planned || '').trim();
+
+        const planTitleBand = Boolean(planSlot.planTitleBandOn && normalizedPlanTitle);
+
+        const baseShowTitleBand = planTitleBand;
 
         // 제목 밴드는 항상 분해 범위의 첫 번째 행에만 한 번 표시
         const showTitleBand = (index === baseIndex) && baseShowTitleBand;
@@ -2303,8 +2315,8 @@ class TimeTracker {
                     titleSegments = [{ label: normalizedPlanTitle, span: unitsPerRow }];
                 }
             } else {
-                // 실제(우측) 분해: 세부 활동별 제목 대신 상위 활동 제목만 한 번 표시
-                const rawTitle = (slot.activityLog && slot.activityLog.title) || slot.actual || '';
+                // 실제(우측) 분해: 좌측 계획 제목과 동일하게 표시 (좌측에 없으면 표시 안 함)
+                const rawTitle = normalizedPlanTitle || normalizedPlannedLabel;
                 const normalizedTitle = this.normalizeActivityText
                     ? this.normalizeActivityText(rawTitle || '')
                     : String(rawTitle || '').trim();
@@ -2388,11 +2400,9 @@ class TimeTracker {
             '#a3d9ff', '#ffd280', '#c8e6c9', '#f5b7b1', '#d1c4e9',
             '#ffe6a7', '#b2ebf2', '#f8cdda', '#dcedc8', '#ffecb3'
         ];
-        const actualPalette = [
-            '#b7e1ff', '#9ad5c0', '#f7c5a8', '#c8b6ff', '#b2dfdb',
-            '#ffccbc', '#c5e1a5', '#d7ccc8', '#c0c5ff', '#ffc4e1'
-        ];
-        const palette = type === 'planned' ? plannedPalette : actualPalette;
+        // 우측 실제도 동일 팔레트로 맞춰 좌우 색상을 통일
+        const actualPalette = plannedPalette;
+        const palette = (type === 'planned') ? plannedPalette : actualPalette;
         const base = Math.abs(this.hashStringColor(label));
         return palette[base % palette.length];
     }
@@ -5529,6 +5539,21 @@ class TimeTracker {
             const planBaseIndex = plannedMergeKey ? parseInt(plannedMergeKey.split('-')[1], 10) : index;
             const planActivities = this.getPlanActivitiesForIndex(planBaseIndex) || [];
 
+            // 현재 시간 인덱스가 병합된 계획 범위에 포함되면 그 인덱스를 오프셋 기준으로 사용
+            let planStart = planBaseIndex;
+            let planEnd = planBaseIndex;
+            if (plannedMergeKey) {
+                const [, sStr, eStr] = plannedMergeKey.split('-');
+                const s = parseInt(sStr, 10);
+                const e = parseInt(eStr, 10);
+                if (Number.isFinite(s)) planStart = s;
+                if (Number.isFinite(e)) planEnd = e;
+            }
+            const currentTimeIndex = this.getCurrentTimeIndex ? this.getCurrentTimeIndex() : -1;
+            const offsetIndex = (Number.isInteger(currentTimeIndex) && currentTimeIndex >= planStart && currentTimeIndex <= planEnd)
+                ? currentTimeIndex
+                : index;
+
             const blockLengthHours = this.getBlockLength('planned', planBaseIndex);
             const defaultPlanSeconds = Math.max(3600, Math.floor((blockLengthHours * 3600) / Math.max(1, planActivities.length || 1)));
             const normalizedPlans = (planActivities || []).map((item) => {
@@ -5541,7 +5566,7 @@ class TimeTracker {
 
             let targetLabel = '';
             if (normalizedPlans.length > 0) {
-                const offsetSeconds = Math.max(0, (index - planBaseIndex) * 3600);
+                const offsetSeconds = Math.max(0, (offsetIndex - planStart) * 3600);
                 let acc = 0;
                 let chosen = normalizedPlans[normalizedPlans.length - 1];
                 for (const p of normalizedPlans) {
