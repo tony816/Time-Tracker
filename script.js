@@ -2357,7 +2357,25 @@ class TimeTracker {
             return this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
         }
         const sub = slot.activityLog && slot.activityLog.subActivities;
-        return this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
+        const normalizedActual = this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
+        const hasActualTime = normalizedActual.some(item => Number.isFinite(item.seconds) && item.seconds > 0);
+        if (hasActualTime || normalizedActual.length > 0) {
+            return normalizedActual;
+        }
+
+        // 실제 기록이 없을 때는 계획 분해를 그대로 시각화에 사용해 동일한 그리드를 보여준다.
+        const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
+        if (!planActs || planActs.length === 0) return [];
+
+        const blockSeconds = Math.max(3600, this.getBlockLength('actual', baseIndex) * 3600);
+        const fallbackSeconds = Math.max(600, Math.floor(blockSeconds / Math.max(1, planActs.length)));
+        return planActs.map((item) => {
+            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
+            const seconds = Number.isFinite(item.seconds) && item.seconds > 0
+                ? Math.floor(item.seconds)
+                : fallbackSeconds;
+            return { label, seconds, source: 'plan-template' };
+        });
     }
 
     getSplitColor(type, label) {
