@@ -4039,6 +4039,16 @@ class TimeTracker {
                 // 혹시 남아있을 수 있는 인라인 높이 제거
                 main.style.removeProperty('height');
                 input.style.removeProperty('height');
+
+                // ??(??) ?? ????? ?? ????? ?? ??? ??? ??? ??
+                const wrapper = main.closest('.split-cell-wrapper');
+                if (wrapper) {
+                    const splitViz = wrapper.querySelector('.split-visualization');
+                    if (splitViz) {
+                        const vizHeight = Math.max(0, totalHeight - 12); // ?? inset 6px? ??
+                        splitViz.style.height = `${vizHeight}px`;
+                    }
+                }
             });
         } catch (e) {
             // ignore
