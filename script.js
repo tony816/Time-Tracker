@@ -2200,13 +2200,13 @@ class TimeTracker {
 
         const activities = this.getSplitActivities(type, baseIndex);
 
-        const isPlanMergedRange = (type === 'planned') &&
-            range &&
+        const isMergedRange = range &&
             Number.isInteger(range.start) &&
             Number.isInteger(range.end) &&
             range.end > range.start;
 
-        if (isPlanMergedRange && index !== baseIndex) {
+        // 병합 범위에서는 기준 행에만 오버레이를 그려 단일 카드처럼 보이도록 처리
+        if (isMergedRange && index !== baseIndex) {
             return null;
         }
 
@@ -2236,7 +2236,7 @@ class TimeTracker {
         }
         if (units.length > 0 && offset > maxOffset) return null;
 
-        const useFullUnits = isPlanMergedRange && index === baseIndex;
+        const useFullUnits = isMergedRange && index === baseIndex;
         const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
         const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
         const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
