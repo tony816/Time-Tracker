@@ -959,7 +959,7 @@ h1 {
 .activity-log-btn {
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: 90%;
   /* 우측 정렬(right: 25px)에서 중앙 정렬로 변경 */
   transform: translate(-50%, -50%);
   /* 정확한 중앙 배치를 위해 X축 이동 추가 */
