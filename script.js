@@ -4479,13 +4479,14 @@ class TimeTracker {
         if (!wrapper) return;
 
         const container = wrapper.querySelector('.actual-field-container') || wrapper;
-        const rect = container.getBoundingClientRect();
+        const viz = wrapper.querySelector('.split-visualization');
+        const targetRect = (viz && viz.getBoundingClientRect()) || container.getBoundingClientRect();
         const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         const btnW = 30;
         const btnH = 30;
-        const centerX = rect.left + scrollX + (rect.width / 2);
-        const centerY = rect.top + scrollY + (rect.height / 2);
+        const centerX = targetRect.left + scrollX + (targetRect.width * 0.9);
+        const centerY = targetRect.top + scrollY + (targetRect.height / 2);
 
         this.hideHoverActivityLogButton();
 
