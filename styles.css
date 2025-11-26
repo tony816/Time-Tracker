@@ -136,7 +136,7 @@ h1 {
   font-weight: 600;
 }
 
-.header-row > div {
+.header-row>div {
   padding: 15px;
   text-align: center;
   border-right: 1px solid #2c3e50;
@@ -144,7 +144,7 @@ h1 {
   font-weight: 600;
 }
 
-.header-row > div:last-child {
+.header-row>div:last-child {
   border-right: none;
 }
 
@@ -185,8 +185,10 @@ h1 {
   text-align: center;
   font-weight: 600;
   background-color: #ecf0f1;
-  border-right: 2px solid #ddd; /* 시간열 우측 테두리 두께 */
-  border-left: 2px solid #ddd; /* 시간열 좌측 테두리 두께 - 우측과 동일하게 */
+  border-right: 2px solid #ddd;
+  /* 시간열 우측 테두리 두께 */
+  border-left: 2px solid #ddd;
+  /* 시간열 좌측 테두리 두께 - 우측과 동일하게 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -202,7 +204,8 @@ h1 {
 
 .input-field {
   padding: 8px 12px;
-  border: 1px solid transparent; /* 레이아웃 일관성을 위해 투명 테두리 유지 */
+  border: 1px solid transparent;
+  /* 레이아웃 일관성을 위해 투명 테두리 유지 */
   background: white;
   display: block;
   width: 100%;
@@ -210,15 +213,18 @@ h1 {
   min-height: 44px;
   text-align: center;
   font-size: 16px;
-  box-sizing: border-box; /* 테두리 유무에 따른 폭 변화 방지 */
+  box-sizing: border-box;
+  /* 테두리 유무에 따른 폭 변화 방지 */
 }
 
 .planned-input {
-  border-right: 0; /* 시간열과 맞닿는 우측 경계선 제거 (겹침 방지) */
+  border-right: 0;
+  /* 시간열과 맞닿는 우측 경계선 제거 (겹침 방지) */
 }
 
 .actual-input {
-  border-left: 0; /* 시간열과 맞닿는 좌측 경계선 제거 (겹침 방지) */
+  border-left: 0;
+  /* 시간열과 맞닿는 좌측 경계선 제거 (겹침 방지) */
 }
 
 .actual-input {
@@ -247,13 +253,13 @@ h1 {
   font-size: 1.1em;
 }
 
-.summary-row > div {
+.summary-row>div {
   padding: 15px;
   text-align: center;
   border-right: 1px solid #34495e;
 }
 
-.summary-row > div:last-child {
+.summary-row>div:last-child {
   border-right: none;
 }
 
@@ -383,7 +389,7 @@ h1 {
 
   .time-slot,
   .input-field,
-  .summary-row > div {
+  .summary-row>div {
     padding: 8px;
     font-size: 14px;
   }
@@ -413,7 +419,7 @@ h1 {
   pointer-events: none;
 }
 
-.header-row > div {
+.header-row>div {
   pointer-events: none;
 }
 
@@ -438,27 +444,35 @@ h1 {
 
 .undo-button {
   position: absolute;
-  background: #3498db; /* schedule-button와 동일 */
+  background: #3498db;
+  /* schedule-button와 동일 */
   color: #fff;
   border: none;
   border-radius: 50%;
-  width: 28px; /* schedule-button와 동일 */
-  height: 28px; /* schedule-button와 동일 */
+  width: 28px;
+  /* schedule-button와 동일 */
+  height: 28px;
+  /* schedule-button와 동일 */
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3); /* schedule-button와 동일 */
-  transition: all 0.3s ease; /* schedule-button와 동일 */
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+  /* schedule-button와 동일 */
+  transition: all 0.3s ease;
+  /* schedule-button와 동일 */
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .undo-button:hover {
-  background: #2980b9; /* schedule-button와 동일 */
-  transform: translateY(-1px); /* schedule-button와 동일 */
-  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4); /* schedule-button와 동일 */
+  background: #2980b9;
+  /* schedule-button와 동일 */
+  transform: translateY(-1px);
+  /* schedule-button와 동일 */
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+  /* schedule-button와 동일 */
 }
 
 .undo-button::before {
@@ -466,8 +480,10 @@ h1 {
   position: absolute;
   width: 20px;
   height: 20px;
-  top: 4px; /* 28px 버튼에서 중앙 정렬 */
-  left: 4px; /* 28px 버튼에서 중앙 정렬 */
+  top: 4px;
+  /* 28px 버튼에서 중앙 정렬 */
+  left: 4px;
+  /* 28px 버튼에서 중앙 정렬 */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3'/%3E%3C/svg%3E");
   background-size: contain;
   background-repeat: no-repeat;
@@ -505,7 +521,8 @@ h1 {
   background-color: white !important;
   border: 1px solid #ddd !important;
   border-bottom: none !important;
-  border-top: none !important; /* 상단 중복 라인 방지 */
+  border-top: none !important;
+  /* 상단 중복 라인 방지 */
   align-self: stretch !important;
   justify-self: stretch !important;
 }
@@ -518,9 +535,11 @@ h1 {
 /* 좌측 병합 메인 컨테이너: 내부 입력을 절대위치로 확장 */
 .planned-merged-main-container {
   position: relative;
-  z-index: 7; /* 행 내부 오버레이 위 */
+  z-index: 7;
+  /* 행 내부 오버레이 위 */
   overflow: visible;
 }
+
 .planned-merged-main-container .merged-field {
   box-sizing: border-box !important;
   /* 높이, 위치는 JS에서 runtime으로 설정 */
@@ -546,7 +565,8 @@ h1 {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 1; /* 덮개/막대 용 스택 컨텍스트를 만들어 자식 z-index를 제어 */
+  z-index: 1;
+  /* 덮개/막대 용 스택 컨텍스트를 만들어 자식 z-index를 제어 */
   /* 하단 2px(행 경계선)을 가리지 않도록 높이를 2px 줄임 */
   height: calc(var(--merged-planned-block-height, 44px) - 2px);
   display: flex;
@@ -558,17 +578,20 @@ h1 {
 .planned-merged-overlay::before {
   content: "";
   position: absolute;
-  inset: 2px 0 2px 0; /* 상·하 테두리를 남기고 내부 행 경계선만 덮음 */
+  inset: 2px 0 2px 0;
+  /* 상·하 테두리를 남기고 내부 행 경계선만 덮음 */
   background: #fff;
   border-radius: inherit;
-  z-index: 0; /* 덮개는 가장 뒤, 막대는 위로 올림 */
+  z-index: 0;
+  /* 덮개는 가장 뒤, 막대는 위로 올림 */
   pointer-events: none;
 }
 
 .planned-merged-overlay .merged-field {
   height: 100%;
   width: 100%;
-  position: relative; /* 배경(::before)보다 위로 올림 */
+  position: relative;
+  /* 배경(::before)보다 위로 올림 */
   z-index: 1;
 }
 
@@ -576,7 +599,8 @@ h1 {
 .planned-input.merged-field,
 .planned-input.merged-main {
   border-right: 0 !important;
-  border-left-color: transparent !important; /* 외곽(타임시트) 좌측 2px와 겹치지 않도록 숨김 */
+  border-left-color: transparent !important;
+  /* 외곽(타임시트) 좌측 2px와 겹치지 않도록 숨김 */
 }
 
 /* 선택 효과는 투명 오버레이로만 사용: 필드 자체 배경/색상 변경 제거 */
@@ -596,6 +620,7 @@ h1 {
 .selected-merged-planned {
   position: relative;
 }
+
 .selected-merged-planned::after {
   content: none !important;
 }
@@ -603,6 +628,7 @@ h1 {
 .selected-merged-actual {
   position: relative;
 }
+
 .selected-merged-actual::before {
   content: none !important;
 }
@@ -649,13 +675,15 @@ h1 {
 
 .selection-overlay {
   position: absolute;
-  background-color: rgba(52, 152, 219, 0.25); /* 투명 파란 오버레이만 */
+  background-color: rgba(52, 152, 219, 0.25);
+  /* 투명 파란 오버레이만 */
   /* 테두리는 인셋 박스섀도우로 통일된 진하기 유지 (행 하단선과 겹침 방지) */
   box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.55);
   border-radius: 4px;
   pointer-events: auto;
   cursor: pointer;
-  z-index: 900; /* 콘텐츠/오버레이 위, 버튼(1000) 아래 */
+  z-index: 900;
+  /* 콘텐츠/오버레이 위, 버튼(1000) 아래 */
 }
 
 .selected-merged-planned::after,
@@ -930,14 +958,21 @@ h1 {
 .activity-log-btn {
   position: absolute;
   top: 50%;
-  right: 25px; /* 테두리에서 살짝 안쪽으로 이동 */
+  left: 50%;
+  /* 우측 정렬(right: 25px)에서 중앙 정렬로 변경 */
+  transform: translate(-50%, -50%);
+  /* 정확한 중앙 배치를 위해 X축 이동 추가 */
   background: #3498db;
   color: white;
   border: none;
-  border-radius: 4px; /* 정사각형 모양 */
-  width: 30px; /* 기존 24px -> 1.5배 */
-  height: 30px; /* 기존 24px -> 1.5배 */
-  font-size: 15px; /* 아이콘 가독성 유지 */
+  border-radius: 4px;
+  /* 정사각형 모양 */
+  width: 30px;
+  /* 기존 24px -> 1.5배 */
+  height: 30px;
+  /* 기존 24px -> 1.5배 */
+  font-size: 15px;
+  /* 아이콘 가독성 유지 */
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -948,26 +983,28 @@ h1 {
   opacity: 0;
   pointer-events: none;
   z-index: 6;
-  transform: translateY(-50%);
 }
 
 .activity-log-btn:hover {
   background: #2980b9;
-  transform: translateY(calc(-50% - 1px));
+  transform: translate(-50%, calc(-50% - 1px));
+  /* 호버 시 위로 살짝 이동 (X축 유지) */
   box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
   opacity: 1;
   pointer-events: auto;
 }
 
 /* 활동 기록 입력창 호버/포커스 시 버튼 노출 */
-.actual-field-container .timer-result-input:hover ~ .activity-log-btn,
-.actual-field-container .timer-result-input:focus ~ .activity-log-btn {
+.actual-field-container .timer-result-input:hover~.activity-log-btn,
+.actual-field-container .timer-result-input:focus~.activity-log-btn {
   opacity: 1;
   pointer-events: auto;
 }
+
 /* 입력 텍스트가 버튼 영역과 겹치지 않도록 우측 패딩 확보 */
 .actual-field-container .timer-result-input {
-  padding-right: 52px; /* 활동 상세 버튼 공간 */
+  padding-right: 52px;
+  /* 활동 상세 버튼 공간 */
 }
 
 .actual-field-container {
@@ -992,11 +1029,13 @@ h1 {
   border-right: 2px solid #ddd !important;
   border-top: none !important;
   border-bottom: none !important;
-  padding-top: 0 !important; /* 오버레이 높이 계산과 일치시키기 위해 수직 패딩 제거 */
+  padding-top: 0 !important;
+  /* 오버레이 높이 계산과 일치시키기 위해 수직 패딩 제거 */
   padding-bottom: 0 !important;
   align-self: stretch !important;
   justify-self: stretch !important;
-  position: relative; /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
+  position: relative;
+  /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
   overflow: visible;
   z-index: 5;
 }
@@ -1004,12 +1043,15 @@ h1 {
 /* 병합된 시간열: 보조셀도 열의 배경/테두리를 유지해서
    전체가 하나의 긴 블록처럼 보이도록 한다 */
 .merged-time-secondary {
-  background-color: #ecf0f1 !important; /* 시간열 기본 배경 유지 */
+  background-color: #ecf0f1 !important;
+  /* 시간열 기본 배경 유지 */
   /* 세로 경계는 셀 자체가 그림 (겹침과 두께 불일치 방지) */
   border-left: 2px solid #ddd !important;
   border-right: 2px solid #ddd !important;
-  border-top: none !important; /* 상단 경계선 제거 */
-  border-bottom: none !important; /* 하단 경계선 제거 */
+  border-top: none !important;
+  /* 상단 경계선 제거 */
+  border-bottom: none !important;
+  /* 하단 경계선 제거 */
 
   /* 셀 높이/정렬은 기존 행과 동일 */
   height: 44px !important;
@@ -1022,7 +1064,8 @@ h1 {
   /* 더 이상 숨기지 않음 */
   opacity: 1 !important;
   visibility: visible !important;
-  pointer-events: none !important; /* 클릭은 막되, 모양만 유지 */
+  pointer-events: none !important;
+  /* 클릭은 막되, 모양만 유지 */
 
   /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
   position: relative;
@@ -1042,20 +1085,25 @@ h1 {
   background-color: white !important;
   /* 컨테이너는 테두리를 그리지 않고, 내부 입력의 테두리를 사용 */
   border: none !important;
-  padding: 0 !important; /* 오버레이 높이 계산과 일치시키기 위해 패딩 제거 */
+  padding: 0 !important;
+  /* 오버레이 높이 계산과 일치시키기 위해 패딩 제거 */
   align-self: stretch !important;
   justify-self: stretch !important;
-  position: relative; /* 외곽선 오버레이 배치 기준 */
-  overflow: visible; /* 오버레이가 아래 행으로 시각 확장되도록 */
+  position: relative;
+  /* 외곽선 오버레이 배치 기준 */
+  overflow: visible;
+  /* 오버레이가 아래 행으로 시각 확장되도록 */
 }
 
 /* 실제(우측) 병합 컨테이너 내부 인풋은 항상 자체 테두리를 표시 */
 .merged-actual-main .merged-field {
-  border: 1px solid #ddd !important; /* 실제 입력 자체의 테두리: 상/하 포함 */
+  border: 1px solid #ddd !important;
+  /* 실제 입력 자체의 테두리: 상/하 포함 */
   border-top: 1px solid #ddd !important;
   border-bottom: 1px solid #ddd !important;
   position: relative;
-  z-index: 3; /* 외곽선 오버레이(2) 위, 선택오버레이(5) 아래 */
+  z-index: 3;
+  /* 외곽선 오버레이(2) 위, 선택오버레이(5) 아래 */
 }
 
 /* 병합된 실제 활동 블록의 상/하 라인은 행 경계선(2px)을 그대로 사용 */
@@ -1113,20 +1161,25 @@ h1 {
 .merged-time-secondary:not(.merged-time-last)::after {
   content: "";
   position: absolute;
-  left: 0; /* 셀 내부 폭만 덮어, 좌우 열에 침범하지 않음 */
+  left: 0;
+  /* 셀 내부 폭만 덮어, 좌우 열에 침범하지 않음 */
   right: 0;
-  bottom: -2px; /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
+  bottom: -2px;
+  /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
   height: 2px;
-  background: #ecf0f1; /* 시간열 배경과 동일 */
+  background: #ecf0f1;
+  /* 시간열 배경과 동일 */
   pointer-events: none;
-  z-index: 2; /* 부모 행의 테두리 위에 표시 */
+  z-index: 2;
+  /* 부모 행의 테두리 위에 표시 */
 }
 
 /* 병합된 시간열의 첫 번째(메인) 셀 아래 구분선도 가리기 */
 .merged-time-main::after {
   content: "";
   position: absolute;
-  left: 0; /* 셀 내부 폭만 덮음 */
+  left: 0;
+  /* 셀 내부 폭만 덮음 */
   right: 0;
   bottom: -2px;
   height: 2px;
@@ -1152,12 +1205,14 @@ h1 {
 /* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */
 .merged-time-content {
   position: relative;
-  z-index: 10; /* 외곽선/가림 오버레이보다 위 */
+  z-index: 10;
+  /* 외곽선/가림 오버레이보다 위 */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
+
 /* Multi-select dropdown for schedule modal */
 .multi-select {
   border: 1px solid #ddd;
@@ -1165,14 +1220,17 @@ h1 {
   padding: 8px;
   background: #fff;
 }
+
 .plan-title-group {
   margin-top: 16px;
 }
+
 .title-input-wrapper {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 #planTitleInput {
   flex: 1;
   padding: 6px 8px;
@@ -1180,6 +1238,7 @@ h1 {
   border-radius: 6px;
   font-size: 14px;
 }
+
 .title-clear-btn {
   padding: 6px 12px;
   border: 1px solid #dcdfe3;
@@ -1190,21 +1249,26 @@ h1 {
   cursor: pointer;
   transition: background 0.2s ease;
 }
+
 .title-clear-btn:hover {
   background: #ecf0f1;
 }
+
 .title-dropdown {
   margin-top: 6px;
   display: none;
 }
+
 .title-dropdown.open {
   display: block;
 }
+
 #planTitleOptions {
   list-style: none;
   margin: 0;
   padding: 4px;
 }
+
 #planTitleOptions li {
   display: flex;
   align-items: center;
@@ -1214,10 +1278,12 @@ h1 {
   border-radius: 4px;
   cursor: pointer;
 }
+
 #planTitleOptions li:hover,
 #planTitleOptions li.active {
   background: #f5f9ff;
 }
+
 #planTitleOptions .title-option-label {
   display: flex;
   align-items: center;
@@ -1225,22 +1291,26 @@ h1 {
   font-size: 13px;
   color: #2c3e50;
 }
+
 #planTitleOptions .title-option-meta {
   font-size: 12px;
   color: #7f8c8d;
 }
+
 .selected-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 6px;
 }
+
 .title-band-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
 }
+
 .title-band-toggle label {
   display: flex;
   align-items: center;
@@ -1249,15 +1319,18 @@ h1 {
   color: #2c3e50;
   font-weight: 600;
 }
+
 .title-band-toggle input[type="checkbox"] {
   width: 16px;
   height: 16px;
 }
+
 .plan-tabs {
   display: flex;
   gap: 6px;
   margin-bottom: 8px;
 }
+
 .plan-tab {
   flex: 1;
   padding: 6px 10px;
@@ -1269,9 +1342,11 @@ h1 {
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
+
 .plan-tab:hover {
   background: #e9edf2;
 }
+
 .plan-tab.active {
   background: #fff;
   border-color: #2980b9;
@@ -1279,13 +1354,16 @@ h1 {
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
+
 .plan-tab.empty {
   opacity: 0.7;
 }
+
 .plan-tab:focus {
   outline: 2px solid #2980b9;
   outline-offset: 2px;
 }
+
 .chip {
   background: #ecf5ff;
   color: #2c3e50;
@@ -1297,7 +1375,11 @@ h1 {
   align-items: center;
   gap: 6px;
 }
-.chip-label { white-space: nowrap; }
+
+.chip-label {
+  white-space: nowrap;
+}
+
 .pr-badge {
   display: inline-flex;
   align-items: center;
@@ -1310,33 +1392,77 @@ h1 {
   line-height: 1.2;
   font-weight: 600;
 }
-.pr-badge[data-pr="1"] { background: #f4d2d1; color: #9f3a3a; }
-.pr-badge[data-pr="2"] { background: #f3e2b5; color: #8a5c14; }
-.pr-badge[data-pr="3"] { background: #e5dcf4; color: #684699; }
-.pr-badge[data-pr="4"] { background: #d6e7f4; color: #2a6693; }
-.pr-badge[data-pr="5"] { background: #d6e8dd; color: #2f6144; }
-.pr-badge[data-pr="6"] { background: #e5d8cd; color: #71533c; }
-.pr-badge[data-pr="7"] { background: #f3d2e6; color: #984472; }
-.pr-badge[data-pr="8"] { background: #efd9c3; color: #8b4d20; }
-.pr-badge[data-pr="9"] { background: #dcdfe3; color: #4a4f55; }
-.pr-badge[data-pr="10"] { background: #e7e6e2; color: #5a5a57; }
+
+.pr-badge[data-pr="1"] {
+  background: #f4d2d1;
+  color: #9f3a3a;
+}
+
+.pr-badge[data-pr="2"] {
+  background: #f3e2b5;
+  color: #8a5c14;
+}
+
+.pr-badge[data-pr="3"] {
+  background: #e5dcf4;
+  color: #684699;
+}
+
+.pr-badge[data-pr="4"] {
+  background: #d6e7f4;
+  color: #2a6693;
+}
+
+.pr-badge[data-pr="5"] {
+  background: #d6e8dd;
+  color: #2f6144;
+}
+
+.pr-badge[data-pr="6"] {
+  background: #e5d8cd;
+  color: #71533c;
+}
+
+.pr-badge[data-pr="7"] {
+  background: #f3d2e6;
+  color: #984472;
+}
+
+.pr-badge[data-pr="8"] {
+  background: #efd9c3;
+  color: #8b4d20;
+}
+
+.pr-badge[data-pr="9"] {
+  background: #dcdfe3;
+  color: #4a4f55;
+}
+
+.pr-badge[data-pr="10"] {
+  background: #e7e6e2;
+  color: #5a5a57;
+}
+
 .chip .remove-chip {
   background: transparent;
   border: none;
   cursor: pointer;
   color: #2980b9;
 }
+
 .multi-input-row {
   display: flex;
   gap: 6px;
   align-items: center;
 }
+
 #activityInput {
   flex: 1;
   border: 1px solid #ddd;
   border-radius: 4px;
   padding: 6px 8px;
 }
+
 .add-option-btn {
   background: #3498db;
   color: #fff;
@@ -1345,7 +1471,11 @@ h1 {
   padding: 6px 10px;
   cursor: pointer;
 }
-.add-option-btn:hover { background: #2980b9; }
+
+.add-option-btn:hover {
+  background: #2980b9;
+}
+
 .sync-btn {
   background: #7f8c8d;
   color: #fff;
@@ -1354,7 +1484,11 @@ h1 {
   padding: 6px 10px;
   cursor: pointer;
 }
-.sync-btn:hover { background: #707b7c; }
+
+.sync-btn:hover {
+  background: #707b7c;
+}
+
 .dropdown {
   border: 1px solid #eee;
   border-radius: 6px;
@@ -1362,7 +1496,13 @@ h1 {
   max-height: 160px;
   overflow: auto;
 }
-#activityOptions { list-style: none; margin: 0; padding: 4px; }
+
+#activityOptions {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
 #activityOptions li {
   display: flex;
   align-items: center;
@@ -1371,27 +1511,53 @@ h1 {
   padding: 6px 8px;
   border-radius: 4px;
 }
+
 #activityOptions li.disabled-option {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
 #activityOptions li.disabled-option .option-label {
   color: #95a5a6;
 }
+
 #activityOptions li.disabled-option input[type="checkbox"] {
   cursor: not-allowed;
 }
-#activityOptions li:hover { background: #f5f9ff; }
-.option-actions { display: flex; gap: 4px; }
+
+#activityOptions li:hover {
+  background: #f5f9ff;
+}
+
+.option-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .empty-option {
   padding: 10px;
   color: #7f8c8d;
   font-size: 13px;
   text-align: center;
 }
-.opt-btn { border: none; background: #ecf0f1; color: #2c3e50; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 12px; }
-.opt-btn:hover { background: #dfe6e9; }
-#activityOptions li span { white-space: nowrap; }
+
+.opt-btn {
+  border: none;
+  background: #ecf0f1;
+  color: #2c3e50;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.opt-btn:hover {
+  background: #dfe6e9;
+}
+
+#activityOptions li span {
+  white-space: nowrap;
+}
 
 .sub-activities-group {
   border: 1px solid #eef1f4;
@@ -1525,7 +1691,7 @@ h1 {
   min-height: 56px;
 }
 
-.split-cell-wrapper.split-has-data > :first-child {
+.split-cell-wrapper.split-has-data> :first-child {
   position: relative;
   z-index: 1;
 }
@@ -1555,8 +1721,10 @@ h1 {
   background: transparent;
   color: transparent;
   caret-color: transparent;
-  pointer-events: none; /* 그리드가 있을 때 기본 텍스트 입력창과 상호작용 불가 */
-  opacity: 0; /* ???? ?? ? ?? ??? ?? */
+  pointer-events: none;
+  /* 그리드가 있을 때 기본 텍스트 입력창과 상호작용 불가 */
+  opacity: 0;
+  /* ???? ?? ? ?? ??? ?? */
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input::placeholder {
@@ -1584,7 +1752,8 @@ h1 {
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
-  z-index: 2; /* 기본적으로 컨텐츠 위에 표시 */
+  z-index: 2;
+  /* 기본적으로 컨텐츠 위에 표시 */
 }
 
 .split-plan-merged-visualization {
@@ -1601,7 +1770,8 @@ h1 {
 .split-visualization-actual {
   box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.5);
   background: rgba(255, 255, 255, 0.92);
-  z-index: 3; /* ?????? ????? ?????? ?????? ?????? */
+  z-index: 3;
+  /* ?????? ????? ?????? ?????? ?????? */
 }
 
 .split-visualization.no-title {
@@ -1628,11 +1798,13 @@ h1 {
 .split-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  grid-auto-rows: minmax(18px, 1fr);  /* 줄 간격 최소 18px, 여분 공간은 균등 분배 */
+  grid-auto-rows: minmax(18px, 1fr);
+  /* 줄 간격 최소 18px, 여분 공간은 균등 분배 */
   row-gap: 0;
   column-gap: 0;
   align-content: stretch;
-  flex: 1;              /* Fill extra space within the overlay */
+  flex: 1;
+  /* Fill extra space within the overlay */
 }
 
 .split-grid-label {
@@ -1688,7 +1860,8 @@ h1 {
 .split-visualization .split-title-segment,
 .split-visualization .split-grid-segment {
   position: relative;
-  z-index: 2; /* 덮개(::before)보다 위에 표시해 막대가 가려지지 않도록 */
+  z-index: 2;
+  /* 덮개(::before)보다 위에 표시해 막대가 가려지지 않도록 */
 }
 
 .split-grid-segment.connect-top {
@@ -1718,7 +1891,7 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.18);
 }
 
-.split-grid > .split-grid-segment:last-child {
+.split-grid>.split-grid-segment:last-child {
   border-bottom-width: 0;
 }
 
