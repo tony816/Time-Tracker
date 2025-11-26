@@ -568,6 +568,8 @@ h1 {
 .planned-merged-overlay .merged-field {
   height: 100%;
   width: 100%;
+  position: relative; /* 배경(::before)보다 위로 올림 */
+  z-index: 1;
 }
 
 /* 좌측(계획) 병합 필드: 시간열과 맞닿는 우측 경계선 제거 */
