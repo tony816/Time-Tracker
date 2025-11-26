@@ -952,7 +952,8 @@ h1 {
 
 .timer-result-input::placeholder {
   color: #95a5a6;
-  font-style: italic;
+  font-style: normal;
+  text-align: center;
 }
 
 .activity-log-btn {
@@ -1001,10 +1002,9 @@ h1 {
   pointer-events: auto;
 }
 
-/* 입력 텍스트가 버튼 영역과 겹치지 않도록 우측 패딩 확보 */
+/* 좌우 패딩을 맞춰 플레이스홀더를 정확히 중앙에 배치 */
 .actual-field-container .timer-result-input {
-  padding-right: 52px;
-  /* 활동 상세 버튼 공간 */
+  padding: 8px 12px;
 }
 
 .actual-field-container {
@@ -1136,7 +1136,7 @@ h1 {
 }
 
 .actual-merged-overlay .timer-result-input {
-  padding-right: 52px;
+  padding: 8px 12px;
 }
 
 .merged-actual-main .actual-merged-overlay .timer-result-input {
