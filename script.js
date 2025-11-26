@@ -13,6 +13,8 @@ class TimeTracker {
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
         this.scheduleButton = null;
+        this.activityHoverButton = null;
+        this.activityHoverHideTimer = null;
         this.plannedActivities = [];
         this.modalSelectedActivities = [];
         this.currentPlanSource = 'local';
@@ -1783,7 +1785,28 @@ class TimeTracker {
             }
         }
         
-        // actualField에 대해서는 어떤 드래그 선택 리스너도 추가하지 않음
+        // No drag-selection listeners for actualField in the actual column
+        if (actualField) {
+            const actualContainer = entryDiv.querySelector('.actual-field-container');
+            const actualOverlay = entryDiv.querySelector('.actual-merged-overlay');
+
+            const bindHover = (el) => {
+                if (!el) return;
+                el.addEventListener('mouseenter', () => {
+                    const wrapper = el.closest('.split-cell-wrapper.split-type-actual.split-has-data');
+                    if (!wrapper) return;
+                    this.showActivityLogButtonOnHover(index);
+                });
+                el.addEventListener('mouseleave', (e) => {
+                    const toEl = e.relatedTarget;
+                    if (toEl && toEl.closest && toEl.closest('.activity-log-btn-floating')) return;
+                    this.hideHoverActivityLogButton();
+                });
+            };
+
+            bindHover(actualContainer);
+            bindHover(actualOverlay);
+        }
     }
 
     startFieldSelection(type, index, e) {
@@ -4449,6 +4472,62 @@ class TimeTracker {
 
         document.body.appendChild(btn);
         this.scheduleHoverButton = btn;
+    }
+
+    showActivityLogButtonOnHover(index) {
+        const wrapper = document.querySelector(`.time-entry[data-index="${index}"] .split-cell-wrapper.split-type-actual.split-has-data`);
+        if (!wrapper) return;
+
+        const container = wrapper.querySelector('.actual-field-container') || wrapper;
+        const rect = container.getBoundingClientRect();
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const btnW = 30;
+        const btnH = 30;
+        const centerX = rect.left + scrollX + (rect.width / 2);
+        const centerY = rect.top + scrollY + (rect.height / 2);
+
+        this.hideHoverActivityLogButton();
+
+        const btn = document.createElement('button');
+        btn.className = 'activity-log-btn activity-log-btn-floating';
+        btn.textContent = '📝';
+        btn.title = '상세 기록';
+        btn.setAttribute('aria-label', '상세 기록');
+        btn.style.left = `${Math.round(centerX - (btnW / 2))}px`;
+        btn.style.top = `${Math.round(centerY - (btnH / 2))}px`;
+
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            this.openActivityLogModal(index);
+        };
+
+        const requestHide = () => {
+            if (this.activityHoverHideTimer) clearTimeout(this.activityHoverHideTimer);
+            this.activityHoverHideTimer = setTimeout(() => this.hideHoverActivityLogButton(), 150);
+        };
+
+        btn.addEventListener('mouseleave', requestHide);
+        btn.addEventListener('mouseenter', () => {
+            if (this.activityHoverHideTimer) {
+                clearTimeout(this.activityHoverHideTimer);
+                this.activityHoverHideTimer = null;
+            }
+        });
+
+        document.body.appendChild(btn);
+        this.activityHoverButton = btn;
+    }
+
+    hideHoverActivityLogButton() {
+        if (this.activityHoverHideTimer) {
+            clearTimeout(this.activityHoverHideTimer);
+            this.activityHoverHideTimer = null;
+        }
+        if (this.activityHoverButton && this.activityHoverButton.parentNode) {
+            this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
+        }
+        this.activityHoverButton = null;
     }
 
     hideHoverScheduleButton() {

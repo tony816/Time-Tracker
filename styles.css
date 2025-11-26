@@ -995,6 +995,18 @@ h1 {
   pointer-events: auto;
 }
 
+.activity-log-btn.activity-log-btn-floating {
+  position: absolute;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1200;
+}
+
+.activity-log-btn-floating:hover {
+  transform: translateY(-1px);
+}
+
 /* 활동 기록 입력창 호버/포커스 시 버튼 노출 */
 .actual-field-container .timer-result-input:hover~.activity-log-btn,
 .actual-field-container .timer-result-input:focus~.activity-log-btn {
