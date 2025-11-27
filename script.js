@@ -12,6 +12,8 @@ class TimeTracker {
         this.undoButton = null;
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
+        this.hoverSelectionOverlay = { planned: null, actual: null };
+        this.hoveredMergeKey = null;
         this.scheduleButton = null;
         this.activityHoverButton = null;
         this.activityHoverHideTimer = null;
@@ -4230,6 +4232,8 @@ class TimeTracker {
             this.removeSelectionOverlay(type);
             return;
         }
+        this.removeHoverSelectionOverlay(type);
+        if (type === 'planned') this.hoveredMergeKey = null;
 
         const idx = Array.from(selectedSet).sort((a,b)=>a-b);
         const startIndex = idx[0];
@@ -4292,6 +4296,54 @@ class TimeTracker {
             const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
             return field ? field.getBoundingClientRect() : null;
         }
+    }
+
+    ensureHoverSelectionOverlay(type) {
+        if (!this.hoverSelectionOverlay[type]) {
+            const el = document.createElement('div');
+            el.className = 'selection-overlay hover-selection-overlay';
+            el.dataset.type = type;
+            document.body.appendChild(el);
+            this.hoverSelectionOverlay[type] = el;
+        }
+        return this.hoverSelectionOverlay[type];
+    }
+
+    removeHoverSelectionOverlay(type) {
+        const el = this.hoverSelectionOverlay[type];
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        this.hoverSelectionOverlay[type] = null;
+    }
+
+    updateHoverSelectionOverlay(type, startIndex, endIndex) {
+        const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
+        const endField = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
+        if (!startField || !endField) {
+            this.removeHoverSelectionOverlay(type);
+            return;
+        }
+
+        const startRect = this.getSelectionCellRect(type, startIndex);
+        if (!startRect) {
+            this.removeHoverSelectionOverlay(type);
+            return;
+        }
+
+        let endBottom;
+        if (type === 'actual') {
+            const endRect = this.getSelectionCellRect(type, endIndex) || endField.getBoundingClientRect();
+            endBottom = endRect.bottom;
+        } else {
+            const endRow = endField.closest('.time-entry');
+            const endRowRect = endRow ? endRow.getBoundingClientRect() : endField.getBoundingClientRect();
+            endBottom = endRowRect.bottom;
+        }
+
+        const overlay = this.ensureHoverSelectionOverlay(type);
+        overlay.style.left = `${startRect.left + window.scrollX}px`;
+        overlay.style.top = `${startRect.top + window.scrollY}px`;
+        overlay.style.width = `${startRect.width}px`;
+        overlay.style.height = `${Math.max(0, (endBottom - startRect.top))}px`;
     }
 
     isMergeRangeSelected(type, mergeKey) {
@@ -4419,16 +4471,35 @@ class TimeTracker {
             if (!isMergedSelection) return; // 병합 후보(아직 병합 아님)일 때만 차단
         }
         // 선택 중인 셀 자체에는 오버레이 내부 버튼이 있으므로 중복 표시하지 않음
-        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 0 && this.selectedPlannedFields.has(index)) return;
+        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 0) {
+            this.hideHoverScheduleButton();
+            return;
+        }
+
+        const mergeKey = this.findMergeKey('planned', index);
+        const mkParts = mergeKey ? mergeKey.split('-') : null;
+        const startIndex = mkParts ? parseInt(mkParts[1], 10) : index;
+        const endIndex = mkParts ? parseInt(mkParts[2], 10) : index;
 
         const field = document.querySelector(`[data-index="${index}"] .planned-input`);
-        if (!field) return;
+        if (!field) {
+            this.removeHoverSelectionOverlay('planned');
+            return;
+        }
         const rect = field.getBoundingClientRect();
         const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
         // 생성/표시
         this.hideHoverScheduleButton();
+        this.updateHoverSelectionOverlay('planned', startIndex, endIndex);
+        if (mergeKey) {
+            this.hoveredMergeKey = mergeKey;
+            this.showUndoButton('planned', mergeKey);
+        } else {
+            this.hoveredMergeKey = null;
+            this.hideUndoButton();
+        }
         const btn = document.createElement('button');
         btn.className = 'schedule-button';
         btn.textContent = '📅';
@@ -4464,6 +4535,7 @@ class TimeTracker {
 
         document.body.appendChild(btn);
         this.scheduleHoverButton = btn;
+        this.repositionButtonsNextToSchedule();
     }
 
     showActivityLogButtonOnHover(index) {
@@ -4528,13 +4600,19 @@ class TimeTracker {
             this.scheduleHoverButton.parentNode.removeChild(this.scheduleHoverButton);
             this.scheduleHoverButton = null;
         }
+        this.removeHoverSelectionOverlay('planned');
+        if (this.hoveredMergeKey && (!this.selectedPlannedFields || this.selectedPlannedFields.size === 0)) {
+            this.hideUndoButton();
+        }
+        this.hoveredMergeKey = null;
     }
 
     // 스케줄 버튼 우측으로 병합/되돌리기 버튼 정렬
     repositionButtonsNextToSchedule() {
-        if (!this.scheduleButton) return;
+        const anchor = this.scheduleButton || this.scheduleHoverButton;
+        if (!anchor) return;
         const spacing = 8;
-        const sbRect = this.scheduleButton.getBoundingClientRect();
+        const sbRect = anchor.getBoundingClientRect();
         const baseLeft = window.scrollX + sbRect.left + sbRect.width + spacing;
         const baseTop  = window.scrollY + sbRect.top;
 
