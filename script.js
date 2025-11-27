@@ -2450,9 +2450,10 @@ class TimeTracker {
         }
 
         // 더 넓은 색상 분산을 위해 해시 기반 팔레트 선택
+        // 유사도 낮추되 톤은 파스텔로 완화한 팔레트(계획/실제 공통)
         const plannedPalette = [
-            '#a3d9ff', '#ffd280', '#c8e6c9', '#f5b7b1', '#d1c4e9',
-            '#ffe6a7', '#b2ebf2', '#f8cdda', '#dcedc8', '#ffecb3'
+            '#a6d9ff', '#ffdca3', '#c8f0c0', '#f8c7ce', '#d6ccf5',
+            '#ffe4b8', '#b8eef2', '#f5d6e8', '#d7f4d0', '#fff1b8'
         ];
         // 우측 실제도 동일 팔레트로 맞춰 좌우 색상을 통일
         const actualPalette = plannedPalette;
@@ -2882,17 +2883,8 @@ class TimeTracker {
         if (this.modalSplitMaxSeconds > 0 && this.modalSplitTotalSeconds > this.modalSplitMaxSeconds) {
             this.modalSplitTotalSeconds = this.modalSplitMaxSeconds;
         }
-        if (this.modalSubActivities.length === 0) {
-            const planActivities = this.getPlanActivitiesForIndex(baseIndex);
-            if (planActivities.length > 0) {
-                this.modalSubActivities = planActivities.map(item => ({ ...item, source: 'plan', invalid: false }));
-                this.modalSplitSectionOpen = true;
-                section.hidden = false;
-                const planTotal = Math.min(this.modalSplitMaxSeconds, this.getValidSubActivitiesSeconds());
-                this.modalSplitTotalSeconds = planTotal;
-                this.updateSubActivitiesToggleLabel();
-            }
-        }
+        // 실제 세부활동이 비어 있어도 계획값을 자동 복사하지 않는다.
+        // (타이머로 쌓인 실제 기록이 계획 시간으로 덮어쓰이는 것을 방지)
         const baseSlot = this.timeSlots[baseIndex] || {};
         const storedBand = baseSlot && baseSlot.activityLog ? Boolean(baseSlot.activityLog.titleBandOn) : false;
         this.modalActualTitleBandOn = storedBand && this.modalSubActivities.length > 0;
