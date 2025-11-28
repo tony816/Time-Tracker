@@ -375,7 +375,7 @@ class TimeTracker {
             timeEntries.addEventListener('mouseleave', (e) => {
                 const toEl = e.relatedTarget;
                 // 스케줄 버튼으로 이동할 때는 유지
-                if (toEl && toEl.closest && toEl.closest('.schedule-button')) return;
+                if (toEl && toEl.closest && (toEl.closest('.schedule-button') || toEl.closest('.undo-button'))) return;
                 this.hideHoverScheduleButton && this.hideHoverScheduleButton();
             });
         }
@@ -1746,8 +1746,8 @@ class TimeTracker {
             });
             plannedField.addEventListener('mouseleave', (e) => {
                 const toEl = e.relatedTarget;
-                // 1) 스케줄 버튼으로 이동하는 경우 유지
-                if (toEl && toEl.closest && toEl.closest('.schedule-button')) return;
+                // 1) 스케줄/되돌리기 버튼으로 이동하는 경우 유지
+                if (toEl && toEl.closest && (toEl.closest('.schedule-button') || toEl.closest('.undo-button'))) return;
                 // 2) 병합된 계획 블록 내부로 이동하는 경우(같은 mergeKey) 유지
                 const mk = this.findMergeKey('planned', index);
                 if (mk && toEl && toEl.closest) {
@@ -1779,6 +1779,7 @@ class TimeTracker {
                         const toEl2 = ev.relatedTarget;
                         if (toEl2 && toEl2.closest && (
                             toEl2.closest('.schedule-button') ||
+                            toEl2.closest('.undo-button') ||
                             toEl2.closest(`.planned-merged-main-container[data-merge-key="${mk2}"]`)
                         )) return;
                         this.hideHoverScheduleButton();
@@ -1969,19 +1970,29 @@ class TimeTracker {
             const startRect = startField.getBoundingClientRect();
             const endRect = endField.getBoundingClientRect();
             
-            const centerX = startRect.left + (startRect.width / 2);
-            const centerY = startRect.top + ((endRect.bottom - startRect.top) / 2);
-            
             this.hideUndoButton();
             
             const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
             const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-            
+
+            const anchor = this.scheduleHoverButton || this.scheduleButton;
+            let defaultLeft, defaultTop;
+            if (anchor) {
+                const sbRect = anchor.getBoundingClientRect();
+                defaultLeft = window.scrollX + sbRect.left + sbRect.width + 8;
+                defaultTop = window.scrollY + sbRect.top;
+            } else {
+                const centerX = startRect.left + (startRect.width / 2);
+                const centerY = startRect.top + ((endRect.bottom - startRect.top) / 2);
+                defaultLeft = centerX + scrollX - 17;
+                defaultTop = centerY + scrollY - 17;
+            }
+
             this.undoButton = document.createElement('button');
             this.undoButton.className = 'undo-button';
-            // 기본 배치(중앙) 후, 스케줄 버튼이 있으면 우측으로 재배치
-            this.undoButton.style.left = `${centerX + scrollX - 17}px`;
-            this.undoButton.style.top = `${centerY + scrollY - 17}px`;
+            // 기본 배치: 스케줄 버튼이 있으면 바로 우측, 없으면 중앙
+            this.undoButton.style.left = `${Math.round(defaultLeft)}px`;
+            this.undoButton.style.top = `${Math.round(defaultTop)}px`;
             
             this.undoButton.addEventListener('click', () => {
                 this.undoMerge(type, mergeKey);
@@ -4137,13 +4148,13 @@ class TimeTracker {
         }
         
         this.updateSelectionOverlay(type);
-        // Undo 버튼은 좌측(계획) 열에서만 제공
+        this.showScheduleButtonForSelection(type);
+        // Undo 버튼은 좌측(계획) 열에서만 제공 - 스케줄 버튼 생성 후 즉시 정렬
         if (type === 'planned') {
             this.showUndoButton(type, mergeKey);
         } else {
             this.hideUndoButton();
         }
-        this.showScheduleButtonForSelection(type);
     }
 
     ensureSelectionOverlay(type) {
@@ -4476,11 +4487,6 @@ class TimeTracker {
             return;
         }
 
-        const mergeKey = this.findMergeKey('planned', index);
-        const mkParts = mergeKey ? mergeKey.split('-') : null;
-        const startIndex = mkParts ? parseInt(mkParts[1], 10) : index;
-        const endIndex = mkParts ? parseInt(mkParts[2], 10) : index;
-
         const field = document.querySelector(`[data-index="${index}"] .planned-input`);
         if (!field) {
             this.removeHoverSelectionOverlay('planned');
@@ -4492,14 +4498,6 @@ class TimeTracker {
 
         // 생성/표시
         this.hideHoverScheduleButton();
-        this.updateHoverSelectionOverlay('planned', startIndex, endIndex);
-        if (mergeKey) {
-            this.hoveredMergeKey = mergeKey;
-            this.showUndoButton('planned', mergeKey);
-        } else {
-            this.hoveredMergeKey = null;
-            this.hideUndoButton();
-        }
         const btn = document.createElement('button');
         btn.className = 'schedule-button';
         btn.textContent = '📅';
@@ -4527,6 +4525,8 @@ class TimeTracker {
         let hideTimer = null;
         const requestHide = () => {
             hideTimer = setTimeout(() => {
+                // 되돌리기 버튼 위에 있을 땐 숨기지 않음
+                if (this.undoButton && this.undoButton.matches(':hover')) return;
                 this.hideHoverScheduleButton();
             }, 150);
         };
@@ -4535,6 +4535,20 @@ class TimeTracker {
 
         document.body.appendChild(btn);
         this.scheduleHoverButton = btn;
+
+        const mergeKey = this.findMergeKey('planned', index);
+        const mkParts = mergeKey ? mergeKey.split('-') : null;
+        const startIndex = mkParts ? parseInt(mkParts[1], 10) : index;
+        const endIndex = mkParts ? parseInt(mkParts[2], 10) : index;
+        this.updateHoverSelectionOverlay('planned', startIndex, endIndex);
+        if (mergeKey) {
+            this.hoveredMergeKey = mergeKey;
+            this.showUndoButton('planned', mergeKey);
+        } else {
+            this.hoveredMergeKey = null;
+            this.hideUndoButton();
+        }
+
         this.repositionButtonsNextToSchedule();
     }
 
@@ -4596,6 +4610,8 @@ class TimeTracker {
     }
 
     hideHoverScheduleButton() {
+        // 되돌리기 버튼에 커서가 있으면 유지
+        if (this.undoButton && this.undoButton.matches(':hover')) return;
         if (this.scheduleHoverButton && this.scheduleHoverButton.parentNode) {
             this.scheduleHoverButton.parentNode.removeChild(this.scheduleHoverButton);
             this.scheduleHoverButton = null;
