@@ -835,6 +835,32 @@ h1 {
   min-width: 0;
 }
 
+.plan-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.plan-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.plan-title-toggle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.plan-title-toggle-row .plan-title-group {
+  margin-top: 6px;
+}
+
+
 @media (max-width: 960px) {
   #scheduleModal .modal-content {
     max-width: 720px;
@@ -848,6 +874,10 @@ h1 {
     width: 100%;
     flex: none;
     min-width: 0;
+  }
+
+  .plan-editor-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2033,6 +2063,13 @@ h1 {
 
 .sub-activity-action-btn:hover {
   background: #e9edf2;
+}
+
+.sub-activity-action-btn.sub-activity-action-compact {
+  padding: 6px 8px;
+  font-size: 11px;
+  min-width: 52px;
+  text-align: center;
 }
 
 .sub-activities-notice {

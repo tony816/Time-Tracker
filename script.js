@@ -3117,9 +3117,6 @@ class TimeTracker {
                 this.modalPlanTitle = fallback;
                 const input = document.getElementById('planTitleInput');
                 if (input) input.value = fallback;
-            } else {
-                // 그래도 없으면 토글을 내림
-                this.modalPlanTitleBandOn = false;
             }
         }
 
@@ -3326,31 +3323,35 @@ class TimeTracker {
         const upBtn = spinner.querySelector('.spinner-up');
         const downBtn = spinner.querySelector('.spinner-down');
 
+        let limit = null;
+        let items = null;
+        if (kind === 'plan') {
+            limit = Number(this.modalPlanTotalSeconds) || 0;
+            items = this.modalPlanActivities || [];
+        } else {
+            limit = Number(this.modalSplitMaxSeconds) || 0;
+            if (!limit || limit <= 0) {
+                limit = this.getBlockLength('actual', this.modalActualBaseIndex ?? index) * 3600;
+            }
+            items = this.modalSubActivities || [];
+        }
+
+        let available = 0;
+        if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
+            const otherSum = items.reduce((sum, item, idx) => {
+                if (idx === index || !item) return sum;
+                const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return sum + secs;
+            }, 0);
+            available = Math.max(0, limit - otherSum);
+        }
+
         if (downBtn) {
-            const maxValue = this.getMaxSpinnerValue(kind);
-            downBtn.disabled = maxValue <= 0;
+            downBtn.disabled = seconds <= 0 && available <= 0;
         }
 
         if (upBtn) {
-            let limit = null;
-            let items = null;
-            if (kind === 'plan') {
-                limit = Number(this.modalPlanTotalSeconds) || 0;
-                items = this.modalPlanActivities || [];
-            } else {
-                limit = Number(this.modalSplitMaxSeconds) || 0;
-                items = this.modalSubActivities || [];
-            }
-            let disable = false;
-            if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
-                const otherSum = items.reduce((sum, item, idx) => {
-                    if (idx === index || !item) return sum;
-                    const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                    return sum + secs;
-                }, 0);
-                disable = otherSum + seconds >= limit;
-            }
-            upBtn.disabled = disable;
+            upBtn.disabled = !(Number.isFinite(limit) && limit > 0) || seconds >= available;
         }
     }
 
@@ -3367,19 +3368,6 @@ class TimeTracker {
         const spinnerList = kind === 'plan' ? document.getElementById('planActivitiesList') : document.getElementById('subActivitiesList');
         const spinner = spinnerList ? spinnerList.querySelector(`.time-spinner[data-kind="${kind}"][data-index="${index}"]`) : null;
         const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
-        let newSeconds;
-        if (direction < 0 && currentSeconds === 0) {
-            const limit = this.getSpinnerLimit(kind);
-            if (Number.isFinite(limit) && limit > 0) {
-                newSeconds = limit;
-            } else {
-                newSeconds = step * 6; // 60분
-            }
-        } else {
-            newSeconds = currentSeconds + (direction * step);
-        }
-        if (newSeconds < 0) newSeconds = 0;
-
         let limit = null;
         if (kind === 'plan') {
             limit = Number(this.modalPlanTotalSeconds) || 0;
@@ -3390,26 +3378,30 @@ class TimeTracker {
             }
         }
 
-        if (Number.isFinite(limit) && limit > 0) {
+        let available = 0;
+        if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
             const otherSum = items.reduce((sum, item, idx) => {
                 if (idx === index || !item) return sum;
                 const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
                 return sum + secs;
             }, 0);
-            const available = Math.max(0, limit - otherSum);
-            if (direction > 0 && newSeconds > available) {
-                newSeconds = available;
-            }
-            if (direction < 0 && currentSeconds === 0 && newSeconds === 0 && available > 0) {
-                const wrap = Math.min(available, this.getMaxSpinnerValue(kind));
-                if (wrap > 0) newSeconds = wrap;
-            }
-            if (newSeconds > limit) newSeconds = limit;
+            available = Math.max(0, limit - otherSum);
+        }
+
+        let newSeconds;
+        if (direction < 0 && currentSeconds === 0) {
+            newSeconds = available > 0 ? available : 0;
+        } else {
+            newSeconds = currentSeconds + (direction * step);
+        }
+        if (newSeconds < 0) newSeconds = 0;
+        if (Number.isFinite(available) && newSeconds > available) {
+            newSeconds = available;
         }
 
         newSeconds = this.normalizeDurationStep(newSeconds) || 0;
-        if (Number.isFinite(limit) && limit > 0 && newSeconds > limit) {
-            newSeconds = this.normalizeDurationStep(limit) || limit;
+        if (Number.isFinite(available) && newSeconds > available) {
+            newSeconds = this.normalizeDurationStep(available) || available;
         }
         if (!Number.isFinite(newSeconds)) newSeconds = 0;
 
@@ -3432,6 +3424,14 @@ class TimeTracker {
         if (!section) return;
         this.modalPlanSectionOpen = true;
         section.hidden = false;
+        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+        if (planTitleToggleRow) {
+            planTitleToggleRow.hidden = false;
+        }
+        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        if (fillPlanBtn) {
+            fillPlanBtn.hidden = false;
+        }
         this.updatePlanActivitiesToggleLabel();
         if (!this.isValidPlanRow(this.modalPlanActiveRow) && (this.modalPlanActivities || []).length > 0) {
             this.modalPlanActiveRow = 0;
@@ -3444,6 +3444,14 @@ class TimeTracker {
         if (!section) return;
         this.modalPlanSectionOpen = false;
         section.hidden = true;
+        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+        if (planTitleToggleRow) {
+            planTitleToggleRow.hidden = true;
+        }
+        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        if (fillPlanBtn) {
+            fillPlanBtn.hidden = true;
+        }
         this.updatePlanActivitiesToggleLabel();
         this.modalPlanActiveRow = -1;
         this.updatePlanRowActiveStyles();
@@ -3794,6 +3802,14 @@ class TimeTracker {
         this.modalPlanSectionOpen = shouldOpen;
         this.modalPlanActiveRow = shouldOpen ? 0 : -1;
         section.hidden = !shouldOpen;
+        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+        if (planTitleToggleRow) {
+            planTitleToggleRow.hidden = !shouldOpen;
+        }
+        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        if (fillPlanBtn) {
+            fillPlanBtn.hidden = !shouldOpen;
+        }
         const baseSlot = this.timeSlots[startIndex] || {};
         const storedBand = Boolean(baseSlot.planTitleBandOn);
         const normalizedTitle = this.normalizeActivityText
@@ -4936,6 +4952,14 @@ class TimeTracker {
                 planTitleInput.value = this.modalPlanTitle || '';
             }
             this.syncPlanTitleBandToggleState();
+            const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+            if (planTitleToggleRow) {
+                planTitleToggleRow.hidden = !this.modalPlanSectionOpen;
+            }
+            const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+            if (fillPlanBtn) {
+                fillPlanBtn.hidden = !this.modalPlanSectionOpen;
+            }
         }
 
         // 활동 멀티셀렉트 초기화: 기존 값에서 선택 복원
@@ -5020,6 +5044,8 @@ class TimeTracker {
         }
         const planTitleField = document.getElementById('planTitleField');
         if (planTitleField) planTitleField.hidden = true;
+        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+        if (planTitleToggleRow) planTitleToggleRow.hidden = true;
         const planTitleInput = document.getElementById('planTitleInput');
         if (planTitleInput) planTitleInput.value = '';
         const planTitleList = document.getElementById('planTitleOptions');
@@ -5027,6 +5053,8 @@ class TimeTracker {
         const planTitleDropdown = document.getElementById('planTitleDropdown');
         if (planTitleDropdown) planTitleDropdown.classList.remove('open');
         this.modalPlanTitle = '';
+        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        if (fillPlanBtn) fillPlanBtn.hidden = true;
         this.resetSchedulePreview();
     }
     
@@ -5162,6 +5190,14 @@ class TimeTracker {
             togglePlanBtn.addEventListener('click', () => {
                 this.modalPlanSectionOpen = !this.modalPlanSectionOpen;
                 planSection.hidden = !this.modalPlanSectionOpen;
+                const planTitleToggleRow = document.getElementById('planTitleToggleRow');
+                if (planTitleToggleRow) {
+                    planTitleToggleRow.hidden = !this.modalPlanSectionOpen;
+                }
+                const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+                if (fillPlanBtn) {
+                    fillPlanBtn.hidden = !this.modalPlanSectionOpen;
+                }
                 if (this.modalPlanSectionOpen) {
                     if ((this.modalPlanActivities || []).length === 0) {
                         this.addPlanActivityRow();
