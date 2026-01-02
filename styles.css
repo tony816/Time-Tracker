@@ -762,6 +762,95 @@ h1 {
   padding: 20px;
 }
 
+#scheduleModal .modal-content {
+  width: 92%;
+  max-width: 980px;
+  max-height: 85vh;
+}
+
+.schedule-modal-layout {
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.schedule-preview {
+  flex: 0 0 42%;
+  min-width: 300px;
+  background: #f8f9fb;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.schedule-preview-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schedule-preview-title {
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.schedule-preview-meta {
+  font-size: 0.9em;
+  color: #6c7a89;
+}
+
+.schedule-preview-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.schedule-preview-sheet {
+  background: #ffffff;
+}
+
+.schedule-preview .input-field,
+.schedule-preview .timer-btn,
+.schedule-preview .activity-log-btn {
+  pointer-events: none;
+}
+
+.schedule-preview .timer-controls-container {
+  pointer-events: none;
+}
+
+.schedule-preview-note {
+  min-height: 1.2em;
+  font-size: 0.85em;
+  color: #c0392b;
+}
+
+.schedule-form {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  #scheduleModal .modal-content {
+    max-width: 720px;
+  }
+
+  .schedule-modal-layout {
+    flex-direction: column;
+  }
+
+  .schedule-preview {
+    width: 100%;
+    flex: none;
+    min-width: 0;
+  }
+}
+
 .form-group {
   margin-bottom: 20px;
 }
