@@ -5952,6 +5952,7 @@ class TimeTracker {
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
             </div>
+            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해 (준비중)">세부 활동 분해 (준비중)</button>
         `;
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;

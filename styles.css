@@ -1823,6 +1823,24 @@ h1 {
   font-size: 13px;
 }
 
+.inline-plan-split-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed #b6dbff;
+  border-radius: 10px;
+  background: #f7fbff;
+  color: #1f2d3d;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-split-btn:hover {
+  background: #ecf5ff;
+  border-color: #3498db;
+}
+
 .sub-activities-group {
   border: 1px solid #eef1f4;
   border-radius: 8px;
