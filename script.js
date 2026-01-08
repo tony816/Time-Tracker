@@ -21,6 +21,11 @@ class TimeTracker {
         this.modalSelectedActivities = [];
         this.currentPlanSource = 'local';
         this.planTabsContainer = null;
+        this.inlinePlanDropdown = null;
+        this.inlinePlanTarget = null;
+        this.inlinePlanOutsideHandler = null;
+        this.inlinePlanEscHandler = null;
+        this.inlinePlanScrollHandler = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
             try { return window.NOTION_ACTIVITIES_ENDPOINT || localStorage.getItem('notion_activities_endpoint') || null; } catch(e){ return null; }
@@ -191,6 +196,7 @@ class TimeTracker {
     }
 
     renderTimeEntries() {
+        this.closeInlinePlanDropdown();
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
 
@@ -1686,6 +1692,11 @@ class TimeTracker {
                     this.clearAllSelections();
                     this.selectMergedRange('planned', mergeKey);
                 }
+                const [, startStr] = mergeKey.split('-');
+                const parsedStart = parseInt(startStr, 10);
+                const mergeStart = Number.isInteger(parsedStart) ? parsedStart : index;
+                const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
+                this.openInlinePlanDropdown(mergeStart, anchor);
             });
         }
         // 우측(실제) 열은 개별 선택/드래그/병합 조작을 제공하지 않음
@@ -1694,6 +1705,7 @@ class TimeTracker {
         if (plannedField) {
             plannedField.addEventListener('mousedown', (e) => {
                 if (this.findMergeKey('planned', index)) return;
+                this.closeInlinePlanDropdown();
                 if (e.target === plannedField && !plannedField.matches(':focus')) {
                     e.preventDefault();
                     plannedMouseMoved = false;
@@ -1720,6 +1732,10 @@ class TimeTracker {
                         } else {
                             this.clearAllSelections();
                             this.selectFieldRange('planned', index, index);
+                        }
+                        if (!e.ctrlKey && !e.metaKey) {
+                            const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
+                            this.openInlinePlanDropdown(index, anchor);
                         }
                     } else {
                         if (!e.ctrlKey && !e.metaKey) {
@@ -5625,6 +5641,30 @@ class TimeTracker {
         const rank = match && Number.isFinite(match.priorityRank) ? Number(match.priorityRank) : null;
         return Number.isFinite(rank) ? rank : null;
     }
+    buildPlannedActivityOptions(extraLabels = []) {
+        const grouped = { local: [], notion: [] };
+        const seen = new Set();
+
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : String(item.label || '').trim();
+            if (!label || seen.has(label)) return;
+            seen.add(label);
+            const source = item.source === 'notion' ? 'notion' : 'local';
+            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            grouped[source].push({ label, source, priorityRank, recommendedSeconds });
+        });
+
+        (extraLabels || []).forEach((raw) => {
+            const label = this.normalizeActivityText ? this.normalizeActivityText(raw) : String(raw || '').trim();
+            if (!label || seen.has(label)) return;
+            seen.add(label);
+            grouped.local.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
+        });
+
+        return grouped;
+    }
     renderPlannedActivityDropdown() {
         const chips = document.getElementById('activityChips');
         const list = document.getElementById('activityOptions');
@@ -5658,24 +5698,7 @@ class TimeTracker {
             .map(t => this.normalizeActivityText(t))
             .filter(Boolean);
         const selectedSet = new Set(normalizedSelections);
-        const grouped = { local: [], notion: [] };
-        const seen = new Set();
-
-        (this.plannedActivities || []).forEach((item) => {
-            if (!item) return;
-            const label = this.normalizeActivityText(item.label || '');
-            if (!label || seen.has(label)) return;
-            seen.add(label);
-            const source = item.source === 'notion' ? 'notion' : 'local';
-            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-            grouped[source].push({ label, source, priorityRank, recommendedSeconds });
-        });
-
-        normalizedSelections.forEach((label) => {
-            if (!label || seen.has(label)) return;
-            grouped.local.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
-        });
+        const grouped = this.buildPlannedActivityOptions(normalizedSelections);
 
         this.updatePlanSourceTabs({
             local: grouped.local.length,
@@ -5781,8 +5804,8 @@ class TimeTracker {
         this.updateSchedulePreview();
     }
 
-    updatePlanSourceTabs(counts = {}) {
-        const container = this.planTabsContainer || document.getElementById('planTabs');
+    updatePlanSourceTabs(counts = {}, containerOverride = null) {
+        const container = containerOverride || this.planTabsContainer || document.getElementById('planTabs');
         if (!container) return;
         const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
         container.querySelectorAll('.plan-tab').forEach((button) => {
@@ -5792,6 +5815,231 @@ class TimeTracker {
             button.setAttribute('aria-selected', isActive ? 'true' : 'false');
             button.classList.toggle('empty', !(counts[source] > 0));
         });
+    }
+    getPlannedRangeInfo(index) {
+        const info = { startIndex: index, endIndex: index, mergeKey: null };
+        if (!Number.isInteger(index)) return info;
+        const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
+        if (!mk) return info;
+        const [, sStr, eStr] = mk.split('-');
+        const s = parseInt(sStr, 10);
+        const e = parseInt(eStr, 10);
+        const startIndex = Number.isInteger(s) ? s : index;
+        const endIndex = Number.isInteger(e) ? e : startIndex;
+        return { startIndex, endIndex, mergeKey: mk };
+    }
+    getPlannedValueForIndex(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return '';
+        const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
+        if (mk) {
+            const merged = this.mergedFields.get(mk);
+            if (merged != null) {
+                return this.normalizeActivityText ? this.normalizeActivityText(merged) : String(merged || '').trim();
+            }
+        }
+        const slot = this.timeSlots[index];
+        const raw = slot && typeof slot.planned === 'string' ? slot.planned : '';
+        return this.normalizeActivityText ? this.normalizeActivityText(raw) : String(raw || '').trim();
+    }
+    positionInlinePlanDropdown(anchorEl) {
+        if (!this.inlinePlanDropdown || !anchorEl) return;
+        const rect = anchorEl.getBoundingClientRect();
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const dropdown = this.inlinePlanDropdown;
+        const minWidth = Math.max(240, rect.width + 32);
+        dropdown.style.minWidth = `${minWidth}px`;
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + 6;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || minWidth;
+        const maxLeft = scrollX + viewportWidth - minWidth - 12;
+        if (left > maxLeft) {
+            left = Math.max(scrollX + 12, maxLeft);
+        }
+        dropdown.style.left = `${Math.round(left)}px`;
+        dropdown.style.top = `${Math.round(top)}px`;
+    }
+    renderInlinePlanDropdownOptions() {
+        if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
+        const list = this.inlinePlanDropdown.querySelector('.inline-plan-options-list');
+        const tabs = this.inlinePlanDropdown.querySelector('.inline-plan-tabs');
+        if (!list) return;
+
+        const startIndex = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
+        const currentValue = this.getPlannedValueForIndex(startIndex);
+        const grouped = this.buildPlannedActivityOptions(currentValue ? [currentValue] : []);
+        const counts = { local: (grouped.local || []).length, notion: (grouped.notion || []).length };
+        this.updatePlanSourceTabs(counts, tabs);
+
+        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        const visibleItems = grouped[activeSource] || [];
+        const normalizedCurrent = this.normalizeActivityText ? this.normalizeActivityText(currentValue) : String(currentValue || '').trim();
+
+        list.innerHTML = '';
+        if (visibleItems.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'inline-plan-empty';
+            empty.textContent = activeSource === 'notion'
+                ? '노션에서 불러온 활동이 없습니다.'
+                : '등록된 활동이 없습니다.';
+            list.appendChild(empty);
+            return;
+        }
+
+        visibleItems.forEach((item) => {
+            const { label, source } = item;
+            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Math.floor(item.recommendedSeconds)) : null;
+            const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+            const li = document.createElement('li');
+            li.className = 'inline-plan-option';
+            li.dataset.source = source;
+            if (normalizedCurrent && normalizedLabel === normalizedCurrent) {
+                li.classList.add('selected');
+            }
+
+            const left = document.createElement('div');
+            left.className = 'inline-plan-option-left';
+            const badge = this.makePriorityBadge(priorityRank);
+            if (badge) left.appendChild(badge);
+            const text = document.createElement('span');
+            text.className = 'inline-plan-option-label';
+            text.textContent = label;
+            left.appendChild(text);
+
+            const right = document.createElement('div');
+            right.className = 'inline-plan-option-meta';
+            const sourceTag = document.createElement('span');
+            sourceTag.className = 'inline-plan-option-source';
+            sourceTag.textContent = source === 'notion' ? '노션' : '직접 추가';
+            right.appendChild(sourceTag);
+            if (recommendedSeconds && recommendedSeconds > 0) {
+                const displaySeconds = this.normalizeDurationStep
+                    ? (this.normalizeDurationStep(recommendedSeconds) || recommendedSeconds)
+                    : recommendedSeconds;
+                const time = document.createElement('span');
+                time.className = 'inline-plan-option-time';
+                time.textContent = this.formatDurationSummary(displaySeconds);
+                right.appendChild(time);
+            }
+
+            li.appendChild(left);
+            li.appendChild(right);
+            li.addEventListener('click', () => this.applyInlinePlanSelection(label));
+            list.appendChild(li);
+        });
+    }
+    openInlinePlanDropdown(index, anchorEl) {
+        const anchor = anchorEl || null;
+        if (!anchor) return;
+        const range = this.getPlannedRangeInfo(index);
+        this.closeInlinePlanDropdown();
+
+        this.inlinePlanTarget = { ...range, anchor };
+        const dropdown = document.createElement('div');
+        dropdown.className = 'inline-plan-dropdown';
+        dropdown.innerHTML = `
+            <div class="inline-plan-tabs plan-tabs">
+                <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">직접 추가</button>
+                <button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>
+            </div>
+            <div class="inline-plan-options dropdown">
+                <ul class="inline-plan-options-list"></ul>
+            </div>
+        `;
+        document.body.appendChild(dropdown);
+        this.inlinePlanDropdown = dropdown;
+
+        const tabs = dropdown.querySelector('.inline-plan-tabs');
+        if (tabs) {
+            tabs.addEventListener('click', (event) => {
+                const btn = event.target.closest('.plan-tab');
+                if (!btn || !tabs.contains(btn)) return;
+                const source = btn.dataset.source === 'notion' ? 'notion' : 'local';
+                if (this.currentPlanSource !== source) {
+                    this.currentPlanSource = source;
+                    this.renderInlinePlanDropdownOptions();
+                }
+            });
+        }
+
+        this.renderInlinePlanDropdownOptions();
+        this.positionInlinePlanDropdown(anchor);
+
+        this.inlinePlanOutsideHandler = (event) => {
+            if (!this.inlinePlanDropdown) return;
+            if (this.inlinePlanDropdown.contains(event.target)) return;
+            if (anchor && anchor.contains(event.target)) return;
+            this.closeInlinePlanDropdown();
+        };
+        document.addEventListener('mousedown', this.inlinePlanOutsideHandler, true);
+
+        this.inlinePlanEscHandler = (event) => {
+            if (event.key === 'Escape') this.closeInlinePlanDropdown();
+        };
+        document.addEventListener('keydown', this.inlinePlanEscHandler);
+
+        this.inlinePlanScrollHandler = () => this.positionInlinePlanDropdown(anchor);
+        window.addEventListener('resize', this.inlinePlanScrollHandler);
+        window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
+
+        if (this.prefetchNotionActivitiesIfConfigured) {
+            this.prefetchNotionActivitiesIfConfigured()
+                .then((added) => {
+                    if (added && this.inlinePlanDropdown) {
+                        this.renderInlinePlanDropdownOptions();
+                    }
+                })
+                .catch(() => {});
+        }
+    }
+    closeInlinePlanDropdown() {
+        if (this.inlinePlanOutsideHandler) {
+            document.removeEventListener('mousedown', this.inlinePlanOutsideHandler, true);
+            this.inlinePlanOutsideHandler = null;
+        }
+        if (this.inlinePlanEscHandler) {
+            document.removeEventListener('keydown', this.inlinePlanEscHandler);
+            this.inlinePlanEscHandler = null;
+        }
+        if (this.inlinePlanScrollHandler) {
+            window.removeEventListener('resize', this.inlinePlanScrollHandler);
+            window.removeEventListener('scroll', this.inlinePlanScrollHandler, true);
+            this.inlinePlanScrollHandler = null;
+        }
+        if (this.inlinePlanDropdown && this.inlinePlanDropdown.parentNode) {
+            this.inlinePlanDropdown.parentNode.removeChild(this.inlinePlanDropdown);
+        }
+        this.inlinePlanDropdown = null;
+        this.inlinePlanTarget = null;
+    }
+    applyInlinePlanSelection(label) {
+        if (!this.inlinePlanTarget) return;
+        const normalized = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+        if (!normalized) return;
+
+        const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
+        const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
+        const startIndex = Math.min(safeStart, safeEnd);
+        const endIndex = Math.max(safeStart, safeEnd);
+
+        if (this.inlinePlanTarget.mergeKey) {
+            this.mergedFields.set(this.inlinePlanTarget.mergeKey, normalized);
+        }
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (!this.timeSlots[i]) continue;
+            const isStart = i === startIndex;
+            this.timeSlots[i].planned = isStart ? normalized : '';
+            this.timeSlots[i].planActivities = [];
+            this.timeSlots[i].planTitle = isStart ? normalized : '';
+            this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+        }
+
+        this.renderTimeEntries();
+        this.calculateTotals();
+        this.autoSave();
+        this.closeInlinePlanDropdown();
     }
 
     // ===== Notion integration (optional) =====

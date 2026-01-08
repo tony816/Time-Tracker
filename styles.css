@@ -1695,6 +1695,93 @@ h1 {
   white-space: nowrap;
 }
 
+.inline-plan-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  z-index: 50;
+}
+
+.inline-plan-dropdown .plan-tabs {
+  margin-bottom: 8px;
+}
+
+.inline-plan-options {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.inline-plan-options-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.inline-plan-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.inline-plan-option:hover {
+  background: #f5f9ff;
+}
+
+.inline-plan-option.selected {
+  background: #ecf5ff;
+  border: 1px solid #b6dbff;
+}
+
+.inline-plan-option-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-plan-option-label {
+  font-size: 14px;
+  color: #1f2d3d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inline-plan-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.inline-plan-option-source {
+  background: #f4f6f8;
+  color: #2c3e50;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.inline-plan-option-time {
+  color: #2980b9;
+  font-weight: 700;
+}
+
+.inline-plan-empty {
+  padding: 10px;
+  text-align: center;
+  color: #7f8c8d;
+  font-size: 13px;
+}
+
 .sub-activities-group {
   border: 1px solid #eef1f4;
   border-radius: 8px;
