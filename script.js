@@ -26,6 +26,7 @@ class TimeTracker {
         this.inlinePlanOutsideHandler = null;
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
+        this.inlinePlanContext = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
             try { return window.NOTION_ACTIVITIES_ENDPOINT || localStorage.getItem('notion_activities_endpoint') || null; } catch(e){ return null; }
@@ -3057,6 +3058,21 @@ class TimeTracker {
         }, 0);
     }
 
+    getPlanUIElements() {
+        if (this.inlinePlanContext) {
+            return this.inlinePlanContext;
+        }
+        return {
+            list: document.getElementById('planActivitiesList'),
+            totalEl: document.getElementById('planSplitTotalTime'),
+            usedEl: document.getElementById('planSplitUsedTime'),
+            noticeEl: document.getElementById('planActivitiesNotice'),
+            fillBtn: document.getElementById('fillRemainingPlanActivity'),
+            addBtn: document.getElementById('addPlanActivityRow'),
+            section: document.getElementById('planActivitiesSection')
+        };
+    }
+
     updatePlanActivitiesToggleLabel() {
         const toggleBtn = document.getElementById('togglePlanActivities');
         if (toggleBtn) {
@@ -3065,9 +3081,7 @@ class TimeTracker {
     }
 
     updatePlanActivitiesSummary() {
-        const totalEl = document.getElementById('planSplitTotalTime');
-        const usedEl = document.getElementById('planSplitUsedTime');
-        const noticeEl = document.getElementById('planActivitiesNotice');
+        const { totalEl, usedEl, noticeEl } = this.getPlanUIElements();
         if (!totalEl || !usedEl || !noticeEl) return;
 
         const total = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
@@ -3145,7 +3159,7 @@ class TimeTracker {
     }
 
     renderPlanActivitiesList() {
-        const list = document.getElementById('planActivitiesList');
+        const { list } = this.getPlanUIElements();
         if (!list) return;
         list.innerHTML = '';
         (this.modalPlanActivities || []).forEach((item, idx) => {
@@ -3198,7 +3212,7 @@ class TimeTracker {
     }
 
     updatePlanRowActiveStyles() {
-        const list = document.getElementById('planActivitiesList');
+        const { list } = this.getPlanUIElements();
         if (!list) return;
         const activeIndex = this.isValidPlanRow(this.modalPlanActiveRow) ? this.modalPlanActiveRow : -1;
         list.querySelectorAll('.sub-activity-row').forEach((rowEl) => {
@@ -3219,7 +3233,7 @@ class TimeTracker {
     focusPlanRowLabel(index) {
         if (!this.isValidPlanRow(index)) return;
         try {
-            const list = document.getElementById('planActivitiesList');
+            const { list } = this.getPlanUIElements();
             if (!list) return;
             const row = list.querySelector(`.sub-activity-row[data-index="${index}"]`);
             if (!row) return;
@@ -3482,11 +3496,12 @@ class TimeTracker {
         if (defaults.focusLabel !== false) {
             this.focusPlanRowLabel(newIndex);
         }
+        this.syncInlinePlanToSlots();
     }
 
     handlePlanActivitiesInput(event) {
-        const list = document.getElementById('planActivitiesList');
-        if (!list) return;
+        const { list } = this.getPlanUIElements();
+        if (!list || !list.contains(event.target)) return;
         const row = event.target.closest('.sub-activity-row');
         if (!row) return;
         const idx = parseInt(row.dataset.index, 10);
@@ -3499,6 +3514,7 @@ class TimeTracker {
 
         this.updatePlanActivitiesSummary();
         this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+        this.syncInlinePlanToSlots();
     }
 
     handlePlanActivitiesRemoval(event) {
@@ -3516,6 +3532,7 @@ class TimeTracker {
         }
         this.renderPlanActivitiesList();
         this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+        this.syncInlinePlanToSlots();
     }
 
     insertPlanLabelToRow(label, meta = {}) {
@@ -3682,7 +3699,7 @@ class TimeTracker {
         const remainingRaw = Math.max(0, this.modalPlanTotalSeconds - this.getValidPlanActivitiesSeconds());
         const remaining = this.normalizeDurationStep(remainingRaw) || 0;
         if (remaining <= 0) {
-            const noticeEl = document.getElementById('planActivitiesNotice');
+            const { noticeEl } = this.getPlanUIElements();
             if (noticeEl) {
                 noticeEl.textContent = '잔여 시간이 없습니다.';
                 noticeEl.classList.remove('ok');
@@ -3692,6 +3709,7 @@ class TimeTracker {
         this.openPlanActivitiesSection();
         this.addPlanActivityRow({ seconds: remaining });
         this.updatePlanActivitiesSummary();
+        this.syncInlinePlanToSlots();
     }
 
     setPlanTitle(text) {
