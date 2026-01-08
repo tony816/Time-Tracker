@@ -1709,6 +1709,47 @@ h1 {
   margin-bottom: 8px;
 }
 
+.inline-plan-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inline-plan-input {
+  padding: 8px 10px;
+  border: 1px solid #dcdfe3;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.inline-plan-add-btn,
+.inline-plan-sync-btn {
+  padding: 8px 10px;
+  border: 1px solid #dcdfe3;
+  border-radius: 8px;
+  background: #f4f6f8;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-add-btn {
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.inline-plan-add-btn:hover {
+  background: #2980b9;
+}
+
+.inline-plan-sync-btn:hover {
+  background: #e9edf2;
+  border-color: #cdd4dc;
+}
+
 .inline-plan-options {
   border: 1px solid #eee;
   border-radius: 8px;

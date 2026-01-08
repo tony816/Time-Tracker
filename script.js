@@ -4921,6 +4921,7 @@ class TimeTracker {
     }
     
     openScheduleModal(type, startIndex, endIndex = null) {
+        this.closeInlinePlanDropdown();
         const modal = document.getElementById('scheduleModal');
         const timeField = document.getElementById('scheduleTime');
 
@@ -5943,6 +5944,11 @@ class TimeTracker {
                 <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">직접 추가</button>
                 <button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>
             </div>
+            <div class="inline-plan-input-row">
+                <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
+                <button type="button" class="inline-plan-add-btn">추가</button>
+                <button type="button" class="inline-plan-sync-btn">동기화</button>
+            </div>
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
             </div>
@@ -5959,6 +5965,49 @@ class TimeTracker {
                 if (this.currentPlanSource !== source) {
                     this.currentPlanSource = source;
                     this.renderInlinePlanDropdownOptions();
+                }
+            });
+        }
+
+        const input = dropdown.querySelector('.inline-plan-input');
+        const addBtn = dropdown.querySelector('.inline-plan-add-btn');
+        const syncBtn = dropdown.querySelector('.inline-plan-sync-btn');
+
+        const addHandler = () => {
+            const val = this.normalizeActivityText ? this.normalizeActivityText(input.value) : String(input.value || '').trim();
+            if (!val) return;
+            this.addPlannedActivityOption(val, false);
+            input.value = '';
+            this.currentPlanSource = 'local';
+            this.renderInlinePlanDropdownOptions();
+            this.applyInlinePlanSelection(val);
+        };
+
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.isComposing) {
+                    e.preventDefault();
+                    addHandler();
+                }
+            });
+        }
+        if (addBtn) {
+            addBtn.addEventListener('click', addHandler);
+        }
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                if (!this.prefetchNotionActivitiesIfConfigured) return;
+                const prev = syncBtn.textContent;
+                syncBtn.disabled = true;
+                syncBtn.textContent = '동기화중...';
+                try {
+                    const added = await this.prefetchNotionActivitiesIfConfigured();
+                    if (added) this.renderInlinePlanDropdownOptions();
+                } catch (e) {
+                    console.warn('[inline notion sync] failed:', e);
+                } finally {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = prev || '동기화';
                 }
             });
         }
