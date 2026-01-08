@@ -1841,6 +1841,85 @@ h1 {
   border-color: #3498db;
 }
 
+.inline-plan-subsection {
+  margin-top: 10px;
+  border: 1px solid #eef1f4;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.inline-plan-sub-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #34495e;
+  margin-bottom: 10px;
+}
+
+.inline-plan-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline-plan-sub-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e6ebf1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.inline-plan-sub-input {
+  padding: 8px 10px;
+  border: 1px solid #dcdfe3;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #f9fbff;
+}
+
+.inline-plan-sub-time {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2c3e50;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1px solid #e1e7ef;
+}
+
+.inline-plan-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inline-plan-sub-actions button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #dcdfe3;
+  background: #f4f6f8;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-sub-actions button:hover {
+  background: #e9edf2;
+  border-color: #cdd4dc;
+}
+
+.inline-plan-sub-note {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
 .sub-activities-group {
   border: 1px solid #eef1f4;
   border-radius: 8px;

@@ -5953,6 +5953,23 @@ class TimeTracker {
                 <ul class="inline-plan-options-list"></ul>
             </div>
             <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해 (준비중)">세부 활동 분해 (준비중)</button>
+            <div class="inline-plan-subsection" hidden>
+                <div class="inline-plan-sub-summary">
+                    <div>총 시간: <span class="inline-plan-sub-total">0시간</span></div>
+                    <div>분해 합계: <span class="inline-plan-sub-used">0시간</span></div>
+                </div>
+                <div class="inline-plan-sub-list">
+                    <div class="inline-plan-sub-row">
+                        <input type="text" class="inline-plan-sub-input" placeholder="세부 활동 입력 (디자인용)" readonly>
+                        <div class="inline-plan-sub-time">0:00</div>
+                    </div>
+                </div>
+                <div class="inline-plan-sub-actions">
+                    <button type="button" class="inline-plan-sub-add">행 추가</button>
+                    <button type="button" class="inline-plan-sub-fill">잔여+</button>
+                    <span class="inline-plan-sub-note">디자인용 미리보기입니다.</span>
+                </div>
+            </div>
         `;
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
@@ -6009,6 +6026,20 @@ class TimeTracker {
                 } finally {
                     syncBtn.disabled = false;
                     syncBtn.textContent = prev || '동기화';
+                }
+            });
+        }
+        const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
+        const subSection = dropdown.querySelector('.inline-plan-subsection');
+        if (splitBtn && subSection) {
+            splitBtn.addEventListener('click', () => {
+                const willShow = subSection.hidden;
+                subSection.hidden = !willShow;
+                splitBtn.classList.toggle('open', willShow);
+                if (willShow) {
+                    splitBtn.textContent = '세부 활동 분해 닫기';
+                } else {
+                    splitBtn.textContent = '세부 활동 분해 (준비중)';
                 }
             });
         }
