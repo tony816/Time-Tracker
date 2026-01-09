@@ -5879,9 +5879,22 @@ class TimeTracker {
         const raw = slot && typeof slot.planned === 'string' ? slot.planned : '';
         return this.normalizeActivityText ? this.normalizeActivityText(raw) : String(raw || '').trim();
     }
+    resolveInlinePlanAnchor(anchorEl, fallbackIndex = null) {
+        if (anchorEl && anchorEl.isConnected) return anchorEl;
+        const target = this.inlinePlanTarget;
+        const index = Number.isInteger(fallbackIndex)
+            ? fallbackIndex
+            : (target && Number.isInteger(target.startIndex) ? target.startIndex : null);
+        if (!Number.isInteger(index)) return anchorEl || null;
+        return document.querySelector(`[data-index="${index}"] .planned-input`)
+            || document.querySelector(`[data-index="${index}"]`);
+    }
     positionInlinePlanDropdown(anchorEl) {
-        if (!this.inlinePlanDropdown || !anchorEl) return;
-        const rect = anchorEl.getBoundingClientRect();
+        if (!this.inlinePlanDropdown) return;
+        const anchor = this.resolveInlinePlanAnchor(anchorEl);
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return;
         const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         const dropdown = this.inlinePlanDropdown;
@@ -5896,6 +5909,7 @@ class TimeTracker {
         }
         dropdown.style.left = `${Math.round(left)}px`;
         dropdown.style.top = `${Math.round(top)}px`;
+        dropdown.style.visibility = 'visible';
     }
     renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
@@ -5968,13 +5982,13 @@ class TimeTracker {
         });
     }
     openInlinePlanDropdown(index, anchorEl, endIndex = null) {
-        const anchor = anchorEl || null;
-        if (!anchor) return;
         const range = this.getPlannedRangeInfo(index);
         if (Number.isInteger(endIndex)) {
             range.startIndex = Math.min(range.startIndex, endIndex);
             range.endIndex = Math.max(range.endIndex, endIndex);
         }
+        const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
+        if (!anchor) return;
         this.closeInlinePlanDropdown();
 
         this.inlinePlanTarget = { ...range, anchor };
@@ -6021,6 +6035,7 @@ class TimeTracker {
                 </div>
             </div>
         `;
+        dropdown.style.visibility = 'hidden';
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
 
@@ -6228,6 +6243,13 @@ class TimeTracker {
 
         this.renderInlinePlanDropdownOptions();
         this.positionInlinePlanDropdown(anchor);
+        requestAnimationFrame(() => {
+            if (!this.inlinePlanDropdown) return;
+            const anchorNow = this.resolveInlinePlanAnchor(anchor, range.startIndex);
+            if (!anchorNow) return;
+            this.inlinePlanTarget.anchor = anchorNow;
+            this.positionInlinePlanDropdown(anchorNow);
+        });
 
         this.inlinePlanOutsideHandler = (event) => {
             if (!this.inlinePlanDropdown) return;
