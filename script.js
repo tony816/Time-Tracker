@@ -196,8 +196,10 @@ class TimeTracker {
         });
     }
 
-    renderTimeEntries() {
-        this.closeInlinePlanDropdown();
+    renderTimeEntries(preserveInlineDropdown = false) {
+        if (!preserveInlineDropdown) {
+            this.closeInlinePlanDropdown();
+        }
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
 
@@ -386,6 +388,28 @@ class TimeTracker {
                 // 스케줄 버튼으로 이동할 때는 유지
                 if (toEl && toEl.closest && (toEl.closest('.schedule-button') || toEl.closest('.undo-button'))) return;
                 this.hideHoverScheduleButton && this.hideHoverScheduleButton();
+            });
+
+            // 계획 입력 필드 클릭 시 드롭다운 바로 열기
+            timeEntries.addEventListener('click', (e) => {
+                const planned = e.target.closest('.planned-input');
+                if (!planned || !timeEntries.contains(planned)) return;
+                const idx = parseInt(planned.dataset.index, 10);
+                if (!Number.isFinite(idx)) return;
+
+                let start = idx;
+                let end = idx;
+                const mk = this.findMergeKey('planned', idx);
+                if (mk) {
+                    const [, sStr, eStr] = mk.split('-');
+                    const sVal = parseInt(sStr, 10);
+                    const eVal = parseInt(eStr, 10);
+                    if (Number.isFinite(sVal)) start = sVal;
+                    if (Number.isFinite(eVal)) end = eVal;
+                }
+
+                const anchor = planned.closest('.split-cell-wrapper.split-type-planned') || planned;
+                this.openInlinePlanDropdown(start, anchor, end);
             });
         }
 
@@ -602,6 +626,16 @@ class TimeTracker {
             else {
                 this.clearAllSelections();
                 this.selectMergedRange('planned', mergeKey);
+            }
+            if (e.type === 'click') {
+                const [, startStr, endStr] = mergeKey.split('-');
+                const startIdx = parseInt(startStr, 10);
+                const endIdx = parseInt(endStr, 10);
+                const safeStart = Number.isFinite(startIdx) ? startIdx : parseInt(plannedEl.dataset.index, 10);
+                const safeEnd = Number.isFinite(endIdx) ? endIdx : safeStart;
+                if (!Number.isFinite(safeStart)) return;
+                const anchor = document.querySelector(`[data-index="${safeStart}"] .planned-input`) || plannedEl;
+                this.openInlinePlanDropdown(safeStart, anchor, safeEnd);
             }
             return;
         }
@@ -3126,8 +3160,12 @@ class TimeTracker {
     }
 
     syncPlanTitleBandToggleState() {
-        const toggle = document.getElementById('planTitleBandToggle');
-        const field = document.getElementById('planTitleField');
+        const ctxToggle = this.inlinePlanContext && this.inlinePlanContext.titleToggle;
+        const ctxField = this.inlinePlanContext && this.inlinePlanContext.titleField;
+        const ctxInput = this.inlinePlanContext && this.inlinePlanContext.titleInput;
+        const toggle = ctxToggle || document.getElementById('planTitleBandToggle');
+        const field = ctxField || document.getElementById('planTitleField');
+        const input = ctxInput || document.getElementById('planTitleInput');
         if (!toggle) return;
         const normalizedTitle = this.normalizeActivityText
             ? this.normalizeActivityText(this.modalPlanTitle || '')
@@ -3145,7 +3183,6 @@ class TimeTracker {
                 : (fallbackRaw || '').trim();
             if (fallback) {
                 this.modalPlanTitle = fallback;
-                const input = document.getElementById('planTitleInput');
                 if (input) input.value = fallback;
             }
         }
@@ -3155,7 +3192,7 @@ class TimeTracker {
         }
         toggle.checked = this.modalPlanTitleBandOn;
         toggle.disabled = false;
-        this.updateSchedulePreview();
+        this.updateSchedulePreview && this.updateSchedulePreview();
     }
 
     renderPlanActivitiesList() {
@@ -3714,20 +3751,49 @@ class TimeTracker {
                 return { label, seconds };
             });
 
+        const planSummary = (() => {
+            const summary = this.formatActivitiesSummary ? this.formatActivitiesSummary(planActivities) : '';
+            if (summary) return summary;
+            const labels = planActivities.map(item => item.label).filter(Boolean);
+            return labels.join(', ');
+        })();
+
         for (let i = startIndex; i <= endIndex; i++) {
             const slot = this.timeSlots[i];
             if (!slot) continue;
             slot.planActivities = [];
             slot.planTitle = '';
             slot.planTitleBandOn = false;
+            // keep planned text empty here; will set below
+            if (!target.mergeKey) slot.planned = '';
         }
 
         if (this.timeSlots[baseIndex]) {
             this.timeSlots[baseIndex].planActivities = planActivities.map(item => ({ ...item }));
-            this.timeSlots[baseIndex].planTitle = '';
-            this.timeSlots[baseIndex].planTitleBandOn = false;
+            const plannedText = planSummary || this.timeSlots[baseIndex].planned || this.modalPlanTitle || '';
+            this.timeSlots[baseIndex].planned = plannedText;
+            this.timeSlots[baseIndex].planTitle = this.modalPlanTitle || '';
+            this.timeSlots[baseIndex].planTitleBandOn = Boolean(this.modalPlanTitleBandOn && this.modalPlanTitle);
+
+            if (target.mergeKey) {
+                this.mergedFields.set(target.mergeKey, plannedText);
+                // ensure other merged slots blank planned text
+                for (let i = startIndex; i <= endIndex; i++) {
+                    if (i === baseIndex) continue;
+                    if (this.timeSlots[i]) this.timeSlots[i].planned = '';
+                }
+            }
         }
 
+        this.renderTimeEntries(true);
+        if (this.inlinePlanTarget) {
+            const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
+                || document.querySelector(`[data-index="${baseIndex}"]`);
+            if (anchor) {
+                this.inlinePlanTarget.anchor = anchor;
+                this.positionInlinePlanDropdown(anchor);
+            }
+        }
         this.calculateTotals();
         this.autoSave();
     }
@@ -4508,6 +4574,7 @@ class TimeTracker {
 
     showScheduleButtonForSelection(type) {
         this.hideScheduleButton();
+        return;
         
         // 스케줄 입력 버튼은 계획(planned) 컬럼에서만 표시
         if (type !== 'planned') return;
@@ -4540,14 +4607,14 @@ class TimeTracker {
         this.scheduleButton.setAttribute('aria-label', '스케줄 입력');
         // 위치는 CSS로 오버레이 정중앙에 표시 (hover 시 노출)
         
-        this.scheduleButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const firstIndex = selectedIndices[0];
-            const lastIndex = selectedIndices[selectedIndices.length - 1];
-            
-            this.openScheduleModal(type, firstIndex, lastIndex);
-        });
+            this.scheduleButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
+                const firstIndex = selectedIndices[0];
+                const lastIndex = selectedIndices[selectedIndices.length - 1];
+                const anchor = document.querySelector(`[data-index="${firstIndex}"] .planned-input`) || document.querySelector(`[data-index="${firstIndex}"]`);
+                this.openInlinePlanDropdown(firstIndex, anchor, lastIndex);
+            });
         
         // 스케줄 버튼은 오버레이 내부에 배치
         overlay.appendChild(this.scheduleButton);
@@ -4566,6 +4633,8 @@ class TimeTracker {
 
     // 좌측 열 셀에 마우스를 올렸을 때 단일/병합 대상의 스케줄 버튼을 표시
     showScheduleButtonOnHover(index) {
+        this.hideHoverScheduleButton();
+        return;
         // 멀티 선택 중(병합 후보)에는 스케줄 버튼을 표시하지 않음
         if (this.selectedPlannedFields && this.selectedPlannedFields.size > 1) {
             const indices = Array.from(this.selectedPlannedFields).sort((a,b)=>a-b);
@@ -4608,9 +4677,11 @@ class TimeTracker {
             const mk = this.findMergeKey('planned', index);
             if (mk) {
                 const [, s, eIdx] = mk.split('-');
-                this.openScheduleModal('planned', parseInt(s,10), parseInt(eIdx,10));
+                const anchor = document.querySelector(`[data-index="${s}"] .planned-input`) || document.querySelector(`[data-index="${s}"]`);
+                this.openInlinePlanDropdown(parseInt(s,10), anchor, parseInt(eIdx,10));
             } else {
-                this.openScheduleModal('planned', index, index);
+                const anchor = document.querySelector(`[data-index="${index}"] .planned-input`) || document.querySelector(`[data-index="${index}"]`);
+                this.openInlinePlanDropdown(index, anchor, index);
             }
         };
 
@@ -4976,101 +5047,11 @@ class TimeTracker {
     }
     
     openScheduleModal(type, startIndex, endIndex = null) {
-        this.closeInlinePlanDropdown();
-        const modal = document.getElementById('scheduleModal');
-        const timeField = document.getElementById('scheduleTime');
-
-        const actualEndIndex = endIndex !== null ? endIndex : startIndex;
-        const mergeKey = this.findMergeKey(type, startIndex);
-        const value = mergeKey ? this.mergedFields.get(mergeKey) : this.timeSlots[startIndex][type];
-
-        if (type === 'planned') {
-            this.modalPlanStartIndex = startIndex;
-            this.modalPlanEndIndex = actualEndIndex;
-            const baseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', startIndex) : startIndex;
-            const baseSlot = (Number.isFinite(baseIndex) && baseIndex >= 0 && baseIndex < this.timeSlots.length)
-                ? this.timeSlots[baseIndex]
-                : (this.timeSlots[startIndex] || {});
-            const storedTitle = baseSlot && typeof baseSlot.planTitle === 'string'
-                ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
-                : '';
-            this.modalPlanTitle = storedTitle;
-        } else {
-            this.modalPlanStartIndex = null;
-            this.modalPlanEndIndex = null;
-            this.modalPlanActiveRow = -1;
-            this.modalPlanTitle = '';
-        }
-
-        // 시간 범위 표시
-        const startTime = this.timeSlots[startIndex].time;
-        if (actualEndIndex === startIndex) {
-            timeField.value = startTime + '시';
-        } else {
-            const endTime = parseInt(this.timeSlots[actualEndIndex].time);
-            const nextHour = endTime === 23 ? 0 : (endTime === 3 ? 4 : endTime + 1);
-            timeField.value = `${startTime}시 ~ ${nextHour}시`;
-        }
-
-        if (type === 'planned') {
-            const durationHours = Math.max(1, (actualEndIndex - startIndex + 1));
-            this.modalPlanTotalSeconds = durationHours * 3600;
-            this.modalPlanActivities = [];
-            this.modalPlanSectionOpen = false;
-            this.modalPlanActiveRow = -1;
-            this.preparePlanActivitiesSection(startIndex, actualEndIndex);
-            const planTitleInput = document.getElementById('planTitleInput');
-            if (planTitleInput) {
-                planTitleInput.value = this.modalPlanTitle || '';
-            }
-            this.syncPlanTitleBandToggleState();
-            const planTitleToggleRow = document.getElementById('planTitleToggleRow');
-            if (planTitleToggleRow) {
-                planTitleToggleRow.hidden = !this.modalPlanSectionOpen;
-            }
-            const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
-            if (fillPlanBtn) {
-                fillPlanBtn.hidden = !this.modalPlanSectionOpen;
-            }
-        }
-
-        // 활동 멀티셀렉트 초기화: 기존 값에서 선택 복원
-        const parsed = (value || '')
-            .split(/[,·]/)
-            .map(v => this.normalizeActivityText(v))
-            .filter(v => v);
-        if ((this.modalPlanActivities || []).length > 0) {
-            this.modalSelectedActivities = this.modalPlanActivities
-                .map(item => this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim())
-                .filter(Boolean);
-        } else {
-            this.modalSelectedActivities = parsed;
-        }
-        this.currentPlanSource = 'local';
-        this.renderPlannedActivityDropdown();
-
-        // Notion activities (optional): prefetch and merge, then re-render once
-        if (this.prefetchNotionActivitiesIfConfigured) {
-            this.prefetchNotionActivitiesIfConfigured()
-                .then((added) => { if (added) this.renderPlannedActivityDropdown(); })
-                .catch(() => {});
-        }
-
-        modal.style.display = 'flex';
-        
-        modal.dataset.type = type;
-        modal.dataset.startIndex = startIndex;
-        modal.dataset.endIndex = actualEndIndex;
-
-        this.updateSchedulePreview();
-        
-        setTimeout(() => {
-            const ai = document.getElementById('activityInput');
-            if (ai) ai.focus();
-        }, 100);
-        
-        this.hideScheduleButton();
-        this.hideHoverScheduleButton && this.hideHoverScheduleButton();
+        // Modal 제거됨: 인라인 드롭다운으로 대체
+        if (type !== 'planned') return;
+        const end = endIndex != null ? endIndex : startIndex;
+        const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`) || document.querySelector(`[data-index="${startIndex}"]`);
+        this.openInlinePlanDropdown(startIndex, anchor, end);
     }
     
     closeScheduleModal() {
@@ -5215,6 +5196,7 @@ class TimeTracker {
     
     attachModalEventListeners() {
         const modal = document.getElementById('scheduleModal');
+        if (!modal) return;
         const closeBtn = document.getElementById('closeModal');
         const saveBtn = document.getElementById('saveSchedule');
         const cancelBtn = document.getElementById('cancelSchedule');
@@ -5985,10 +5967,14 @@ class TimeTracker {
             list.appendChild(li);
         });
     }
-    openInlinePlanDropdown(index, anchorEl) {
+    openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         const anchor = anchorEl || null;
         if (!anchor) return;
         const range = this.getPlannedRangeInfo(index);
+        if (Number.isInteger(endIndex)) {
+            range.startIndex = Math.min(range.startIndex, endIndex);
+            range.endIndex = Math.max(range.endIndex, endIndex);
+        }
         this.closeInlinePlanDropdown();
 
         this.inlinePlanTarget = { ...range, anchor };
@@ -6003,6 +5989,20 @@ class TimeTracker {
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn">추가</button>
                 <button type="button" class="inline-plan-sync-btn">동기화</button>
+            </div>
+            <div class="inline-plan-title-area">
+                <div class="title-band-toggle inline-plan-title-toggle">
+                    <label>
+                        <input type="checkbox" class="inline-plan-title-band">
+                        활동 제목 밴드 표시
+                    </label>
+                </div>
+                <div class="inline-plan-title-field">
+                    <div class="title-input-wrapper">
+                        <input type="text" class="inline-plan-title-input" placeholder="활동 제목 입력">
+                        <button type="button" class="title-clear-btn inline-plan-title-clear">지우기</button>
+                    </div>
+                </div>
             </div>
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
@@ -6087,6 +6087,10 @@ class TimeTracker {
         const inlineNotice = dropdown.querySelector('.inline-plan-sub-note');
         const inlineTotal = dropdown.querySelector('.inline-plan-sub-total');
         const inlineUsed = dropdown.querySelector('.inline-plan-sub-used');
+        const inlineTitleInput = dropdown.querySelector('.inline-plan-title-input');
+        const inlineTitleClear = dropdown.querySelector('.inline-plan-title-clear');
+        const inlineTitleBand = dropdown.querySelector('.inline-plan-title-band');
+        const inlineTitleField = dropdown.querySelector('.inline-plan-title-field');
 
         // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
         this.inlinePlanContext = {
@@ -6097,7 +6101,11 @@ class TimeTracker {
             noticeEl: inlineNotice,
             fillBtn: inlineFill,
             addBtn: inlineAdd,
-            section: subSection
+            section: subSection,
+            titleInput: inlineTitleInput,
+            titleClear: inlineTitleClear,
+            titleToggle: inlineTitleBand,
+            titleField: inlineTitleField
         };
 
         // 현재 슬롯 범위 기준 기본 총시간 및 기존 세부활동 불러오기
@@ -6112,6 +6120,19 @@ class TimeTracker {
         this.modalPlanSectionOpen = false;
         if (subSection) subSection.hidden = true;
         if (inlineFill) inlineFill.hidden = true;
+        // 제목 초기화
+        const baseSlot = this.timeSlots[range.startIndex] || {};
+        this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
+            ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
+            : '';
+        this.modalPlanTitleBandOn = Boolean(baseSlot.planTitleBandOn && this.modalPlanTitle);
+        if (inlineTitleInput) inlineTitleInput.value = this.modalPlanTitle || '';
+        if (inlineTitleBand) {
+            inlineTitleBand.checked = this.modalPlanTitleBandOn;
+        }
+        if (inlineTitleField) {
+            inlineTitleField.hidden = !this.modalPlanTitleBandOn;
+        }
         this.updatePlanActivitiesSummary();
         this.renderPlanActivitiesList();
 
@@ -6174,13 +6195,45 @@ class TimeTracker {
             });
         }
 
+        if (inlineTitleInput) {
+            inlineTitleInput.addEventListener('input', () => {
+                this.modalPlanTitle = this.normalizeActivityText
+                    ? this.normalizeActivityText(inlineTitleInput.value || '')
+                    : (inlineTitleInput.value || '').trim();
+                this.syncPlanTitleBandToggleState();
+                this.syncInlinePlanToSlots();
+            });
+        }
+
+        if (inlineTitleClear && inlineTitleInput) {
+            inlineTitleClear.addEventListener('click', () => {
+                inlineTitleInput.value = '';
+                this.modalPlanTitle = '';
+                this.modalPlanTitleBandOn = false;
+                if (inlineTitleBand) inlineTitleBand.checked = false;
+                if (inlineTitleField) inlineTitleField.hidden = true;
+                this.syncPlanTitleBandToggleState();
+                this.syncInlinePlanToSlots();
+            });
+        }
+
+        if (inlineTitleBand) {
+            inlineTitleBand.addEventListener('change', () => {
+                this.modalPlanTitleBandOn = inlineTitleBand.checked;
+                if (inlineTitleField) inlineTitleField.hidden = !inlineTitleBand.checked;
+                this.syncPlanTitleBandToggleState();
+                this.syncInlinePlanToSlots();
+            });
+        }
+
         this.renderInlinePlanDropdownOptions();
         this.positionInlinePlanDropdown(anchor);
 
         this.inlinePlanOutsideHandler = (event) => {
             if (!this.inlinePlanDropdown) return;
             if (this.inlinePlanDropdown.contains(event.target)) return;
-            if (anchor && anchor.contains(event.target)) return;
+            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+            if (currentAnchor && currentAnchor.contains(event.target)) return;
             this.closeInlinePlanDropdown();
         };
         document.addEventListener('mousedown', this.inlinePlanOutsideHandler, true);
@@ -6190,7 +6243,10 @@ class TimeTracker {
         };
         document.addEventListener('keydown', this.inlinePlanEscHandler);
 
-        this.inlinePlanScrollHandler = () => this.positionInlinePlanDropdown(anchor);
+        this.inlinePlanScrollHandler = () => {
+            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+            if (currentAnchor) this.positionInlinePlanDropdown(currentAnchor);
+        };
         window.addEventListener('resize', this.inlinePlanScrollHandler);
         window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
 
