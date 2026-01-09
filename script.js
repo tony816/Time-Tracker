@@ -3203,6 +3203,7 @@ class TimeTracker {
         this.refreshSpinnerStates('plan');
         this.updatePlanRowActiveStyles();
         this.syncPlanTitleBandToggleState();
+        this.syncInlinePlanToSlots();
     }
 
     isValidPlanRow(index) {
@@ -3395,7 +3396,10 @@ class TimeTracker {
         const step = 600;
         const items = kind === 'plan' ? (this.modalPlanActivities || []) : (this.modalSubActivities || []);
         if (!items[index]) return;
-        const spinnerList = kind === 'plan' ? document.getElementById('planActivitiesList') : document.getElementById('subActivitiesList');
+        const ctx = kind === 'plan' ? this.getPlanUIElements() : null;
+        const spinnerList = kind === 'plan'
+            ? (ctx && ctx.list) || document.getElementById('planActivitiesList')
+            : document.getElementById('subActivitiesList');
         const spinner = spinnerList ? spinnerList.querySelector(`.time-spinner[data-kind="${kind}"][data-index="${index}"]`) : null;
         const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
         let limit = null;
@@ -3441,6 +3445,7 @@ class TimeTracker {
 
         if (kind === 'plan') {
             this.updatePlanActivitiesSummary();
+            this.syncInlinePlanToSlots();
         } else {
             const total = this.getValidSubActivitiesSeconds();
             this.modalSplitTotalSeconds = limit > 0 ? Math.min(total, limit) : total;
@@ -3450,15 +3455,15 @@ class TimeTracker {
     }
 
     openPlanActivitiesSection() {
-        const section = document.getElementById('planActivitiesSection');
-        if (!section) return;
+        const ctx = this.getPlanUIElements();
+        const section = ctx.section || document.getElementById('planActivitiesSection');
         this.modalPlanSectionOpen = true;
-        section.hidden = false;
+        if (section) section.hidden = false;
         const planTitleToggleRow = document.getElementById('planTitleToggleRow');
         if (planTitleToggleRow) {
             planTitleToggleRow.hidden = false;
         }
-        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        const fillPlanBtn = ctx.fillBtn || document.getElementById('fillRemainingPlanActivity');
         if (fillPlanBtn) {
             fillPlanBtn.hidden = false;
         }
@@ -3470,15 +3475,15 @@ class TimeTracker {
     }
 
     closePlanActivitiesSection() {
-        const section = document.getElementById('planActivitiesSection');
-        if (!section) return;
+        const ctx = this.getPlanUIElements();
+        const section = ctx.section || document.getElementById('planActivitiesSection');
         this.modalPlanSectionOpen = false;
-        section.hidden = true;
+        if (section) section.hidden = true;
         const planTitleToggleRow = document.getElementById('planTitleToggleRow');
         if (planTitleToggleRow) {
             planTitleToggleRow.hidden = true;
         }
-        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
+        const fillPlanBtn = ctx.fillBtn || document.getElementById('fillRemainingPlanActivity');
         if (fillPlanBtn) {
             fillPlanBtn.hidden = true;
         }
@@ -3693,6 +3698,38 @@ class TimeTracker {
         this.renderPlanActivitiesList();
         this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
         return true;
+    }
+
+    syncInlinePlanToSlots() {
+        const target = this.inlinePlanTarget;
+        if (!target) return;
+        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
+        const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
+        const baseIndex = Math.min(startIndex, endIndex);
+        const planActivities = (this.modalPlanActivities || [])
+            .filter(item => item && !item.invalid && (String(item.label || '').trim() !== '' || (Number.isFinite(item.seconds) && item.seconds > 0)))
+            .map(item => {
+                const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
+                const seconds = this.normalizeDurationStep(Number.isFinite(item.seconds) ? Number(item.seconds) : 0) || 0;
+                return { label, seconds };
+            });
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            const slot = this.timeSlots[i];
+            if (!slot) continue;
+            slot.planActivities = [];
+            slot.planTitle = '';
+            slot.planTitleBandOn = false;
+        }
+
+        if (this.timeSlots[baseIndex]) {
+            this.timeSlots[baseIndex].planActivities = planActivities.map(item => ({ ...item }));
+            this.timeSlots[baseIndex].planTitle = '';
+            this.timeSlots[baseIndex].planTitleBandOn = false;
+        }
+
+        this.calculateTotals();
+        this.autoSave();
     }
 
     fillRemainingPlanActivity() {
@@ -5972,20 +6009,15 @@ class TimeTracker {
             </div>
             <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해 (준비중)">세부 활동 분해 (준비중)</button>
             <div class="inline-plan-subsection" hidden>
-                <div class="inline-plan-sub-summary">
+                <div class="sub-activities-summary">
                     <div>총 시간: <span class="inline-plan-sub-total">0시간</span></div>
                     <div>분해 합계: <span class="inline-plan-sub-used">0시간</span></div>
                 </div>
-                <div class="inline-plan-sub-list">
-                    <div class="inline-plan-sub-row">
-                        <input type="text" class="inline-plan-sub-input" placeholder="세부 활동 입력 (디자인용)" readonly>
-                        <div class="inline-plan-sub-time">0:00</div>
-                    </div>
-                </div>
-                <div class="inline-plan-sub-actions">
-                    <button type="button" class="inline-plan-sub-add">행 추가</button>
-                    <button type="button" class="inline-plan-sub-fill">잔여+</button>
-                    <span class="inline-plan-sub-note">디자인용 미리보기입니다.</span>
+                <div class="sub-activities-list inline-plan-sub-list"></div>
+                <div class="sub-activities-actions">
+                    <button type="button" class="sub-activity-action-btn inline-plan-sub-add">행 추가</button>
+                    <button type="button" class="sub-activity-action-btn inline-plan-sub-fill" title="잔여 시간 추가">잔여+</button>
+                    <span class="sub-activities-notice inline-plan-sub-note"></span>
                 </div>
             </div>
         `;
@@ -6049,15 +6081,95 @@ class TimeTracker {
         }
         const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
         const subSection = dropdown.querySelector('.inline-plan-subsection');
+        const inlineList = dropdown.querySelector('.inline-plan-sub-list');
+        const inlineAdd = dropdown.querySelector('.inline-plan-sub-add');
+        const inlineFill = dropdown.querySelector('.inline-plan-sub-fill');
+        const inlineNotice = dropdown.querySelector('.inline-plan-sub-note');
+        const inlineTotal = dropdown.querySelector('.inline-plan-sub-total');
+        const inlineUsed = dropdown.querySelector('.inline-plan-sub-used');
+
+        // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
+        this.inlinePlanContext = {
+            root: dropdown,
+            list: inlineList,
+            totalEl: inlineTotal,
+            usedEl: inlineUsed,
+            noticeEl: inlineNotice,
+            fillBtn: inlineFill,
+            addBtn: inlineAdd,
+            section: subSection
+        };
+
+        // 현재 슬롯 범위 기준 기본 총시간 및 기존 세부활동 불러오기
+        const blockHours = Math.max(1, (range.endIndex - range.startIndex + 1));
+        this.modalPlanTotalSeconds = blockHours * 3600;
+        this.modalPlanActivities = this.getPlanActivitiesForIndex(range.startIndex).map(item => ({
+            label: item.label || '',
+            seconds: Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0,
+            invalid: false
+        }));
+        this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
+        this.modalPlanSectionOpen = false;
+        if (subSection) subSection.hidden = true;
+        if (inlineFill) inlineFill.hidden = true;
+        this.updatePlanActivitiesSummary();
+        this.renderPlanActivitiesList();
+
         if (splitBtn && subSection) {
             splitBtn.addEventListener('click', () => {
                 const willShow = subSection.hidden;
                 subSection.hidden = !willShow;
+                this.modalPlanSectionOpen = willShow;
+                if (inlineFill) inlineFill.hidden = !willShow;
                 splitBtn.classList.toggle('open', willShow);
-                if (willShow) {
-                    splitBtn.textContent = '세부 활동 분해 닫기';
-                } else {
-                    splitBtn.textContent = '세부 활동 분해 (준비중)';
+                splitBtn.textContent = willShow ? '세부 활동 분해 닫기' : '세부 활동 분해';
+                if (willShow && this.modalPlanActivities.length === 0) {
+                    this.addPlanActivityRow();
+                } else if (willShow) {
+                    this.renderPlanActivitiesList();
+                }
+                this.updatePlanActivitiesSummary();
+            });
+        }
+
+        if (inlineAdd) {
+            inlineAdd.addEventListener('click', () => {
+                this.openPlanActivitiesSection();
+                this.addPlanActivityRow();
+            });
+        }
+
+        if (inlineFill) {
+            inlineFill.addEventListener('click', () => {
+                this.fillRemainingPlanActivity();
+            });
+        }
+
+        if (inlineList) {
+            inlineList.addEventListener('input', (event) => {
+                if (event.target.classList.contains('plan-activity-label')) {
+                    this.handlePlanActivitiesInput(event);
+                }
+            });
+            inlineList.addEventListener('click', (event) => {
+                const spinnerBtn = event.target.closest('.spinner-btn');
+                if (spinnerBtn) {
+                    const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
+                    const idx = parseInt(spinnerBtn.dataset.index, 10);
+                    if (Number.isFinite(idx)) {
+                        this.adjustActivityDuration('plan', idx, direction);
+                    }
+                    return;
+                }
+                const removeBtn = event.target.closest('.remove-sub-activity');
+                if (removeBtn) {
+                    this.handlePlanActivitiesRemoval(event);
+                    return;
+                }
+                const row = event.target.closest('.sub-activity-row');
+                if (row && inlineList.contains(row)) {
+                    const idx = parseInt(row.dataset.index, 10);
+                    if (Number.isFinite(idx)) this.setPlanActiveRow(idx);
                 }
             });
         }
@@ -6111,6 +6223,7 @@ class TimeTracker {
         }
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
+        this.inlinePlanContext = null;
     }
     applyInlinePlanSelection(label) {
         if (!this.inlinePlanTarget) return;
