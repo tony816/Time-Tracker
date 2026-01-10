@@ -3563,7 +3563,6 @@ class TimeTracker {
         }
 
         this.updatePlanActivitiesSummary();
-        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
         this.syncInlinePlanToSlots();
     }
 
@@ -3581,7 +3580,6 @@ class TimeTracker {
             this.modalPlanActiveRow = Math.max(0, this.modalPlanActiveRow - 1);
         }
         this.renderPlanActivitiesList();
-        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
         this.syncInlinePlanToSlots();
     }
 
@@ -5274,7 +5272,6 @@ class TimeTracker {
                     this.updatePlanRowActiveStyles();
                 }
                 this.updatePlanActivitiesToggleLabel();
-                this.syncSelectedActivitiesFromPlan();
                 this.renderPlannedActivityDropdown();
             });
         }
@@ -5988,7 +5985,9 @@ class TimeTracker {
 
         const startIndex = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
         const currentValue = this.getPlannedValueForIndex(startIndex);
-        const grouped = this.buildPlannedActivityOptions(currentValue ? [currentValue] : []);
+        const planActivities = this.getPlanActivitiesForIndex(startIndex);
+        const hasPlanSplit = Array.isArray(planActivities) && planActivities.length > 0;
+        const grouped = this.buildPlannedActivityOptions(!hasPlanSplit && currentValue ? [currentValue] : []);
         const counts = { local: (grouped.local || []).length, notion: (grouped.notion || []).length };
         this.updatePlanSourceTabs(counts, tabs);
 
