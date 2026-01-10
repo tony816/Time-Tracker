@@ -2800,6 +2800,9 @@ class TimeTracker {
         const list = document.getElementById('subActivitiesList');
         if (!list) return;
         list.innerHTML = '';
+        const optionLabels = this.buildActivityLabelOptions(
+            (this.modalSubActivities || []).map(item => (item && item.label ? item.label : ''))
+        );
         (this.modalSubActivities || []).forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'sub-activity-row';
@@ -2808,11 +2811,10 @@ class TimeTracker {
                 row.classList.add('invalid');
             }
 
-            const labelInput = document.createElement('input');
-            labelInput.type = 'text';
-            labelInput.className = 'sub-activity-label';
-            labelInput.placeholder = '세부 활동';
-            labelInput.value = item.label || '';
+            const labelSelect = document.createElement('select');
+            labelSelect.className = 'sub-activity-label';
+            labelSelect.setAttribute('aria-label', '세부 활동');
+            this.populateActivityLabelSelect(labelSelect, optionLabels, item.label, '세부 활동');
 
             const spinner = this.createDurationSpinner({
                 kind: 'actual',
@@ -2825,7 +2827,7 @@ class TimeTracker {
             removeBtn.className = 'remove-sub-activity';
             removeBtn.textContent = '삭제';
 
-            row.appendChild(labelInput);
+            row.appendChild(labelSelect);
             row.appendChild(spinner);
             row.appendChild(removeBtn);
             list.appendChild(row);
@@ -2992,7 +2994,9 @@ class TimeTracker {
         const item = this.modalSubActivities[idx];
 
         if (event.target.classList.contains('sub-activity-label')) {
-            item.label = event.target.value;
+            item.label = this.normalizeActivityText
+                ? this.normalizeActivityText(event.target.value || '')
+                : String(event.target.value || '').trim();
         }
 
         this.updateSubActivitiesSummary();
@@ -3199,6 +3203,9 @@ class TimeTracker {
         const { list } = this.getPlanUIElements();
         if (!list) return;
         list.innerHTML = '';
+        const optionLabels = this.buildActivityLabelOptions(
+            (this.modalPlanActivities || []).map(item => (item && item.label ? item.label : ''))
+        );
         (this.modalPlanActivities || []).forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'sub-activity-row';
@@ -3206,11 +3213,10 @@ class TimeTracker {
             if (item.invalid) row.classList.add('invalid');
             if (idx === this.modalPlanActiveRow) row.classList.add('active');
 
-            const labelInput = document.createElement('input');
-            labelInput.type = 'text';
-            labelInput.className = 'plan-activity-label';
-            labelInput.placeholder = '세부 활동';
-            labelInput.value = item.label || '';
+            const labelSelect = document.createElement('select');
+            labelSelect.className = 'plan-activity-label';
+            labelSelect.setAttribute('aria-label', '세부 활동');
+            this.populateActivityLabelSelect(labelSelect, optionLabels, item.label, '세부 활동');
 
             const spinner = this.createDurationSpinner({
                 kind: 'plan',
@@ -3223,7 +3229,7 @@ class TimeTracker {
             removeBtn.className = 'remove-sub-activity';
             removeBtn.textContent = '삭제';
 
-            row.appendChild(labelInput);
+            row.appendChild(labelSelect);
             row.appendChild(spinner);
             row.appendChild(removeBtn);
             list.appendChild(row);
@@ -3551,7 +3557,9 @@ class TimeTracker {
         const item = this.modalPlanActivities[idx];
 
         if (event.target.classList.contains('plan-activity-label')) {
-            item.label = event.target.value;
+            item.label = this.normalizeActivityText
+                ? this.normalizeActivityText(event.target.value || '')
+                : String(event.target.value || '').trim();
         }
 
         this.updatePlanActivitiesSummary();
@@ -5290,6 +5298,11 @@ class TimeTracker {
                     this.handlePlanActivitiesInput(event);
                 }
             });
+            planList.addEventListener('change', (event) => {
+                if (event.target.classList.contains('plan-activity-label')) {
+                    this.handlePlanActivitiesInput(event);
+                }
+            });
             planList.addEventListener('click', (event) => {
                 const spinnerBtn = event.target.closest('.spinner-btn');
                 if (spinnerBtn) {
@@ -5511,6 +5524,7 @@ class TimeTracker {
             if (!this.modalSelectedActivities.includes(label)) this.modalSelectedActivities.push(label);
         }
         this.renderPlannedActivityDropdown();
+        this.refreshSubActivityOptions();
     }
     removePlannedActivityOption(text) {
         const label = this.normalizeActivityText(text);
@@ -5522,6 +5536,7 @@ class TimeTracker {
             const sidx = this.modalSelectedActivities.indexOf(label);
             if (sidx >= 0) this.modalSelectedActivities.splice(sidx, 1);
             this.renderPlannedActivityDropdown();
+            this.refreshSubActivityOptions();
         }
     }
     toggleSelectActivity(text, options = {}) {
@@ -5574,6 +5589,7 @@ class TimeTracker {
             this.dedupeAndSortPlannedActivities();
             this.savePlannedActivities();
             this.renderPlannedActivityDropdown();
+            this.refreshSubActivityOptions();
         }
     }
     findPlannedActivityIndex(label) {
@@ -5702,6 +5718,59 @@ class TimeTracker {
         });
 
         return grouped;
+    }
+    buildActivityLabelOptions(extraLabels = []) {
+        const seen = new Set();
+        const options = [];
+        const normalize = (value) => {
+            return this.normalizeActivityText ? this.normalizeActivityText(value || '') : String(value || '').trim();
+        };
+
+        (this.plannedActivities || []).forEach((item) => {
+            if (!item) return;
+            const label = normalize(item.label || item.title || '');
+            if (!label || seen.has(label)) return;
+            seen.add(label);
+            options.push(label);
+        });
+
+        (extraLabels || []).forEach((raw) => {
+            const label = normalize(raw);
+            if (!label || seen.has(label)) return;
+            seen.add(label);
+            options.push(label);
+        });
+
+        return options;
+    }
+    populateActivityLabelSelect(select, optionLabels, currentLabel, placeholderText = '세부 활동') {
+        if (!select) return;
+        select.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = placeholderText;
+        select.appendChild(placeholder);
+
+        (optionLabels || []).forEach((label) => {
+            const option = document.createElement('option');
+            option.value = label;
+            option.textContent = label;
+            select.appendChild(option);
+        });
+
+        const normalizedCurrent = this.normalizeActivityText
+            ? this.normalizeActivityText(currentLabel || '')
+            : String(currentLabel || '').trim();
+        select.value = normalizedCurrent || '';
+    }
+    refreshSubActivityOptions() {
+        if (this.modalSplitSectionOpen) {
+            this.renderSubActivitiesList();
+        }
+        if (this.modalPlanSectionOpen) {
+            this.renderPlanActivitiesList();
+        }
     }
     renderPlannedActivityDropdown() {
         const chips = document.getElementById('activityChips');
@@ -6187,6 +6256,11 @@ class TimeTracker {
                     this.handlePlanActivitiesInput(event);
                 }
             });
+            inlineList.addEventListener('change', (event) => {
+                if (event.target.classList.contains('plan-activity-label')) {
+                    this.handlePlanActivitiesInput(event);
+                }
+            });
             inlineList.addEventListener('click', (event) => {
                 const spinnerBtn = event.target.closest('.spinner-btn');
                 if (spinnerBtn) {
@@ -6452,6 +6526,9 @@ class TimeTracker {
         this.dedupeAndSortPlannedActivities();
         if (this.pruneSelectedActivitiesByAvailability()) {
             changed = true;
+        }
+        if (changed) {
+            this.refreshSubActivityOptions();
         }
         return changed;
     }
@@ -6996,6 +7073,11 @@ class TimeTracker {
 
         if (list) {
             list.addEventListener('input', (event) => {
+                if (event.target.classList.contains('sub-activity-label')) {
+                    this.handleSubActivitiesInput(event);
+                }
+            });
+            list.addEventListener('change', (event) => {
                 if (event.target.classList.contains('sub-activity-label')) {
                     this.handleSubActivitiesInput(event);
                 }

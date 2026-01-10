@@ -1974,11 +1974,14 @@ h1 {
   align-items: center;
 }
 
-.sub-activity-row input {
+.sub-activity-row input,
+.sub-activity-row select {
+  width: 100%;
   padding: 6px 8px;
   border: 1px solid #d0d6dc;
   border-radius: 4px;
   font-size: 13px;
+  background: #fff;
 }
 
 .sub-activity-row.active {
