@@ -6004,25 +6004,25 @@ class TimeTracker {
                 <button type="button" class="inline-plan-add-btn">추가</button>
                 <button type="button" class="inline-plan-sync-btn">동기화</button>
             </div>
-            <div class="inline-plan-title-area">
-                <div class="title-band-toggle inline-plan-title-toggle">
-                    <label>
-                        <input type="checkbox" class="inline-plan-title-band">
-                        활동 제목 밴드 표시
-                    </label>
-                </div>
-                <div class="inline-plan-title-field">
-                    <div class="title-input-wrapper">
-                        <input type="text" class="inline-plan-title-input" placeholder="활동 제목 입력">
-                        <button type="button" class="title-clear-btn inline-plan-title-clear">지우기</button>
-                    </div>
-                </div>
-            </div>
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
             </div>
             <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해 (준비중)">세부 활동 분해 (준비중)</button>
             <div class="inline-plan-subsection" hidden>
+                <div class="inline-plan-title-area">
+                    <div class="title-band-toggle inline-plan-title-toggle">
+                        <label>
+                            <input type="checkbox" class="inline-plan-title-band">
+                            활동 제목 밴드 표시
+                        </label>
+                    </div>
+                    <div class="inline-plan-title-field">
+                        <div class="title-input-wrapper">
+                            <input type="text" class="inline-plan-title-input" placeholder="활동 제목 입력">
+                            <button type="button" class="title-clear-btn inline-plan-title-clear">지우기</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="sub-activities-summary">
                     <div>총 시간: <span class="inline-plan-sub-total">0시간</span></div>
                     <div>분해 합계: <span class="inline-plan-sub-used">0시간</span></div>
