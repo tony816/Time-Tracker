@@ -6124,22 +6124,44 @@ class TimeTracker {
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
 
+        const input = dropdown.querySelector('.inline-plan-input');
+        const addBtn = dropdown.querySelector('.inline-plan-add-btn');
+        const syncBtn = dropdown.querySelector('.inline-plan-sync-btn');
+        const runInlineNotionSync = async () => {
+            if (!this.prefetchNotionActivitiesIfConfigured) return false;
+            if (syncBtn && syncBtn.disabled) return false;
+            const prev = syncBtn ? syncBtn.textContent : '';
+            if (syncBtn) {
+                syncBtn.disabled = true;
+                syncBtn.textContent = '동기화중...';
+            }
+            try {
+                const added = await this.prefetchNotionActivitiesIfConfigured();
+                if (added) this.renderInlinePlanDropdownOptions();
+                return added;
+            } catch (e) {
+                console.warn('[inline notion sync] failed:', e);
+                return false;
+            } finally {
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = prev || '동기화';
+                }
+            }
+        };
+
         const tabs = dropdown.querySelector('.inline-plan-tabs');
         if (tabs) {
             tabs.addEventListener('click', (event) => {
                 const btn = event.target.closest('.plan-tab');
                 if (!btn || !tabs.contains(btn)) return;
                 const source = btn.dataset.source === 'notion' ? 'notion' : 'local';
-                if (this.currentPlanSource !== source) {
-                    this.currentPlanSource = source;
-                    this.renderInlinePlanDropdownOptions();
-                }
+                if (this.currentPlanSource === source) return;
+                this.currentPlanSource = source;
+                this.renderInlinePlanDropdownOptions();
+                if (source === 'notion') runInlineNotionSync();
             });
         }
-
-        const input = dropdown.querySelector('.inline-plan-input');
-        const addBtn = dropdown.querySelector('.inline-plan-add-btn');
-        const syncBtn = dropdown.querySelector('.inline-plan-sync-btn');
 
         const addHandler = () => {
             const val = this.normalizeActivityText ? this.normalizeActivityText(input.value) : String(input.value || '').trim();
@@ -6164,19 +6186,7 @@ class TimeTracker {
         }
         if (syncBtn) {
             syncBtn.addEventListener('click', async () => {
-                if (!this.prefetchNotionActivitiesIfConfigured) return;
-                const prev = syncBtn.textContent;
-                syncBtn.disabled = true;
-                syncBtn.textContent = '동기화중...';
-                try {
-                    const added = await this.prefetchNotionActivitiesIfConfigured();
-                    if (added) this.renderInlinePlanDropdownOptions();
-                } catch (e) {
-                    console.warn('[inline notion sync] failed:', e);
-                } finally {
-                    syncBtn.disabled = false;
-                    syncBtn.textContent = prev || '동기화';
-                }
+                await runInlineNotionSync();
             });
         }
         const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
