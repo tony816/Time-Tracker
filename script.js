@@ -216,7 +216,7 @@ class TimeTracker {
                         data-index="${index}" 
                         data-type="planned" 
                         value="${slot.planned}"
-                        placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+                        placeholder="">`;
 
             plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
 
@@ -332,6 +332,7 @@ class TimeTracker {
         });
 
         document.getElementById('timeEntries').addEventListener('input', (e) => {
+            if (e.target.classList.contains('planned-input')) return;
             if (e.target.classList.contains('input-field') && !e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
                 const type = e.target.dataset.type;
@@ -370,6 +371,18 @@ class TimeTracker {
         // 병합된 셀은 완전 일체화: 어느 위치를 클릭해도 전체 범위 선택
         const timeEntries = document.getElementById('timeEntries');
         if (timeEntries) {
+            timeEntries.addEventListener('keydown', (e) => {
+                if (!e.target.classList.contains('planned-input')) return;
+                if (e.key === 'Enter' && !e.isComposing) {
+                    e.preventDefault();
+                    this.commitPlannedInputChange(e.target);
+                    e.target.blur();
+                }
+            });
+            timeEntries.addEventListener('blur', (e) => {
+                if (!e.target.classList.contains('planned-input')) return;
+                this.commitPlannedInputChange(e.target);
+            }, true);
             // 캡처 단계에서 먼저 가로챔: 드래그/단일선택 로직보다 선행
             const captureHandler = (e) => this.handleMergedClickCapture(e);
             timeEntries.addEventListener('mousedown', captureHandler, true);
@@ -5924,6 +5937,33 @@ class TimeTracker {
             button.setAttribute('aria-selected', isActive ? 'true' : 'false');
             button.classList.toggle('empty', !(counts[source] > 0));
         });
+    }
+    commitPlannedInputChange(field) {
+        if (!field || !field.dataset) return;
+        const index = parseInt(field.dataset.index, 10);
+        if (!Number.isFinite(index)) return;
+        const raw = field.value || '';
+        const normalized = this.normalizeActivityText
+            ? this.normalizeActivityText(raw)
+            : String(raw).trim();
+        const range = this.getPlannedRangeInfo(index);
+        const startIndex = Number.isInteger(range.startIndex) ? range.startIndex : index;
+        const endIndex = Number.isInteger(range.endIndex) ? range.endIndex : startIndex;
+        if (range.mergeKey) {
+            this.mergedFields.set(range.mergeKey, normalized);
+        }
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (!this.timeSlots[i]) continue;
+            const isStart = i === startIndex;
+            this.timeSlots[i].planned = isStart ? normalized : '';
+            this.timeSlots[i].planActivities = [];
+            this.timeSlots[i].planTitle = isStart ? normalized : '';
+            this.timeSlots[i].planTitleBandOn = false;
+        }
+        if (field.value !== normalized) field.value = normalized;
+        this.calculateTotals();
+        this.updateSchedulePreview && this.updateSchedulePreview();
+        this.autoSave();
     }
     getPlannedRangeInfo(index) {
         const info = { startIndex: index, endIndex: index, mergeKey: null };
