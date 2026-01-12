@@ -1745,13 +1745,19 @@ h1 {
   border-color: #3498db;
 }
 
+.inline-plan-sync-btn {
+  background: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}
+
 .inline-plan-add-btn:hover {
     background: #2980b9;
 }
 
 .inline-plan-sync-btn:hover {
-    background: #e9edf2;
-    border-color: #cdd4dc;
+    background: #c0392b;
+    border-color: #c0392b;
 }
 
 .inline-plan-options {

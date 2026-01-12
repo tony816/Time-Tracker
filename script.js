@@ -6087,7 +6087,7 @@ class TimeTracker {
             <div class="inline-plan-input-row">
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn">추가</button>
-                <button type="button" class="inline-plan-sync-btn">동기화</button>
+                <button type="button" class="inline-plan-sync-btn">지우기</button>
             </div>
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
@@ -6126,15 +6126,9 @@ class TimeTracker {
 
         const input = dropdown.querySelector('.inline-plan-input');
         const addBtn = dropdown.querySelector('.inline-plan-add-btn');
-        const syncBtn = dropdown.querySelector('.inline-plan-sync-btn');
+        const clearBtn = dropdown.querySelector('.inline-plan-sync-btn');
         const runInlineNotionSync = async () => {
             if (!this.prefetchNotionActivitiesIfConfigured) return false;
-            if (syncBtn && syncBtn.disabled) return false;
-            const prev = syncBtn ? syncBtn.textContent : '';
-            if (syncBtn) {
-                syncBtn.disabled = true;
-                syncBtn.textContent = '동기화중...';
-            }
             try {
                 const added = await this.prefetchNotionActivitiesIfConfigured();
                 if (added) this.renderInlinePlanDropdownOptions();
@@ -6142,11 +6136,6 @@ class TimeTracker {
             } catch (e) {
                 console.warn('[inline notion sync] failed:', e);
                 return false;
-            } finally {
-                if (syncBtn) {
-                    syncBtn.disabled = false;
-                    syncBtn.textContent = prev || '동기화';
-                }
             }
         };
 
@@ -6172,6 +6161,31 @@ class TimeTracker {
             this.renderInlinePlanDropdownOptions();
             this.applyInlinePlanSelection(val);
         };
+        const clearHandler = () => {
+            const target = this.inlinePlanTarget;
+            if (!target) return;
+            const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
+            const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
+            const baseIndex = Math.min(startIndex, endIndex);
+            if (this.timeSlots[baseIndex]) {
+                this.timeSlots[baseIndex].planned = '';
+            }
+            this.modalPlanActivities = [];
+            this.modalPlanActiveRow = -1;
+            this.modalPlanTitle = '';
+            this.modalPlanTitleBandOn = false;
+            if (this.inlinePlanContext && this.inlinePlanContext.titleInput) {
+                this.inlinePlanContext.titleInput.value = '';
+            }
+            if (this.inlinePlanContext && this.inlinePlanContext.titleToggle) {
+                this.inlinePlanContext.titleToggle.checked = false;
+            }
+            if (this.inlinePlanContext && this.inlinePlanContext.titleField) {
+                this.inlinePlanContext.titleField.hidden = true;
+            }
+            this.renderPlanActivitiesList();
+            this.renderInlinePlanDropdownOptions();
+        };
 
         if (input) {
             input.addEventListener('keydown', (e) => {
@@ -6184,9 +6198,9 @@ class TimeTracker {
         if (addBtn) {
             addBtn.addEventListener('click', addHandler);
         }
-        if (syncBtn) {
-            syncBtn.addEventListener('click', async () => {
-                await runInlineNotionSync();
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                clearHandler();
             });
         }
         const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
