@@ -4442,6 +4442,11 @@ class TimeTracker {
         }
 
         const overlay   = this.ensureSelectionOverlay(type);
+        if (type === 'planned') {
+            overlay.dataset.fill = selectedSet.size > 1 ? 'solid' : 'outline';
+        } else {
+            delete overlay.dataset.fill;
+        }
         const left      = startRect.left + window.scrollX;
         const top       = startRect.top  + window.scrollY;
         const width     = startRect.width;
@@ -6033,6 +6038,18 @@ class TimeTracker {
             sourceTag.className = 'inline-plan-option-source';
             sourceTag.textContent = source === 'notion' ? '노션' : '직접 추가';
             right.appendChild(sourceTag);
+            if (source !== 'notion') {
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'inline-plan-option-remove';
+                removeBtn.textContent = '삭제';
+                removeBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    this.removePlannedActivityOption(label);
+                    this.renderInlinePlanDropdownOptions();
+                });
+                right.appendChild(removeBtn);
+            }
             if (recommendedSeconds && recommendedSeconds > 0) {
                 const displaySeconds = this.normalizeDurationStep
                     ? (this.normalizeDurationStep(recommendedSeconds) || recommendedSeconds)
