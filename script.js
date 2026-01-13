@@ -6401,6 +6401,7 @@ class TimeTracker {
             if (!anchorNow) return;
             this.inlinePlanTarget.anchor = anchorNow;
             this.positionInlinePlanDropdown(anchorNow);
+            if (input) input.focus();
         });
 
         this.inlinePlanOutsideHandler = (event) => {
