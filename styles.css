@@ -2163,6 +2163,10 @@ h1 {
   /* ?????? ????? ?????? ?????? ?????? */
 }
 
+.split-cell-wrapper .split-visualization.split-visualization-actual {
+  pointer-events: auto;
+}
+
 .split-visualization.no-title {
   justify-content: center;
 }
@@ -2267,6 +2271,28 @@ h1 {
 
 .split-visualization-actual .split-grid-segment {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.2);
+}
+
+.split-visualization-actual .split-grid-segment.is-off {
+  opacity: 0.35;
+}
+
+.split-visualization-actual .split-grid-segment.is-on {
+  opacity: 1;
+}
+
+.split-visualization-actual .split-grid-segment {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container .timer-result-input {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
+  background: transparent;
 }
 
 .split-grid-segment.split-empty {
