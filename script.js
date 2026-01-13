@@ -5539,6 +5539,44 @@ class TimeTracker {
             if (sidx >= 0) this.modalSelectedActivities.splice(sidx, 1);
             this.renderPlannedActivityDropdown();
             this.refreshSubActivityOptions();
+            if (this.inlinePlanTarget) {
+                const range = this.getPlannedRangeInfo(this.inlinePlanTarget.startIndex);
+                const current = this.getPlannedValueForIndex(range.startIndex);
+                const normalizedCurrent = this.normalizeActivityText
+                    ? this.normalizeActivityText(current || '')
+                    : String(current || '').trim();
+                if (normalizedCurrent === label) {
+                    for (let i = range.startIndex; i <= range.endIndex; i++) {
+                        if (this.timeSlots[i]) {
+                            this.timeSlots[i].planned = '';
+                            this.timeSlots[i].planActivities = [];
+                            this.timeSlots[i].planTitle = '';
+                            this.timeSlots[i].planTitleBandOn = false;
+                        }
+                    }
+                    if (range.mergeKey) {
+                        this.mergedFields.set(range.mergeKey, '');
+                    }
+                    this.modalPlanActivities = [];
+                    this.modalPlanActiveRow = -1;
+                    this.modalPlanTitle = '';
+                    this.modalPlanTitleBandOn = false;
+                    if (this.inlinePlanContext && this.inlinePlanContext.titleInput) {
+                        this.inlinePlanContext.titleInput.value = '';
+                    }
+                    if (this.inlinePlanContext && this.inlinePlanContext.titleToggle) {
+                        this.inlinePlanContext.titleToggle.checked = false;
+                    }
+                    if (this.inlinePlanContext && this.inlinePlanContext.titleField) {
+                        this.inlinePlanContext.titleField.hidden = true;
+                    }
+                    this.renderPlanActivitiesList();
+                    this.renderTimeEntries();
+                    this.calculateTotals();
+                    this.autoSave();
+                    this.renderInlinePlanDropdownOptions();
+                }
+            }
         }
     }
     toggleSelectActivity(text, options = {}) {
