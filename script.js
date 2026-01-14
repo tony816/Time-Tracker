@@ -2432,6 +2432,25 @@ class TimeTracker {
         return units;
     }
 
+    getActualGridBlockRange(planUnits, unitIndex, unitsPerRow = 6) {
+        if (!Array.isArray(planUnits) || !Number.isFinite(unitIndex)) return null;
+        if (unitIndex < 0 || unitIndex >= planUnits.length) return null;
+        const label = planUnits[unitIndex];
+        if (!label) return null;
+
+        const rowStart = Math.floor(unitIndex / unitsPerRow) * unitsPerRow;
+        const rowEnd = Math.min(rowStart + unitsPerRow - 1, planUnits.length - 1);
+        let start = unitIndex;
+        while (start > rowStart && planUnits[start - 1] === label) {
+            start -= 1;
+        }
+        let end = unitIndex;
+        while (end < rowEnd && planUnits[end + 1] === label) {
+            end += 1;
+        }
+        return { start, end, label };
+    }
+
     buildActualUnitsFromActivities(planUnits, activities) {
         if (!Array.isArray(planUnits) || !Array.isArray(activities)) return [];
         const counts = new Map();
@@ -2525,9 +2544,23 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
-        if (!planContext.units[unitIndex]) return;
+        const block = this.getActualGridBlockRange(planContext.units, unitIndex, 6);
+        if (!block) return;
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
-        actualUnits[unitIndex] = !actualUnits[unitIndex];
+        const { start, end } = block;
+        const onlyFirstOn = (unitIndex === start) &&
+            actualUnits[start] &&
+            actualUnits.slice(start + 1, end + 1).every(value => !value);
+
+        if (onlyFirstOn) {
+            for (let i = start; i <= end; i++) {
+                actualUnits[i] = false;
+            }
+        } else {
+            for (let i = start; i <= end; i++) {
+                actualUnits[i] = i <= unitIndex;
+            }
+        }
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
         this.renderTimeEntries(true);
         this.calculateTotals();
