@@ -55,18 +55,12 @@ class TimeTracker {
         this.authButton = null;
         this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
             try { const k='device_id'; let v=localStorage.getItem(k); if(v) return v; const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); v=`${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; localStorage.setItem(k,v); return v; } catch(_) { return 'device-anon'; } })();
-        this.modalSubActivities = [];
-        this.modalSplitTotalSeconds = 0;
-        this.modalSplitSectionOpen = false;
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
         this.modalPlanActiveRow = -1;
         this.modalPlanTitle = '';
         this.modalPlanTitleBandOn = false;
-        this.modalActualTitleBandOn = false;
-        this.modalSplitMaxSeconds = 0;
-        this.modalActualBaseIndex = null;
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
         this.lastPlanOptionInput = 'activity';
@@ -2267,31 +2261,6 @@ class TimeTracker {
         return 1;
     }
 
-    getSpinnerLimit(kind) {
-        if (kind === 'plan') {
-            const limit = Number(this.modalPlanTotalSeconds) || 0;
-            return Math.max(0, limit);
-        }
-        let limit = Number(this.modalSplitMaxSeconds) || 0;
-        if (!limit || limit <= 0) {
-            const base = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : 0;
-            limit = this.getBlockLength('actual', base) * 3600;
-        }
-        return Math.max(0, limit);
-    }
-
-    getMaxSpinnerValue(kind) {
-        const step = 600;
-        const limit = this.getSpinnerLimit(kind);
-        if (!limit || limit <= 0) {
-            return step * 5;
-        }
-        const multiples = Math.floor(limit / step);
-        if (multiples <= 0) return 0;
-        if (multiples === 1) return limit;
-        return (multiples * step === limit) ? (limit - step) : (multiples * step);
-    }
-
     wrapWithSplitVisualization(type, index, content) {
         const splitMarkup = this.buildSplitVisualization(type, index);
         if (!splitMarkup) return content;
@@ -3114,266 +3083,6 @@ class TimeTracker {
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
-    getValidSubActivitiesSeconds() {
-        return this.modalSubActivities.reduce((sum, item) => {
-            if (!item || item.invalid) return sum;
-            const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            return sum + secs;
-        }, 0);
-    }
-
-    updateSubActivitiesToggleLabel() {
-        const toggleBtn = document.getElementById('toggleSubActivities');
-        if (toggleBtn) {
-            toggleBtn.textContent = this.modalSplitSectionOpen ? '세부 활동 접기' : '세부 활동 분해';
-        }
-    }
-
-    renderSubActivitiesList() {
-        const list = document.getElementById('subActivitiesList');
-        if (!list) return;
-        list.innerHTML = '';
-        const optionLabels = this.buildActivityLabelOptions(
-            (this.modalSubActivities || []).map(item => (item && item.label ? item.label : ''))
-        );
-        (this.modalSubActivities || []).forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'sub-activity-row';
-            row.dataset.index = String(idx);
-            if (item.invalid) {
-                row.classList.add('invalid');
-            }
-
-            const labelSelect = document.createElement('select');
-            labelSelect.className = 'sub-activity-label';
-            labelSelect.setAttribute('aria-label', '세부 활동');
-            this.populateActivityLabelSelect(labelSelect, optionLabels, item.label, '세부 활동');
-
-            const spinner = this.createDurationSpinner({
-                kind: 'actual',
-                index: idx,
-                seconds: Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0
-            });
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'remove-sub-activity';
-            removeBtn.textContent = '삭제';
-
-            row.appendChild(labelSelect);
-            row.appendChild(spinner);
-            row.appendChild(removeBtn);
-            list.appendChild(row);
-        });
-
-        if ((this.modalSubActivities || []).length === 0 && this.modalSplitSectionOpen) {
-            const empty = document.createElement('div');
-            empty.className = 'sub-activities-empty';
-            empty.textContent = '세부 활동을 추가해보세요.';
-            list.appendChild(empty);
-        }
-
-        this.updateSubActivitiesSummary();
-        this.refreshSpinnerStates('actual');
-        this.syncActualTitleBandToggleState();
-    }
-
-    updateSubActivitiesSummary() {
-        const totalEl = document.getElementById('splitTotalTime');
-        const usedEl = document.getElementById('splitUsedTime');
-        const noticeEl = document.getElementById('subActivitiesNotice');
-        if (!totalEl || !usedEl || !noticeEl) return;
-
-        let total = Math.max(0, Number(this.modalSplitTotalSeconds) || 0);
-        const used = this.getValidSubActivitiesSeconds();
-        const limit = Number(this.modalSplitMaxSeconds) || 0;
-        const hasInvalid = this.modalSubActivities.some(item => item && item.invalid);
-
-        if (total === 0 && used > 0) {
-            total = used;
-            this.modalSplitTotalSeconds = used;
-        }
-
-        if (limit > 0 && total > limit) {
-            total = limit;
-            this.modalSplitTotalSeconds = limit;
-        }
-
-        totalEl.textContent = this.formatDurationSummary(total);
-        usedEl.textContent = this.formatDurationSummary(used);
-
-        noticeEl.textContent = '';
-        noticeEl.classList.remove('ok');
-
-        if (this.modalSubActivities.length === 0) {
-            if (total > 0) {
-                noticeEl.textContent = '분해를 추가하지 않으면 전체 시간이 그대로 기록됩니다.';
-            }
-            return;
-        }
-
-        if (hasInvalid) {
-            noticeEl.textContent = '잘못된 시간 형식이 있습니다.';
-            return;
-        }
-
-        if (total === 0) {
-            noticeEl.textContent = '총 시간이 0이어서 분해 합계 검증을 건너뜁니다.';
-            noticeEl.classList.add('ok');
-            return;
-        }
-
-        if (used === total) {
-            noticeEl.textContent = '분해 합계가 총 시간과 일치합니다.';
-            noticeEl.classList.add('ok');
-        } else if (used > total) {
-            noticeEl.textContent = '분해 합계가 총 시간을 초과했습니다.';
-        } else {
-            const remaining = total - used;
-            noticeEl.textContent = `잔여 시간 ${this.formatDurationSummary(remaining)}이 남아 있습니다.`;
-        }
-        this.refreshSpinnerStates('actual');
-        this.syncActualTitleBandToggleState();
-    }
-
-    syncActualTitleBandToggleState() {
-        const toggle = document.getElementById('actualTitleBandToggle');
-        if (!toggle) return;
-        const hasActivities = Array.isArray(this.modalSubActivities) && this.modalSubActivities.length > 0;
-        if (!hasActivities) {
-            this.modalActualTitleBandOn = false;
-            toggle.checked = false;
-            toggle.disabled = true;
-            return;
-        }
-        toggle.disabled = false;
-        toggle.checked = this.modalActualTitleBandOn;
-    }
-
-    prepareSubActivitiesSection(index, options = {}) {
-        const section = document.getElementById('subActivitiesSection');
-        if (!section) return;
-        const toggleBtn = document.getElementById('toggleSubActivities');
-        if (toggleBtn) toggleBtn.hidden = true;
-        section.hidden = true;
-        // 세부 활동 편집은 비활성화: 실제 기록은 10분 그리드에서 처리
-        this.modalSplitSectionOpen = false;
-        this.modalSubActivities = [];
-        this.modalSplitTotalSeconds = 0;
-        this.modalSplitMaxSeconds = 0;
-        this.modalActualBaseIndex = null;
-        this.syncActualTitleBandToggleState();
-        return;
-        const slot = this.timeSlots[index] || {};
-        let totalSeconds = this.parseDurationFromText(slot.actual);
-        if ((!Number.isFinite(totalSeconds) || totalSeconds <= 0) && slot.timer) {
-            totalSeconds = Number(slot.timer.elapsed) || 0;
-        }
-        if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
-            totalSeconds = 0;
-        }
-        this.modalSplitTotalSeconds = Math.floor(totalSeconds);
-
-        const existing = slot.activityLog && Array.isArray(slot.activityLog.subActivities)
-            ? this.normalizeActivitiesArray(slot.activityLog.subActivities)
-            : [];
-        this.modalSubActivities = existing.map(item => ({ ...item, invalid: false }));
-
-        const shouldOpen = Boolean(options.openSplit) || this.modalSubActivities.length > 0;
-        this.modalSplitSectionOpen = shouldOpen;
-        section.hidden = !shouldOpen;
-        this.updateSubActivitiesToggleLabel();
-        const actualMergeKey = this.findMergeKey('actual', index);
-        let baseIndex = index;
-        if (actualMergeKey) {
-            const [, startStr] = actualMergeKey.split('-');
-            const start = parseInt(startStr, 10);
-            if (Number.isFinite(start)) baseIndex = start;
-        }
-        this.modalActualBaseIndex = baseIndex;
-        this.modalSplitMaxSeconds = this.getBlockLength('actual', baseIndex) * 3600;
-        if (this.modalSplitMaxSeconds > 0 && this.modalSplitTotalSeconds > this.modalSplitMaxSeconds) {
-            this.modalSplitTotalSeconds = this.modalSplitMaxSeconds;
-        }
-        // 실제 세부활동이 비어 있어도 계획값을 자동 복사하지 않는다.
-        // (타이머로 쌓인 실제 기록이 계획 시간으로 덮어쓰이는 것을 방지)
-        const baseSlot = this.timeSlots[baseIndex] || {};
-        const storedBand = baseSlot && baseSlot.activityLog ? Boolean(baseSlot.activityLog.titleBandOn) : false;
-        this.modalActualTitleBandOn = storedBand && this.modalSubActivities.length > 0;
-        this.syncActualTitleBandToggleState();
-        this.renderSubActivitiesList();
-    }
-
-    openSubActivitiesSection() {
-        const section = document.getElementById('subActivitiesSection');
-        if (!section) return;
-        this.modalSplitSectionOpen = true;
-        section.hidden = false;
-        this.updateSubActivitiesToggleLabel();
-    }
-
-    closeSubActivitiesSection() {
-        const section = document.getElementById('subActivitiesSection');
-        if (!section) return;
-        this.modalSplitSectionOpen = false;
-        section.hidden = true;
-        this.updateSubActivitiesToggleLabel();
-    }
-
-    addSubActivityRow(defaults = {}) {
-        const seconds = this.normalizeDurationStep(Number.isFinite(defaults.seconds) ? Number(defaults.seconds) : 0) || 0;
-        const label = typeof defaults.label === 'string' ? defaults.label : '';
-        const source = typeof defaults.source === 'string' ? defaults.source : 'manual';
-        this.modalSubActivities.push({ label, seconds, source, invalid: !!defaults.invalid });
-        this.renderSubActivitiesList();
-    }
-
-    handleSubActivitiesInput(event) {
-        const list = document.getElementById('subActivitiesList');
-        if (!list) return;
-        const row = event.target.closest('.sub-activity-row');
-        if (!row) return;
-        const idx = parseInt(row.dataset.index, 10);
-        if (!Number.isFinite(idx) || !this.modalSubActivities[idx]) return;
-        const item = this.modalSubActivities[idx];
-
-        if (event.target.classList.contains('sub-activity-label')) {
-            item.label = this.normalizeActivityText
-                ? this.normalizeActivityText(event.target.value || '')
-                : String(event.target.value || '').trim();
-        }
-
-        this.updateSubActivitiesSummary();
-    }
-
-    handleSubActivitiesRemoval(event) {
-        const row = event.target.closest('.sub-activity-row');
-        if (!row) return;
-        const idx = parseInt(row.dataset.index, 10);
-        if (!Number.isFinite(idx)) return;
-        this.modalSubActivities.splice(idx, 1);
-        this.renderSubActivitiesList();
-    }
-
-    fillRemainingSubActivity() {
-        const target = this.modalSplitTotalSeconds > 0 ? this.modalSplitTotalSeconds : this.modalSplitMaxSeconds;
-        const remainingRaw = Math.max(0, target - this.getValidSubActivitiesSeconds());
-        const remaining = this.normalizeDurationStep(remainingRaw) || 0;
-        if (remaining <= 0) {
-            const noticeEl = document.getElementById('subActivitiesNotice');
-            if (noticeEl) {
-                noticeEl.textContent = '잔여 시간이 없습니다.';
-                noticeEl.classList.remove('ok');
-            }
-            return;
-        }
-        if (remaining > 0) {
-            this.openSubActivitiesSection();
-            this.addSubActivityRow({ seconds: remaining });
-            this.updateSubActivitiesSummary();
-        }
-    }
-
     clearSubActivitiesForIndex(index) {
         const mergeKey = this.findMergeKey('actual', index);
         if (mergeKey) {
@@ -3400,7 +3109,6 @@ class TimeTracker {
                 }
             }
         }
-        this.modalSplitTotalSeconds = 0;
     }
 
     enforceActualLimit(index) {
@@ -3742,23 +3450,14 @@ class TimeTracker {
     updateSpinnerState(spinner) {
         if (!spinner) return;
         const kind = spinner.dataset.kind;
+        if (kind !== 'plan') return;
         const index = parseInt(spinner.dataset.index, 10);
         const seconds = parseInt(spinner.dataset.seconds, 10) || 0;
         const upBtn = spinner.querySelector('.spinner-up');
         const downBtn = spinner.querySelector('.spinner-down');
 
-        let limit = null;
-        let items = null;
-        if (kind === 'plan') {
-            limit = Number(this.modalPlanTotalSeconds) || 0;
-            items = this.modalPlanActivities || [];
-        } else {
-            limit = Number(this.modalSplitMaxSeconds) || 0;
-            if (!limit || limit <= 0) {
-                limit = this.getBlockLength('actual', this.modalActualBaseIndex ?? index) * 3600;
-            }
-            items = this.modalSubActivities || [];
-        }
+        const limit = Number(this.modalPlanTotalSeconds) || 0;
+        const items = this.modalPlanActivities || [];
 
         let available = 0;
         if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
@@ -3786,24 +3485,15 @@ class TimeTracker {
     }
 
     adjustActivityDuration(kind, index, direction) {
+        if (kind !== 'plan') return;
         const step = 600;
-        const items = kind === 'plan' ? (this.modalPlanActivities || []) : (this.modalSubActivities || []);
+        const items = this.modalPlanActivities || [];
         if (!items[index]) return;
-        const ctx = kind === 'plan' ? this.getPlanUIElements() : null;
-        const spinnerList = kind === 'plan'
-            ? (ctx && ctx.list) || document.getElementById('planActivitiesList')
-            : document.getElementById('subActivitiesList');
+        const ctx = this.getPlanUIElements();
+        const spinnerList = (ctx && ctx.list) || document.getElementById('planActivitiesList');
         const spinner = spinnerList ? spinnerList.querySelector(`.time-spinner[data-kind="${kind}"][data-index="${index}"]`) : null;
         const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
-        let limit = null;
-        if (kind === 'plan') {
-            limit = Number(this.modalPlanTotalSeconds) || 0;
-        } else {
-            limit = Number(this.modalSplitMaxSeconds) || 0;
-            if (!limit || limit <= 0) {
-                limit = this.getBlockLength('actual', this.modalActualBaseIndex ?? index) * 3600;
-            }
-        }
+        const limit = Number(this.modalPlanTotalSeconds) || 0;
 
         let available = 0;
         if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
@@ -3836,14 +3526,8 @@ class TimeTracker {
         items[index].invalid = false;
         if (spinner) this.updateSpinnerDisplay(spinner, newSeconds);
 
-        if (kind === 'plan') {
-            this.updatePlanActivitiesSummary();
-            this.syncInlinePlanToSlots();
-        } else {
-            const total = this.getValidSubActivitiesSeconds();
-            this.modalSplitTotalSeconds = limit > 0 ? Math.min(total, limit) : total;
-            this.updateSubActivitiesSummary();
-        }
+        this.updatePlanActivitiesSummary();
+        this.syncInlinePlanToSlots();
         this.refreshSpinnerStates(kind);
     }
 
@@ -6158,9 +5842,6 @@ class TimeTracker {
         select.value = normalizedCurrent || '';
     }
     refreshSubActivityOptions() {
-        if (this.modalSplitSectionOpen) {
-            this.renderSubActivitiesList();
-        }
         if (this.modalPlanSectionOpen) {
             this.renderPlanActivitiesList();
         }
@@ -7196,22 +6877,29 @@ class TimeTracker {
         }
     }
 
-    openActivityLogModal(index, options = {}) {
+    openActivityLogModal(index) {
         const modal = document.getElementById('activityLogModal');
         const slot = this.timeSlots[index];
+        const actualMergeKey = this.findMergeKey('actual', index);
+        let baseIndex = index;
+        if (actualMergeKey) {
+            const [, startStr] = actualMergeKey.split('-');
+            const start = parseInt(startStr, 10);
+            if (Number.isFinite(start)) baseIndex = start;
+        }
+        const baseSlot = this.timeSlots[baseIndex] || slot;
 
         document.getElementById('activityTime').value = `${slot.time}시`;
         // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
         // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
-        const actualMergeKey = this.findMergeKey('actual', index);
-        if (actualMergeKey) {
+        if (this.isActualGridMode(index)) {
+            document.getElementById('activityTitle').value = (baseSlot.activityLog && baseSlot.activityLog.title) || '';
+        } else if (actualMergeKey) {
             document.getElementById('activityTitle').value = this.mergedFields.get(actualMergeKey) || '';
         } else {
-        document.getElementById('activityTitle').value = slot.actual || '';
+            document.getElementById('activityTitle').value = slot.actual || '';
         }
-        document.getElementById('activityDetails').value = slot.activityLog.details || '';
-
-        this.prepareSubActivitiesSection(index, options);
+        document.getElementById('activityDetails').value = (baseSlot.activityLog && baseSlot.activityLog.details) || '';
 
         modal.style.display = 'flex';
         modal.dataset.index = index;
@@ -7229,29 +6917,6 @@ class TimeTracker {
         document.getElementById('activityDetails').value = '';
         
         delete modal.dataset.index;
-
-        this.modalSubActivities = [];
-        this.modalSplitTotalSeconds = 0;
-        this.modalSplitSectionOpen = false;
-        this.modalSplitMaxSeconds = 0;
-        this.modalActualBaseIndex = null;
-        const section = document.getElementById('subActivitiesSection');
-        if (section) section.hidden = true;
-        const list = document.getElementById('subActivitiesList');
-        if (list) list.innerHTML = '';
-        const noticeEl = document.getElementById('subActivitiesNotice');
-        if (noticeEl) {
-            noticeEl.textContent = '';
-            noticeEl.classList.remove('ok');
-        }
-        this.updateSubActivitiesToggleLabel();
-        this.updateSubActivitiesSummary();
-        this.modalActualTitleBandOn = false;
-        const actualTitleToggle = document.getElementById('actualTitleBandToggle');
-        if (actualTitleToggle) {
-            actualTitleToggle.checked = false;
-            actualTitleToggle.disabled = true;
-        }
     }
 
     saveActivityLogFromModal() {
@@ -7308,12 +6973,6 @@ class TimeTracker {
         const closeBtn = document.getElementById('closeActivityModal');
         const saveBtn = document.getElementById('saveActivityLog');
         const cancelBtn = document.getElementById('cancelActivityLog');
-        const toggleSplitBtn = document.getElementById('toggleSubActivities');
-        const subSection = document.getElementById('subActivitiesSection');
-        const addRowBtn = document.getElementById('addSubActivityRow');
-        const fillBtn = document.getElementById('fillRemainingSubActivity');
-        const list = document.getElementById('subActivitiesList');
-        const actualTitleToggle = document.getElementById('actualTitleBandToggle');
 
         closeBtn.addEventListener('click', () => {
             this.closeActivityLogModal();
@@ -7339,64 +6998,6 @@ class TimeTracker {
             }
         });
 
-        if (toggleSplitBtn && subSection) {
-            toggleSplitBtn.addEventListener('click', () => {
-                this.modalSplitSectionOpen = !this.modalSplitSectionOpen;
-                subSection.hidden = !this.modalSplitSectionOpen;
-                this.updateSubActivitiesToggleLabel();
-                if (this.modalSplitSectionOpen && this.modalSubActivities.length === 0) {
-                    this.addSubActivityRow();
-                } else if (this.modalSplitSectionOpen) {
-                    this.renderSubActivitiesList();
-                }
-            });
-        }
-
-        if (addRowBtn) {
-            addRowBtn.addEventListener('click', () => {
-                this.openSubActivitiesSection();
-                this.addSubActivityRow();
-            });
-        }
-
-        if (fillBtn) {
-            fillBtn.addEventListener('click', () => {
-                this.fillRemainingSubActivity();
-            });
-        }
-
-        if (list) {
-            list.addEventListener('input', (event) => {
-                if (event.target.classList.contains('sub-activity-label')) {
-                    this.handleSubActivitiesInput(event);
-                }
-            });
-            list.addEventListener('change', (event) => {
-                if (event.target.classList.contains('sub-activity-label')) {
-                    this.handleSubActivitiesInput(event);
-                }
-            });
-            list.addEventListener('click', (event) => {
-                const spinnerBtn = event.target.closest('.spinner-btn');
-                if (spinnerBtn) {
-                    const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
-                    const idx = parseInt(spinnerBtn.dataset.index, 10);
-                    if (Number.isFinite(idx)) {
-                        this.adjustActivityDuration('actual', idx, direction);
-                    }
-                    return;
-                }
-                if (event.target.classList.contains('remove-sub-activity')) {
-                    this.handleSubActivitiesRemoval(event);
-                }
-            });
-        }
-        if (actualTitleToggle) {
-            actualTitleToggle.addEventListener('change', () => {
-                this.modalActualTitleBandOn = actualTitleToggle.checked;
-                this.syncActualTitleBandToggleState();
-            });
-        }
     }
 }
 
