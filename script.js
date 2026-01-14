@@ -601,6 +601,7 @@ class TimeTracker {
         const target = e.target;
         // 예외: 실제 활동 상세 기록 버튼은 통과
         if (target.closest && target.closest('.activity-log-btn')) return;
+        if (target.closest && target.closest('.split-visualization-actual')) return;
 
         // 시간열(병합) 클릭: 타이머 컨트롤은 통과, 그 외는 선택과 무관하므로 차단
         const timeMerged = target.closest && target.closest('.time-slot-container.merged-time-main, .time-slot-container.merged-time-secondary');
