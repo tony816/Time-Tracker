@@ -2548,18 +2548,23 @@ class TimeTracker {
         if (!block) return;
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
         const { start, end } = block;
-        const onlyFirstOn = (unitIndex === start) &&
-            actualUnits[start] &&
-            actualUnits.slice(start + 1, end + 1).every(value => !value);
+        const clickedCount = unitIndex - start + 1;
+        let currentOnCount = 0;
+        for (let i = start; i <= end; i++) {
+            if (actualUnits[i]) {
+                currentOnCount += 1;
+            } else {
+                break;
+            }
+        }
+        const isClickedOn = Boolean(actualUnits[unitIndex]);
+        let newCount = clickedCount;
+        if (isClickedOn && currentOnCount === clickedCount) {
+            newCount = 0;
+        }
 
-        if (onlyFirstOn) {
-            for (let i = start; i <= end; i++) {
-                actualUnits[i] = false;
-            }
-        } else {
-            for (let i = start; i <= end; i++) {
-                actualUnits[i] = i <= unitIndex;
-            }
+        for (let i = start; i <= end; i++) {
+            actualUnits[i] = i < start + newCount;
         }
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
         this.renderTimeEntries(true);
