@@ -1885,6 +1885,7 @@ class TimeTracker {
         if (actualField) {
             const actualContainer = entryDiv.querySelector('.actual-field-container');
             const actualOverlay = entryDiv.querySelector('.actual-merged-overlay');
+            const actualSplitViz = entryDiv.querySelector('.split-visualization-actual');
 
             const bindHover = (el) => {
                 if (!el) return;
@@ -1902,6 +1903,7 @@ class TimeTracker {
 
             bindHover(actualContainer);
             bindHover(actualOverlay);
+            bindHover(actualSplitViz);
 
             const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
             if (actualGrid) {
