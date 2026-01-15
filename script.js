@@ -145,10 +145,10 @@ class TimeTracker {
 
     
 
-    generateTimeSlots() {
-        this.timeSlots = [];
+    createEmptyTimeSlots() {
+        const slots = [];
         for (let hour = 4; hour <= 23; hour++) {
-            this.timeSlots.push({
+            slots.push({
                 time: `${hour}`,
                 planned: '',
                 actual: '',
@@ -159,7 +159,7 @@ class TimeTracker {
                 activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
             });
         }
-        this.timeSlots.push({
+        slots.push({
             time: '00',
             planned: '',
             actual: '',
@@ -169,7 +169,7 @@ class TimeTracker {
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
         });
-        this.timeSlots.push({
+        slots.push({
             time: '1',
             planned: '',
             actual: '',
@@ -179,7 +179,7 @@ class TimeTracker {
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
         });
-        this.timeSlots.push({
+        slots.push({
             time: '2',
             planned: '',
             actual: '',
@@ -189,7 +189,7 @@ class TimeTracker {
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
         });
-        this.timeSlots.push({
+        slots.push({
             time: '3',
             planned: '',
             actual: '',
@@ -199,6 +199,11 @@ class TimeTracker {
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
         });
+        return slots;
+    }
+
+    generateTimeSlots() {
+        this.timeSlots = this.createEmptyTimeSlots();
     }
 
     renderTimeEntries(preserveInlineDropdown = false) {
@@ -1994,6 +1999,20 @@ class TimeTracker {
         if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
         return { year, month, day };
     }
+    getDateValue(date) {
+        const parts = this.getLocalDateParts(date);
+        if (!parts) return null;
+        const ms = new Date(parts.year, parts.month - 1, parts.day, 0, 0, 0, 0).getTime();
+        return Number.isFinite(ms) ? ms : null;
+    }
+    compareDateStrings(a, b) {
+        const av = this.getDateValue(a);
+        const bv = this.getDateValue(b);
+        if (!Number.isFinite(av) || !Number.isFinite(bv)) return 0;
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+        return 0;
+    }
     getLocalSlotStartMs(date, hour) {
         const parts = this.getLocalDateParts(date);
         if (!parts) return null;
@@ -2006,6 +2025,38 @@ class TimeTracker {
         const parts = this.getLocalDateParts(date);
         if (!parts) return 0;
         return new Date(parts.year, parts.month - 1, parts.day).getDay();
+    }
+    withTemporarySlots(timeSlots, mergedFieldsMap, fn) {
+        const originalSlots = this.timeSlots;
+        const originalMerged = this.mergedFields;
+        this.timeSlots = timeSlots;
+        this.mergedFields = mergedFieldsMap;
+        try {
+            return fn();
+        } finally {
+            this.timeSlots = originalSlots;
+            this.mergedFields = originalMerged;
+        }
+    }
+    applySlotsJsonToContext(slotsJson, timeSlots, mergedFieldsMap) {
+        return this.withTemporarySlots(timeSlots, mergedFieldsMap, () => this.applySlotsJson(slotsJson));
+    }
+    buildSlotsJsonForContext(timeSlots, mergedFieldsMap) {
+        return this.withTemporarySlots(timeSlots, mergedFieldsMap, () => this.buildSlotsJson());
+    }
+    findMergeKeyInMap(mergedFieldsMap, type, index) {
+        if (!mergedFieldsMap || !Number.isInteger(index)) return null;
+        const entries = mergedFieldsMap instanceof Map ? mergedFieldsMap : new Map(Object.entries(mergedFieldsMap));
+        for (let [key] of entries) {
+            if (!key || !key.startsWith(`${type}-`)) continue;
+            const [, startStr, endStr] = key.split('-');
+            const start = parseInt(startStr, 10);
+            const end = parseInt(endStr, 10);
+            if (index >= start && index <= end) {
+                return key;
+            }
+        }
+        return null;
     }
     routineIncludesHour(routine, hour) {
         if (!routine || typeof routine !== 'object') return false;
@@ -2171,61 +2222,177 @@ class TimeTracker {
         const passes = Array.isArray(routine.passDates) ? routine.passDates.filter(x => x !== d) : [];
         return this.updateRoutineItem(routineId, { passDates: passes });
     }
-    clearRoutineRangeForDate(routine, date) {
+    clearRoutineRangeForDate(routine, date, options = {}) {
         if (!routine || typeof routine !== 'object') return false;
         const d = String(date || '').trim();
         if (!d) return false;
+        const slots = Array.isArray(options.timeSlots) ? options.timeSlots : this.timeSlots;
+        const mergedMap = options.mergedFieldsMap instanceof Map ? options.mergedFieldsMap : this.mergedFields;
+        if (!Array.isArray(slots) || !mergedMap) return false;
+        const label = this.normalizeActivityText
+            ? this.normalizeActivityText(routine.label || '')
+            : String(routine.label || '').trim();
+        if (!label) return false;
+
         const startHour = (Number(routine.startHour) + 24) % 24;
         const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
-        let changed = false;
-        const handledMerges = new Set();
+        const indicesToClear = new Set();
+
         for (let i = 0; i < dur; i++) {
             const hour = (startHour + i) % 24;
-            const labelForHour = this.hourToLabel(hour);
-            const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
-            if (index < 0) continue;
-            const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
-            if (mk) {
-                if (handledMerges.has(mk)) continue;
-                handledMerges.add(mk);
-                const [, startStr, endStr] = mk.split('-');
-                const start = parseInt(startStr, 10);
-                const end = parseInt(endStr, 10);
-                if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
-                const baseSlot = this.timeSlots[start];
-                const mergedRaw = (this.mergedFields && this.mergedFields.has(mk))
-                    ? this.mergedFields.get(mk)
-                    : '';
-                const mergedText = this.normalizeActivityText
-                    ? this.normalizeActivityText(mergedRaw || (baseSlot && baseSlot.planned) || '')
-                    : String(mergedRaw || (baseSlot && baseSlot.planned) || '').trim();
-                if (mergedText && mergedText !== routine.label) continue;
-                if (this.mergedFields && this.mergedFields.has(mk)) {
-                    this.mergedFields.delete(mk);
-                    changed = true;
-                }
-                for (let j = start; j <= end; j++) {
-                    const slot = this.timeSlots[j];
-                    if (!slot) continue;
-                    if (slot.planned !== '') { slot.planned = ''; changed = true; }
-                    if (slot.planTitle !== '') { slot.planTitle = ''; changed = true; }
-                    if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
-                    const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
-                    if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
-                }
+            const slotStartMs = this.getLocalSlotStartMs(d, hour);
+            if (Number.isFinite(options.minSlotStartMs) && slotStartMs != null && slotStartMs < options.minSlotStartMs) {
                 continue;
             }
-            const slot = this.timeSlots[index];
-            if (!slot) continue;
-            const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
-            if (planned && planned !== routine.label) continue;
+            const labelForHour = this.hourToLabel(hour);
+            const index = slots.findIndex(s => s && String(s.time) === labelForHour);
+            if (index >= 0) indicesToClear.add(index);
+        }
+
+        if (indicesToClear.size === 0) return false;
+
+        let changed = false;
+        const handledMerges = new Set();
+        const clearSlot = (slot) => {
+            if (!slot) return;
             if (slot.planned !== '') { slot.planned = ''; changed = true; }
             if (slot.planTitle !== '') { slot.planTitle = ''; changed = true; }
             if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
             const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
             if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
-        }
+        };
+
+        indicesToClear.forEach((index) => {
+            const mk = this.findMergeKeyInMap(mergedMap, 'planned', index);
+            if (mk) {
+                if (handledMerges.has(mk)) return;
+                handledMerges.add(mk);
+                const [, startStr, endStr] = mk.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return;
+                const baseSlot = slots[start];
+                const mergedRaw = mergedMap.has(mk)
+                    ? mergedMap.get(mk)
+                    : (baseSlot && baseSlot.planned) || '';
+                const mergedText = this.normalizeActivityText
+                    ? this.normalizeActivityText(mergedRaw || '')
+                    : String(mergedRaw || '').trim();
+                if (mergedText && mergedText !== label) return;
+
+                let clearAll = true;
+                for (let j = start; j <= end; j++) {
+                    if (!indicesToClear.has(j)) {
+                        clearAll = false;
+                        break;
+                    }
+                }
+
+                if (mergedMap.has(mk)) {
+                    mergedMap.delete(mk);
+                    changed = true;
+                }
+
+                for (let j = start; j <= end; j++) {
+                    const slot = slots[j];
+                    if (!slot) continue;
+                    if (clearAll || indicesToClear.has(j)) {
+                        clearSlot(slot);
+                    } else {
+                        if (slot.planned !== label) { slot.planned = label; changed = true; }
+                        if (slot.planTitle !== label) { slot.planTitle = label; changed = true; }
+                        if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
+                        const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
+                        if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
+                    }
+                }
+                return;
+            }
+
+            const slot = slots[index];
+            if (!slot) return;
+            const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
+            const planTitle = this.normalizeActivityText ? this.normalizeActivityText(slot.planTitle || '') : String(slot.planTitle || '').trim();
+            if ((planned && planned !== label) && (planTitle && planTitle !== label)) return;
+            clearSlot(slot);
+        });
+
         return changed;
+    }
+    clearRoutineFromLocalStorageFutureDates(routine, fromDate) {
+        try {
+            const prefix = 'timesheet_';
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith(prefix)) keys.push(k);
+            }
+            keys.forEach((key) => {
+                const date = key.substring(prefix.length);
+                if (this.compareDateStrings(date, fromDate) <= 0) return;
+                try {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) return;
+                    const data = JSON.parse(raw);
+                    if (!data || !Array.isArray(data.timeSlots)) return;
+                    const mergedMap = new Map(Object.entries(data.mergedFields || {}));
+                    const changed = this.clearRoutineRangeForDate(routine, date, {
+                        timeSlots: data.timeSlots,
+                        mergedFieldsMap: mergedMap
+                    });
+                    if (!changed) return;
+                    data.mergedFields = Object.fromEntries(mergedMap);
+                    localStorage.setItem(key, JSON.stringify(data));
+                } catch (_) {}
+            });
+        } catch (_) {}
+    }
+    async clearRoutineFromSupabaseFutureDates(routine, fromDate) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        try {
+            const { data, error } = await this.supabase
+                .from('timesheet_days')
+                .select('day, slots')
+                .eq('user_id', identity)
+                .gte('day', fromDate)
+                .neq('day', this.PLANNED_SENTINEL_DAY)
+                .neq('day', this.ROUTINE_SENTINEL_DAY);
+            if (error) throw error;
+            if (!Array.isArray(data) || data.length === 0) return true;
+
+            for (const row of data) {
+                if (!row || !row.day || row.day === fromDate) continue;
+                const slotsJson = row.slots || {};
+                const tempSlots = this.createEmptyTimeSlots();
+                const tempMerged = new Map();
+                this.applySlotsJsonToContext(slotsJson, tempSlots, tempMerged);
+                const changed = this.clearRoutineRangeForDate(routine, row.day, {
+                    timeSlots: tempSlots,
+                    mergedFieldsMap: tempMerged
+                });
+                if (!changed) continue;
+                const nextSlotsJson = this.buildSlotsJsonForContext(tempSlots, tempMerged);
+                if (Object.keys(nextSlotsJson).length === 0) {
+                    await this.deleteFromSupabaseForDate(row.day);
+                } else {
+                    const payload = {
+                        user_id: identity,
+                        day: row.day,
+                        slots: nextSlotsJson,
+                        updated_at: new Date().toISOString(),
+                    };
+                    await this.supabase
+                        .from('timesheet_days')
+                        .upsert([payload], { onConflict: 'user_id,day' });
+                }
+            }
+            return true;
+        } catch (e) {
+            console.warn('[supabase] routines future cleanup failed:', e);
+            return false;
+        }
     }
     ensureRoutinesAvailableOrNotify() {
         if (this.supabaseConfigured && this.supabase && this.getSupabaseIdentity()) return true;
@@ -6933,9 +7100,18 @@ class TimeTracker {
                 this.closeRoutineMenu();
                 return;
             }
-            this.updateRoutineItem(routine.id, { stoppedAtMs: Date.now() });
+            const stoppedAtMs = Date.now();
+            this.updateRoutineItem(routine.id, { stoppedAtMs });
             this.scheduleSupabaseRoutineSave();
+            const clearedNow = this.clearRoutineRangeForDate(routine, this.currentDate, { minSlotStartMs: stoppedAtMs });
             this.closeRoutineMenu();
+            if (clearedNow) {
+                this.renderTimeEntries(true);
+                this.calculateTotals();
+                this.autoSave();
+            }
+            this.clearRoutineFromLocalStorageFutureDates(routine, this.currentDate);
+            this.clearRoutineFromSupabaseFutureDates(routine, this.currentDate);
             this.renderInlinePlanDropdownOptions();
             return;
         }
@@ -7274,6 +7450,7 @@ class TimeTracker {
         this.inlinePlanOutsideHandler = (event) => {
             if (!this.inlinePlanDropdown) return;
             if (this.inlinePlanDropdown.contains(event.target)) return;
+            if (this.routineMenu && this.routineMenu.contains(event.target)) return;
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             this.closeInlinePlanDropdown();
