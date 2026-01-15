@@ -993,6 +993,19 @@ class TimeTracker {
         this.renderTimeEntries();
         this.calculateTotals();
         try { localStorage.removeItem(`timesheet_${this.currentDate}`); } catch (_) {}
+        // If user refreshes quickly, Supabase fetch could re-apply stale data.
+        // Mark this day as "pending clear" so the next load will delete remote first.
+        this.markTimesheetClearPending(this.currentDate);
+        try { this.deleteFromSupabaseForDate(this.currentDate); } catch (_) {}
+        try {
+            this._lastSavedSignature = JSON.stringify({
+                date: this.currentDate,
+                timeSlots: this.timeSlots,
+                mergedFields: {}
+            });
+        } catch (_) {
+            this._lastSavedSignature = '';
+        }
         // 자동 저장 시스템: 초기화 후에도 서버에 반영
         this.autoSave();
     }
@@ -1466,6 +1479,15 @@ class TimeTracker {
         if (!this.supabaseConfigured || !this.supabase) return false;
         const identity = this.getSupabaseIdentity();
         if (!identity) return false;
+        // If a clear/reset happened right before a refresh, remote data can be stale.
+        // In that case, delete the remote row first and skip applying fetched slots.
+        if (this.isTimesheetClearPending(date)) {
+            const deleted = await this.deleteFromSupabaseForDate(date);
+            if (deleted) {
+                this.clearTimesheetClearPending(date);
+            }
+            return true;
+        }
         try {
             const { data, error } = await this.supabase
                 .from('timesheet_days')
@@ -1496,15 +1518,52 @@ class TimeTracker {
         clearTimeout(this._sbSaveTimer);
         this._sbSaveTimer = setTimeout(() => { try { this.saveToSupabase && this.saveToSupabase(); } catch(_) {} }, 500);
     }
+    getTimesheetClearPendingKey(date) {
+        return `timesheet_clear_pending_${date}`;
+    }
+    isTimesheetClearPending(date) {
+        try { return !!localStorage.getItem(this.getTimesheetClearPendingKey(date)); } catch (_) { return false; }
+    }
+    markTimesheetClearPending(date) {
+        try { localStorage.setItem(this.getTimesheetClearPendingKey(date), String(Date.now())); } catch (_) {}
+    }
+    clearTimesheetClearPending(date) {
+        try { localStorage.removeItem(this.getTimesheetClearPendingKey(date)); } catch (_) {}
+    }
+    async deleteFromSupabaseForDate(date) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        try {
+            const { error } = await this.supabase
+                .from('timesheet_days')
+                .delete()
+                .eq('user_id', identity)
+                .eq('day', date);
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('[supabase] delete failed:', e);
+            return false;
+        }
+    }
     async saveToSupabase() {
         if (!this.supabaseConfigured || !this.supabase) return false;
         const identity = this.getSupabaseIdentity();
         if (!identity) return false;
         try {
+            const slotsJson = this.buildSlotsJson();
+            if (Object.keys(slotsJson).length === 0) {
+                const deleted = await this.deleteFromSupabaseForDate(this.currentDate);
+                if (deleted) {
+                    this.clearTimesheetClearPending(this.currentDate);
+                }
+                return deleted;
+            }
             const payload = {
                 user_id: identity,
                 day: this.currentDate,
-                slots: this.buildSlotsJson(),
+                slots: slotsJson,
                 updated_at: new Date().toISOString(),
             };
             const { error } = await this.supabase
