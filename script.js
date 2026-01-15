@@ -43,14 +43,17 @@ class TimeTracker {
         // 저장 진행 중 플래그는 사용하지 않음(큐 직렬화만 사용)
         // Supabase (optional)
         this.supabase = null;
-        this.supabaseChannels = { timesheet: null, planned: null };
+        this.supabaseChannels = { timesheet: null, planned: null, routines: null };
         this.supabaseConfigured = false;
         this._sbSaveTimer = null;
         this.supabaseUser = null;
         this._lastSupabaseIdentity = null;
         this.PLANNED_SENTINEL_DAY = '1970-01-01';
+        this.ROUTINE_SENTINEL_DAY = '1970-01-02';
         this._plannedSaveTimer = null;
         this._lastSupabasePlannedSignature = '';
+        this._routineSaveTimer = null;
+        this._lastSupabaseRoutineSignature = '';
         this.authStatusElement = null;
         this.authButton = null;
         this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
@@ -64,6 +67,14 @@ class TimeTracker {
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
         this.lastPlanOptionInput = 'activity';
+
+        // Routines (planned auto-fill)
+        this.routines = [];
+        this.routinesLoaded = false;
+        this.routineMenu = null;
+        this.routineMenuContext = null;
+        this.routineMenuOutsideHandler = null;
+        this.routineMenuEscHandler = null;
         this.init();
     }
 
@@ -932,8 +943,15 @@ class TimeTracker {
             this.mergedFields.clear();
         }
 
+        const routineApplied = this.applyRoutinesToDate
+            ? this.applyRoutinesToDate(this.currentDate, { reason: 'load' })
+            : false;
+
         this.renderTimeEntries();
         this.calculateTotals();
+        if (routineApplied) {
+            this.autoSave();
+        }
         // Supabase에서 최신 데이터 가져오기(옵션)
         try { this.fetchFromSupabaseForDate && this.fetchFromSupabaseForDate(this.currentDate); } catch(_) {}
     }
@@ -1027,11 +1045,16 @@ class TimeTracker {
             clearTimeout(this._sbSaveTimer);
             clearTimeout(this._plannedSaveTimer);
             this._lastSupabasePlannedSignature = '';
+            clearTimeout(this._routineSaveTimer);
+            this._lastSupabaseRoutineSignature = '';
+            this.routines = [];
+            this.routinesLoaded = false;
             return;
         }
         if (force || this._lastSupabaseIdentity !== identity) {
             this._lastSupabaseIdentity = identity;
             this._lastSupabasePlannedSignature = '';
+            this._lastSupabaseRoutineSignature = '';
             try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch (_) {}
             try {
                 if (this.fetchFromSupabaseForDate) {
@@ -1046,6 +1069,14 @@ class TimeTracker {
                     const p = this.fetchPlannedCatalogFromSupabase();
                     if (p && typeof p.catch === 'function') {
                         p.catch(() => {});
+                    }
+                }
+            } catch (_) {}
+            try {
+                if (this.fetchRoutinesFromSupabase) {
+                    const r = this.fetchRoutinesFromSupabase();
+                    if (r && typeof r.catch === 'function') {
+                        r.catch(() => {});
                     }
                 }
             } catch (_) {}
@@ -1433,7 +1464,12 @@ class TimeTracker {
                 this.supabase.removeChannel(this.supabaseChannels.planned);
             }
         } catch (_) {}
-        this.supabaseChannels = { timesheet: null, planned: null };
+        try {
+            if (this.supabaseChannels.routines) {
+                this.supabase.removeChannel(this.supabaseChannels.routines);
+            }
+        } catch (_) {}
+        this.supabaseChannels = { timesheet: null, planned: null, routines: null };
     }
     resubscribeSupabaseRealtime() {
         if (!this.supabaseConfigured || !this.supabase) return;
@@ -1474,6 +1510,32 @@ class TimeTracker {
                 } catch (e) { console.warn('[supabase] planned catalog change failed', e); }
             })
             .subscribe();
+
+        const routinesFilter = `user_id=eq.${identity},day=eq.${this.ROUTINE_SENTINEL_DAY}`;
+        const routinesChannelKey = `timesheet_days:${identity}:routines`;
+        this.supabaseChannels.routines = this.supabase
+            .channel(routinesChannelKey)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'timesheet_days', filter: routinesFilter }, (payload) => {
+                try {
+                    const row = payload.new || payload.old;
+                    if (!row || row.day !== this.ROUTINE_SENTINEL_DAY) return;
+                    const changed = this.applyRoutinesFromRow ? this.applyRoutinesFromRow(row) : false;
+                    if (changed) {
+                        const applied = this.applyRoutinesToDate
+                            ? this.applyRoutinesToDate(this.currentDate, { reason: 'routines-realtime' })
+                            : false;
+                        if (applied) {
+                            this.renderTimeEntries();
+                            this.calculateTotals();
+                            this.autoSave();
+                        }
+                        if (this.inlinePlanDropdown) {
+                            this.renderInlinePlanDropdownOptions();
+                        }
+                    }
+                } catch (e) { console.warn('[supabase] routines change failed', e); }
+            })
+            .subscribe();
     }
     async fetchFromSupabaseForDate(date) {
         if (!this.supabaseConfigured || !this.supabase) return false;
@@ -1500,7 +1562,10 @@ class TimeTracker {
             if (data && data.slots) {
                 changed = this.applySlotsJson(data.slots);
             }
-            if (changed) {
+            const routineApplied = (date === this.currentDate && this.applyRoutinesToDate)
+                ? this.applyRoutinesToDate(date, { reason: 'supabase-fetch' })
+                : false;
+            if (changed || routineApplied) {
                 this.renderTimeEntries();
                 this.calculateTotals();
                 this.autoSave();
@@ -1729,6 +1794,443 @@ class TimeTracker {
             console.warn('[supabase] planned catalog upsert failed:', e);
             return false;
         }
+    }
+
+    // ===== Routines (planned auto-fill) =====
+    normalizeRoutinePattern(pattern) {
+        const p = String(pattern || '').trim().toLowerCase();
+        if (p === 'weekday' || p === 'weekdays') return 'weekday';
+        if (p === 'weekend' || p === 'weekends') return 'weekend';
+        return 'daily';
+    }
+    getRoutinePatternLabel(pattern) {
+        const p = this.normalizeRoutinePattern(pattern);
+        if (p === 'weekday') return '평일';
+        if (p === 'weekend') return '주말';
+        return '매일';
+    }
+    createRoutineId() {
+        try {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return crypto.randomUUID();
+            }
+        } catch (_) {}
+        return `routine_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+    normalizeRoutineItems(items) {
+        if (!Array.isArray(items)) return [];
+        const seen = new Set();
+        const out = [];
+        items.forEach((raw) => {
+            if (!raw || typeof raw !== 'object') return;
+            const id = String(raw.id || '').trim() || this.createRoutineId();
+            if (seen.has(id)) return;
+            seen.add(id);
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(raw.label || '')
+                : String(raw.label || '').trim();
+            if (!label) return;
+            const startHour = Number.isFinite(raw.startHour) ? (Number(raw.startHour) % 24) : this.labelToHour(raw.startHour);
+            const durationHours = Number.isFinite(raw.durationHours)
+                ? Math.max(1, Math.min(24, Math.floor(Number(raw.durationHours))))
+                : 1;
+            const pattern = this.normalizeRoutinePattern(raw.pattern);
+            const stoppedAtMs = Number.isFinite(raw.stoppedAtMs) ? Math.max(0, Math.floor(Number(raw.stoppedAtMs))) : null;
+            const passDates = Array.isArray(raw.passDates)
+                ? raw.passDates.map(d => String(d || '').trim()).filter(Boolean)
+                : [];
+            const uniquePasses = Array.from(new Set(passDates)).sort((a, b) => a.localeCompare(b));
+            out.push({
+                id,
+                label,
+                startHour: (startHour + 24) % 24,
+                durationHours,
+                pattern,
+                passDates: uniquePasses,
+                stoppedAtMs,
+                createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : null,
+                createdBy: typeof raw.createdBy === 'string' ? raw.createdBy : null,
+                updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+                updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
+            });
+        });
+        return out;
+    }
+    computeRoutineSignature(items) {
+        try {
+            const normalized = this.normalizeRoutineItems(items).map((r) => ({
+                id: r.id,
+                label: r.label,
+                startHour: r.startHour,
+                durationHours: r.durationHours,
+                pattern: r.pattern,
+                passDates: Array.isArray(r.passDates) ? Array.from(new Set(r.passDates)).sort() : [],
+                stoppedAtMs: Number.isFinite(r.stoppedAtMs) ? r.stoppedAtMs : null,
+            }));
+            normalized.sort((a, b) => {
+                const aKey = `${a.label}|${a.startHour}|${a.durationHours}|${a.id}`;
+                const bKey = `${b.label}|${b.startHour}|${b.durationHours}|${b.id}`;
+                return aKey.localeCompare(bKey);
+            });
+            return JSON.stringify(normalized);
+        } catch (_) {
+            return '';
+        }
+    }
+    applyRoutinesJson(slotsJson) {
+        const routines = (slotsJson && typeof slotsJson === 'object' && slotsJson.routines && typeof slotsJson.routines === 'object')
+            ? slotsJson.routines
+            : null;
+        const items = routines && Array.isArray(routines.items) ? routines.items : [];
+        const next = this.normalizeRoutineItems(items);
+        const before = JSON.stringify(this.routines || []);
+        const after = JSON.stringify(next);
+        const changed = before !== after;
+        this.routines = next;
+        this.routinesLoaded = true;
+        const signature = this.computeRoutineSignature(next);
+        if (signature) {
+            this._lastSupabaseRoutineSignature = signature;
+        }
+        return changed;
+    }
+    applyRoutinesFromRow(row) {
+        if (!row || typeof row !== 'object') return false;
+        const slots = row.slots || {};
+        return this.applyRoutinesJson(slots);
+    }
+    async fetchRoutinesFromSupabase() {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        try {
+            const { data, error } = await this.supabase
+                .from('timesheet_days')
+                .select('slots')
+                .eq('user_id', identity)
+                .eq('day', this.ROUTINE_SENTINEL_DAY)
+                .maybeSingle();
+            if (error && error.code !== 'PGRST116') throw error;
+            if (data && data.slots) {
+                const changed = this.applyRoutinesJson(data.slots);
+                if (changed) {
+                    const applied = this.applyRoutinesToDate ? this.applyRoutinesToDate(this.currentDate, { reason: 'routines-fetch' }) : false;
+                    if (applied) {
+                        this.renderTimeEntries();
+                        this.calculateTotals();
+                        this.autoSave();
+                    }
+                } else {
+                    this.routinesLoaded = true;
+                }
+                return true;
+            }
+            this.routinesLoaded = true;
+            return true;
+        } catch (e) {
+            console.warn('[supabase] routines fetch failed:', e);
+            return false;
+        }
+    }
+    scheduleSupabaseRoutineSave(force = false) {
+        if (!this.supabaseConfigured || !this.supabase) return;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return;
+        clearTimeout(this._routineSaveTimer);
+        const executor = () => {
+            this._routineSaveTimer = null;
+            try {
+                const promise = this.saveRoutinesToSupabase(force);
+                if (promise && typeof promise.catch === 'function') {
+                    promise.catch(() => {});
+                }
+            } catch (_) {}
+        };
+        if (force) {
+            executor();
+        } else {
+            this._routineSaveTimer = setTimeout(executor, 500);
+        }
+    }
+    async saveRoutinesToSupabase(force = false) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        const items = this.normalizeRoutineItems(this.routines || []);
+        const signature = this.computeRoutineSignature(items);
+        if (!force && signature && signature === this._lastSupabaseRoutineSignature) {
+            return true;
+        }
+        try {
+            const routines = {
+                version: 1,
+                items,
+                updatedAt: new Date().toISOString(),
+                updatedBy: this.deviceId || null,
+            };
+            const payload = {
+                user_id: identity,
+                day: this.ROUTINE_SENTINEL_DAY,
+                slots: { routines },
+                updated_at: new Date().toISOString(),
+            };
+            const { error } = await this.supabase
+                .from('timesheet_days')
+                .upsert([payload], { onConflict: 'user_id,day' });
+            if (error) throw error;
+            this._lastSupabaseRoutineSignature = signature;
+            return true;
+        } catch (e) {
+            console.warn('[supabase] routines upsert failed:', e);
+            return false;
+        }
+    }
+    getLocalDateParts(date) {
+        const s = String(date || '').trim();
+        const [yStr, mStr, dStr] = s.split('-');
+        const year = parseInt(yStr, 10);
+        const month = parseInt(mStr, 10);
+        const day = parseInt(dStr, 10);
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+        return { year, month, day };
+    }
+    getLocalSlotStartMs(date, hour) {
+        const parts = this.getLocalDateParts(date);
+        if (!parts) return null;
+        const h = Number.isFinite(hour) ? Math.floor(Number(hour)) : 0;
+        const dt = new Date(parts.year, parts.month - 1, parts.day, h, 0, 0, 0);
+        const ms = dt.getTime();
+        return Number.isFinite(ms) ? ms : null;
+    }
+    getDayOfWeek(date) {
+        const parts = this.getLocalDateParts(date);
+        if (!parts) return 0;
+        return new Date(parts.year, parts.month - 1, parts.day).getDay();
+    }
+    routineIncludesHour(routine, hour) {
+        if (!routine || typeof routine !== 'object') return false;
+        const h = (Number(hour) + 24) % 24;
+        const start = (Number(routine.startHour) + 24) % 24;
+        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
+        for (let i = 0; i < dur; i++) {
+            const hh = (start + i) % 24;
+            if (hh === h) return true;
+        }
+        return false;
+    }
+    findRoutineForLabelAtIndex(label, index) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+        if (!normalizedLabel) return null;
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
+        const hour = this.labelToHour(this.timeSlots[index] && this.timeSlots[index].time);
+        return (this.routines || []).find((r) => r && r.label === normalizedLabel && this.routineIncludesHour(r, hour)) || null;
+    }
+    findRoutineForLabelAndWindow(label, startHour, durationHours) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+        if (!normalizedLabel) return null;
+        const s = (Number(startHour) + 24) % 24;
+        const d = Number.isFinite(durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(durationHours)))) : 1;
+        return (this.routines || []).find((r) => {
+            if (!r || r.label !== normalizedLabel) return false;
+            const rs = (Number(r.startHour) + 24) % 24;
+            const rd = Number.isFinite(r.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(r.durationHours)))) : 1;
+            return rs === s && rd === d;
+        }) || null;
+    }
+    isRoutineActiveOnDate(routine, date) {
+        if (!routine || typeof routine !== 'object') return false;
+        const passes = Array.isArray(routine.passDates) ? routine.passDates : [];
+        if (passes.includes(date)) return false;
+        const dow = this.getDayOfWeek(date);
+        const pattern = this.normalizeRoutinePattern(routine.pattern);
+        if (pattern === 'weekday') return dow >= 1 && dow <= 5;
+        if (pattern === 'weekend') return dow === 0 || dow === 6;
+        return true;
+    }
+    isPlanSlotEmptyForRoutine(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return false;
+        const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
+        if (mk) return false;
+        const slot = this.timeSlots[index];
+        if (!slot) return false;
+        const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
+        const planTitle = this.normalizeActivityText ? this.normalizeActivityText(slot.planTitle || '') : String(slot.planTitle || '').trim();
+        const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
+        return !planned && !planTitle && planActivities.length === 0;
+    }
+    applyRoutinesToDate(date, options = {}) {
+        if (!this.routinesLoaded) return false;
+        const d = String(date || '').trim();
+        if (!d) return false;
+        const routines = Array.isArray(this.routines) ? this.routines : [];
+        if (routines.length === 0) return false;
+
+        let changed = false;
+
+        routines.forEach((routine) => {
+            if (!this.isRoutineActiveOnDate(routine, d)) return;
+            const label = String(routine.label || '').trim();
+            if (!label) return;
+            const startHour = (Number(routine.startHour) + 24) % 24;
+            const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
+            for (let i = 0; i < dur; i++) {
+                const hour = (startHour + i) % 24;
+                const slotStartMs = this.getLocalSlotStartMs(d, hour);
+                if (slotStartMs != null && Number.isFinite(routine.stoppedAtMs) && slotStartMs >= routine.stoppedAtMs) {
+                    continue;
+                }
+                const labelForHour = this.hourToLabel(hour);
+                const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
+                if (index < 0) continue;
+                if (!this.isPlanSlotEmptyForRoutine(index)) continue;
+                const slot = this.timeSlots[index];
+                slot.planned = label;
+                slot.planTitle = label;
+                slot.planActivities = [];
+                slot.planTitleBandOn = false;
+                changed = true;
+            }
+        });
+
+        if (changed && options && options.reason === 'routines-realtime') {
+            // no-op: caller handles render/save
+        }
+        return changed;
+    }
+    updateRoutineItem(id, patch = {}) {
+        const list = Array.isArray(this.routines) ? this.routines : [];
+        const idx = list.findIndex(r => r && r.id === id);
+        if (idx < 0) return false;
+        const before = JSON.stringify(list[idx]);
+        const next = { ...list[idx], ...patch };
+        next.updatedAt = new Date().toISOString();
+        next.updatedBy = this.deviceId || null;
+        list[idx] = next;
+        this.routines = list;
+        return JSON.stringify(next) !== before;
+    }
+    upsertRoutineByWindow(label, startHour, durationHours, patch = {}) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+        if (!normalizedLabel) return null;
+        const s = (Number(startHour) + 24) % 24;
+        const d = Number.isFinite(durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(durationHours)))) : 1;
+        const existing = this.findRoutineForLabelAndWindow(normalizedLabel, s, d);
+        if (existing) {
+            const updated = this.updateRoutineItem(existing.id, { ...patch, label: normalizedLabel, startHour: s, durationHours: d });
+            return updated ? this.findRoutineForLabelAndWindow(normalizedLabel, s, d) : existing;
+        }
+        const now = new Date().toISOString();
+        const item = {
+            id: this.createRoutineId(),
+            label: normalizedLabel,
+            startHour: s,
+            durationHours: d,
+            pattern: this.normalizeRoutinePattern(patch.pattern),
+            passDates: Array.isArray(patch.passDates) ? patch.passDates.slice() : [],
+            stoppedAtMs: Number.isFinite(patch.stoppedAtMs) ? patch.stoppedAtMs : null,
+            createdAt: now,
+            createdBy: this.deviceId || null,
+            updatedAt: now,
+            updatedBy: this.deviceId || null,
+        };
+        this.routines = [...(this.routines || []), item];
+        return item;
+    }
+    getInlineTargetRange() {
+        if (!this.inlinePlanTarget) return null;
+        const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
+        const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
+        const startIndex = Math.min(safeStart, safeEnd);
+        const endIndex = Math.max(safeStart, safeEnd);
+        return { startIndex, endIndex };
+    }
+    getRoutineWindowFromRange(startIndex, endIndex) {
+        if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) return null;
+        const startSlot = this.timeSlots[startIndex];
+        const endSlot = this.timeSlots[endIndex];
+        if (!startSlot || !endSlot) return null;
+        const startHour = this.labelToHour(startSlot.time);
+        const durationHours = Math.max(1, endIndex - startIndex + 1);
+        return { startHour, durationHours };
+    }
+    passRoutineForDate(routineId, date) {
+        const d = String(date || '').trim();
+        if (!d) return false;
+        const routine = (this.routines || []).find(r => r && r.id === routineId);
+        if (!routine) return false;
+        const passes = Array.isArray(routine.passDates) ? routine.passDates.slice() : [];
+        if (!passes.includes(d)) passes.push(d);
+        passes.sort((a, b) => a.localeCompare(b));
+        return this.updateRoutineItem(routineId, { passDates: passes });
+    }
+    clearRoutinePassForDate(routineId, date) {
+        const d = String(date || '').trim();
+        if (!d) return false;
+        const routine = (this.routines || []).find(r => r && r.id === routineId);
+        if (!routine) return false;
+        const passes = Array.isArray(routine.passDates) ? routine.passDates.filter(x => x !== d) : [];
+        return this.updateRoutineItem(routineId, { passDates: passes });
+    }
+    clearRoutineRangeForDate(routine, date) {
+        if (!routine || typeof routine !== 'object') return false;
+        const d = String(date || '').trim();
+        if (!d) return false;
+        const startHour = (Number(routine.startHour) + 24) % 24;
+        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
+        let changed = false;
+        const handledMerges = new Set();
+        for (let i = 0; i < dur; i++) {
+            const hour = (startHour + i) % 24;
+            const labelForHour = this.hourToLabel(hour);
+            const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
+            if (index < 0) continue;
+            const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
+            if (mk) {
+                if (handledMerges.has(mk)) continue;
+                handledMerges.add(mk);
+                const [, startStr, endStr] = mk.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
+                const baseSlot = this.timeSlots[start];
+                const mergedRaw = (this.mergedFields && this.mergedFields.has(mk))
+                    ? this.mergedFields.get(mk)
+                    : '';
+                const mergedText = this.normalizeActivityText
+                    ? this.normalizeActivityText(mergedRaw || (baseSlot && baseSlot.planned) || '')
+                    : String(mergedRaw || (baseSlot && baseSlot.planned) || '').trim();
+                if (mergedText && mergedText !== routine.label) continue;
+                if (this.mergedFields && this.mergedFields.has(mk)) {
+                    this.mergedFields.delete(mk);
+                    changed = true;
+                }
+                for (let j = start; j <= end; j++) {
+                    const slot = this.timeSlots[j];
+                    if (!slot) continue;
+                    if (slot.planned !== '') { slot.planned = ''; changed = true; }
+                    if (slot.planTitle !== '') { slot.planTitle = ''; changed = true; }
+                    if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
+                    const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
+                    if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
+                }
+                continue;
+            }
+            const slot = this.timeSlots[index];
+            if (!slot) continue;
+            const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
+            if (planned && planned !== routine.label) continue;
+            if (slot.planned !== '') { slot.planned = ''; changed = true; }
+            if (slot.planTitle !== '') { slot.planTitle = ''; changed = true; }
+            if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
+            const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
+            if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
+        }
+        return changed;
+    }
+    ensureRoutinesAvailableOrNotify() {
+        if (this.supabaseConfigured && this.supabase && this.getSupabaseIdentity()) return true;
+        this.showNotification('루틴 기능은 Google 로그인 후 사용할 수 있습니다.');
+        return false;
     }
 
     normalizeActivityLog(slot) {
@@ -6165,10 +6667,32 @@ class TimeTracker {
 
             const right = document.createElement('div');
             right.className = 'inline-plan-option-meta';
-            const sourceTag = document.createElement('span');
-            sourceTag.className = 'inline-plan-option-source';
-            sourceTag.textContent = source === 'notion' ? '노션' : '직접 추가';
-            right.appendChild(sourceTag);
+            if (source === 'notion') {
+                const sourceTag = document.createElement('span');
+                sourceTag.className = 'inline-plan-option-source';
+                sourceTag.textContent = '노션';
+                right.appendChild(sourceTag);
+            }
+
+            const routineBtn = document.createElement('button');
+            routineBtn.type = 'button';
+            routineBtn.className = 'inline-plan-option-routine';
+            routineBtn.textContent = '루틴';
+            const ctxIndex = this.inlinePlanTarget && Number.isInteger(this.inlinePlanTarget.startIndex)
+                ? this.inlinePlanTarget.startIndex
+                : null;
+            const activeRoutine = Number.isInteger(ctxIndex) ? this.findRoutineForLabelAtIndex(normalizedLabel, ctxIndex) : null;
+            if (activeRoutine) {
+                routineBtn.classList.add('active');
+                routineBtn.title = `루틴: ${this.getRoutinePatternLabel(activeRoutine.pattern)}`;
+            } else {
+                routineBtn.title = '루틴 설정';
+            }
+            routineBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                this.openRoutineMenuFromInlinePlan(label, routineBtn);
+            });
+            right.appendChild(routineBtn);
             if (source !== 'notion') {
                 const removeBtn = document.createElement('button');
                 removeBtn.type = 'button';
@@ -6196,6 +6720,225 @@ class TimeTracker {
             li.addEventListener('click', () => this.applyInlinePlanSelection(label));
             list.appendChild(li);
         });
+    }
+
+    openRoutineMenuFromInlinePlan(label, anchorEl) {
+        if (!anchorEl || !anchorEl.isConnected) return;
+        if (!this.inlinePlanTarget) return;
+        if (!this.ensureRoutinesAvailableOrNotify()) return;
+
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
+        if (!normalizedLabel) return;
+
+        const range = this.getInlineTargetRange();
+        const ctxIndex = range && Number.isInteger(range.startIndex) ? range.startIndex : null;
+        const windowInfo = range ? this.getRoutineWindowFromRange(range.startIndex, range.endIndex) : null;
+
+        const routineAtIndex = Number.isInteger(ctxIndex) ? this.findRoutineForLabelAtIndex(normalizedLabel, ctxIndex) : null;
+        const routineForWindow = windowInfo ? this.findRoutineForLabelAndWindow(normalizedLabel, windowInfo.startHour, windowInfo.durationHours) : null;
+        const routineForPattern = routineAtIndex || routineForWindow;
+
+        this.closeRoutineMenu();
+
+        const menu = document.createElement('div');
+        menu.className = 'routine-menu';
+        menu.setAttribute('role', 'menu');
+        menu.innerHTML = `
+            <button type="button" class="routine-menu-item" data-action="daily" role="menuitem">매일</button>
+            <button type="button" class="routine-menu-item" data-action="weekday" role="menuitem">평일</button>
+            <button type="button" class="routine-menu-item" data-action="weekend" role="menuitem">주말</button>
+            <div class="routine-menu-divider" role="separator"></div>
+            <button type="button" class="routine-menu-item" data-action="pass" role="menuitem">패스</button>
+            <button type="button" class="routine-menu-item danger" data-action="stop" role="menuitem">루틴 중단</button>
+        `;
+        document.body.appendChild(menu);
+        this.routineMenu = menu;
+        this.routineMenuContext = {
+            label: normalizedLabel,
+            rawLabel: label,
+            anchorEl,
+            ctxIndex,
+            windowInfo,
+            routineAtIndex,
+            routineForWindow
+        };
+
+        if (routineForPattern) {
+            const p = this.normalizeRoutinePattern(routineForPattern.pattern);
+            const activeBtn = menu.querySelector(`[data-action="${p}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        const passBtn = menu.querySelector('[data-action="pass"]');
+        const stopBtn = menu.querySelector('[data-action="stop"]');
+        if (!routineAtIndex) {
+            if (passBtn) passBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = true;
+        } else {
+            const passed = Array.isArray(routineAtIndex.passDates) && routineAtIndex.passDates.includes(this.currentDate);
+            if (passBtn && passed) {
+                passBtn.classList.add('active');
+            }
+        }
+
+        menu.addEventListener('click', (event) => {
+            const btn = event.target.closest('.routine-menu-item');
+            if (!btn || !menu.contains(btn)) return;
+            if (btn.disabled) return;
+            const action = String(btn.dataset.action || '').trim();
+            if (!action) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.handleRoutineMenuAction(action);
+        });
+
+        this.positionRoutineMenu(anchorEl);
+
+        this.routineMenuOutsideHandler = (event) => {
+            if (!this.routineMenu) return;
+            const t = event.target;
+            if (this.routineMenu.contains(t)) return;
+            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
+            this.closeRoutineMenu();
+        };
+        document.addEventListener('mousedown', this.routineMenuOutsideHandler, true);
+
+        this.routineMenuEscHandler = (event) => {
+            if (event.key === 'Escape') {
+                this.closeRoutineMenu();
+            }
+        };
+        document.addEventListener('keydown', this.routineMenuEscHandler);
+    }
+    positionRoutineMenu(anchorEl) {
+        if (!this.routineMenu) return;
+        if (!anchorEl || !anchorEl.isConnected) return;
+        const rect = anchorEl.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return;
+
+        const menu = this.routineMenu;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+
+        menu.style.visibility = 'hidden';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+
+        const menuWidth = menu.offsetWidth || 220;
+        const menuHeight = menu.offsetHeight || 180;
+
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + 6;
+
+        const maxLeft = scrollX + viewportWidth - menuWidth - 12;
+        if (left > maxLeft) {
+            left = Math.max(scrollX + 12, maxLeft);
+        }
+
+        const maxTop = scrollY + viewportHeight - menuHeight - 12;
+        if (top > maxTop) {
+            top = rect.top + scrollY - menuHeight - 6;
+        }
+        if (top < scrollY + 12) {
+            top = scrollY + 12;
+        }
+
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+        menu.style.visibility = 'visible';
+    }
+    closeRoutineMenu() {
+        if (this.routineMenuOutsideHandler) {
+            document.removeEventListener('mousedown', this.routineMenuOutsideHandler, true);
+            this.routineMenuOutsideHandler = null;
+        }
+        if (this.routineMenuEscHandler) {
+            document.removeEventListener('keydown', this.routineMenuEscHandler);
+            this.routineMenuEscHandler = null;
+        }
+        if (this.routineMenu && this.routineMenu.parentNode) {
+            this.routineMenu.parentNode.removeChild(this.routineMenu);
+        }
+        this.routineMenu = null;
+        this.routineMenuContext = null;
+    }
+    handleRoutineMenuAction(action) {
+        const ctx = this.routineMenuContext;
+        if (!ctx) return;
+        const act = String(action || '').trim().toLowerCase();
+
+        if (act === 'daily' || act === 'weekday' || act === 'weekend') {
+            const target = ctx.routineAtIndex || ctx.routineForWindow;
+            let routine = target;
+            if (routine) {
+                const nextPassDates = Array.isArray(routine.passDates)
+                    ? routine.passDates.filter(d => d !== this.currentDate)
+                    : [];
+                this.updateRoutineItem(routine.id, {
+                    pattern: act,
+                    stoppedAtMs: null,
+                    passDates: nextPassDates
+                });
+            } else {
+                let win = ctx.windowInfo;
+                if (!win && Number.isInteger(ctx.ctxIndex) && this.timeSlots[ctx.ctxIndex]) {
+                    win = { startHour: this.labelToHour(this.timeSlots[ctx.ctxIndex].time), durationHours: 1 };
+                }
+                if (!win) return;
+                routine = this.upsertRoutineByWindow(ctx.label, win.startHour, win.durationHours, { pattern: act, stoppedAtMs: null, passDates: [] });
+            }
+            this.scheduleSupabaseRoutineSave();
+            this.closeRoutineMenu();
+            this.applyInlinePlanSelection(ctx.label, { keepOpen: true });
+            this.renderInlinePlanDropdownOptions();
+            return;
+        }
+
+        if (act === 'pass') {
+            const routine = ctx.routineAtIndex || ctx.routineForWindow;
+            if (!routine) {
+                this.showNotification('이 시간대에 설정된 루틴이 없습니다.');
+                this.closeRoutineMenu();
+                return;
+            }
+            const routineChanged = this.passRoutineForDate(routine.id, this.currentDate);
+            if (routineChanged) {
+                this.scheduleSupabaseRoutineSave();
+            }
+            const cleared = this.clearRoutineRangeForDate(routine, this.currentDate);
+            this.closeRoutineMenu();
+            if (cleared) {
+                this.renderTimeEntries(true);
+                this.calculateTotals();
+                this.autoSave();
+            }
+            this.renderInlinePlanDropdownOptions();
+            if (this.inlinePlanTarget && Number.isInteger(ctx.ctxIndex)) {
+                const anchor = document.querySelector(`[data-index="${ctx.ctxIndex}"] .planned-input`)
+                    || document.querySelector(`[data-index="${ctx.ctxIndex}"]`);
+                if (anchor) {
+                    this.inlinePlanTarget.anchor = anchor;
+                    this.positionInlinePlanDropdown(anchor);
+                }
+            }
+            return;
+        }
+
+        if (act === 'stop') {
+            const routine = ctx.routineAtIndex || ctx.routineForWindow;
+            if (!routine) {
+                this.showNotification('중단할 루틴이 없습니다.');
+                this.closeRoutineMenu();
+                return;
+            }
+            this.updateRoutineItem(routine.id, { stoppedAtMs: Date.now() });
+            this.scheduleSupabaseRoutineSave();
+            this.closeRoutineMenu();
+            this.renderInlinePlanDropdownOptions();
+            return;
+        }
     }
     openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         const range = this.getPlannedRangeInfo(index);
@@ -6298,8 +7041,27 @@ class TimeTracker {
             const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
             const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
             const baseIndex = Math.min(startIndex, endIndex);
-            if (this.timeSlots[baseIndex]) {
-                this.timeSlots[baseIndex].planned = '';
+
+            const previousLabel = this.getPlannedValueForIndex(baseIndex);
+            const routine = previousLabel ? this.findRoutineForLabelAtIndex(previousLabel, baseIndex) : null;
+
+            if (routine && this.ensureRoutinesAvailableOrNotify()) {
+                const routineChanged = this.passRoutineForDate(routine.id, this.currentDate);
+                if (routineChanged) {
+                    this.scheduleSupabaseRoutineSave();
+                }
+                this.clearRoutineRangeForDate(routine, this.currentDate);
+            } else {
+                if (target.mergeKey && this.mergedFields && this.mergedFields.has(target.mergeKey)) {
+                    this.mergedFields.delete(target.mergeKey);
+                }
+                for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
+                    if (!this.timeSlots[i]) continue;
+                    this.timeSlots[i].planned = '';
+                    this.timeSlots[i].planActivities = [];
+                    this.timeSlots[i].planTitle = '';
+                    this.timeSlots[i].planTitleBandOn = false;
+                }
             }
             this.modalPlanActivities = [];
             this.modalPlanActiveRow = -1;
@@ -6315,7 +7077,19 @@ class TimeTracker {
                 this.inlinePlanContext.titleField.hidden = true;
             }
             this.renderPlanActivitiesList();
+            this.renderTimeEntries(true);
+            this.calculateTotals();
+            this.autoSave();
             this.renderInlinePlanDropdownOptions();
+
+            if (this.inlinePlanTarget) {
+                const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
+                    || document.querySelector(`[data-index="${baseIndex}"]`);
+                if (anchor) {
+                    this.inlinePlanTarget.anchor = anchor;
+                    this.positionInlinePlanDropdown(anchor);
+                }
+            }
         };
 
         if (input) {
@@ -6529,6 +7303,7 @@ class TimeTracker {
         }
     }
     closeInlinePlanDropdown() {
+        this.closeRoutineMenu();
         if (this.inlinePlanOutsideHandler) {
             document.removeEventListener('mousedown', this.inlinePlanOutsideHandler, true);
             this.inlinePlanOutsideHandler = null;

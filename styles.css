@@ -1821,6 +1821,29 @@ h1 {
     font-weight: 700;
 }
 
+.inline-plan-option-routine {
+  border: 1px solid rgba(52, 152, 219, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #f5f9ff;
+  color: #1f5fa5;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.inline-plan-option-routine:hover {
+  background: #eaf4ff;
+  border-color: rgba(52, 152, 219, 0.55);
+}
+
+.inline-plan-option-routine.active {
+  background: #3498db;
+  border-color: #3498db;
+  color: #fff;
+}
+
 .inline-plan-option-remove {
     border: 1px solid #f0b3b3;
     border-radius: 999px;
@@ -1839,6 +1862,54 @@ h1 {
 .inline-plan-option-time {
   color: #2980b9;
   font-weight: 700;
+}
+
+.routine-menu {
+  position: absolute;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  z-index: 70;
+}
+
+.routine-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.routine-menu-item:hover {
+  background: #f5f9ff;
+}
+
+.routine-menu-item.active {
+  background: #ecf5ff;
+  color: #1f5fa5;
+}
+
+.routine-menu-item.danger {
+  color: #c0392b;
+}
+
+.routine-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.routine-menu-divider {
+  height: 1px;
+  background: #eef1f4;
+  margin: 6px 2px;
 }
 
 .inline-plan-empty {
