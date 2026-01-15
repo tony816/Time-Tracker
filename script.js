@@ -257,6 +257,11 @@ class TimeTracker {
             `;
             
             entryDiv.dataset.index = index;
+            const routineMatch = this.getRoutineForPlannedIndex(index, this.currentDate);
+            if (routineMatch) {
+                entryDiv.classList.add('routine-planned');
+                entryDiv.dataset.routineId = routineMatch.id;
+            }
             
             if (plannedMergeKey) {
                 const plannedStart = parseInt(plannedMergeKey.split('-')[1]);
@@ -2013,6 +2018,15 @@ class TimeTracker {
         if (av > bv) return 1;
         return 0;
     }
+    formatDateFromMsLocal(ms) {
+        if (!Number.isFinite(ms)) return '';
+        const dt = new Date(ms);
+        if (isNaN(dt.getTime())) return '';
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
     getLocalSlotStartMs(date, hour) {
         const parts = this.getLocalDateParts(date);
         if (!parts) return null;
@@ -2069,12 +2083,25 @@ class TimeTracker {
         }
         return false;
     }
-    findRoutineForLabelAtIndex(label, index) {
+    findRoutineForLabelAtIndex(label, index, date = null) {
         const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
         if (!normalizedLabel) return null;
         if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
         const hour = this.labelToHour(this.timeSlots[index] && this.timeSlots[index].time);
-        return (this.routines || []).find((r) => r && r.label === normalizedLabel && this.routineIncludesHour(r, hour)) || null;
+        const targetDate = date || this.currentDate;
+        return (this.routines || []).find((r) => {
+            if (!r || r.label !== normalizedLabel) return false;
+            if (!this.routineIncludesHour(r, hour)) return false;
+            if (this.isRoutineStoppedForDate(r, targetDate)) return false;
+            return !this.isRoutineStoppedAtSlot(r, targetDate, hour);
+        }) || null;
+    }
+    findActiveRoutineForLabelAtIndex(label, index, date = null) {
+        const targetDate = date || this.currentDate;
+        const routine = this.findRoutineForLabelAtIndex(label, index, targetDate);
+        if (!routine) return null;
+        if (!this.isRoutineActiveOnDate(routine, targetDate)) return null;
+        return routine;
     }
     findRoutineForLabelAndWindow(label, startHour, durationHours) {
         const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
@@ -2098,6 +2125,29 @@ class TimeTracker {
         if (pattern === 'weekend') return dow === 0 || dow === 6;
         return true;
     }
+    isRoutineStoppedAtSlot(routine, date, hour) {
+        if (!Number.isFinite(routine && routine.stoppedAtMs)) return false;
+        const slotStartMs = this.getLocalSlotStartMs(date, hour);
+        return slotStartMs != null && slotStartMs >= routine.stoppedAtMs;
+    }
+    isRoutineStoppedForDate(routine, date) {
+        if (!Number.isFinite(routine && routine.stoppedAtMs)) return false;
+        const stopDate = this.formatDateFromMsLocal(routine.stoppedAtMs);
+        if (!stopDate) return false;
+        return this.compareDateStrings(date, stopDate) >= 0;
+    }
+    isRoutineActiveAtSlot(routine, date, hour) {
+        if (this.isRoutineStoppedForDate(routine, date)) return false;
+        if (!this.isRoutineActiveOnDate(routine, date)) return false;
+        return !this.isRoutineStoppedAtSlot(routine, date, hour);
+    }
+    getRoutineForPlannedIndex(index, date = null) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
+        const plannedLabel = this.getPlannedValueForIndex(index);
+        if (!plannedLabel) return null;
+        const targetDate = date || this.currentDate;
+        return this.findActiveRoutineForLabelAtIndex(plannedLabel, index, targetDate);
+    }
     isPlanSlotEmptyForRoutine(index) {
         if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return false;
         const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
@@ -2119,6 +2169,7 @@ class TimeTracker {
         let changed = false;
 
         routines.forEach((routine) => {
+            if (this.isRoutineStoppedForDate(routine, d)) return;
             if (!this.isRoutineActiveOnDate(routine, d)) return;
             const label = String(routine.label || '').trim();
             if (!label) return;
@@ -6848,7 +6899,9 @@ class TimeTracker {
             const ctxIndex = this.inlinePlanTarget && Number.isInteger(this.inlinePlanTarget.startIndex)
                 ? this.inlinePlanTarget.startIndex
                 : null;
-            const activeRoutine = Number.isInteger(ctxIndex) ? this.findRoutineForLabelAtIndex(normalizedLabel, ctxIndex) : null;
+            const activeRoutine = Number.isInteger(ctxIndex)
+                ? this.findActiveRoutineForLabelAtIndex(normalizedLabel, ctxIndex, this.currentDate)
+                : null;
             if (activeRoutine) {
                 routineBtn.classList.add('active');
                 routineBtn.title = `루틴: ${this.getRoutinePatternLabel(activeRoutine.pattern)}`;
@@ -6901,9 +6954,10 @@ class TimeTracker {
         const ctxIndex = range && Number.isInteger(range.startIndex) ? range.startIndex : null;
         const windowInfo = range ? this.getRoutineWindowFromRange(range.startIndex, range.endIndex) : null;
 
-        const routineAtIndex = Number.isInteger(ctxIndex) ? this.findRoutineForLabelAtIndex(normalizedLabel, ctxIndex) : null;
+        const routineAtIndex = Number.isInteger(ctxIndex)
+            ? this.findRoutineForLabelAtIndex(normalizedLabel, ctxIndex, this.currentDate)
+            : null;
         const routineForWindow = windowInfo ? this.findRoutineForLabelAndWindow(normalizedLabel, windowInfo.startHour, windowInfo.durationHours) : null;
-        const routineForPattern = routineAtIndex || routineForWindow;
 
         this.closeRoutineMenu();
 
@@ -6930,8 +6984,8 @@ class TimeTracker {
             routineForWindow
         };
 
-        if (routineForPattern) {
-            const p = this.normalizeRoutinePattern(routineForPattern.pattern);
+        if (routineAtIndex) {
+            const p = this.normalizeRoutinePattern(routineAtIndex.pattern);
             const activeBtn = menu.querySelector(`[data-action="${p}"]`);
             if (activeBtn) activeBtn.classList.add('active');
         }
