@@ -7023,7 +7023,8 @@ class TimeTracker {
             routineForWindow
         };
 
-        if (routineAtIndex && this.isRoutineActiveOnDate(routineAtIndex, this.currentDate)) {
+        const routineActiveForDate = routineAtIndex && this.isRoutineActiveOnDate(routineAtIndex, this.currentDate);
+        if (routineActiveForDate) {
             const p = this.normalizeRoutinePattern(routineAtIndex.pattern);
             const activeBtn = menu.querySelector(`[data-action="${p}"]`);
             if (activeBtn) activeBtn.classList.add('active');
@@ -7031,7 +7032,7 @@ class TimeTracker {
 
         const passBtn = menu.querySelector('[data-action="pass"]');
         const stopBtn = menu.querySelector('[data-action="stop"]');
-        if (!routineAtIndex) {
+        if (!routineActiveForDate) {
             if (passBtn) passBtn.disabled = true;
             if (stopBtn) stopBtn.disabled = true;
         } else {
