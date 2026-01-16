@@ -3280,7 +3280,12 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
-        const block = this.getActualGridBlockRange(planContext.units, unitIndex, 6);
+        const isMultiRow = this.getBlockLength('actual', baseIndex) > 1;
+        const baseLabel = planContext.planLabel || '';
+        const isSingleLabel = Boolean(baseLabel) && planContext.units.every(label => label === baseLabel);
+        const block = (isMultiRow && isSingleLabel)
+            ? { start: 0, end: planContext.units.length - 1, label: baseLabel }
+            : this.getActualGridBlockRange(planContext.units, unitIndex, 6);
         if (!block) return;
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
         const { start, end } = block;
