@@ -6889,7 +6889,7 @@ class TimeTracker {
 
             li.appendChild(left);
             li.appendChild(right);
-            li.addEventListener('click', () => this.applyInlinePlanSelection(label));
+            li.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
             list.appendChild(li);
         });
     }
