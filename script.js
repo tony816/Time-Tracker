@@ -29,7 +29,7 @@ class TimeTracker {
         this.inlinePlanContext = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
-            try { return window.NOTION_ACTIVITIES_ENDPOINT || localStorage.getItem('notion_activities_endpoint') || null; } catch(e){ return null; }
+            try { return window.NOTION_ACTIVITIES_ENDPOINT || null; } catch(e){ return null; }
         })();
         this.notionActivitiesCache = null;
         // 타이머 관련 속성 추가
@@ -57,7 +57,9 @@ class TimeTracker {
         this.authStatusElement = null;
         this.authButton = null;
         this.deviceId = this.loadOrCreateDeviceId ? this.loadOrCreateDeviceId() : (function(){
-            try { const k='device_id'; let v=localStorage.getItem(k); if(v) return v; const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); v=`${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; localStorage.setItem(k,v); return v; } catch(_) { return 'device-anon'; } })();
+            try { const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); return `${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; } catch(_) { return 'device-anon'; } })();
+        this._timesheetClearPending = new Set();
+        this.loginIntent = null;
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
@@ -325,7 +327,7 @@ class TimeTracker {
                     if (Object.keys(options).length > 0) {
                         params.options = options;
                     }
-                    try { localStorage.setItem('login_intent', 'google'); } catch(_) {}
+                    this.loginIntent = 'google';
                     this.supabase.auth.signInWithOAuth(params).catch((err) => {
                         console.warn('[auth] sign in failed', err);
                         this.showNotification('Google 로그인에 실패했습니다.');
@@ -870,7 +872,7 @@ class TimeTracker {
         };
         // 로컬 저장
         try {
-            localStorage.setItem(`timesheet_${this.currentDate}`, JSON.stringify(data));
+            // local storage disabled
         } catch (_) {}
         // 마지막 저장 스냅샷 업데이트(워처 중복 저장 방지)
         try {
@@ -886,7 +888,7 @@ class TimeTracker {
 
     async loadData() {
         // 로컬에서 로드
-        const savedData = localStorage.getItem(`timesheet_${this.currentDate}`);
+        const savedData = null;
         if (savedData) {
             const data = JSON.parse(savedData);
             this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
@@ -1036,7 +1038,7 @@ class TimeTracker {
         this.calculateTotals();
         this.renderInlinePlanDropdownOptions();
         this.closeRoutineMenu();
-        try { localStorage.removeItem(`timesheet_${this.currentDate}`); } catch (_) {}
+        try { /* local storage disabled */ } catch (_) {}
         // If user refreshes quickly, Supabase fetch could re-apply stale data.
         // Mark this day as "pending clear" so the next load will delete remote first.
         this.markTimesheetClearPending(this.currentDate);
@@ -1124,11 +1126,11 @@ class TimeTracker {
         // 로그인 성공 알림: 실제로 사용자 의도로 로그인 플로우를 시작한 경우에만
         if (ev === 'SIGNED_IN' && hasUser) {
             let startedByUser = false;
-            try { startedByUser = !!localStorage.getItem('login_intent'); } catch(_) {}
+            startedByUser = this.loginIntent === 'google';
             if (startedByUser) {
                 this.showNotification('Google 로그인에 성공했습니다.');
             }
-            try { localStorage.removeItem('login_intent'); } catch(_) {}
+            this.loginIntent = null;
         }
         // 로그아웃 알림: 명시적 SIGNED_OUT 이벤트일 때만
         if (ev === 'SIGNED_OUT' && hadPrev) {
@@ -1443,22 +1445,17 @@ class TimeTracker {
     }
     loadOrCreateDeviceId() {
         try {
-            const k = 'device_id';
-            let id = localStorage.getItem(k);
-            if (id) return id;
             const rnd = crypto && crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(16)) : Array.from({length:16},()=>Math.floor(Math.random()*256));
             rnd[6] = (rnd[6] & 0x0f) | 0x40;
             rnd[8] = (rnd[8] & 0x3f) | 0x80;
             const hex = Array.from(rnd).map(b=>b.toString(16).padStart(2,'0')).join('');
-            id = `${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`;
-            localStorage.setItem(k, id);
-            return id;
+            return `${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`;
         } catch(_) { return 'device-anon'; }
     }
     loadSupabaseConfig() {
         try {
-            const url = (typeof window !== 'undefined' && window.SUPABASE_URL) || localStorage.getItem('supabase_url') || null;
-            const anon = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || localStorage.getItem('supabase_anon_key') || null;
+            const url = (typeof window !== 'undefined' && window.SUPABASE_URL) || null;
+            const anon = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || null;
             if (url && anon) return { url: String(url), anonKey: String(anon) };
         } catch(_) {}
         return null;
@@ -1610,16 +1607,19 @@ class TimeTracker {
         this._sbSaveTimer = setTimeout(() => { try { this.saveToSupabase && this.saveToSupabase(); } catch(_) {} }, 500);
     }
     getTimesheetClearPendingKey(date) {
-        return `timesheet_clear_pending_${date}`;
+        return String(date || '');
     }
     isTimesheetClearPending(date) {
-        try { return !!localStorage.getItem(this.getTimesheetClearPendingKey(date)); } catch (_) { return false; }
+        const key = this.getTimesheetClearPendingKey(date);
+        return key ? this._timesheetClearPending.has(key) : false;
     }
     markTimesheetClearPending(date) {
-        try { localStorage.setItem(this.getTimesheetClearPendingKey(date), String(Date.now())); } catch (_) {}
+        const key = this.getTimesheetClearPendingKey(date);
+        if (key) this._timesheetClearPending.add(key);
     }
     clearTimesheetClearPending(date) {
-        try { localStorage.removeItem(this.getTimesheetClearPendingKey(date)); } catch (_) {}
+        const key = this.getTimesheetClearPendingKey(date);
+        if (key) this._timesheetClearPending.delete(key);
     }
     async deleteFromSupabaseForDate(date) {
         if (!this.supabaseConfigured || !this.supabase) return false;
@@ -2410,32 +2410,7 @@ class TimeTracker {
         return changed;
     }
     clearRoutineFromLocalStorageFutureDates(routine, fromDate) {
-        try {
-            const prefix = 'timesheet_';
-            const keys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith(prefix)) keys.push(k);
-            }
-            keys.forEach((key) => {
-                const date = key.substring(prefix.length);
-                if (this.compareDateStrings(date, fromDate) <= 0) return;
-                try {
-                    const raw = localStorage.getItem(key);
-                    if (!raw) return;
-                    const data = JSON.parse(raw);
-                    if (!data || !Array.isArray(data.timeSlots)) return;
-                    const mergedMap = new Map(Object.entries(data.mergedFields || {}));
-                    const changed = this.clearRoutineRangeForDate(routine, date, {
-                        timeSlots: data.timeSlots,
-                        mergedFieldsMap: mergedMap
-                    });
-                    if (!changed) return;
-                    data.mergedFields = Object.fromEntries(mergedMap);
-                    localStorage.setItem(key, JSON.stringify(data));
-                } catch (_) {}
-            });
-        } catch (_) {}
+        // local storage disabled
     }
     async clearRoutineFromSupabaseFutureDates(routine, fromDate) {
         if (!this.supabaseConfigured || !this.supabase) return false;
@@ -2523,33 +2498,7 @@ class TimeTracker {
 
     // 저장소 전체 순회하여 기존 데이터에서 outcome 필드 제거
     purgeOutcomeFromAllStoredData() {
-        try {
-            const prefix = 'timesheet_';
-            const keys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith(prefix)) keys.push(k);
-            }
-            keys.forEach((k) => {
-                try {
-                    const raw = localStorage.getItem(k);
-                    if (!raw) return;
-                    const obj = JSON.parse(raw);
-                    if (!obj || !Array.isArray(obj.timeSlots)) return;
-                    let changed = false;
-                    obj.timeSlots = obj.timeSlots.map((slot) => {
-                        const before = JSON.stringify(slot && slot.activityLog);
-                        const afterSlot = this.normalizeActivityLog(slot);
-                        const after = JSON.stringify(afterSlot && afterSlot.activityLog);
-                        if (before !== after) changed = true;
-                        return afterSlot;
-                    });
-                    if (changed) {
-                        try { localStorage.setItem(k, JSON.stringify(obj)); } catch (_) {}
-                    }
-                } catch (_) {}
-            });
-        } catch (_) {}
+        // local storage disabled
     }
 
     changeDate(days) {
@@ -6317,33 +6266,6 @@ class TimeTracker {
     // Planned activities: load/save and render dropdown
     loadPlannedActivities() {
         this.plannedActivities = [];
-        try {
-            const raw = localStorage.getItem('planned_activities');
-            if (!raw) {
-                this.dedupeAndSortPlannedActivities();
-                return;
-            }
-            const arr = JSON.parse(raw);
-            if (!Array.isArray(arr)) {
-                this.dedupeAndSortPlannedActivities();
-                return;
-            }
-            arr.forEach((item) => {
-                if (typeof item === 'string') {
-                    const label = this.normalizeActivityText(item);
-                    if (label) this.plannedActivities.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
-                    return;
-                }
-                if (item && typeof item === 'object') {
-                    const label = this.normalizeActivityText(item.label || item.title || '');
-                    if (!label) return;
-                    const source = item.source === 'notion' ? 'notion' : 'local';
-                    const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-                    const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-                    this.plannedActivities.push({ label, source, priorityRank, recommendedSeconds });
-                }
-            });
-        } catch (e) {}
         this.dedupeAndSortPlannedActivities();
     }
     savePlannedActivities(options = {}) {
@@ -6355,16 +6277,7 @@ class TimeTracker {
         return locals;
     }
     persistPlannedActivitiesLocally() {
-        try {
-            const locals = (this.plannedActivities || [])
-                .filter(item => item && item.source !== 'notion')
-                .map(item => this.normalizeActivityText(item.label || ''))
-                .filter(Boolean);
-            localStorage.setItem('planned_activities', JSON.stringify(locals));
-            return locals;
-        } catch (e) {
-            return [];
-        }
+        return [];
     }
     addPlannedActivityOption(text, selectAfter = false) {
         const label = this.normalizeActivityText(text);
@@ -7644,10 +7557,7 @@ class TimeTracker {
                 return String(window.NOTION_ACTIVITIES_ENDPOINT);
             }
         } catch (e) {}
-        try {
-            const v = localStorage.getItem('notion_activities_endpoint');
-            return v ? String(v) : null;
-        } catch (e) { return null; }
+        return null;
     }
     async prefetchNotionActivitiesIfConfigured() {
         const url = this.notionEndpoint;
