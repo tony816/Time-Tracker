@@ -77,6 +77,10 @@ class TimeTracker {
         this.routineMenuContext = null;
         this.routineMenuOutsideHandler = null;
         this.routineMenuEscHandler = null;
+        this.planActivityMenu = null;
+        this.planActivityMenuContext = null;
+        this.planActivityMenuOutsideHandler = null;
+        this.planActivityMenuEscHandler = null;
         this.init();
     }
 
@@ -4032,10 +4036,8 @@ class TimeTracker {
     renderPlanActivitiesList() {
         const { list } = this.getPlanUIElements();
         if (!list) return;
+        this.closePlanActivityMenu();
         list.innerHTML = '';
-        const optionLabels = this.buildActivityLabelOptions(
-            (this.modalPlanActivities || []).map(item => (item && item.label ? item.label : ''))
-        );
         (this.modalPlanActivities || []).forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'sub-activity-row';
@@ -4043,10 +4045,23 @@ class TimeTracker {
             if (item.invalid) row.classList.add('invalid');
             if (idx === this.modalPlanActiveRow) row.classList.add('active');
 
-            const labelSelect = document.createElement('select');
-            labelSelect.className = 'plan-activity-label';
-            labelSelect.setAttribute('aria-label', '세부 활동');
-            this.populateActivityLabelSelect(labelSelect, optionLabels, item.label, '세부 활동');
+            const labelButton = document.createElement('button');
+            labelButton.type = 'button';
+            labelButton.className = 'plan-activity-label';
+            labelButton.setAttribute('aria-label', '세부 활동');
+            labelButton.setAttribute('aria-haspopup', 'menu');
+            labelButton.setAttribute('aria-expanded', 'false');
+            const normalizedLabel = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            labelButton.textContent = normalizedLabel || '세부 활동';
+            if (!normalizedLabel) labelButton.classList.add('empty');
+            labelButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.setPlanActiveRow(idx);
+                this.openPlanActivityMenu(idx, labelButton);
+            });
 
             const spinner = this.createDurationSpinner({
                 kind: 'plan',
@@ -4059,7 +4074,7 @@ class TimeTracker {
             removeBtn.className = 'remove-sub-activity';
             removeBtn.textContent = '삭제';
 
-            row.appendChild(labelSelect);
+            row.appendChild(labelButton);
             row.appendChild(spinner);
             row.appendChild(removeBtn);
             list.appendChild(row);
@@ -4370,6 +4385,173 @@ class TimeTracker {
 
         this.updatePlanActivitiesSummary();
         this.syncInlinePlanToSlots();
+    }
+
+    applyPlanActivityLabelSelection(index, label) {
+        if (!this.isValidPlanRow(index)) return false;
+        const normalized = this.normalizeActivityText
+            ? this.normalizeActivityText(label || '')
+            : String(label || '').trim();
+        const item = this.modalPlanActivities[index];
+        if (!item) return false;
+        item.label = normalized;
+        item.invalid = false;
+        this.modalPlanActiveRow = index;
+        this.renderPlanActivitiesList();
+        return true;
+    }
+
+    openPlanActivityMenu(index, anchorEl) {
+        if (!this.isValidPlanRow(index) || !anchorEl || !anchorEl.isConnected) return;
+        this.closePlanActivityMenu();
+
+        const currentRaw = this.modalPlanActivities[index] && this.modalPlanActivities[index].label;
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const normalizedCurrent = normalize(currentRaw);
+        const grouped = this.buildPlannedActivityOptions(normalizedCurrent ? [normalizedCurrent] : []);
+
+        const menu = document.createElement('div');
+        menu.className = 'plan-activity-menu';
+        menu.setAttribute('role', 'menu');
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
+        clearBtn.dataset.label = '';
+        clearBtn.textContent = '비우기';
+        menu.appendChild(clearBtn);
+
+        const divider = document.createElement('div');
+        divider.className = 'plan-activity-menu-divider';
+        menu.appendChild(divider);
+
+        const buildSection = (title, items) => {
+            const section = document.createElement('div');
+            section.className = 'plan-activity-menu-section';
+            const heading = document.createElement('div');
+            heading.className = 'plan-activity-menu-title';
+            heading.textContent = title;
+            section.appendChild(heading);
+            if (!items || items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'plan-activity-menu-empty';
+                empty.textContent = '목록 없음';
+                section.appendChild(empty);
+                return section;
+            }
+            items.forEach((item) => {
+                const label = normalize(item && item.label);
+                if (!label) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'plan-activity-menu-item';
+                btn.dataset.label = label;
+                btn.textContent = label;
+                if (normalizedCurrent && label === normalizedCurrent) {
+                    btn.classList.add('active');
+                }
+                section.appendChild(btn);
+            });
+            return section;
+        };
+
+        menu.appendChild(buildSection('직접 추가', grouped.local || []));
+        menu.appendChild(buildSection('노션', grouped.notion || []));
+
+        document.body.appendChild(menu);
+        this.planActivityMenu = menu;
+        this.planActivityMenuContext = { index, anchorEl };
+        anchorEl.setAttribute('aria-expanded', 'true');
+
+        menu.addEventListener('click', (event) => {
+            const btn = event.target.closest('.plan-activity-menu-item');
+            if (!btn || !menu.contains(btn)) return;
+            if (btn.disabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const label = btn.dataset.label != null ? btn.dataset.label : '';
+            this.applyPlanActivityLabelSelection(index, label);
+            this.closePlanActivityMenu();
+        });
+
+        this.positionPlanActivityMenu(anchorEl);
+
+        this.planActivityMenuOutsideHandler = (event) => {
+            if (!this.planActivityMenu) return;
+            const t = event.target;
+            if (this.planActivityMenu.contains(t)) return;
+            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
+            this.closePlanActivityMenu();
+        };
+        document.addEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
+
+        this.planActivityMenuEscHandler = (event) => {
+            if (event.key === 'Escape') {
+                this.closePlanActivityMenu();
+            }
+        };
+        document.addEventListener('keydown', this.planActivityMenuEscHandler);
+    }
+
+    positionPlanActivityMenu(anchorEl) {
+        if (!this.planActivityMenu) return;
+        if (!anchorEl || !anchorEl.isConnected) return;
+        const rect = anchorEl.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return;
+
+        const menu = this.planActivityMenu;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+
+        menu.style.visibility = 'hidden';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+
+        const menuWidth = menu.offsetWidth || 240;
+        const menuHeight = menu.offsetHeight || 220;
+
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + 6;
+
+        const maxLeft = scrollX + viewportWidth - menuWidth - 12;
+        if (left > maxLeft) {
+            left = Math.max(scrollX + 12, maxLeft);
+        }
+
+        const maxTop = scrollY + viewportHeight - menuHeight - 12;
+        if (top > maxTop) {
+            top = rect.top + scrollY - menuHeight - 6;
+        }
+        if (top < scrollY + 12) {
+            top = scrollY + 12;
+        }
+
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+        menu.style.visibility = 'visible';
+    }
+
+    closePlanActivityMenu() {
+        if (this.planActivityMenuOutsideHandler) {
+            document.removeEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
+            this.planActivityMenuOutsideHandler = null;
+        }
+        if (this.planActivityMenuEscHandler) {
+            document.removeEventListener('keydown', this.planActivityMenuEscHandler);
+            this.planActivityMenuEscHandler = null;
+        }
+        if (this.planActivityMenuContext && this.planActivityMenuContext.anchorEl) {
+            try { this.planActivityMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
+        }
+        if (this.planActivityMenu && this.planActivityMenu.parentNode) {
+            this.planActivityMenu.parentNode.removeChild(this.planActivityMenu);
+        }
+        this.planActivityMenu = null;
+        this.planActivityMenuContext = null;
     }
 
     handlePlanActivitiesRemoval(event) {
@@ -5877,6 +6059,7 @@ class TimeTracker {
     closeScheduleModal() {
         const modal = document.getElementById('scheduleModal');
         modal.style.display = 'none';
+        this.closePlanActivityMenu();
         
         document.getElementById('scheduleTime').value = '';
         this.modalSelectedActivities = [];
@@ -7465,6 +7648,7 @@ class TimeTracker {
             if (!this.inlinePlanDropdown) return;
             if (this.inlinePlanDropdown.contains(event.target)) return;
             if (this.routineMenu && this.routineMenu.contains(event.target)) return;
+            if (this.planActivityMenu && this.planActivityMenu.contains(event.target)) return;
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             this.closeInlinePlanDropdown();
@@ -7495,6 +7679,7 @@ class TimeTracker {
     }
     closeInlinePlanDropdown() {
         this.closeRoutineMenu();
+        this.closePlanActivityMenu();
         if (this.inlinePlanOutsideHandler) {
             document.removeEventListener('mousedown', this.inlinePlanOutsideHandler, true);
             this.inlinePlanOutsideHandler = null;
