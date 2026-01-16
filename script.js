@@ -1022,6 +1022,7 @@ class TimeTracker {
                 if (!routine || typeof routine !== 'object') return;
                 if (this.isRoutineStoppedForDate(routine, this.currentDate)) return;
                 if (!this.isRoutineActiveOnDate(routine, this.currentDate)) return;
+                if (!this.isRoutinePresentOnDate(routine)) return;
                 const updated = this.passRoutineForDate(routine.id, this.currentDate);
                 if (updated) routineChanged = true;
             });
@@ -1033,6 +1034,8 @@ class TimeTracker {
         this.mergedFields.clear();
         this.renderTimeEntries();
         this.calculateTotals();
+        this.renderInlinePlanDropdownOptions();
+        this.closeRoutineMenu();
         try { localStorage.removeItem(`timesheet_${this.currentDate}`); } catch (_) {}
         // If user refreshes quickly, Supabase fetch could re-apply stale data.
         // Mark this day as "pending clear" so the next load will delete remote first.
@@ -2153,6 +2156,29 @@ class TimeTracker {
         if (this.isRoutineStoppedForDate(routine, date)) return false;
         if (!this.isRoutineActiveOnDate(routine, date)) return false;
         return !this.isRoutineStoppedAtSlot(routine, date, hour);
+    }
+    isRoutinePresentOnDate(routine) {
+        if (!routine || typeof routine !== 'object') return false;
+        const label = this.normalizeActivityText
+            ? this.normalizeActivityText(routine.label || '')
+            : String(routine.label || '').trim();
+        if (!label) return false;
+        const startHour = (Number(routine.startHour) + 24) % 24;
+        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
+        for (let i = 0; i < dur; i++) {
+            const hour = (startHour + i) % 24;
+            const labelForHour = this.hourToLabel(hour);
+            const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
+            if (index < 0) continue;
+            const plannedValue = this.getPlannedValueForIndex(index);
+            if (plannedValue && plannedValue === label) return true;
+            const slot = this.timeSlots[index];
+            const titleValue = this.normalizeActivityText
+                ? this.normalizeActivityText((slot && slot.planTitle) || '')
+                : String((slot && slot.planTitle) || '').trim();
+            if (titleValue && titleValue === label) return true;
+        }
+        return false;
     }
     getRoutineForPlannedIndex(index, date = null) {
         if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
@@ -6997,7 +7023,7 @@ class TimeTracker {
             routineForWindow
         };
 
-        if (routineAtIndex) {
+        if (routineAtIndex && this.isRoutineActiveOnDate(routineAtIndex, this.currentDate)) {
             const p = this.normalizeRoutinePattern(routineAtIndex.pattern);
             const activeBtn = menu.querySelector(`[data-action="${p}"]`);
             if (activeBtn) activeBtn.classList.add('active');
@@ -7179,6 +7205,8 @@ class TimeTracker {
             }
             this.clearRoutineFromLocalStorageFutureDates(routine, this.currentDate);
             this.clearRoutineFromSupabaseFutureDates(routine, this.currentDate);
+            this.routines = (this.routines || []).filter((item) => item && item.id !== routine.id);
+            this.scheduleSupabaseRoutineSave(true);
             this.renderInlinePlanDropdownOptions();
             return;
         }
