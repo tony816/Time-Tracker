@@ -8331,20 +8331,13 @@ class TimeTracker {
         document.getElementById('activityTime').value = `${slot.time}시`;
         // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
         // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
-        if (this.isActualGridMode(index)) {
-            document.getElementById('activityTitle').value = (baseSlot.activityLog && baseSlot.activityLog.title) || '';
-        } else if (actualMergeKey) {
-            document.getElementById('activityTitle').value = this.mergedFields.get(actualMergeKey) || '';
-        } else {
-            document.getElementById('activityTitle').value = slot.actual || '';
-        }
         document.getElementById('activityDetails').value = (baseSlot.activityLog && baseSlot.activityLog.details) || '';
 
         modal.style.display = 'flex';
         modal.dataset.index = index;
 
         setTimeout(() => {
-            document.getElementById('activityTitle').focus();
+            document.getElementById('activityDetails').focus();
         }, 100);
     }
 
@@ -8352,7 +8345,6 @@ class TimeTracker {
         const modal = document.getElementById('activityLogModal');
         modal.style.display = 'none';
         
-        document.getElementById('activityTitle').value = '';
         document.getElementById('activityDetails').value = '';
         
         delete modal.dataset.index;
@@ -8368,37 +8360,7 @@ class TimeTracker {
                 slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
             }
             // 제목 필드는 이제 실제 칸(우측) 로그 용도로만 사용
-            const userActualText = document.getElementById('activityTitle').value.trim();
-            slot.activityLog.title = userActualText;
             slot.activityLog.details = document.getElementById('activityDetails').value.trim();
-
-            if (this.isActualGridMode(index)) {
-                this.renderTimeEntries();
-                this.calculateTotals();
-                this.autoSave();
-                this.closeActivityLogModal();
-                return;
-            }
-
-            const actualText = userActualText;
-            const actualMergeKey = this.findMergeKey('actual', index);
-            if (actualMergeKey) {
-                const [, startStr, endStr] = actualMergeKey.split('-');
-                const start = parseInt(startStr, 10);
-                const end = parseInt(endStr, 10);
-                this.mergedFields.set(actualMergeKey, actualText);
-                for (let i = start; i <= end; i++) {
-                    this.timeSlots[i].actual = (i === start) ? actualText : '';
-                    if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
-                    }
-                }
-                this.syncTimerElapsedFromActualInput(start, actualText);
-            } else {
-                slot.actual = actualText;
-                this.syncTimerElapsedFromActualInput(index, actualText);
-            }
-
             this.renderTimeEntries();
             this.calculateTotals();
             this.autoSave();
