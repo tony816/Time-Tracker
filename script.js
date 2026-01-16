@@ -1016,6 +1016,19 @@ class TimeTracker {
     }
 
     clearData() {
+        let routineChanged = false;
+        if (this.routinesLoaded && Array.isArray(this.routines)) {
+            this.routines.forEach((routine) => {
+                if (!routine || typeof routine !== 'object') return;
+                if (this.isRoutineStoppedForDate(routine, this.currentDate)) return;
+                if (!this.isRoutineActiveOnDate(routine, this.currentDate)) return;
+                const updated = this.passRoutineForDate(routine.id, this.currentDate);
+                if (updated) routineChanged = true;
+            });
+            if (routineChanged) {
+                this.scheduleSupabaseRoutineSave();
+            }
+        }
         this.generateTimeSlots();
         this.mergedFields.clear();
         this.renderTimeEntries();
@@ -7159,8 +7172,8 @@ class TimeTracker {
             this.scheduleSupabaseRoutineSave();
             const clearedNow = this.clearRoutineRangeForDate(routine, this.currentDate, { minSlotStartMs: stoppedAtMs });
             this.closeRoutineMenu();
+            this.renderTimeEntries(true);
             if (clearedNow) {
-                this.renderTimeEntries(true);
                 this.calculateTotals();
                 this.autoSave();
             }
