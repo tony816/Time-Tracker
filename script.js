@@ -69,6 +69,15 @@ class TimeTracker {
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
         this.lastPlanOptionInput = 'activity';
+        this.modalActualActivities = [];
+        this.modalActualTotalSeconds = 0;
+        this.modalActualActiveRow = -1;
+        this.modalActualBaseIndex = null;
+        this.modalActualDirty = false;
+        this.actualActivityMenu = null;
+        this.actualActivityMenuContext = null;
+        this.actualActivityMenuOutsideHandler = null;
+        this.actualActivityMenuEscHandler = null;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -166,7 +175,7 @@ class TimeTracker {
                 planTitle: '',
                 planTitleBandOn: false,
                 timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-                activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
+                activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
             });
         }
         slots.push({
@@ -177,7 +186,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '1',
@@ -187,7 +196,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '2',
@@ -197,7 +206,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '3',
@@ -207,7 +216,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
         });
         return slots;
     }
@@ -902,7 +911,7 @@ class TimeTracker {
             this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
                 // activityLog 구조 정규화 및 legacy 필드(outcome) 제거
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                 } else {
                     if (typeof slot.activityLog.title !== 'string') {
                         slot.activityLog.title = String(slot.activityLog.title || '');
@@ -942,6 +951,7 @@ class TimeTracker {
                 }
                 slot.planTitleBandOn = Boolean(slot.planTitleBandOn);
                 slot.activityLog.titleBandOn = Boolean(slot.activityLog.titleBandOn);
+                slot.activityLog.actualOverride = Boolean(slot.activityLog.actualOverride);
                 return slot;
             });
 
@@ -1354,7 +1364,7 @@ class TimeTracker {
                                 if (slot.planned !== nextPlanned) { slot.planned = nextPlanned; changed = true; }
                                 if (slot.actual !== nextActual) { slot.actual = nextActual; changed = true; }
                                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                                 }
                                 const desiredDetails = (i === startIdx) ? detailsValue : '';
                                 if (slot.activityLog.details !== desiredDetails) {
@@ -1410,7 +1420,7 @@ class TimeTracker {
                 const slot = this.timeSlots[idx];
                 if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
                 if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
-                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                 if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
                 const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
                 const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
@@ -2477,7 +2487,7 @@ class TimeTracker {
         try {
             if (!slot || typeof slot !== 'object') return slot;
             if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
             } else {
                 if ('outcome' in slot.activityLog) {
                     try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
@@ -2499,6 +2509,7 @@ class TimeTracker {
                 } else {
                     slot.activityLog.actualGridUnits = slot.activityLog.actualGridUnits.map(value => Boolean(value));
                 }
+                slot.activityLog.actualOverride = Boolean(slot.activityLog.actualOverride);
             }
         } catch (_) {}
         return slot;
@@ -2914,6 +2925,7 @@ class TimeTracker {
                 if (this.timeSlots[i].activityLog && this.timeSlots[i].activityLog.subActivities) {
                     this.timeSlots[i].activityLog.subActivities = [];
                     this.timeSlots[i].activityLog.titleBandOn = false;
+                    this.timeSlots[i].activityLog.actualOverride = false;
                     if (Array.isArray(this.timeSlots[i].activityLog.actualGridUnits)) {
                         this.timeSlots[i].activityLog.actualGridUnits = [];
                     }
@@ -2969,11 +2981,14 @@ class TimeTracker {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
+                    this.timeSlots[i].activityLog.actualOverride = i === startIndex
+                        ? Boolean(this.timeSlots[i].activityLog.actualOverride)
+                        : false;
                     if (this.timeSlots[i].activityLog.subActivities && this.timeSlots[i].activityLog.subActivities.length) {
                         this.timeSlots[i].activityLog.subActivities = i === startIndex ? this.timeSlots[i].activityLog.subActivities : [];
                     }
@@ -2988,9 +3003,12 @@ class TimeTracker {
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
+                    this.timeSlots[i].activityLog.actualOverride = i === startIndex
+                        ? Boolean(this.timeSlots[i].activityLog.actualOverride)
+                        : false;
                     if (this.timeSlots[i].activityLog.subActivities && this.timeSlots[i].activityLog.subActivities.length) {
                         this.timeSlots[i].activityLog.subActivities = i === startIndex ? this.timeSlots[i].activityLog.subActivities : [];
                     }
@@ -3050,6 +3068,10 @@ class TimeTracker {
         const context = this.computeSplitSegments(type, index);
         if (!context) return '';
         const { gridSegments, titleSegments, showTitleBand } = context;
+        const isActual = type === 'actual';
+        const toggleable = isActual ? (context.toggleable !== undefined ? context.toggleable : true) : false;
+        const showLabels = !isActual || Boolean(context.showLabels);
+        const useConnections = !isActual || !toggleable;
         const hasGrid = Array.isArray(gridSegments) && gridSegments.length > 0;
         if (!hasGrid && !showTitleBand) return '';
 
@@ -3057,6 +3079,9 @@ class TimeTracker {
         classes.push(type === 'planned' ? 'split-visualization-planned' : 'split-visualization-actual');
         if (type === 'planned' && showTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
             classes.push('split-visualization-single-title');
+        }
+        if (isActual) {
+            classes.push(toggleable ? 'split-toggleable' : 'split-readonly');
         }
 
         const titleHtml = showTitleBand
@@ -3068,19 +3093,18 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
-        const isActual = type === 'actual';
         const gridHtml = hasGrid
             ? `<div class="split-grid">${gridSegments.map((segment) => {
                 const color = this.getSplitColor(type, segment.label);
                 const emptyClass = segment.label ? '' : ' split-empty';
-                const activeClass = isActual ? (segment.active ? ' is-on' : ' is-off') : '';
-                const connTopClass = (!isActual && segment.connectTop) ? ' connect-top' : '';
-                const connBotClass = (!isActual && segment.connectBottom) ? ' connect-bottom' : '';
-                const safeLabel = (!isActual && segment.label) ? this.escapeHtml(segment.label) : '';
+                const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
+                const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
+                const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
+                const safeLabel = (showLabels && segment.label) ? this.escapeHtml(segment.label) : '';
                 const labelHtml = safeLabel
                     ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
                     : '';
-                const unitAttr = (isActual && Number.isFinite(segment.unitIndex))
+                const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
                     ? ` data-unit-index="${segment.unitIndex}"`
                     : '';
                 return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
@@ -3104,7 +3128,14 @@ class TimeTracker {
         return this.normalizeActivityText ? this.normalizeActivityText(raw) : String(raw || '').trim();
     }
 
+    isActualOverrideActive(index) {
+        const baseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('actual', index) : index;
+        const slot = this.timeSlots[baseIndex];
+        return Boolean(slot && slot.activityLog && slot.activityLog.actualOverride);
+    }
+
     isActualGridMode(index) {
+        if (this.isActualOverrideActive(index)) return false;
         const planBaseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', index) : index;
         const slot = this.timeSlots[planBaseIndex];
         if (!slot) return false;
@@ -3260,8 +3291,9 @@ class TimeTracker {
             for (let i = start; i <= end; i++) {
                 const slot = this.timeSlots[i];
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                 }
+                slot.activityLog.actualOverride = false;
                 slot.actual = (i === start) ? summary : '';
                 if (i === start) {
                     slot.activityLog.subActivities = activities.map(item => ({ ...item }));
@@ -3276,8 +3308,9 @@ class TimeTracker {
 
         const slot = this.timeSlots[baseIndex];
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
         }
+        slot.activityLog.actualOverride = false;
         slot.actual = summary;
         slot.activityLog.subActivities = activities.map(item => ({ ...item }));
         slot.activityLog.actualGridUnits = safeUnits.slice();
@@ -3285,6 +3318,7 @@ class TimeTracker {
 
     toggleActualGridUnit(index, unitIndex) {
         const baseIndex = this.getSplitBaseIndex('actual', index);
+        if (this.isActualOverrideActive(baseIndex)) return;
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
@@ -3322,6 +3356,7 @@ class TimeTracker {
     }
 
     applyActualGridSeconds(baseIndex, secondsToAdd, startRow = 0) {
+        if (this.isActualOverrideActive(baseIndex)) return false;
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return false;
         const normalized = this.normalizeDurationStep(Number.isFinite(secondsToAdd) ? secondsToAdd : 0) || 0;
@@ -3409,12 +3444,110 @@ class TimeTracker {
             }
         }
 
+        const actualActivities = (type === 'actual')
+            ? this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities)
+            : [];
+        const actualOverrideActive = (type === 'actual')
+            && Boolean(slot.activityLog && slot.activityLog.actualOverride);
+        const shouldUseActualActivities = (type === 'actual')
+            && actualActivities.length > 0
+            && (actualOverrideActive || !this.isActualGridMode(baseIndex));
+
+        const buildSegmentsFromActivities = (activities, options = {}) => {
+            const units = [];
+            if (Array.isArray(activities)) {
+                activities.forEach((item) => {
+                    if (!item) return;
+                    const label = typeof item.label === 'string' ? item.label.trim() : '';
+                    const seconds = Number(item.seconds || 0);
+                    const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
+                    for (let i = 0; i < unitsCount; i++) {
+                        units.push(label);
+                    }
+                });
+            }
+
+            const offset = index - baseIndex;
+            if (offset < 0) return null;
+
+            const maxOffset = Math.ceil(units.length / unitsPerRow) - 1;
+            if (units.length === 0 && index !== baseIndex) {
+                return null;
+            }
+            if (units.length > 0 && offset > maxOffset) return null;
+
+            const useFullUnits = isMergedRange && index === baseIndex;
+            const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
+            const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
+            const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
+
+            const segments = [];
+
+            if (slice.length > 0) {
+                let segmentStartIdx = 0;
+
+                for (let i = 0; i < slice.length; i++) {
+                    const label = slice[i];
+                    const isLastItem = (i === slice.length - 1);
+                    const nextIsRowStart = ((i + 1) % unitsPerRow === 0);
+                    const nextLabel = isLastItem ? null : slice[i + 1];
+
+                    const needsBreak = isLastItem || label !== nextLabel || nextIsRowStart;
+                    if (!needsBreak) continue;
+
+                    const span = i - segmentStartIdx + 1;
+                    const connectTop = (
+                        segmentStartIdx > 0 &&
+                        segmentStartIdx % unitsPerRow === 0 &&
+                        slice[segmentStartIdx - 1] === label
+                    );
+                    const connectBottom = (
+                        nextIsRowStart &&
+                        !isLastItem &&
+                        slice[i + 1] === label
+                    );
+
+                    segments.push({ label, span, connectTop, connectBottom });
+                    segmentStartIdx = i + 1;
+                }
+            }
+
+            const filledUnits = slice.length;
+            const remainder = filledUnits % unitsPerRow;
+            if (filledUnits === 0) {
+                segments.push({ label: '', span: unitsPerRow, connectTop: false, connectBottom: false });
+            } else if (remainder !== 0) {
+                const remaining = unitsPerRow - remainder;
+                if (segments.length && segments[segments.length - 1].label === '') {
+                    segments[segments.length - 1].span += remaining;
+                } else {
+                    segments.push({ label: '', span: remaining, connectTop: false, connectBottom: false });
+                }
+            }
+
+            const hasLabels = segments.some(seg => seg && seg.label);
+
+            if (!hasLabels && !showTitleBand) {
+                return null; // 빈 병합 영역에서는 시각화 자체를 숨김
+            }
+
+            if (!hasLabels && showTitleBand) {
+                return { gridSegments: [], titleSegments, showTitleBand, ...options };
+            }
+
+            return { gridSegments: segments, titleSegments, showTitleBand, ...options };
+        };
+
+        if (shouldUseActualActivities) {
+            return buildSegmentsFromActivities(actualActivities, { toggleable: false, showLabels: true });
+        }
+
         if (type === 'actual') {
             const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
             const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
             if (planUnits.length === 0) {
                 if (!showTitleBand) return null;
-                return { gridSegments: [], titleSegments, showTitleBand };
+                return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
             }
             const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
             const gridSegments = planUnits.map((label, unitIndex) => ({
@@ -3428,95 +3561,13 @@ class TimeTracker {
                 return null;
             }
             if (!hasLabels && showTitleBand) {
-                return { gridSegments: [], titleSegments, showTitleBand };
+                return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
             }
-            return { gridSegments, titleSegments, showTitleBand };
+            return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: false };
         }
 
         const activities = this.getSplitActivities(type, baseIndex);
-
-        const units = [];
-        if (Array.isArray(activities)) {
-            activities.forEach((item) => {
-                if (!item) return;
-                const label = typeof item.label === 'string' ? item.label.trim() : '';
-                const seconds = Number(item.seconds || 0);
-                const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
-                for (let i = 0; i < unitsCount; i++) {
-                    units.push(label);
-                }
-            });
-        }
-
-        const offset = index - baseIndex;
-        if (offset < 0) return null;
-
-        const maxOffset = Math.ceil(units.length / unitsPerRow) - 1;
-        if (units.length === 0 && index !== baseIndex) {
-            return null;
-        }
-        if (units.length > 0 && offset > maxOffset) return null;
-
-        const useFullUnits = isMergedRange && index === baseIndex;
-        const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
-        const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
-        const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
-
-        const segments = [];
-
-        if (slice.length > 0) {
-            let segmentStartIdx = 0;
-
-            for (let i = 0; i < slice.length; i++) {
-                const label = slice[i];
-                const isLastItem = (i === slice.length - 1);
-                const nextIsRowStart = ((i + 1) % unitsPerRow === 0);
-                const nextLabel = isLastItem ? null : slice[i + 1];
-
-                const needsBreak = isLastItem || label !== nextLabel || nextIsRowStart;
-                if (!needsBreak) continue;
-
-                const span = i - segmentStartIdx + 1;
-                const connectTop = (
-                    segmentStartIdx > 0 &&
-                    segmentStartIdx % unitsPerRow === 0 &&
-                    slice[segmentStartIdx - 1] === label
-                );
-                const connectBottom = (
-                    nextIsRowStart &&
-                    !isLastItem &&
-                    slice[i + 1] === label
-                );
-
-                segments.push({ label, span, connectTop, connectBottom });
-                segmentStartIdx = i + 1;
-            }
-        }
-
-        const filledUnits = slice.length;
-        const remainder = filledUnits % unitsPerRow;
-        if (filledUnits === 0) {
-            segments.push({ label: '', span: unitsPerRow, connectTop: false, connectBottom: false });
-        } else if (remainder !== 0) {
-            const remaining = unitsPerRow - remainder;
-            if (segments.length && segments[segments.length - 1].label === '') {
-                segments[segments.length - 1].span += remaining;
-            } else {
-                segments.push({ label: '', span: remaining, connectTop: false, connectBottom: false });
-            }
-        }
-
-        const hasLabels = segments.some(seg => seg && seg.label);
-
-        if (!hasLabels && !showTitleBand) {
-            return null; // 빈 병합 영역에서는 시각화 자체를 숨김
-        }
-
-        if (!hasLabels && showTitleBand) {
-            return { gridSegments: [], titleSegments, showTitleBand };
-        }
-
-        return { gridSegments: segments, titleSegments, showTitleBand };
+        return buildSegmentsFromActivities(activities);
     }
 
     getSplitRange(type, index) {
@@ -3551,10 +3602,11 @@ class TimeTracker {
 
         const sub = slot.activityLog && slot.activityLog.subActivities;
         const normalizedActual = this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
+        const actualOverrideActive = Boolean(slot.activityLog && slot.activityLog.actualOverride);
         const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
 
         // 계획 분해가 있으면 계획 레이아웃 그대로 사용 (라벨 텍스트만)
-        if (planActs && planActs.length > 0) {
+        if (!actualOverrideActive && planActs && planActs.length > 0) {
             const blockSeconds = Math.max(3600, this.getBlockLength('actual', baseIndex) * 3600);
             const fallbackSeconds = Math.max(600, Math.floor(blockSeconds / Math.max(1, planActs.length)));
             return planActs
@@ -3822,6 +3874,16 @@ class TimeTracker {
         return Math.max(0, Math.floor(seconds));
     }
 
+    getActualDurationStepSeconds() {
+        return 600;
+    }
+
+    normalizeActualDurationStep(seconds) {
+        if (!Number.isFinite(seconds)) return 0;
+        const step = this.getActualDurationStepSeconds();
+        return Math.max(0, Math.round(seconds / step) * step);
+    }
+
     normalizeActivitiesArray(raw) {
         if (!Array.isArray(raw)) return [];
         return raw
@@ -3863,6 +3925,17 @@ class TimeTracker {
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
 
+    formatMinutesForInput(seconds) {
+        if (!Number.isFinite(seconds) || seconds <= 0) return '0';
+        return String(Math.round(seconds / 60));
+    }
+
+    formatSpinnerValue(kind, seconds) {
+        return kind === 'actual'
+            ? this.formatMinutesForInput(seconds)
+            : this.formatSecondsForInput(seconds);
+    }
+
     clearSubActivitiesForIndex(index) {
         const mergeKey = this.findMergeKey('actual', index);
         if (mergeKey) {
@@ -3874,6 +3947,7 @@ class TimeTracker {
                 if (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities)) {
                     slot.activityLog.subActivities = [];
                     slot.activityLog.titleBandOn = false;
+                    slot.activityLog.actualOverride = false;
                     if (Array.isArray(slot.activityLog.actualGridUnits)) {
                         slot.activityLog.actualGridUnits = [];
                     }
@@ -3884,6 +3958,7 @@ class TimeTracker {
             if (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities)) {
                 slot.activityLog.subActivities = [];
                 slot.activityLog.titleBandOn = false;
+                slot.activityLog.actualOverride = false;
                 if (Array.isArray(slot.activityLog.actualGridUnits)) {
                     slot.activityLog.actualGridUnits = [];
                 }
@@ -4200,9 +4275,19 @@ class TimeTracker {
         spinner.dataset.index = String(index);
         spinner.dataset.seconds = String(Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0);
 
-        const display = document.createElement('div');
-        display.className = 'spinner-display';
-        display.textContent = this.formatSecondsForInput(Number(spinner.dataset.seconds));
+        const display = (kind === 'actual') ? document.createElement('input') : document.createElement('div');
+        if (kind === 'actual') {
+            display.type = 'text';
+            display.inputMode = 'numeric';
+            display.autocomplete = 'off';
+            display.placeholder = '분';
+            display.className = 'spinner-display actual-duration-input';
+            display.value = this.formatSpinnerValue(kind, Number(spinner.dataset.seconds));
+            display.setAttribute('aria-label', '분 입력');
+        } else {
+            display.className = 'spinner-display';
+            display.textContent = this.formatSpinnerValue(kind, Number(spinner.dataset.seconds));
+        }
 
         const controls = document.createElement('div');
         controls.className = 'spinner-controls';
@@ -4237,7 +4322,15 @@ class TimeTracker {
         const adjusted = this.normalizeDurationStep(safeSeconds) || 0;
         spinner.dataset.seconds = String(adjusted);
         const display = spinner.querySelector('.spinner-display');
-        if (display) display.textContent = this.formatSecondsForInput(adjusted);
+        if (display) {
+            const kind = spinner.dataset.kind;
+            const formatted = this.formatSpinnerValue(kind, adjusted);
+            if (display.tagName === 'INPUT') {
+                display.value = formatted;
+            } else {
+                display.textContent = formatted;
+            }
+        }
         this.updateSpinnerState(spinner);
     }
 
@@ -5203,6 +5296,19 @@ class TimeTracker {
         return null;
     }
 
+    parseActualDurationInput(value) {
+        const text = String(value || '').trim();
+        if (!text) return 0;
+        const parsed = this.parseDurationFromText(text);
+        if (parsed != null && Number.isFinite(parsed)) {
+            return parsed;
+        }
+        if (/^\d+$/.test(text)) {
+            return parseInt(text, 10) * 60;
+        }
+        return null;
+    }
+
     // 실제 활동 입력 변경 시, 텍스트에 포함된 시간값을 timer.elapsed로 반영
     syncTimerElapsedFromActualInput(index, text) {
         const secs = this.parseDurationFromText(text);
@@ -6125,7 +6231,7 @@ class TimeTracker {
                         ? slot.activityLog.actualGridUnits.slice()
                         : []
                 }
-                : { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+                : { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
             const planActivities = Array.isArray(slot.planActivities)
                 ? slot.planActivities.map(item => ({ ...item }))
                 : [];
@@ -8316,6 +8422,558 @@ class TimeTracker {
         }
     }
 
+    getActualModalElements() {
+        return {
+            list: document.getElementById('actualActivitiesList'),
+            totalEl: document.getElementById('actualSplitTotalTime'),
+            usedEl: document.getElementById('actualSplitUsedTime'),
+            noticeEl: document.getElementById('actualActivitiesNotice'),
+            addBtn: document.getElementById('addActualActivityRow')
+        };
+    }
+
+    normalizeActualActivitiesList(raw) {
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .filter(item => item && typeof item === 'object')
+            .map(item => {
+                const labelSource = (item.label ?? item.title ?? '').toString();
+                const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
+                const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
+                const seconds = this.normalizeActualDurationStep(rawSeconds);
+                return { label, seconds };
+            })
+            .filter(item => item.label || item.seconds > 0);
+    }
+
+    getActualActivitiesSeconds(items = null) {
+        const list = Array.isArray(items) ? items : (this.modalActualActivities || []);
+        return list.reduce((sum, item) => {
+            if (!item) return sum;
+            const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return sum + secs;
+        }, 0);
+    }
+
+    buildActualActivitiesSeed(baseIndex, totalSeconds) {
+        const baseSlot = this.timeSlots[baseIndex] || {};
+        const existing = this.normalizeActualActivitiesList(baseSlot.activityLog && baseSlot.activityLog.subActivities);
+        if (existing.length > 0) return existing.map(item => ({ ...item }));
+
+        const planActivities = this.getPlanActivitiesForIndex(baseIndex);
+        if (planActivities.length > 0) {
+            const sumSeconds = planActivities.reduce((sum, item) => {
+                const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return sum + secs;
+            }, 0);
+            if (sumSeconds <= 0 && totalSeconds > 0) {
+                const fallbackSeconds = this.normalizeActualDurationStep(
+                    Math.floor(totalSeconds / Math.max(1, planActivities.length))
+                );
+                return planActivities.map(item => ({
+                    label: item.label || '',
+                    seconds: fallbackSeconds
+                }));
+            }
+            return planActivities.map(item => ({
+                label: item.label || '',
+                seconds: this.normalizeActualDurationStep(Number.isFinite(item.seconds) ? item.seconds : 0)
+            }));
+        }
+
+        const planLabel = this.getPlannedLabelForIndex(baseIndex);
+        if (planLabel) {
+            return [{ label: planLabel, seconds: totalSeconds }];
+        }
+        return totalSeconds > 0 ? [{ label: '', seconds: totalSeconds }] : [];
+    }
+
+    normalizeActualActivitiesToTotal(totalSeconds = null) {
+        const total = Math.max(0, Number(totalSeconds != null ? totalSeconds : this.modalActualTotalSeconds) || 0);
+        if (!Array.isArray(this.modalActualActivities)) {
+            this.modalActualActivities = [];
+        }
+        const items = this.modalActualActivities;
+        if (items.length === 0) {
+            if (total > 0) {
+                items.push({ label: '', seconds: total });
+            }
+            return;
+        }
+
+        items.forEach((item) => {
+            item.seconds = this.normalizeActualDurationStep(Number.isFinite(item.seconds) ? item.seconds : 0);
+        });
+
+        if (total === 0) {
+            items.forEach((item) => { item.seconds = 0; });
+            return;
+        }
+
+        let sum = this.getActualActivitiesSeconds(items);
+        if (sum === total) return;
+        if (sum === 0) {
+            items[0].seconds = total;
+            return;
+        }
+        if (sum < total) {
+            items[items.length - 1].seconds += (total - sum);
+            return;
+        }
+
+        let remaining = sum - total;
+        for (let i = items.length - 1; i >= 0 && remaining > 0; i--) {
+            const reduce = Math.min(items[i].seconds, remaining);
+            items[i].seconds -= reduce;
+            remaining -= reduce;
+        }
+    }
+
+    updateActualActivitiesSummary() {
+        const { totalEl, usedEl, noticeEl } = this.getActualModalElements();
+        if (!totalEl || !usedEl || !noticeEl) return;
+
+        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        const used = this.getActualActivitiesSeconds();
+
+        totalEl.textContent = this.formatDurationSummary(total);
+        usedEl.textContent = this.formatDurationSummary(used);
+
+        noticeEl.textContent = '';
+        noticeEl.classList.remove('ok');
+        if (!Array.isArray(this.modalActualActivities) || this.modalActualActivities.length === 0) {
+            if (total > 0) {
+                noticeEl.textContent = '세부 활동을 추가하세요.';
+            }
+            return;
+        }
+        if (total > 0 && used !== total) {
+            noticeEl.textContent = '합계가 자동 맞춤됩니다.';
+        }
+    }
+
+    isValidActualRow(index) {
+        return Number.isInteger(index)
+            && index >= 0
+            && index < (this.modalActualActivities ? this.modalActualActivities.length : 0);
+    }
+
+    updateActualRowActiveStyles() {
+        const { list } = this.getActualModalElements();
+        if (!list) return;
+        const activeIndex = this.isValidActualRow(this.modalActualActiveRow) ? this.modalActualActiveRow : -1;
+        list.querySelectorAll('.sub-activity-row').forEach((rowEl) => {
+            const idx = parseInt(rowEl.dataset.index, 10);
+            rowEl.classList.toggle('active', idx === activeIndex);
+        });
+    }
+
+    setActualActiveRow(index, options = {}) {
+        const validIndex = this.isValidActualRow(index) ? index : -1;
+        this.modalActualActiveRow = validIndex;
+        this.updateActualRowActiveStyles();
+        if (options.focusLabel && this.isValidActualRow(validIndex)) {
+            this.focusActualRowLabel(validIndex);
+        }
+    }
+
+    focusActualRowLabel(index) {
+        if (!this.isValidActualRow(index)) return;
+        try {
+            const { list } = this.getActualModalElements();
+            if (!list) return;
+            const row = list.querySelector(`.sub-activity-row[data-index="${index}"]`);
+            if (!row) return;
+            const input = row.querySelector('.actual-activity-label');
+            if (input) input.focus();
+        } catch (e) {}
+    }
+
+    renderActualActivitiesList() {
+        const { list } = this.getActualModalElements();
+        if (!list) return;
+        this.closeActualActivityMenu();
+
+        if (!this.isValidActualRow(this.modalActualActiveRow)) {
+            this.modalActualActiveRow = (this.modalActualActivities && this.modalActualActivities.length > 0) ? 0 : -1;
+        }
+
+        list.innerHTML = '';
+        (this.modalActualActivities || []).forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'sub-activity-row actual-row';
+            row.dataset.index = String(idx);
+            if (idx === this.modalActualActiveRow) row.classList.add('active');
+
+            const labelButton = document.createElement('button');
+            labelButton.type = 'button';
+            labelButton.className = 'actual-activity-label';
+            labelButton.setAttribute('aria-label', '세부 활동');
+            labelButton.setAttribute('aria-haspopup', 'menu');
+            labelButton.setAttribute('aria-expanded', 'false');
+            const normalizedLabel = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            labelButton.textContent = normalizedLabel || '세부 활동';
+            if (!normalizedLabel) labelButton.classList.add('empty');
+
+            const spinner = this.createDurationSpinner({
+                kind: 'actual',
+                index: idx,
+                seconds: Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0
+            });
+
+            const actions = document.createElement('div');
+            actions.className = 'actual-row-actions';
+
+            const upBtn = document.createElement('button');
+            upBtn.type = 'button';
+            upBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
+            upBtn.dataset.direction = 'up';
+            upBtn.textContent = '위';
+            upBtn.disabled = idx === 0;
+
+            const downBtn = document.createElement('button');
+            downBtn.type = 'button';
+            downBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
+            downBtn.dataset.direction = 'down';
+            downBtn.textContent = '아래';
+            downBtn.disabled = idx >= (this.modalActualActivities.length - 1);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'actual-remove-btn';
+            removeBtn.textContent = '삭제';
+            removeBtn.disabled = (this.modalActualActivities.length <= 1);
+
+            actions.appendChild(upBtn);
+            actions.appendChild(downBtn);
+            actions.appendChild(removeBtn);
+
+            row.appendChild(labelButton);
+            row.appendChild(spinner);
+            row.appendChild(actions);
+            list.appendChild(row);
+        });
+
+        if ((this.modalActualActivities || []).length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'sub-activities-empty';
+            empty.textContent = '세부 활동을 추가하세요.';
+            list.appendChild(empty);
+        }
+
+        this.updateActualActivitiesSummary();
+        this.updateActualRowActiveStyles();
+    }
+
+    addActualActivityRow(defaults = {}) {
+        if (!Array.isArray(this.modalActualActivities)) {
+            this.modalActualActivities = [];
+        }
+        const label = typeof defaults.label === 'string' ? defaults.label : '';
+        const newIndex = this.modalActualActivities.push({ label, seconds: 0 }) - 1;
+        this.modalActualActiveRow = newIndex;
+        this.modalActualDirty = true;
+        this.normalizeActualActivitiesToTotal();
+        this.renderActualActivitiesList();
+        if (defaults.focusLabel !== false) {
+            this.focusActualRowLabel(newIndex);
+        }
+    }
+
+    removeActualActivityRow(index) {
+        if (!this.isValidActualRow(index)) return;
+        if ((this.modalActualActivities || []).length <= 1) return;
+        const removed = this.modalActualActivities.splice(index, 1)[0];
+        if (this.modalActualActivities.length > 0) {
+            const targetIndex = Math.min(index, this.modalActualActivities.length - 1);
+            const extra = Number.isFinite(removed.seconds) ? Math.max(0, Math.floor(removed.seconds)) : 0;
+            const current = Number.isFinite(this.modalActualActivities[targetIndex].seconds)
+                ? Math.max(0, Math.floor(this.modalActualActivities[targetIndex].seconds))
+                : 0;
+            this.modalActualActivities[targetIndex].seconds = current + extra;
+            this.modalActualActiveRow = targetIndex;
+        } else {
+            this.modalActualActiveRow = -1;
+        }
+        this.modalActualDirty = true;
+        this.normalizeActualActivitiesToTotal();
+        this.renderActualActivitiesList();
+    }
+
+    moveActualActivityRow(index, direction) {
+        if (!this.isValidActualRow(index)) return;
+        const items = this.modalActualActivities || [];
+        const target = direction < 0 ? index - 1 : index + 1;
+        if (target < 0 || target >= items.length) return;
+        const temp = items[index];
+        items[index] = items[target];
+        items[target] = temp;
+        this.modalActualActiveRow = target;
+        this.modalActualDirty = true;
+        this.renderActualActivitiesList();
+        this.focusActualRowLabel(target);
+    }
+
+    applyActualActivityLabelSelection(index, label) {
+        if (!this.isValidActualRow(index)) return false;
+        const normalized = this.normalizeActivityText
+            ? this.normalizeActivityText(label || '')
+            : String(label || '').trim();
+        const item = this.modalActualActivities[index];
+        if (!item) return false;
+        item.label = normalized;
+        this.modalActualActiveRow = index;
+        this.modalActualDirty = true;
+        this.renderActualActivitiesList();
+        return true;
+    }
+
+    getActualBalanceOrder(index, length) {
+        const order = [];
+        for (let i = index + 1; i < length; i++) order.push(i);
+        for (let i = 0; i < index; i++) order.push(i);
+        return order;
+    }
+
+    applyActualDurationChange(index, targetSeconds) {
+        if (!this.isValidActualRow(index)) return;
+        const items = this.modalActualActivities || [];
+        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
+        let nextSeconds = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
+
+        if (total > 0) nextSeconds = Math.min(nextSeconds, total);
+        if (items.length <= 1) {
+            items[index].seconds = total > 0 ? total : nextSeconds;
+            this.modalActualDirty = true;
+            this.updateActualSpinnerDisplays();
+            this.updateActualActivitiesSummary();
+            return;
+        }
+
+        let delta = nextSeconds - currentSeconds;
+        if (delta > 0) {
+            let remaining = delta;
+            const order = this.getActualBalanceOrder(index, items.length);
+            order.forEach((idx) => {
+                if (remaining <= 0) return;
+                const available = Number.isFinite(items[idx].seconds) ? Math.max(0, Math.floor(items[idx].seconds)) : 0;
+                const reduce = Math.min(available, remaining);
+                items[idx].seconds = available - reduce;
+                remaining -= reduce;
+            });
+            if (remaining > 0) {
+                nextSeconds = Math.max(0, nextSeconds - remaining);
+            }
+        } else if (delta < 0) {
+            const order = this.getActualBalanceOrder(index, items.length);
+            if (order.length > 0) {
+                const targetIndex = order[0];
+                const base = Number.isFinite(items[targetIndex].seconds)
+                    ? Math.max(0, Math.floor(items[targetIndex].seconds))
+                    : 0;
+                items[targetIndex].seconds = base + Math.abs(delta);
+            }
+        }
+
+        items[index].seconds = nextSeconds;
+        this.modalActualDirty = true;
+        this.updateActualSpinnerDisplays();
+        this.updateActualActivitiesSummary();
+    }
+
+    adjustActualActivityDuration(index, direction) {
+        if (!this.isValidActualRow(index)) return;
+        const step = this.getActualDurationStepSeconds();
+        const current = Number.isFinite(this.modalActualActivities[index].seconds)
+            ? Math.max(0, Math.floor(this.modalActualActivities[index].seconds))
+            : 0;
+        this.applyActualDurationChange(index, current + (direction * step));
+    }
+
+    updateActualSpinnerDisplays() {
+        const { list } = this.getActualModalElements();
+        if (!list) return;
+        (this.modalActualActivities || []).forEach((item, idx) => {
+            const spinner = list.querySelector(`.time-spinner[data-kind="actual"][data-index="${idx}"]`);
+            if (spinner) this.updateSpinnerDisplay(spinner, item.seconds);
+        });
+    }
+
+    finalizeActualActivitiesForSave() {
+        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        let activities = this.normalizeActualActivitiesList(this.modalActualActivities).map(item => ({ ...item }));
+        if (total > 0) {
+            if (activities.length === 0) {
+                activities = [{ label: '', seconds: total }];
+            } else {
+                const used = this.getActualActivitiesSeconds(activities);
+                if (used !== total) {
+                    const diff = total - used;
+                    const last = activities.length - 1;
+                    const adjusted = (activities[last].seconds || 0) + diff;
+                    activities[last].seconds = Math.max(0, this.normalizeActualDurationStep(adjusted));
+                }
+            }
+        }
+        return activities;
+    }
+
+    openActualActivityMenu(index, anchorEl) {
+        if (!this.isValidActualRow(index) || !anchorEl || !anchorEl.isConnected) return;
+        this.closeActualActivityMenu();
+
+        const currentRaw = this.modalActualActivities[index] && this.modalActualActivities[index].label;
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const normalizedCurrent = normalize(currentRaw);
+        const grouped = this.buildPlannedActivityOptions(normalizedCurrent ? [normalizedCurrent] : []);
+
+        const menu = document.createElement('div');
+        menu.className = 'plan-activity-menu';
+        menu.setAttribute('role', 'menu');
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
+        clearBtn.dataset.label = '';
+        clearBtn.textContent = '비우기';
+        menu.appendChild(clearBtn);
+
+        const divider = document.createElement('div');
+        divider.className = 'plan-activity-menu-divider';
+        menu.appendChild(divider);
+
+        const buildSection = (title, items) => {
+            const section = document.createElement('div');
+            section.className = 'plan-activity-menu-section';
+            const heading = document.createElement('div');
+            heading.className = 'plan-activity-menu-title';
+            heading.textContent = title;
+            section.appendChild(heading);
+            if (!items || items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'plan-activity-menu-empty';
+                empty.textContent = '목록 없음';
+                section.appendChild(empty);
+                return section;
+            }
+            items.forEach((item) => {
+                const label = normalize(item && item.label);
+                if (!label) return;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'plan-activity-menu-item';
+                btn.dataset.label = label;
+                btn.textContent = label;
+                if (normalizedCurrent && label === normalizedCurrent) {
+                    btn.classList.add('active');
+                }
+                section.appendChild(btn);
+            });
+            return section;
+        };
+
+        menu.appendChild(buildSection('직접 추가', grouped.local || []));
+        menu.appendChild(buildSection('노션', grouped.notion || []));
+
+        document.body.appendChild(menu);
+        this.actualActivityMenu = menu;
+        this.actualActivityMenuContext = { index, anchorEl };
+        anchorEl.setAttribute('aria-expanded', 'true');
+
+        menu.addEventListener('click', (event) => {
+            const btn = event.target.closest('.plan-activity-menu-item');
+            if (!btn || !menu.contains(btn)) return;
+            if (btn.disabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const label = btn.dataset.label != null ? btn.dataset.label : '';
+            this.applyActualActivityLabelSelection(index, label);
+            this.closeActualActivityMenu();
+        });
+
+        this.positionActualActivityMenu(anchorEl);
+
+        this.actualActivityMenuOutsideHandler = (event) => {
+            if (!this.actualActivityMenu) return;
+            const t = event.target;
+            if (this.actualActivityMenu.contains(t)) return;
+            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
+            this.closeActualActivityMenu();
+        };
+        document.addEventListener('mousedown', this.actualActivityMenuOutsideHandler, true);
+
+        this.actualActivityMenuEscHandler = (event) => {
+            if (event.key === 'Escape') {
+                this.closeActualActivityMenu();
+            }
+        };
+        document.addEventListener('keydown', this.actualActivityMenuEscHandler);
+    }
+
+    positionActualActivityMenu(anchorEl) {
+        if (!this.actualActivityMenu) return;
+        if (!anchorEl || !anchorEl.isConnected) return;
+        const rect = anchorEl.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) return;
+
+        const menu = this.actualActivityMenu;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+
+        menu.style.visibility = 'hidden';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+
+        const menuWidth = menu.offsetWidth || 240;
+        const menuHeight = menu.offsetHeight || 220;
+
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + 6;
+
+        const maxLeft = scrollX + viewportWidth - menuWidth - 12;
+        if (left > maxLeft) {
+            left = Math.max(scrollX + 12, maxLeft);
+        }
+
+        const maxTop = scrollY + viewportHeight - menuHeight - 12;
+        if (top > maxTop) {
+            top = rect.top + scrollY - menuHeight - 6;
+        }
+        if (top < scrollY + 12) {
+            top = scrollY + 12;
+        }
+
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+        menu.style.visibility = 'visible';
+    }
+
+    closeActualActivityMenu() {
+        if (this.actualActivityMenuOutsideHandler) {
+            document.removeEventListener('mousedown', this.actualActivityMenuOutsideHandler, true);
+            this.actualActivityMenuOutsideHandler = null;
+        }
+        if (this.actualActivityMenuEscHandler) {
+            document.removeEventListener('keydown', this.actualActivityMenuEscHandler);
+            this.actualActivityMenuEscHandler = null;
+        }
+        if (this.actualActivityMenuContext && this.actualActivityMenuContext.anchorEl) {
+            try { this.actualActivityMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
+        }
+        if (this.actualActivityMenu && this.actualActivityMenu.parentNode) {
+            this.actualActivityMenu.parentNode.removeChild(this.actualActivityMenu);
+        }
+        this.actualActivityMenu = null;
+        this.actualActivityMenuContext = null;
+    }
+
     openActivityLogModal(index) {
         const modal = document.getElementById('activityLogModal');
         const slot = this.timeSlots[index];
@@ -8328,13 +8986,28 @@ class TimeTracker {
         }
         const baseSlot = this.timeSlots[baseIndex] || slot;
 
-        document.getElementById('activityTime').value = `${slot.time}시`;
+        const range = this.getSplitRange('actual', baseIndex);
+        const startSlot = this.timeSlots[range.start] || baseSlot;
+        const endSlot = this.timeSlots[range.end] || baseSlot;
+        const startLabel = startSlot && startSlot.time ? startSlot.time : '';
+        const endLabel = endSlot && endSlot.time ? endSlot.time : '';
+        const timeLabel = (range.start === range.end || !endLabel) ? startLabel : `${startLabel} ~ ${endLabel}`;
+        document.getElementById('activityTime').value = timeLabel;
         // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
         // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
         document.getElementById('activityDetails').value = (baseSlot.activityLog && baseSlot.activityLog.details) || '';
 
+        this.modalActualBaseIndex = baseIndex;
+        this.modalActualTotalSeconds = Math.max(0, this.getBlockLength('actual', baseIndex) * 3600);
+        this.modalActualActivities = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds);
+        this.normalizeActualActivitiesToTotal();
+        this.modalActualActiveRow = this.modalActualActivities.length > 0 ? 0 : -1;
+        this.modalActualDirty = false;
+        this.renderActualActivitiesList();
+
         modal.style.display = 'flex';
         modal.dataset.index = index;
+        modal.dataset.baseIndex = String(baseIndex);
 
         setTimeout(() => {
             document.getElementById('activityDetails').focus();
@@ -8346,26 +9019,77 @@ class TimeTracker {
         modal.style.display = 'none';
         
         document.getElementById('activityDetails').value = '';
+
+        this.closeActualActivityMenu();
+        this.modalActualActivities = [];
+        this.modalActualTotalSeconds = 0;
+        this.modalActualActiveRow = -1;
+        this.modalActualBaseIndex = null;
+        this.modalActualDirty = false;
+        const { list, totalEl, usedEl, noticeEl } = this.getActualModalElements();
+        if (list) list.innerHTML = '';
+        if (totalEl) totalEl.textContent = '0시간';
+        if (usedEl) usedEl.textContent = '0시간';
+        if (noticeEl) noticeEl.textContent = '';
         
         delete modal.dataset.index;
+        delete modal.dataset.baseIndex;
     }
 
     saveActivityLogFromModal() {
         const modal = document.getElementById('activityLogModal');
-        const index = parseInt(modal.dataset.index);
-        
-        if (index !== undefined && index >= 0) {
-            const slot = this.timeSlots[index];
-            if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [] };
+        const index = parseInt(modal.dataset.index, 10);
+        const baseIndexRaw = parseInt(modal.dataset.baseIndex, 10);
+        const baseIndex = Number.isFinite(baseIndexRaw) ? baseIndexRaw : index;
+
+        if (Number.isFinite(baseIndex) && baseIndex >= 0) {
+            const range = this.getSplitRange('actual', baseIndex);
+            const start = range.start;
+            const end = range.end;
+            const details = document.getElementById('activityDetails').value.trim();
+
+            if (!this.modalActualDirty) {
+                for (let i = start; i <= end; i++) {
+                    const slot = this.timeSlots[i];
+                    if (!slot) continue;
+                    if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                    }
+                    slot.activityLog.details = (i === start) ? details : '';
+                }
+            } else {
+                const activities = this.finalizeActualActivitiesForSave();
+                const summary = activities.length > 0 ? this.formatActivitiesSummary(activities) : '';
+                const actualMergeKey = this.findMergeKey('actual', start);
+                if (actualMergeKey) {
+                    this.mergedFields.set(actualMergeKey, summary);
+                }
+
+                for (let i = start; i <= end; i++) {
+                    const slot = this.timeSlots[i];
+                    if (!slot) continue;
+                    if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                    }
+                    slot.actual = (i === start) ? summary : '';
+                    slot.activityLog.details = (i === start) ? details : '';
+                    if (i === start) {
+                        slot.activityLog.subActivities = activities.map(item => ({ ...item }));
+                        slot.activityLog.actualGridUnits = [];
+                        slot.activityLog.actualOverride = activities.length > 0;
+                    } else {
+                        slot.activityLog.subActivities = [];
+                        slot.activityLog.actualGridUnits = [];
+                        slot.activityLog.actualOverride = false;
+                    }
+                }
             }
-            // 제목 필드는 이제 실제 칸(우측) 로그 용도로만 사용
-            slot.activityLog.details = document.getElementById('activityDetails').value.trim();
+
             this.renderTimeEntries();
             this.calculateTotals();
             this.autoSave();
         }
-        
+
         this.closeActivityLogModal();
     }
 
@@ -8398,6 +9122,89 @@ class TimeTracker {
                 this.closeActivityLogModal();
             }
         });
+
+        const actualList = document.getElementById('actualActivitiesList');
+        const addActualBtn = document.getElementById('addActualActivityRow');
+
+        if (addActualBtn) {
+            addActualBtn.addEventListener('click', () => {
+                this.addActualActivityRow();
+            });
+        }
+
+        if (actualList) {
+            actualList.addEventListener('click', (event) => {
+                const spinnerBtn = event.target.closest('.spinner-btn');
+                if (spinnerBtn && spinnerBtn.dataset.kind === 'actual') {
+                    const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
+                    const idx = parseInt(spinnerBtn.dataset.index, 10);
+                    if (Number.isFinite(idx)) {
+                        this.setActualActiveRow(idx);
+                        this.adjustActualActivityDuration(idx, direction);
+                    }
+                    return;
+                }
+
+                const moveBtn = event.target.closest('.actual-move-btn');
+                if (moveBtn) {
+                    const row = moveBtn.closest('.sub-activity-row');
+                    const idx = row ? parseInt(row.dataset.index, 10) : NaN;
+                    const direction = moveBtn.dataset.direction === 'up' ? -1 : 1;
+                    if (Number.isFinite(idx)) {
+                        this.moveActualActivityRow(idx, direction);
+                    }
+                    return;
+                }
+
+                const removeBtn = event.target.closest('.actual-remove-btn');
+                if (removeBtn) {
+                    const row = removeBtn.closest('.sub-activity-row');
+                    const idx = row ? parseInt(row.dataset.index, 10) : NaN;
+                    if (Number.isFinite(idx)) {
+                        this.removeActualActivityRow(idx);
+                    }
+                    return;
+                }
+
+                const labelBtn = event.target.closest('.actual-activity-label');
+                if (labelBtn) {
+                    const row = labelBtn.closest('.sub-activity-row');
+                    const idx = row ? parseInt(row.dataset.index, 10) : NaN;
+                    if (Number.isFinite(idx)) {
+                        this.setActualActiveRow(idx);
+                        this.openActualActivityMenu(idx, labelBtn);
+                    }
+                    return;
+                }
+
+                const row = event.target.closest('.sub-activity-row');
+                if (row && actualList.contains(row)) {
+                    const idx = parseInt(row.dataset.index, 10);
+                    if (Number.isFinite(idx)) this.setActualActiveRow(idx);
+                }
+            });
+
+            actualList.addEventListener('change', (event) => {
+                if (!event.target.classList.contains('actual-duration-input')) return;
+                const spinner = event.target.closest('.time-spinner');
+                const idx = spinner ? parseInt(spinner.dataset.index, 10) : NaN;
+                if (!Number.isFinite(idx)) return;
+                const parsed = this.parseActualDurationInput(event.target.value);
+                if (parsed == null) {
+                    this.updateActualSpinnerDisplays();
+                    return;
+                }
+                this.setActualActiveRow(idx);
+                this.applyActualDurationChange(idx, parsed);
+            });
+
+            actualList.addEventListener('focusin', (event) => {
+                const row = event.target.closest('.sub-activity-row');
+                if (!row || !actualList.contains(row)) return;
+                const idx = parseInt(row.dataset.index, 10);
+                if (Number.isFinite(idx)) this.setActualActiveRow(idx);
+            });
+        }
 
     }
 }

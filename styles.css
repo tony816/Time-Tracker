@@ -777,6 +777,45 @@ h1 {
   padding: 20px;
 }
 
+#activityLogModal .modal-content {
+  max-width: 520px;
+}
+
+.actual-sub-activities-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.actual-sub-activities-header label {
+  margin: 0;
+}
+
+.actual-edit-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ecf5ff;
+  color: #1f5fa5;
+  border: 1px solid #b6dbff;
+}
+
+.actual-sub-activities-actions {
+  justify-content: space-between;
+}
+
+.actual-sub-activities-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
 #scheduleModal .modal-content {
   width: 92%;
   max-width: 980px;
@@ -2173,7 +2212,8 @@ h1 {
 
 .sub-activity-row input,
 .sub-activity-row select,
-.sub-activity-row button.plan-activity-label {
+.sub-activity-row button.plan-activity-label,
+.sub-activity-row button.actual-activity-label {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #d0d6dc;
@@ -2182,14 +2222,16 @@ h1 {
   background: #fff;
 }
 
-.sub-activity-row .plan-activity-label {
+.sub-activity-row .plan-activity-label,
+.sub-activity-row .actual-activity-label {
   text-align: left;
   cursor: pointer;
   position: relative;
   padding-right: 26px;
 }
 
-.sub-activity-row .plan-activity-label::after {
+.sub-activity-row .plan-activity-label::after,
+.sub-activity-row .actual-activity-label::after {
   content: '▾';
   position: absolute;
   right: 8px;
@@ -2199,8 +2241,49 @@ h1 {
   color: #95a5a6;
 }
 
-.sub-activity-row .plan-activity-label.empty {
+.sub-activity-row .plan-activity-label.empty,
+.sub-activity-row .actual-activity-label.empty {
   color: #9aa3ad;
+}
+
+.sub-activity-row.actual-row {
+  grid-template-columns: 1fr minmax(110px, auto) 90px;
+}
+
+.actual-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actual-row-actions .sub-activity-action-btn,
+.actual-row-actions .actual-remove-btn {
+  width: 100%;
+}
+
+.actual-remove-btn {
+  border: 1px solid #f0b3b3;
+  border-radius: 4px;
+  background: #fff5f5;
+  color: #a53b3b;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.actual-remove-btn:hover {
+  background: #ffe9e9;
+}
+
+.actual-duration-input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.actual-duration-input:focus {
+  outline: none;
+  border-color: #3498db;
 }
 
 .sub-activity-row.active {
@@ -2209,7 +2292,8 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.38);
 }
 
-.sub-activity-row.active .plan-activity-label {
+.sub-activity-row.active .plan-activity-label,
+.sub-activity-row.active .actual-activity-label {
   border-color: #3498db;
 }
 
@@ -2478,6 +2562,10 @@ h1 {
 .split-visualization-actual .split-grid-segment {
   cursor: pointer;
   transition: opacity 0.15s ease;
+}
+
+.split-visualization-actual.split-readonly .split-grid-segment {
+  cursor: default;
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .actual-field-container .timer-result-input {

@@ -79,6 +79,24 @@
             <label for="activityTime">시간</label>
             <input type="text" id="activityTime" readonly>
           </div>
+          <div class="form-group actual-sub-activities">
+            <div class="actual-sub-activities-header">
+              <label>실제 세부 활동</label>
+              <span class="actual-edit-badge">기록 편집</span>
+            </div>
+            <div class="sub-activities-group">
+              <div class="sub-activities-summary">
+                <div>총 시간: <span id="actualSplitTotalTime">0시간</span></div>
+                <div>합계: <span id="actualSplitUsedTime">0시간</span></div>
+              </div>
+              <div id="actualActivitiesList" class="sub-activities-list"></div>
+              <div class="sub-activities-actions actual-sub-activities-actions">
+                <button type="button" id="addActualActivityRow" class="sub-activity-action-btn">+ 세부 활동</button>
+                <span id="actualActivitiesNotice" class="sub-activities-notice"></span>
+              </div>
+              <div class="actual-sub-activities-hint">10분 단위 입력, 합계는 병합 시간에 자동 맞춤됩니다.</div>
+            </div>
+          </div>
           <div class="form-group">
             <label for="activityDetails">메모</label>
             <textarea id="activityDetails" rows="8"></textarea>
