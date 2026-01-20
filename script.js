@@ -3161,7 +3161,9 @@ class TimeTracker {
         if (planActivities.length > 0) {
             planActivities.forEach((item) => {
                 if (!item) return;
-                const label = typeof item.label === 'string' ? item.label.trim() : '';
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : (typeof item.label === 'string' ? item.label.trim() : '');
                 if (!label) return;
                 const seconds = Number(item.seconds || 0);
                 const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
@@ -3458,7 +3460,9 @@ class TimeTracker {
             if (Array.isArray(activities)) {
                 activities.forEach((item) => {
                     if (!item) return;
-                    const label = typeof item.label === 'string' ? item.label.trim() : '';
+                    const label = this.normalizeActivityText
+                        ? this.normalizeActivityText(item.label || '')
+                        : (typeof item.label === 'string' ? item.label.trim() : '');
                     const seconds = Number(item.seconds || 0);
                     const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
                     for (let i = 0; i < unitsCount; i++) {
@@ -3538,8 +3542,74 @@ class TimeTracker {
             return { gridSegments: segments, titleSegments, showTitleBand, ...options };
         };
 
+        const buildGridSegmentsFromActivities = (activities, totalUnits, options = {}) => {
+            let units = [];
+            if (Array.isArray(activities)) {
+                activities.forEach((item) => {
+                    if (!item) return;
+                    const label = this.normalizeActivityText
+                        ? this.normalizeActivityText(item.label || '')
+                        : (typeof item.label === 'string' ? item.label.trim() : '');
+                    const seconds = Number(item.seconds || 0);
+                    const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / 600)) : 0;
+                    for (let i = 0; i < unitsCount; i++) {
+                        units.push(label);
+                    }
+                });
+            }
+
+            if (Number.isFinite(totalUnits) && totalUnits > 0) {
+                if (units.length > totalUnits) units = units.slice(0, totalUnits);
+                if (units.length < totalUnits) {
+                    units = units.concat(new Array(totalUnits - units.length).fill(''));
+                }
+            }
+
+            const offset = index - baseIndex;
+            if (offset < 0) return null;
+
+            const maxOffset = Math.ceil(units.length / unitsPerRow) - 1;
+            if (units.length === 0 && index !== baseIndex) {
+                return null;
+            }
+            if (units.length > 0 && offset > maxOffset) return null;
+
+            const useFullUnits = isMergedRange && index === baseIndex;
+            const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
+            const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
+            const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
+
+            const gridSegments = [];
+            if (slice.length === 0) {
+                for (let i = 0; i < unitsPerRow; i++) {
+                    gridSegments.push({ label: '', span: 1 });
+                }
+            } else {
+                slice.forEach((label) => {
+                    gridSegments.push({ label, span: 1 });
+                });
+                const remainder = slice.length % unitsPerRow;
+                if (remainder !== 0) {
+                    const remaining = unitsPerRow - remainder;
+                    for (let i = 0; i < remaining; i++) {
+                        gridSegments.push({ label: '', span: 1 });
+                    }
+                }
+            }
+
+            const hasLabels = units.some(label => label);
+            if (!hasLabels && !showTitleBand) {
+                return null;
+            }
+            if (!hasLabels && showTitleBand) {
+                return { gridSegments: [], titleSegments, showTitleBand, ...options };
+            }
+            return { gridSegments, titleSegments, showTitleBand, ...options };
+        };
+
         if (shouldUseActualActivities) {
-            return buildSegmentsFromActivities(actualActivities, { toggleable: false, showLabels: true });
+            const totalUnits = this.getActualGridUnitCount(baseIndex);
+            return buildGridSegmentsFromActivities(actualActivities, totalUnits, { toggleable: false, showLabels: false });
         }
 
         if (type === 'actual') {
@@ -3635,19 +3705,24 @@ class TimeTracker {
     }
 
     getSplitColor(type, label) {
-        if (!label) {
-            return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
-        }
-
         // 실제(우측)에서는 색상 키에서 시간 요약(예: "5초", "1시간 30분")을 제거하여
         // 좌측 계획과 동일한 라벨에 항상 같은 색을 사용한다.
         let colorKey = label;
         if (type === 'actual') {
-            const m = String(label).match(/^(.+?)\s+\d+(시간|분|초)(\s+\d+(분|초))?$/);
+            const m = String(colorKey || '').match(/^(.+?)\s+\d+(시간|분|초)(\s+\d+(분|초))?$/);
             if (m && m[1]) {
                 colorKey = m[1].trim();
             }
         }
+        if (this.normalizeActivityText) {
+            colorKey = this.normalizeActivityText(colorKey || '');
+        } else {
+            colorKey = String(colorKey || '').trim();
+        }
+        if (!colorKey) {
+            return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
+        }
+
 
         // 더 넓은 색상 분산을 위해 해시 기반 팔레트 선택
         // 유사도 낮추되 톤은 파스텔로 완화한 팔레트(계획/실제 공통)
