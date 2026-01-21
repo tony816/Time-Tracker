@@ -3314,8 +3314,14 @@ class TimeTracker {
 
     syncActualGridToSlots(baseIndex, planUnits, actualUnits) {
         const activities = this.buildActualActivitiesFromGrid(planUnits, actualUnits);
-        const extras = this.collectActualExtraActivities(baseIndex, planUnits);
-        const mergedActivities = activities.concat(extras);
+        const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+        const mergedActivities = this.mergeActualActivitiesWithGrid(
+            baseIndex,
+            planUnits,
+            activities,
+            null,
+            planContext && planContext.planLabel ? planContext.planLabel : ''
+        );
         const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
         const actualMergeKey = this.findMergeKey('actual', baseIndex);
         const safeUnits = Array.isArray(actualUnits) ? actualUnits.map(value => Boolean(value)) : [];
@@ -8611,8 +8617,101 @@ class TimeTracker {
                 labelSet.add(normalized);
             }
         });
-        const planLabel = context && context.planLabel ? (this.normalizeActivityText ? this.normalizeActivityText(context.planLabel) : String(context.planLabel || '').trim()) : '';
+        const planLabel = context && context.planLabel
+            ? (this.normalizeActivityText ? this.normalizeActivityText(context.planLabel) : String(context.planLabel || '').trim())
+            : '';
         return { units, labelSet, hasLabels: labelSet.size > 0, planLabel };
+    }
+
+    getPlanLabelOrderForActual(baseIndex, planUnits, planLabel = '') {
+        const order = [];
+        const seen = new Set();
+        const pushLabel = (raw) => {
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(raw || '')
+                : String(raw || '').trim();
+            if (!normalized || seen.has(normalized)) return;
+            seen.add(normalized);
+            order.push(normalized);
+        };
+
+        const planActivities = this.getPlanActivitiesForIndex(baseIndex);
+        if (planActivities.length > 0) {
+            planActivities.forEach((item) => {
+                if (!item) return;
+                pushLabel(item.label || '');
+            });
+        }
+
+        if (order.length === 0) {
+            pushLabel(planLabel);
+        }
+
+        if (order.length === 0 && Array.isArray(planUnits)) {
+            planUnits.forEach((label) => {
+                pushLabel(label);
+            });
+        }
+
+        return order;
+    }
+
+    mergeActualActivitiesWithGrid(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = '') {
+        const labelSet = new Set();
+        if (Array.isArray(planUnits)) {
+            planUnits.forEach((label) => {
+                const normalized = this.normalizeActivityText
+                    ? this.normalizeActivityText(label || '')
+                    : String(label || '').trim();
+                if (normalized) labelSet.add(normalized);
+            });
+        }
+
+        const gridSecondsMap = new Map();
+        (Array.isArray(gridActivities) ? gridActivities : []).forEach((item) => {
+            if (!item || !item.label) return;
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            if (!normalized) return;
+            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            gridSecondsMap.set(normalized, seconds);
+        });
+
+        const slot = this.timeSlots[baseIndex];
+        const baseList = Array.isArray(existingActivities)
+            ? existingActivities
+            : this.normalizeActualActivitiesList(slot && slot.activityLog && slot.activityLog.subActivities);
+
+        const merged = [];
+        const seenGrid = new Set();
+
+        if (baseList.length > 0) {
+            baseList.forEach((item) => {
+                if (!item) return;
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                if (!label && seconds <= 0) return;
+                if (label && labelSet.has(label)) {
+                    merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+                    seenGrid.add(label);
+                } else {
+                    const source = (item.source && item.source !== 'grid') ? item.source : 'extra';
+                    merged.push({ label, seconds, source });
+                }
+            });
+        }
+
+        const orderedLabels = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
+        orderedLabels.forEach((label) => {
+            if (seenGrid.has(label)) return;
+            merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+            seenGrid.add(label);
+        });
+
+        return merged;
     }
 
     splitActualActivitiesByPlan(baseIndex, activities) {
@@ -9092,7 +9191,10 @@ class TimeTracker {
 
         menu.addEventListener('click', (event) => {
             const btn = event.target.closest('.plan-activity-menu-item');
-            if (!btn || !menu.contains(btn)) return;
+            if (!btn || !menu.contains(btn)) {
+                this.closeActualActivityMenu();
+                return;
+            }
             if (btn.disabled) return;
             event.preventDefault();
             event.stopPropagation();
@@ -9209,53 +9311,14 @@ class TimeTracker {
         if (this.modalActualHasPlanUnits) {
             const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
             const gridActivities = this.buildActualActivitiesFromGrid(planContext.units, actualUnits);
-            const gridSecondsMap = new Map();
-            gridActivities.forEach((item) => {
-                if (!item || !item.label) return;
-                const normalizedLabel = this.normalizeActivityText
-                    ? this.normalizeActivityText(item.label || '')
-                    : String(item.label || '').trim();
-                if (!normalizedLabel) return;
-                gridSecondsMap.set(normalizedLabel, Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0);
-            });
-            const orderedLabels = [];
-            const seen = new Set();
-            const planActivities = this.getPlanActivitiesForIndex(baseIndex);
-            if (planActivities.length > 0) {
-                planActivities.forEach((item) => {
-                    const label = this.normalizeActivityText
-                        ? this.normalizeActivityText(item.label || '')
-                        : String(item.label || '').trim();
-                    if (!label || seen.has(label)) return;
-                    seen.add(label);
-                    orderedLabels.push(label);
-                });
-            } else if (planContext.planLabel) {
-                const label = this.normalizeActivityText
-                    ? this.normalizeActivityText(planContext.planLabel || '')
-                    : String(planContext.planLabel || '').trim();
-                if (label) {
-                    seen.add(label);
-                    orderedLabels.push(label);
-                }
-            } else {
-                planContext.units.forEach((label) => {
-                    const normalizedLabel = this.normalizeActivityText
-                        ? this.normalizeActivityText(label || '')
-                        : String(label || '').trim();
-                    if (!normalizedLabel || seen.has(normalizedLabel)) return;
-                    seen.add(normalizedLabel);
-                    orderedLabels.push(normalizedLabel);
-                });
-            }
-
-            const gridSeed = orderedLabels.map(label => ({
-                label,
-                seconds: gridSecondsMap.get(label) || 0,
-                source: 'grid'
-            }));
-            const extras = this.collectActualExtraActivities(baseIndex, planContext.units);
-            this.modalActualActivities = gridSeed.concat(extras);
+            const existing = this.normalizeActualActivitiesList(baseSlot.activityLog && baseSlot.activityLog.subActivities);
+            this.modalActualActivities = this.mergeActualActivitiesWithGrid(
+                baseIndex,
+                planContext.units,
+                gridActivities,
+                existing,
+                planContext.planLabel
+            );
             this.normalizeActualActivitiesToStep();
         } else {
             this.modalActualActivities = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds);
@@ -9320,9 +9383,7 @@ class TimeTracker {
             } else {
                 const activities = this.finalizeActualActivitiesForSave();
                 const split = this.splitActualActivitiesByPlan(baseIndex, activities);
-                const mergedActivities = split.hasLabels
-                    ? split.gridActivities.concat(split.extraActivities)
-                    : activities.map(item => ({ ...item }));
+                const mergedActivities = activities.map(item => ({ ...item }));
                 const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
                 const actualUnits = split.hasLabels
                     ? this.buildActualUnitsFromActivities(split.units, split.gridActivities)
