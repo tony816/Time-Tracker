@@ -1999,6 +1999,10 @@ h1 {
   z-index: 80;
 }
 
+.actual-activity-menu {
+  z-index: 2105;
+}
+
 .plan-activity-menu-section {
   margin-top: 8px;
 }
@@ -2247,7 +2251,7 @@ h1 {
 }
 
 .sub-activity-row.actual-row {
-  grid-template-columns: 1fr minmax(110px, auto) 90px;
+  grid-template-columns: 1fr minmax(110px, auto) minmax(110px, auto) 90px;
 }
 
 .actual-row-actions {
@@ -2281,7 +2285,17 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.actual-time-input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .actual-duration-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.actual-time-input:focus {
   outline: none;
   border-color: #3498db;
 }
@@ -2293,7 +2307,8 @@ h1 {
 }
 
 .sub-activity-row.active .plan-activity-label,
-.sub-activity-row.active .actual-activity-label {
+.sub-activity-row.active .actual-activity-label,
+.sub-activity-row.active .actual-time-input {
   border-color: #3498db;
 }
 
@@ -2593,7 +2608,7 @@ h1 {
 }
 
 .split-grid>.split-grid-segment:last-child {
-  border-bottom-width: 0;
+  border-bottom-color: transparent;
 }
 
 

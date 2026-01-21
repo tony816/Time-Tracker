@@ -3279,9 +3279,42 @@ class TimeTracker {
         return activities;
     }
 
+    collectActualExtraActivities(baseIndex, planUnits) {
+        const slot = this.timeSlots[baseIndex];
+        if (!slot) return [];
+        const existing = this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities);
+        if (!existing.length) return [];
+        const labelSet = new Set();
+        if (Array.isArray(planUnits)) {
+            planUnits.forEach((label) => {
+                const normalized = this.normalizeActivityText
+                    ? this.normalizeActivityText(label || '')
+                    : String(label || '').trim();
+                if (normalized) labelSet.add(normalized);
+            });
+        }
+
+        return existing
+            .map((item) => {
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                const source = typeof item.source === 'string' ? item.source : null;
+                if (!label && seconds <= 0) return null;
+                const isExtra = (source && source !== 'grid') || (label && !labelSet.has(label));
+                if (!isExtra) return null;
+                const extraSource = (source && source !== 'grid') ? source : 'extra';
+                return { label, seconds, source: extraSource };
+            })
+            .filter(Boolean);
+    }
+
     syncActualGridToSlots(baseIndex, planUnits, actualUnits) {
         const activities = this.buildActualActivitiesFromGrid(planUnits, actualUnits);
-        const summary = activities.length > 0 ? this.formatActivitiesSummary(activities) : '';
+        const extras = this.collectActualExtraActivities(baseIndex, planUnits);
+        const mergedActivities = activities.concat(extras);
+        const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
         const actualMergeKey = this.findMergeKey('actual', baseIndex);
         const safeUnits = Array.isArray(actualUnits) ? actualUnits.map(value => Boolean(value)) : [];
 
@@ -3298,7 +3331,7 @@ class TimeTracker {
                 slot.activityLog.actualOverride = false;
                 slot.actual = (i === start) ? summary : '';
                 if (i === start) {
-                    slot.activityLog.subActivities = activities.map(item => ({ ...item }));
+                    slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
                     slot.activityLog.actualGridUnits = safeUnits.slice();
                 } else {
                     slot.activityLog.subActivities = [];
@@ -3314,7 +3347,7 @@ class TimeTracker {
         }
         slot.activityLog.actualOverride = false;
         slot.actual = summary;
-        slot.activityLog.subActivities = activities.map(item => ({ ...item }));
+        slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
         slot.activityLog.actualGridUnits = safeUnits.slice();
     }
 
@@ -4588,7 +4621,7 @@ class TimeTracker {
         const grouped = this.buildPlannedActivityOptions(normalizedCurrent ? [normalizedCurrent] : []);
 
         const menu = document.createElement('div');
-        menu.className = 'plan-activity-menu';
+        menu.className = 'plan-activity-menu actual-activity-menu';
         menu.setAttribute('role', 'menu');
 
         const clearBtn = document.createElement('button');
@@ -8516,7 +8549,8 @@ class TimeTracker {
                 const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = this.normalizeActualDurationStep(rawSeconds);
-                return { label, seconds };
+                const source = typeof item.source === 'string' ? item.source : null;
+                return { label, seconds, source };
             })
             .filter(item => item.label || item.seconds > 0);
     }
@@ -8561,6 +8595,46 @@ class TimeTracker {
             return [{ label: planLabel, seconds: totalSeconds }];
         }
         return totalSeconds > 0 ? [{ label: '', seconds: totalSeconds }] : [];
+    }
+
+    getActualPlanLabelContext(baseIndex) {
+        const context = this.buildPlanUnitsForActualGrid(baseIndex);
+        const units = (context && Array.isArray(context.units)) ? context.units : [];
+        const labelSet = new Set();
+        units.forEach((label) => {
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(label || '')
+                : String(label || '').trim();
+            if (normalized) {
+                labelSet.add(normalized);
+            }
+        });
+        return { units, labelSet, hasLabels: labelSet.size > 0 };
+    }
+
+    splitActualActivitiesByPlan(baseIndex, activities) {
+        const { units, labelSet, hasLabels } = this.getActualPlanLabelContext(baseIndex);
+        const gridActivities = [];
+        const extraActivities = [];
+        (Array.isArray(activities) ? activities : []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            if (!label && seconds <= 0) return;
+            const isGridLabel = hasLabels && labelSet.has(label);
+            const source = isGridLabel
+                ? 'grid'
+                : ((item.source && item.source !== 'grid') ? item.source : 'extra');
+            const normalizedItem = { label, seconds, source };
+            if (isGridLabel) {
+                gridActivities.push(normalizedItem);
+            } else {
+                extraActivities.push(normalizedItem);
+            }
+        });
+        return { units, gridActivities, extraActivities, hasLabels };
     }
 
     normalizeActualActivitiesToTotal(totalSeconds = null) {
@@ -8692,10 +8766,19 @@ class TimeTracker {
             labelButton.textContent = normalizedLabel || '세부 활동';
             if (!normalizedLabel) labelButton.classList.add('empty');
 
+            const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const timeInput = document.createElement('input');
+            timeInput.type = 'text';
+            timeInput.className = 'actual-time-input';
+            timeInput.setAttribute('aria-label', 'Actual time');
+            timeInput.dataset.index = String(idx);
+            timeInput.value = this.formatSecondsForInput(safeSeconds);
+            timeInput.inputMode = 'numeric';
+
             const spinner = this.createDurationSpinner({
                 kind: 'actual',
                 index: idx,
-                seconds: Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0
+                seconds: safeSeconds
             });
 
             const actions = document.createElement('div');
@@ -8726,6 +8809,7 @@ class TimeTracker {
             actions.appendChild(removeBtn);
 
             row.appendChild(labelButton);
+            row.appendChild(timeInput);
             row.appendChild(spinner);
             row.appendChild(actions);
             list.appendChild(row);
@@ -8747,7 +8831,8 @@ class TimeTracker {
             this.modalActualActivities = [];
         }
         const label = typeof defaults.label === 'string' ? defaults.label : '';
-        const newIndex = this.modalActualActivities.push({ label, seconds: 0 }) - 1;
+        const source = typeof defaults.source === 'string' ? defaults.source : 'extra';
+        const newIndex = this.modalActualActivities.push({ label, seconds: 0, source }) - 1;
         this.modalActualActiveRow = newIndex;
         this.modalActualDirty = true;
         this.normalizeActualActivitiesToTotal();
@@ -8799,6 +8884,14 @@ class TimeTracker {
         const item = this.modalActualActivities[index];
         if (!item) return false;
         item.label = normalized;
+        const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+        if (baseIndex != null) {
+            const context = this.getActualPlanLabelContext(baseIndex);
+            const isGridLabel = context.hasLabels && context.labelSet.has(normalized);
+            item.source = isGridLabel ? 'grid' : 'extra';
+        } else if (!item.source && normalized) {
+            item.source = 'extra';
+        }
         this.modalActualActiveRow = index;
         this.modalActualDirty = true;
         this.renderActualActivitiesList();
@@ -8874,6 +8967,8 @@ class TimeTracker {
         (this.modalActualActivities || []).forEach((item, idx) => {
             const spinner = list.querySelector(`.time-spinner[data-kind="actual"][data-index="${idx}"]`);
             if (spinner) this.updateSpinnerDisplay(spinner, item.seconds);
+            const timeInput = list.querySelector(`.actual-time-input[data-index="${idx}"]`);
+            if (timeInput) timeInput.value = this.formatSecondsForInput(item.seconds);
         });
     }
 
@@ -9134,7 +9229,14 @@ class TimeTracker {
                 }
             } else {
                 const activities = this.finalizeActualActivitiesForSave();
-                const summary = activities.length > 0 ? this.formatActivitiesSummary(activities) : '';
+                const split = this.splitActualActivitiesByPlan(baseIndex, activities);
+                const mergedActivities = split.hasLabels
+                    ? split.gridActivities.concat(split.extraActivities)
+                    : activities.map(item => ({ ...item }));
+                const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
+                const actualUnits = split.hasLabels
+                    ? this.buildActualUnitsFromActivities(split.units, split.gridActivities)
+                    : [];
                 const actualMergeKey = this.findMergeKey('actual', start);
                 if (actualMergeKey) {
                     this.mergedFields.set(actualMergeKey, summary);
@@ -9149,9 +9251,14 @@ class TimeTracker {
                     slot.actual = (i === start) ? summary : '';
                     slot.activityLog.details = (i === start) ? details : '';
                     if (i === start) {
-                        slot.activityLog.subActivities = activities.map(item => ({ ...item }));
-                        slot.activityLog.actualGridUnits = [];
-                        slot.activityLog.actualOverride = activities.length > 0;
+                        slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
+                        if (split.hasLabels) {
+                            slot.activityLog.actualGridUnits = actualUnits.slice();
+                            slot.activityLog.actualOverride = false;
+                        } else {
+                            slot.activityLog.actualGridUnits = [];
+                            slot.activityLog.actualOverride = mergedActivities.length > 0;
+                        }
                     } else {
                         slot.activityLog.subActivities = [];
                         slot.activityLog.actualGridUnits = [];
@@ -9260,17 +9367,31 @@ class TimeTracker {
             });
 
             actualList.addEventListener('change', (event) => {
-                if (!event.target.classList.contains('actual-duration-input')) return;
-                const spinner = event.target.closest('.time-spinner');
-                const idx = spinner ? parseInt(spinner.dataset.index, 10) : NaN;
-                if (!Number.isFinite(idx)) return;
-                const parsed = this.parseActualDurationInput(event.target.value);
-                if (parsed == null) {
-                    this.updateActualSpinnerDisplays();
+                if (event.target.classList.contains('actual-time-input')) {
+                    const idx = parseInt(event.target.dataset.index, 10);
+                    if (!Number.isFinite(idx)) return;
+                    const parsed = this.parseActualDurationInput(event.target.value);
+                    if (parsed == null) {
+                        this.updateActualSpinnerDisplays();
+                        return;
+                    }
+                    this.setActualActiveRow(idx);
+                    this.applyActualDurationChange(idx, parsed);
                     return;
                 }
-                this.setActualActiveRow(idx);
-                this.applyActualDurationChange(idx, parsed);
+
+                if (event.target.classList.contains('actual-duration-input')) {
+                    const spinner = event.target.closest('.time-spinner');
+                    const idx = spinner ? parseInt(spinner.dataset.index, 10) : NaN;
+                    if (!Number.isFinite(idx)) return;
+                    const parsed = this.parseActualDurationInput(event.target.value);
+                    if (parsed == null) {
+                        this.updateActualSpinnerDisplays();
+                        return;
+                    }
+                    this.setActualActiveRow(idx);
+                    this.applyActualDurationChange(idx, parsed);
+                }
             });
 
             actualList.addEventListener('focusin', (event) => {
