@@ -2251,7 +2251,7 @@ h1 {
 }
 
 .sub-activity-row.actual-row {
-  grid-template-columns: 1fr minmax(110px, auto) minmax(110px, auto) 90px;
+  grid-template-columns: minmax(0, 2.2fr) minmax(80px, 0.9fr) minmax(44px, 0.4fr) 84px;
 }
 
 .actual-row-actions {
@@ -2283,6 +2283,14 @@ h1 {
 .actual-duration-input {
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.time-spinner[data-kind="actual"] .actual-duration-input {
+  display: none;
+}
+
+.time-spinner[data-kind="actual"] {
+  justify-content: center;
 }
 
 .actual-time-input {
