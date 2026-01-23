@@ -76,6 +76,9 @@ class TimeTracker {
         this.modalActualDirty = false;
         this.modalActualHasPlanUnits = false;
         this.modalActualHasPlanUnits = false;
+        this.modalActualPlanUnits = [];
+        this.modalActualGridUnits = [];
+        this.modalActualPlanLabelSet = new Set();
         this.actualActivityMenu = null;
         this.actualActivityMenuContext = null;
         this.actualActivityMenuOutsideHandler = null;
@@ -4432,6 +4435,57 @@ class TimeTracker {
         return spinner;
     }
 
+    createActualTimeControl({ kind, index, seconds, label, disabled = false }) {
+        const control = document.createElement('div');
+        control.className = `actual-time-control actual-time-${kind}`;
+        control.dataset.kind = kind;
+        control.dataset.index = String(index);
+        if (label) control.dataset.label = label;
+        if (disabled) control.classList.add('is-disabled');
+
+        const caption = document.createElement('div');
+        caption.className = 'actual-time-caption';
+        caption.textContent = kind === 'grid' ? '기록' : '배정';
+
+        const upBtn = document.createElement('button');
+        upBtn.type = 'button';
+        upBtn.className = 'actual-time-btn actual-time-up';
+        upBtn.dataset.kind = kind;
+        upBtn.dataset.direction = 'up';
+        upBtn.dataset.index = String(index);
+        upBtn.textContent = '▲';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.inputMode = 'numeric';
+        input.autocomplete = 'off';
+        input.className = `actual-time-input actual-${kind}-input`;
+        input.dataset.kind = kind;
+        input.dataset.index = String(index);
+        input.value = this.formatSecondsForInput(Number.isFinite(seconds) ? seconds : 0);
+        input.setAttribute('aria-label', kind === 'grid' ? '기록 시간' : '배정 시간');
+
+        const downBtn = document.createElement('button');
+        downBtn.type = 'button';
+        downBtn.className = 'actual-time-btn actual-time-down';
+        downBtn.dataset.kind = kind;
+        downBtn.dataset.direction = 'down';
+        downBtn.dataset.index = String(index);
+        downBtn.textContent = '▼';
+
+        if (disabled) {
+            input.disabled = true;
+            upBtn.disabled = true;
+            downBtn.disabled = true;
+        }
+
+        control.appendChild(caption);
+        control.appendChild(upBtn);
+        control.appendChild(input);
+        control.appendChild(downBtn);
+        return control;
+    }
+
     updateSpinnerDisplay(spinner, seconds) {
         if (!spinner) return;
         const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
@@ -8623,6 +8677,48 @@ class TimeTracker {
         return { units, labelSet, hasLabels: labelSet.size > 0, planLabel };
     }
 
+    getActualGridSecondsMap(planUnits = null, actualUnits = null) {
+        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
+        const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
+        const map = new Map();
+        if (!Array.isArray(units) || !Array.isArray(activeUnits)) return map;
+        const step = this.getActualDurationStepSeconds();
+        for (let i = 0; i < units.length; i++) {
+            if (!activeUnits[i]) continue;
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(units[i] || '')
+                : String(units[i] || '').trim();
+            if (!normalized) continue;
+            map.set(normalized, (map.get(normalized) || 0) + step);
+        }
+        return map;
+    }
+
+    getActualGridSecondsForLabel(label, gridMap = null) {
+        const normalized = this.normalizeActivityText
+            ? this.normalizeActivityText(label || '')
+            : String(label || '').trim();
+        if (!normalized) return 0;
+        const map = gridMap || this.getActualGridSecondsMap();
+        return map.get(normalized) || 0;
+    }
+
+    getActualGridUnitCounts(planUnits = null, actualUnits = null) {
+        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
+        const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
+        const counts = new Map();
+        if (!Array.isArray(units) || !Array.isArray(activeUnits)) return counts;
+        for (let i = 0; i < units.length; i++) {
+            if (!activeUnits[i]) continue;
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(units[i] || '')
+                : String(units[i] || '').trim();
+            if (!normalized) continue;
+            counts.set(normalized, (counts.get(normalized) || 0) + 1);
+        }
+        return counts;
+    }
+
     getPlanLabelOrderForActual(baseIndex, planUnits, planLabel = '') {
         const order = [];
         const seen = new Set();
@@ -8654,6 +8750,75 @@ class TimeTracker {
         }
 
         return order;
+    }
+
+    buildActualModalActivities(baseIndex, planUnits, gridUnits, existingActivities = null, planLabel = '') {
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const planLabelSet = new Set();
+        if (Array.isArray(planUnits)) {
+            planUnits.forEach((label) => {
+                const normalized = normalize(label);
+                if (normalized) planLabelSet.add(normalized);
+            });
+        }
+
+        const gridSecondsMap = this.getActualGridSecondsMap(planUnits, gridUnits);
+        const hasGrid = Array.from(gridSecondsMap.values()).some(seconds => seconds > 0);
+        const planOrder = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
+        const existing = this.normalizeActualActivitiesList(existingActivities);
+
+        let baseList = existing;
+        if (baseList.length === 0) {
+            if (hasGrid && planOrder.length > 0) {
+                baseList = planOrder.map(label => ({
+                    label,
+                    seconds: gridSecondsMap.get(label) || 0,
+                    source: 'grid'
+                }));
+            } else {
+                baseList = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds)
+                    .map(item => ({ ...item }));
+            }
+        }
+
+        const merged = [];
+        const seenPlanLabels = new Set();
+
+        baseList.forEach((item) => {
+            if (!item) return;
+            const label = normalize(item.label || '');
+            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            if (!label && seconds <= 0) return;
+            const isPlanLabel = label && planLabelSet.has(label);
+            if (isPlanLabel) seenPlanLabels.add(label);
+            const source = item.source && item.source !== 'grid'
+                ? item.source
+                : (isPlanLabel ? 'grid' : 'extra');
+            merged.push({ label, seconds, source });
+        });
+
+        planOrder.forEach((label) => {
+            if (!label || seenPlanLabels.has(label)) return;
+            merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+            seenPlanLabels.add(label);
+        });
+
+        return merged;
+    }
+
+    getModalActualGridUnitsForSave(totalUnits) {
+        if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
+        const raw = Array.isArray(this.modalActualGridUnits)
+            ? this.modalActualGridUnits.map(value => Boolean(value))
+            : [];
+        let units = raw;
+        if (units.length > totalUnits) units = units.slice(0, totalUnits);
+        if (units.length < totalUnits) {
+            units = units.concat(new Array(totalUnits - units.length).fill(false));
+        }
+        return units;
     }
 
     mergeActualActivitiesWithGrid(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = '') {
@@ -8862,6 +9027,8 @@ class TimeTracker {
         }
 
         list.innerHTML = '';
+        const gridSecondsMap = this.getActualGridSecondsMap();
+        const planLabelSet = (this.modalActualPlanLabelSet instanceof Set) ? this.modalActualPlanLabelSet : new Set();
         (this.modalActualActivities || []).forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'sub-activity-row actual-row';
@@ -8881,18 +9048,23 @@ class TimeTracker {
             if (!normalizedLabel) labelButton.classList.add('empty');
 
             const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const timeInput = document.createElement('input');
-            timeInput.type = 'text';
-            timeInput.className = 'actual-time-input';
-            timeInput.setAttribute('aria-label', 'Actual time');
-            timeInput.dataset.index = String(idx);
-            timeInput.value = this.formatSecondsForInput(safeSeconds);
-            timeInput.inputMode = 'numeric';
-
-            const spinner = this.createDurationSpinner({
-                kind: 'actual',
+            const gridSeconds = normalizedLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : 0;
+            const gridDisabled = !this.modalActualHasPlanUnits
+                || !normalizedLabel
+                || !planLabelSet.has(normalizedLabel);
+            const gridControl = this.createActualTimeControl({
+                kind: 'grid',
                 index: idx,
-                seconds: safeSeconds
+                seconds: gridSeconds,
+                label: normalizedLabel,
+                disabled: gridDisabled
+            });
+
+            const assignControl = this.createActualTimeControl({
+                kind: 'assign',
+                index: idx,
+                seconds: safeSeconds,
+                label: normalizedLabel
             });
 
             const actions = document.createElement('div');
@@ -8923,8 +9095,8 @@ class TimeTracker {
             actions.appendChild(removeBtn);
 
             row.appendChild(labelButton);
-            row.appendChild(timeInput);
-            row.appendChild(spinner);
+            row.appendChild(gridControl);
+            row.appendChild(assignControl);
             row.appendChild(actions);
             list.appendChild(row);
         });
@@ -9008,12 +9180,12 @@ class TimeTracker {
         const item = this.modalActualActivities[index];
         if (!item) return false;
         item.label = normalized;
-        const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
-        if (baseIndex != null) {
-            const context = this.getActualPlanLabelContext(baseIndex);
-            const isGridLabel = context.hasLabels && context.labelSet.has(normalized);
+        const isGridLabel = this.modalActualHasPlanUnits
+            && (this.modalActualPlanLabelSet instanceof Set)
+            && this.modalActualPlanLabelSet.has(normalized);
+        if (normalized) {
             item.source = isGridLabel ? 'grid' : 'extra';
-        } else if (!item.source && normalized) {
+        } else {
             item.source = 'extra';
         }
         this.modalActualActiveRow = index;
@@ -9083,6 +9255,38 @@ class TimeTracker {
         this.updateActualActivitiesSummary();
     }
 
+    applyActualGridDurationChange(index, targetSeconds) {
+        if (!this.isValidActualRow(index) || !this.modalActualHasPlanUnits) return;
+        const item = this.modalActualActivities[index];
+        const label = this.normalizeActivityText
+            ? this.normalizeActivityText(item && item.label || '')
+            : String(item && item.label || '').trim();
+        if (!label || !(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) return;
+
+        const step = this.getActualDurationStepSeconds();
+        const normalized = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
+        const targetUnits = Math.max(0, Math.round(normalized / step));
+
+        const counts = this.getActualGridUnitCounts();
+        if (targetUnits > 0) {
+            counts.set(label, targetUnits);
+        } else {
+            counts.delete(label);
+        }
+
+        const activities = [];
+        counts.forEach((count, key) => {
+            if (count > 0) {
+                activities.push({ label: key, seconds: count * step });
+            }
+        });
+
+        const nextUnits = this.buildActualUnitsFromActivities(this.modalActualPlanUnits, activities);
+        this.modalActualGridUnits = Array.isArray(nextUnits) ? nextUnits.slice() : [];
+        this.modalActualDirty = true;
+        this.updateActualSpinnerDisplays();
+    }
+
     adjustActualActivityDuration(index, direction) {
         if (!this.isValidActualRow(index)) return;
         const step = this.getActualDurationStepSeconds();
@@ -9092,14 +9296,36 @@ class TimeTracker {
         this.applyActualDurationChange(index, current + (direction * step));
     }
 
+    adjustActualGridDuration(index, direction) {
+        if (!this.isValidActualRow(index) || !this.modalActualHasPlanUnits) return;
+        const item = this.modalActualActivities[index];
+        const label = this.normalizeActivityText
+            ? this.normalizeActivityText(item && item.label || '')
+            : String(item && item.label || '').trim();
+        if (!label || !(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) return;
+        const step = this.getActualDurationStepSeconds();
+        const current = this.getActualGridSecondsForLabel(label);
+        this.applyActualGridDurationChange(index, current + (direction * step));
+    }
+
     updateActualSpinnerDisplays() {
         const { list } = this.getActualModalElements();
         if (!list) return;
+        const gridSecondsMap = this.getActualGridSecondsMap();
         (this.modalActualActivities || []).forEach((item, idx) => {
-            const spinner = list.querySelector(`.time-spinner[data-kind="actual"][data-index="${idx}"]`);
-            if (spinner) this.updateSpinnerDisplay(spinner, item.seconds);
-            const timeInput = list.querySelector(`.actual-time-input[data-index="${idx}"]`);
-            if (timeInput) timeInput.value = this.formatSecondsForInput(item.seconds);
+            const assignInput = list.querySelector(`.actual-assign-input[data-index="${idx}"]`);
+            if (assignInput) {
+                const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                assignInput.value = this.formatSecondsForInput(safeSeconds);
+            }
+            const normalizedLabel = this.normalizeActivityText
+                ? this.normalizeActivityText(item && item.label || '')
+                : String(item && item.label || '').trim();
+            const gridSeconds = normalizedLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : 0;
+            const gridInput = list.querySelector(`.actual-grid-input[data-index="${idx}"]`);
+            if (gridInput) {
+                gridInput.value = this.formatSecondsForInput(gridSeconds);
+            }
         });
     }
 
@@ -9127,6 +9353,13 @@ class TimeTracker {
 
     openActualActivityMenu(index, anchorEl) {
         if (!this.isValidActualRow(index) || !anchorEl || !anchorEl.isConnected) return;
+        if (this.actualActivityMenu
+            && this.actualActivityMenuContext
+            && this.actualActivityMenuContext.index === index
+            && this.actualActivityMenuContext.anchorEl === anchorEl) {
+            this.closeActualActivityMenu();
+            return;
+        }
         this.closeActualActivityMenu();
 
         const currentRaw = this.modalActualActivities[index] && this.modalActualActivities[index].label;
@@ -9308,19 +9541,28 @@ class TimeTracker {
         this.modalActualTotalSeconds = Math.max(0, this.getBlockLength('actual', baseIndex) * 3600);
         const planContext = this.getActualPlanLabelContext(baseIndex);
         this.modalActualHasPlanUnits = planContext.hasLabels;
+        this.modalActualPlanUnits = Array.isArray(planContext.units) ? planContext.units.slice() : [];
+        this.modalActualPlanLabelSet = planContext.labelSet ? new Set(planContext.labelSet) : new Set();
         if (this.modalActualHasPlanUnits) {
-            const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
-            const gridActivities = this.buildActualActivitiesFromGrid(planContext.units, actualUnits);
             const existing = this.normalizeActualActivitiesList(baseSlot.activityLog && baseSlot.activityLog.subActivities);
-            this.modalActualActivities = this.mergeActualActivitiesWithGrid(
+            const actualUnits = this.getActualGridUnitsForBase(
                 baseIndex,
-                planContext.units,
-                gridActivities,
+                this.modalActualPlanUnits.length,
+                this.modalActualPlanUnits
+            );
+            this.modalActualGridUnits = Array.isArray(actualUnits) ? actualUnits.slice() : [];
+            this.modalActualActivities = this.buildActualModalActivities(
+                baseIndex,
+                this.modalActualPlanUnits,
+                this.modalActualGridUnits,
                 existing,
                 planContext.planLabel
             );
             this.normalizeActualActivitiesToStep();
         } else {
+            this.modalActualPlanUnits = [];
+            this.modalActualPlanLabelSet = new Set();
+            this.modalActualGridUnits = [];
             this.modalActualActivities = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds);
             this.normalizeActualActivitiesToTotal();
         }
@@ -9349,6 +9591,10 @@ class TimeTracker {
         this.modalActualActiveRow = -1;
         this.modalActualBaseIndex = null;
         this.modalActualDirty = false;
+        this.modalActualHasPlanUnits = false;
+        this.modalActualPlanUnits = [];
+        this.modalActualGridUnits = [];
+        this.modalActualPlanLabelSet = new Set();
         const { list, totalEl, usedEl, noticeEl } = this.getActualModalElements();
         if (list) list.innerHTML = '';
         if (totalEl) totalEl.textContent = '0시간';
@@ -9386,7 +9632,7 @@ class TimeTracker {
                 const mergedActivities = activities.map(item => ({ ...item }));
                 const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
                 const actualUnits = split.hasLabels
-                    ? this.buildActualUnitsFromActivities(split.units, split.gridActivities)
+                    ? this.getModalActualGridUnitsForSave(split.units.length)
                     : [];
                 const actualMergeKey = this.findMergeKey('actual', start);
                 if (actualMergeKey) {
@@ -9467,13 +9713,19 @@ class TimeTracker {
 
         if (actualList) {
             actualList.addEventListener('click', (event) => {
-                const spinnerBtn = event.target.closest('.spinner-btn');
-                if (spinnerBtn && spinnerBtn.dataset.kind === 'actual') {
-                    const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
-                    const idx = parseInt(spinnerBtn.dataset.index, 10);
+                const timeBtn = event.target.closest('.actual-time-btn');
+                if (timeBtn) {
+                    if (timeBtn.disabled) return;
+                    const direction = timeBtn.dataset.direction === 'up' ? 1 : -1;
+                    const idx = parseInt(timeBtn.dataset.index, 10);
+                    const kind = timeBtn.dataset.kind;
                     if (Number.isFinite(idx)) {
                         this.setActualActiveRow(idx);
-                        this.adjustActualActivityDuration(idx, direction);
+                        if (kind === 'grid') {
+                            this.adjustActualGridDuration(idx, direction);
+                        } else {
+                            this.adjustActualActivityDuration(idx, direction);
+                        }
                     }
                     return;
                 }
@@ -9518,7 +9770,7 @@ class TimeTracker {
             });
 
             actualList.addEventListener('change', (event) => {
-                if (event.target.classList.contains('actual-time-input')) {
+                if (event.target.classList.contains('actual-assign-input')) {
                     const idx = parseInt(event.target.dataset.index, 10);
                     if (!Number.isFinite(idx)) return;
                     const parsed = this.parseActualDurationInput(event.target.value);
@@ -9531,9 +9783,8 @@ class TimeTracker {
                     return;
                 }
 
-                if (event.target.classList.contains('actual-duration-input')) {
-                    const spinner = event.target.closest('.time-spinner');
-                    const idx = spinner ? parseInt(spinner.dataset.index, 10) : NaN;
+                if (event.target.classList.contains('actual-grid-input')) {
+                    const idx = parseInt(event.target.dataset.index, 10);
                     if (!Number.isFinite(idx)) return;
                     const parsed = this.parseActualDurationInput(event.target.value);
                     if (parsed == null) {
@@ -9541,7 +9792,7 @@ class TimeTracker {
                         return;
                     }
                     this.setActualActiveRow(idx);
-                    this.applyActualDurationChange(idx, parsed);
+                    this.applyActualGridDurationChange(idx, parsed);
                 }
             });
 

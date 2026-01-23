@@ -2251,14 +2251,16 @@ h1 {
 }
 
 .sub-activity-row.actual-row {
-  grid-template-columns: minmax(0, 3.2fr) minmax(78px, 0.8fr) minmax(96px, 0.9fr) 60px;
-  gap: 6px;
+    grid-template-columns: minmax(0, 3fr) minmax(84px, 1fr) minmax(84px, 1fr) 56px;
+    gap: 8px;
+    align-items: start;
 }
 
 .actual-row-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 52px;
 }
 
 .actual-row-actions .sub-activity-action-btn,
@@ -2284,12 +2286,54 @@ h1 {
 }
 
 .actual-remove-btn:hover {
-  background: #ffe9e9;
+    background: #ffe9e9;
+}
+
+.actual-time-control {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.actual-time-caption {
+    font-size: 11px;
+    font-weight: 700;
+    color: #5c6b7a;
+    text-align: center;
+}
+
+.actual-time-control.is-disabled {
+    opacity: 0.55;
+}
+
+.actual-time-btn {
+    border: 1px solid #d0d6dc;
+    border-radius: 4px;
+    background: #f5f7fa;
+    height: 18px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.actual-time-btn:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.actual-time-control.actual-time-grid .actual-time-input {
+    background: #f3f7ff;
+}
+
+.actual-time-control.actual-time-assign .actual-time-input {
+    background: #fff;
 }
 
 .actual-duration-input {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 .time-spinner[data-kind="actual"] .spinner-display {
@@ -2297,13 +2341,10 @@ h1 {
   padding: 6px 4px;
 }
 
-.sub-activity-row.actual-row .time-spinner {
-  gap: 4px;
-}
-
 .actual-time-input {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    padding: 6px 4px;
 }
 
 .actual-duration-input:focus {
