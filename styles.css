@@ -2331,6 +2331,17 @@ h1 {
     background: #fff;
 }
 
+.actual-time-control.actual-time-extra .actual-time-input,
+.actual-row-extra .actual-time-control.actual-time-grid .actual-time-input {
+    background: #fff2e1;
+    border-color: #f0c27a;
+}
+
+.actual-row-extra .actual-activity-label {
+    border-color: #f0c27a;
+    background: #fff8ee;
+}
+
 .actual-duration-input {
     text-align: center;
     font-variant-numeric: tabular-nums;

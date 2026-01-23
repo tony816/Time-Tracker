@@ -9048,10 +9048,15 @@ class TimeTracker {
             if (!normalizedLabel) labelButton.classList.add('empty');
 
             const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const gridSeconds = normalizedLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : 0;
+            const isPlanLabel = Boolean(normalizedLabel) && planLabelSet.has(normalizedLabel);
+            const isExtraLabel = Boolean(normalizedLabel) && !isPlanLabel;
+            if (isExtraLabel) row.classList.add('actual-row-extra');
+            const gridSeconds = isPlanLabel
+                ? (gridSecondsMap.get(normalizedLabel) || 0)
+                : safeSeconds;
             const gridDisabled = !this.modalActualHasPlanUnits
                 || !normalizedLabel
-                || !planLabelSet.has(normalizedLabel);
+                || (!isPlanLabel && !isExtraLabel);
             const gridControl = this.createActualTimeControl({
                 kind: 'grid',
                 index: idx,
@@ -9059,6 +9064,7 @@ class TimeTracker {
                 label: normalizedLabel,
                 disabled: gridDisabled
             });
+            if (isExtraLabel) gridControl.classList.add('actual-time-extra');
 
             const assignControl = this.createActualTimeControl({
                 kind: 'assign',
@@ -9261,7 +9267,11 @@ class TimeTracker {
         const label = this.normalizeActivityText
             ? this.normalizeActivityText(item && item.label || '')
             : String(item && item.label || '').trim();
-        if (!label || !(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) return;
+        if (!label) return;
+        if (!(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) {
+            this.applyActualDurationChange(index, targetSeconds);
+            return;
+        }
 
         const step = this.getActualDurationStepSeconds();
         const normalized = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
@@ -9302,7 +9312,11 @@ class TimeTracker {
         const label = this.normalizeActivityText
             ? this.normalizeActivityText(item && item.label || '')
             : String(item && item.label || '').trim();
-        if (!label || !(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) return;
+        if (!label) return;
+        if (!(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) {
+            this.adjustActualActivityDuration(index, direction);
+            return;
+        }
         const step = this.getActualDurationStepSeconds();
         const current = this.getActualGridSecondsForLabel(label);
         this.applyActualGridDurationChange(index, current + (direction * step));
@@ -9312,6 +9326,7 @@ class TimeTracker {
         const { list } = this.getActualModalElements();
         if (!list) return;
         const gridSecondsMap = this.getActualGridSecondsMap();
+        const planLabelSet = (this.modalActualPlanLabelSet instanceof Set) ? this.modalActualPlanLabelSet : new Set();
         (this.modalActualActivities || []).forEach((item, idx) => {
             const assignInput = list.querySelector(`.actual-assign-input[data-index="${idx}"]`);
             if (assignInput) {
@@ -9321,7 +9336,10 @@ class TimeTracker {
             const normalizedLabel = this.normalizeActivityText
                 ? this.normalizeActivityText(item && item.label || '')
                 : String(item && item.label || '').trim();
-            const gridSeconds = normalizedLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : 0;
+            const isPlanLabel = Boolean(normalizedLabel) && planLabelSet.has(normalizedLabel);
+            const gridSeconds = normalizedLabel
+                ? (isPlanLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : (item.seconds || 0))
+                : 0;
             const gridInput = list.querySelector(`.actual-grid-input[data-index="${idx}"]`);
             if (gridInput) {
                 gridInput.value = this.formatSecondsForInput(gridSeconds);
