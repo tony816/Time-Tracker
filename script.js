@@ -180,7 +180,7 @@ class TimeTracker {
                 planTitle: '',
                 planTitleBandOn: false,
                 timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-                activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
+                activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
             });
         }
         slots.push({
@@ -191,7 +191,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '1',
@@ -201,7 +201,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '2',
@@ -211,7 +211,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         });
         slots.push({
             time: '3',
@@ -221,7 +221,7 @@ class TimeTracker {
             planTitle: '',
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false }
+            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         });
         return slots;
     }
@@ -916,7 +916,7 @@ class TimeTracker {
             this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
                 // activityLog 구조 정규화 및 legacy 필드(outcome) 제거
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                 } else {
                     if (typeof slot.activityLog.title !== 'string') {
                         slot.activityLog.title = String(slot.activityLog.title || '');
@@ -933,6 +933,11 @@ class TimeTracker {
                         slot.activityLog.actualGridUnits = [];
                     } else {
                         slot.activityLog.actualGridUnits = slot.activityLog.actualGridUnits.map(value => Boolean(value));
+                    }
+                    if (!Array.isArray(slot.activityLog.actualExtraGridUnits)) {
+                        slot.activityLog.actualExtraGridUnits = [];
+                    } else {
+                        slot.activityLog.actualExtraGridUnits = slot.activityLog.actualExtraGridUnits.map(value => Boolean(value));
                     }
                     if ('outcome' in slot.activityLog) {
                         try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
@@ -1231,6 +1236,10 @@ class TimeTracker {
                         ? startSlot.activityLog.actualGridUnits.map(value => Boolean(value))
                         : [];
                     const hasActualGridUnits = actualGridUnits.some(value => value);
+                    const actualExtraGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualExtraGridUnits))
+                        ? startSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+                        : [];
+                    const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
 
                     if (plannedValue === ''
                         && actualValue === ''
@@ -1267,6 +1276,9 @@ class TimeTracker {
                     if (hasActualGridUnits) {
                         slots[storageKey].actualGridUnits = actualGridUnits;
                     }
+                    if (hasActualExtraGridUnits) {
+                        slots[storageKey].actualExtraGridUnits = actualExtraGridUnits;
+                    }
                     return;
                 }
 
@@ -1285,6 +1297,10 @@ class TimeTracker {
                     ? slot.activityLog.actualGridUnits.map(value => Boolean(value))
                     : [];
                 const hasActualGridUnits = actualGridUnits.some(value => value);
+                const actualExtraGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
+                    ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+                    : [];
+                const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
                 if (planned !== ''
                     || actual !== ''
                     || details !== ''
@@ -1309,6 +1325,9 @@ class TimeTracker {
                     }
                     if (hasActualGridUnits) {
                         entry.actualGridUnits = actualGridUnits;
+                    }
+                    if (hasActualExtraGridUnits) {
+                        entry.actualExtraGridUnits = actualExtraGridUnits;
                     }
                     slots[String(hour)] = entry;
                 }
@@ -1343,6 +1362,9 @@ class TimeTracker {
                 const actualGridUnits = Array.isArray(row.actualGridUnits)
                     ? row.actualGridUnits.map(value => Boolean(value))
                     : [];
+                const actualExtraGridUnits = Array.isArray(row.actualExtraGridUnits)
+                    ? row.actualExtraGridUnits.map(value => Boolean(value))
+                    : [];
 
                 if (row && row.merged && typeof row.timeRange === 'string') {
                     const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
@@ -1369,7 +1391,7 @@ class TimeTracker {
                                 if (slot.planned !== nextPlanned) { slot.planned = nextPlanned; changed = true; }
                                 if (slot.actual !== nextActual) { slot.actual = nextActual; changed = true; }
                                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                                 }
                                 const desiredDetails = (i === startIdx) ? detailsValue : '';
                                 if (slot.activityLog.details !== desiredDetails) {
@@ -1393,8 +1415,10 @@ class TimeTracker {
                                 }
                                 if (i === startIdx) {
                                     slot.activityLog.actualGridUnits = actualGridUnits.slice();
+                                    slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
                                 } else {
                                     slot.activityLog.actualGridUnits = [];
+                                    slot.activityLog.actualExtraGridUnits = [];
                                 }
                                 if (hasActivities) {
                                     const desiredActivities = (i === startIdx) ? activitiesValue : [];
@@ -1425,7 +1449,7 @@ class TimeTracker {
                 const slot = this.timeSlots[idx];
                 if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
                 if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
-                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                 if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
                 const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
                 const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
@@ -1435,6 +1459,7 @@ class TimeTracker {
                 const appliedTitleBand = actualTitleBand && normalizedActivities.length > 0;
                 if (slot.activityLog.titleBandOn !== appliedTitleBand) { slot.activityLog.titleBandOn = appliedTitleBand; changed = true; }
                 slot.activityLog.actualGridUnits = actualGridUnits.slice();
+                slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
                 if (hasActivities) {
                     const currentActivities = Array.isArray(slot.activityLog.subActivities) ? slot.activityLog.subActivities : [];
                     const desiredSignature = JSON.stringify(normalizedActivities);
@@ -2492,7 +2517,7 @@ class TimeTracker {
         try {
             if (!slot || typeof slot !== 'object') return slot;
             if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
             } else {
                 if ('outcome' in slot.activityLog) {
                     try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
@@ -2513,6 +2538,11 @@ class TimeTracker {
                     slot.activityLog.actualGridUnits = [];
                 } else {
                     slot.activityLog.actualGridUnits = slot.activityLog.actualGridUnits.map(value => Boolean(value));
+                }
+                if (!Array.isArray(slot.activityLog.actualExtraGridUnits)) {
+                    slot.activityLog.actualExtraGridUnits = [];
+                } else {
+                    slot.activityLog.actualExtraGridUnits = slot.activityLog.actualExtraGridUnits.map(value => Boolean(value));
                 }
                 slot.activityLog.actualOverride = Boolean(slot.activityLog.actualOverride);
             }
@@ -2696,29 +2726,14 @@ class TimeTracker {
                       const segment = event.target.closest('.split-grid-segment');
                       if (!segment || !actualGrid.contains(segment)) return;
                       const unitIndex = parseInt(segment.dataset.unitIndex, 10);
-                      if (!Number.isFinite(unitIndex)) {
-                          const extraLabel = segment.dataset.extraLabel;
-                          if (extraLabel) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              this.openActivityLogModal(index);
-                              try {
-                                  const normalized = this.normalizeActivityText
-                                      ? this.normalizeActivityText(extraLabel)
-                                      : String(extraLabel || '').trim();
-                                  const found = (this.modalActualActivities || []).findIndex((it) => {
-                                      const lbl = this.normalizeActivityText
-                                          ? this.normalizeActivityText(it && it.label || '')
-                                          : String(it && it.label || '').trim();
-                                      return lbl && lbl === normalized;
-                                  });
-                                  if (found >= 0) {
-                                      this.setActualActiveRow(found, { focusLabel: true });
-                                  }
-                              } catch (_) {}
-                          }
+                      const extraLabel = segment.dataset.extraLabel;
+                      if (extraLabel) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          this.toggleExtraGridUnit(index, extraLabel, unitIndex);
                           return;
                       }
+                      if (!Number.isFinite(unitIndex)) return;
                       event.preventDefault();
                       event.stopPropagation();
                       this.toggleActualGridUnit(index, unitIndex);
@@ -2956,6 +2971,9 @@ class TimeTracker {
                     if (Array.isArray(this.timeSlots[i].activityLog.actualGridUnits)) {
                         this.timeSlots[i].activityLog.actualGridUnits = [];
                     }
+                    if (Array.isArray(this.timeSlots[i].activityLog.actualExtraGridUnits)) {
+                        this.timeSlots[i].activityLog.actualExtraGridUnits = [];
+                    }
                 }
                 if (Array.isArray(this.timeSlots[i].planActivities)) {
                     this.timeSlots[i].planActivities = [];
@@ -3008,7 +3026,7 @@ class TimeTracker {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
@@ -3024,13 +3042,18 @@ class TimeTracker {
                     } else if (i !== startIndex) {
                         this.timeSlots[i].activityLog.actualGridUnits = [];
                     }
+                    if (Array.isArray(this.timeSlots[i].activityLog.actualExtraGridUnits)) {
+                        this.timeSlots[i].activityLog.actualExtraGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualExtraGridUnits : [];
+                    } else if (i !== startIndex) {
+                        this.timeSlots[i].activityLog.actualExtraGridUnits = [];
+                    }
                 }
             } else {
                 // 우측 열만 병합하는 경우
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     this.timeSlots[i].activityLog.actualOverride = i === startIndex
@@ -3043,6 +3066,11 @@ class TimeTracker {
                         this.timeSlots[i].activityLog.actualGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualGridUnits : [];
                     } else if (i !== startIndex) {
                         this.timeSlots[i].activityLog.actualGridUnits = [];
+                    }
+                    if (Array.isArray(this.timeSlots[i].activityLog.actualExtraGridUnits)) {
+                        this.timeSlots[i].activityLog.actualExtraGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualExtraGridUnits : [];
+                    } else if (i !== startIndex) {
+                        this.timeSlots[i].activityLog.actualExtraGridUnits = [];
                     }
                 }
             }
@@ -3238,6 +3266,112 @@ class TimeTracker {
         return units;
     }
 
+    getActualExtraGridUnitsForBase(baseIndex, totalUnits) {
+        const slot = this.timeSlots[baseIndex];
+        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
+            ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+            : [];
+        if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
+        let units = raw;
+        if (units.length > totalUnits) units = units.slice(0, totalUnits);
+        if (units.length < totalUnits) units = units.concat(new Array(totalUnits - units.length).fill(false));
+        return units;
+    }
+
+    buildExtraSlotAllocation(planUnits, actualUnits, extraActivities) {
+        const slotsByIndex = Array.isArray(planUnits) ? new Array(planUnits.length).fill('') : [];
+        const slotsByLabel = new Map();
+        if (!Array.isArray(planUnits) || planUnits.length === 0) {
+            return { slotsByIndex, slotsByLabel };
+        }
+        const available = [];
+        const safeActualUnits = Array.isArray(actualUnits) ? actualUnits : [];
+        for (let i = 0; i < planUnits.length; i++) {
+            if (!safeActualUnits[i]) available.push(i);
+        }
+        if (available.length === 0) return { slotsByIndex, slotsByLabel };
+
+        const step = this.getActualDurationStepSeconds();
+        let cursor = 0;
+        (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            if (!label) return;
+            const assignedSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const recordedSeconds = Number.isFinite(item.recordedSeconds)
+                ? Math.max(0, Math.floor(item.recordedSeconds))
+                : assignedSeconds;
+            let assignedUnits = assignedSeconds > 0 ? Math.floor(assignedSeconds / step) : 0;
+            let recordedUnits = recordedSeconds > 0 ? Math.floor(recordedSeconds / step) : 0;
+            if (assignedSeconds > 0 && assignedUnits === 0) assignedUnits = 1;
+            if (recordedSeconds > 0 && recordedUnits === 0) recordedUnits = 1;
+            let units = Math.max(assignedUnits, recordedUnits);
+            while (units > 0 && cursor < available.length) {
+                const unitIndex = available[cursor];
+                cursor += 1;
+                units -= 1;
+                slotsByIndex[unitIndex] = label;
+                if (!slotsByLabel.has(label)) slotsByLabel.set(label, []);
+                slotsByLabel.get(label).push(unitIndex);
+            }
+        });
+
+        return { slotsByIndex, slotsByLabel };
+    }
+
+    buildExtraActiveGridUnits(totalUnits, allocation, extraActivities, storedUnits = null) {
+        const activeUnits = new Array(Number.isFinite(totalUnits) ? totalUnits : 0).fill(false);
+        if (!allocation || !Array.isArray(allocation.slotsByIndex) || activeUnits.length === 0) {
+            return activeUnits;
+        }
+        const storedRaw = Array.isArray(storedUnits) ? storedUnits.map(value => Boolean(value)) : [];
+        let stored = storedRaw;
+        if (stored.length > activeUnits.length) stored = stored.slice(0, activeUnits.length);
+        if (stored.length < activeUnits.length) {
+            stored = stored.concat(new Array(activeUnits.length - stored.length).fill(false));
+        }
+
+        const step = this.getActualDurationStepSeconds();
+        const recordedMap = new Map();
+        (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
+            if (!item) return;
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            if (!label) return;
+            const baseSeconds = Number.isFinite(item.recordedSeconds)
+                ? Math.max(0, Math.floor(item.recordedSeconds))
+                : (Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0);
+            let units = baseSeconds > 0 ? Math.floor(baseSeconds / step) : 0;
+            if (baseSeconds > 0 && units === 0) units = 1;
+            if (units > 0) {
+                recordedMap.set(label, (recordedMap.get(label) || 0) + units);
+            }
+        });
+        const recordedTotal = Array.from(recordedMap.values()).reduce((sum, value) => sum + value, 0);
+        const hasStored = stored.some(value => value);
+        const useStored = storedRaw.length > 0 && (hasStored || recordedTotal === 0);
+
+        if (useStored) {
+            for (let i = 0; i < activeUnits.length; i++) {
+                const label = allocation.slotsByIndex[i];
+                if (!label) continue;
+                activeUnits[i] = Boolean(stored[i]);
+            }
+            return activeUnits;
+        }
+
+        allocation.slotsByLabel.forEach((indices, label) => {
+            const count = recordedMap.get(label) || 0;
+            for (let i = 0; i < indices.length && i < count; i++) {
+                activeUnits[indices[i]] = true;
+            }
+        });
+        return activeUnits;
+    }
+
     getActualGridBlockRange(planUnits, unitIndex, unitsPerRow = 6) {
         if (!Array.isArray(planUnits) || !Number.isFinite(unitIndex)) return null;
         if (unitIndex < 0 || unitIndex >= planUnits.length) return null;
@@ -3361,6 +3495,19 @@ class TimeTracker {
         const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
         const actualMergeKey = this.findMergeKey('actual', baseIndex);
         const safeUnits = Array.isArray(actualUnits) ? actualUnits.map(value => Boolean(value)) : [];
+        const baseSlot = this.timeSlots[baseIndex];
+        const rawExtraUnits = (baseSlot && baseSlot.activityLog && Array.isArray(baseSlot.activityLog.actualExtraGridUnits))
+            ? baseSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+            : [];
+        let safeExtraUnits = rawExtraUnits;
+        if (Array.isArray(planUnits) && planUnits.length > 0) {
+            if (safeExtraUnits.length > planUnits.length) safeExtraUnits = safeExtraUnits.slice(0, planUnits.length);
+            if (safeExtraUnits.length < planUnits.length) {
+                safeExtraUnits = safeExtraUnits.concat(new Array(planUnits.length - safeExtraUnits.length).fill(false));
+            }
+        } else {
+            safeExtraUnits = [];
+        }
 
         if (actualMergeKey) {
             const [, startStr, endStr] = actualMergeKey.split('-');
@@ -3370,16 +3517,18 @@ class TimeTracker {
             for (let i = start; i <= end; i++) {
                 const slot = this.timeSlots[i];
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                 }
                 slot.activityLog.actualOverride = (i === start) ? hasExtras : false;
                 slot.actual = (i === start) ? summary : '';
                 if (i === start) {
                     slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
                     slot.activityLog.actualGridUnits = safeUnits.slice();
+                    slot.activityLog.actualExtraGridUnits = safeExtraUnits.slice();
                 } else {
                     slot.activityLog.subActivities = [];
                     slot.activityLog.actualGridUnits = [];
+                    slot.activityLog.actualExtraGridUnits = [];
                 }
             }
             return;
@@ -3387,12 +3536,13 @@ class TimeTracker {
 
         const slot = this.timeSlots[baseIndex];
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
         }
         slot.activityLog.actualOverride = hasExtras;
         slot.actual = summary;
         slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
         slot.activityLog.actualGridUnits = safeUnits.slice();
+        slot.activityLog.actualExtraGridUnits = safeExtraUnits.slice();
     }
 
     toggleActualGridUnit(index, unitIndex) {
@@ -3428,6 +3578,88 @@ class TimeTracker {
             actualUnits[i] = i < start + newCount;
         }
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+    }
+
+    toggleExtraGridUnit(index, extraLabel, unitIndex = null) {
+        const baseIndex = this.getSplitBaseIndex('actual', index);
+        const slot = this.timeSlots[baseIndex];
+        if (!slot) return;
+        const normalizedLabel = this.normalizeActivityText
+            ? this.normalizeActivityText(extraLabel || '')
+            : String(extraLabel || '').trim();
+        if (!normalizedLabel) return;
+        const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+        const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
+        if (planUnits.length === 0) return;
+        const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
+        const rawSub = (slot.activityLog && Array.isArray(slot.activityLog.subActivities))
+            ? slot.activityLog.subActivities
+            : [];
+        const normalizedSub = this.normalizeActivitiesArray(rawSub).map(item => ({ ...item }));
+        const planLabelContext = this.getActualPlanLabelContext(baseIndex);
+        const planLabelSet = (planLabelContext && planLabelContext.labelSet) ? planLabelContext.labelSet : new Set();
+        const extras = normalizedSub.filter((item) => {
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            return Boolean(label) && !planLabelSet.has(label);
+        });
+        if (extras.length === 0) return;
+
+        const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras);
+        const labelSlots = allocation && allocation.slotsByLabel
+            ? allocation.slotsByLabel.get(normalizedLabel)
+            : null;
+        if (!labelSlots || labelSlots.length === 0) return;
+
+        const totalUnits = planUnits.length;
+        const currentExtraUnits = this.buildExtraActiveGridUnits(
+            totalUnits,
+            allocation,
+            extras,
+            slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
+        );
+        const targetUnitIndex = Number.isFinite(unitIndex) ? unitIndex : labelSlots[labelSlots.length - 1];
+        if (!labelSlots.includes(targetUnitIndex)) return;
+
+        const nextExtraUnits = currentExtraUnits.slice();
+        nextExtraUnits[targetUnitIndex] = !nextExtraUnits[targetUnitIndex];
+
+        if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+        }
+        slot.activityLog.actualExtraGridUnits = nextExtraUnits.slice();
+
+        const step = this.getActualDurationStepSeconds();
+        const newRecordedUnits = labelSlots.reduce((sum, idx) => sum + (nextExtraUnits[idx] ? 1 : 0), 0);
+        const targetIndex = normalizedSub.findIndex((item) => {
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item && item.label || '')
+                : String(item && item.label || '').trim();
+            return label && label === normalizedLabel;
+        });
+        if (targetIndex >= 0) {
+            normalizedSub[targetIndex].recordedSeconds = this.normalizeActualDurationStep(newRecordedUnits * step);
+        }
+
+        const cleaned = normalizedSub
+            .filter(item => item && (item.label || item.seconds > 0))
+            .map(item => ({
+                label: item.label || '',
+                seconds: this.normalizeActualDurationStep(Number.isFinite(item.seconds) ? item.seconds : 0),
+                recordedSeconds: Number.isFinite(item.recordedSeconds)
+                    ? this.normalizeActualDurationStep(item.recordedSeconds)
+                    : null,
+                source: item.source || null
+            }))
+            .filter(item => item.label || item.seconds > 0);
+
+        slot.activityLog.subActivities = cleaned.map(item => ({ ...item }));
+
+        this.syncActualGridToSlots(baseIndex, planUnits, actualUnits);
         this.renderTimeEntries(true);
         this.calculateTotals();
         this.autoSave();
@@ -3713,35 +3945,24 @@ class TimeTracker {
                           : String(item.label || '').trim();
                       return Boolean(label) && !planLabelSet.has(label);
                   });
-
-                  const extraUnitLabels = [];
-                  extras.forEach((item) => {
-                      const label = this.normalizeActivityText
-                          ? this.normalizeActivityText(item.label || '')
-                          : String(item.label || '').trim();
-                      if (!label) return;
-                      const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                      const unitsCount = Math.max(0, Math.floor(seconds / 600));
-                      for (let i = 0; i < unitsCount; i++) {
-                          extraUnitLabels.push(label);
-                      }
-                  });
-
-                  const extraByUnitIndex = new Map();
-                  let cursor = 0;
-                  for (let i = planUnits.length - 1; i >= 0 && cursor < extraUnitLabels.length; i--) {
-                      if (actualUnits[i]) continue;
-                      extraByUnitIndex.set(i, extraUnitLabels[cursor]);
-                      cursor += 1;
-                  }
+                  const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras);
+                  const extraActiveUnits = this.buildExtraActiveGridUnits(
+                      planUnits.length,
+                      allocation,
+                      extras,
+                      slot && slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
+                  );
 
                   const gridSegments = planUnits.map((label, unitIndex) => {
-                      const extraLabel = extraByUnitIndex.get(unitIndex);
+                      const extraLabel = allocation && allocation.slotsByIndex
+                          ? allocation.slotsByIndex[unitIndex]
+                          : '';
                       if (extraLabel) {
                           return {
                               label: extraLabel,
                               span: 1,
-                              active: true,
+                              unitIndex,
+                              active: Boolean(extraActiveUnits[unitIndex]),
                               isExtra: true,
                               reservedIndices,
                               extraLabel
@@ -3861,7 +4082,10 @@ class TimeTracker {
                       if (label && planLabelSet.has(label)) {
                           return { ...item, seconds: recordMap.get(label) || 0, source: 'grid' };
                       }
-                      return { ...item };
+                      const recordedSeconds = Number.isFinite(item.recordedSeconds)
+                          ? Math.max(0, Math.floor(item.recordedSeconds))
+                          : (Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0);
+                      return { ...item, seconds: recordedSeconds };
                   });
               }
               return normalizedActual;
@@ -4191,7 +4415,15 @@ class TimeTracker {
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = this.normalizeDurationStep(rawSeconds) ?? 0;
                 const source = typeof item.source === 'string' ? item.source : null;
-                return { label, seconds, source };
+                const rawRecorded = Number.isFinite(item.recordedSeconds) ? Number(item.recordedSeconds) : null;
+                const recordedSeconds = rawRecorded == null
+                    ? null
+                    : (this.normalizeDurationStep(rawRecorded) ?? 0);
+                const normalized = { label, seconds, source };
+                if (rawRecorded != null) {
+                    normalized.recordedSeconds = recordedSeconds;
+                }
+                return normalized;
             })
             .filter(item => item.label || item.seconds > 0);
     }
@@ -4248,6 +4480,9 @@ class TimeTracker {
                     if (Array.isArray(slot.activityLog.actualGridUnits)) {
                         slot.activityLog.actualGridUnits = [];
                     }
+                    if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
+                        slot.activityLog.actualExtraGridUnits = [];
+                    }
                 }
             }
         } else {
@@ -4258,6 +4493,9 @@ class TimeTracker {
                 slot.activityLog.actualOverride = false;
                 if (Array.isArray(slot.activityLog.actualGridUnits)) {
                     slot.activityLog.actualGridUnits = [];
+                }
+                if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
+                    slot.activityLog.actualExtraGridUnits = [];
                 }
             }
         }
@@ -8112,6 +8350,16 @@ class TimeTracker {
                     this.timeSlots[i].planTitleBandOn = false;
                 }
             }
+            for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
+                if (!this.timeSlots[i]) continue;
+                if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
+                    this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                }
+                this.timeSlots[i].activityLog.subActivities = [];
+                this.timeSlots[i].activityLog.actualGridUnits = [];
+                this.timeSlots[i].activityLog.actualExtraGridUnits = [];
+                this.timeSlots[i].activityLog.actualOverride = false;
+            }
             this.modalPlanActivities = [];
             this.modalPlanActiveRow = -1;
             this.modalPlanTitle = '';
@@ -8789,8 +9037,10 @@ class TimeTracker {
                 const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = this.normalizeActualDurationStep(rawSeconds);
+                const rawRecorded = Number.isFinite(item.recordedSeconds) ? Number(item.recordedSeconds) : null;
+                const recordedSeconds = (rawRecorded == null) ? null : this.normalizeActualDurationStep(rawRecorded);
                 const source = typeof item.source === 'string' ? item.source : null;
-                return { label, seconds, source };
+                return { label, seconds, source, recordedSeconds };
             })
             .filter(item => item.label || item.seconds > 0);
     }
@@ -8963,6 +9213,24 @@ class TimeTracker {
         if (changed) {
             this.modalActualGridUnits = gridUnits;
         }
+
+        if (Array.isArray(this.modalActualActivities)) {
+            this.modalActualActivities.forEach((item) => {
+                if (!item) return;
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                if (!label) return;
+                const isPlanLabel = (this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
+                    || item.source === 'grid';
+                if (isPlanLabel) return;
+                const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                if (!Number.isFinite(item.recordedSeconds)) return;
+                if (assigned > 0 && item.recordedSeconds > assigned) {
+                    item.recordedSeconds = assigned;
+                }
+            });
+        }
     }
 
     getPlanLabelOrderForActual(baseIndex, planUnits, planLabel = '') {
@@ -9010,6 +9278,29 @@ class TimeTracker {
             });
         }
 
+        const planAssignedMap = new Map();
+        const planActivities = this.getPlanActivitiesForIndex(baseIndex);
+        if (Array.isArray(planActivities) && planActivities.length > 0) {
+            planActivities.forEach((item) => {
+                if (!item) return;
+                const label = normalize(item.label || '');
+                if (!label) return;
+                const seconds = this.normalizeActualDurationStep(Number.isFinite(item.seconds) ? item.seconds : 0);
+                if (seconds > 0) {
+                    planAssignedMap.set(label, seconds);
+                }
+            });
+        } else if (planLabel) {
+            const totalSeconds = Number.isFinite(this.modalActualTotalSeconds) && this.modalActualTotalSeconds > 0
+                ? this.modalActualTotalSeconds
+                : Math.max(0, this.getBlockLength('actual', baseIndex) * 3600);
+            const normalizedTotal = this.normalizeActualDurationStep(totalSeconds);
+            const normalizedLabel = normalize(planLabel);
+            if (normalizedLabel && normalizedTotal > 0) {
+                planAssignedMap.set(normalizedLabel, normalizedTotal);
+            }
+        }
+
         const gridSecondsMap = this.getActualGridSecondsMap(planUnits, gridUnits);
         const hasGrid = Array.from(gridSecondsMap.values()).some(seconds => seconds > 0);
         const planOrder = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
@@ -9020,7 +9311,7 @@ class TimeTracker {
             if (hasGrid && planOrder.length > 0) {
                 baseList = planOrder.map(label => ({
                     label,
-                    seconds: gridSecondsMap.get(label) || 0,
+                    seconds: planAssignedMap.get(label) || (gridSecondsMap.get(label) || 0),
                     source: 'grid'
                 }));
             } else {
@@ -9035,19 +9326,34 @@ class TimeTracker {
         baseList.forEach((item) => {
             if (!item) return;
             const label = normalize(item.label || '');
-            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            let seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const rawRecorded = Number.isFinite(item.recordedSeconds) ? Math.max(0, Math.floor(item.recordedSeconds)) : null;
             if (!label && seconds <= 0) return;
             const isPlanLabel = label && planLabelSet.has(label);
             if (isPlanLabel) seenPlanLabels.add(label);
+            if (isPlanLabel) {
+                const plannedSeconds = planAssignedMap.get(label);
+                if (Number.isFinite(plannedSeconds) && plannedSeconds > 0 && seconds <= 0) {
+                    seconds = plannedSeconds;
+                }
+            }
             const source = item.source && item.source !== 'grid'
                 ? item.source
                 : (isPlanLabel ? 'grid' : 'extra');
-            merged.push({ label, seconds, source });
+            const entry = { label, seconds, source };
+            if (!isPlanLabel && rawRecorded != null) {
+                entry.recordedSeconds = rawRecorded;
+            }
+            merged.push(entry);
         });
 
         planOrder.forEach((label) => {
             if (!label || seenPlanLabels.has(label)) return;
-            merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+            const plannedSeconds = planAssignedMap.get(label);
+            const seconds = Number.isFinite(plannedSeconds) && plannedSeconds > 0
+                ? plannedSeconds
+                : (gridSecondsMap.get(label) || 0);
+            merged.push({ label, seconds, source: 'grid' });
             seenPlanLabels.add(label);
         });
 
@@ -9104,13 +9410,18 @@ class TimeTracker {
                     ? this.normalizeActivityText(item.label || '')
                     : String(item.label || '').trim();
                 const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                const recordedSeconds = Number.isFinite(item.recordedSeconds)
+                    ? Math.max(0, Math.floor(item.recordedSeconds))
+                    : null;
                 if (!label && seconds <= 0) return;
                 if (label && labelSet.has(label)) {
                     merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
                     seenGrid.add(label);
                 } else {
                     const source = (item.source && item.source !== 'grid') ? item.source : 'extra';
-                    merged.push({ label, seconds, source });
+                    const entry = { label, seconds, source };
+                    if (recordedSeconds != null) entry.recordedSeconds = recordedSeconds;
+                    merged.push(entry);
                 }
             });
         }
@@ -9197,6 +9508,9 @@ class TimeTracker {
         }
         this.modalActualActivities.forEach((item) => {
             item.seconds = this.normalizeActualDurationStep(Number.isFinite(item.seconds) ? item.seconds : 0);
+            if (Number.isFinite(item.recordedSeconds)) {
+                item.recordedSeconds = this.normalizeActualDurationStep(item.recordedSeconds);
+            }
         });
     }
 
@@ -9298,9 +9612,12 @@ class TimeTracker {
                 && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
             const isExtraLabel = Boolean(normalizedLabel) && !isPlanLabel;
             if (isExtraLabel) row.classList.add('actual-row-extra');
+            const recordedSeconds = Number.isFinite(item.recordedSeconds)
+                ? Math.max(0, Math.floor(item.recordedSeconds))
+                : safeSeconds;
             const gridSeconds = isPlanLabel
                 ? (gridSecondsMap.get(normalizedLabel) || 0)
-                : safeSeconds;
+                : recordedSeconds;
             const gridDisabled = !this.modalActualHasPlanUnits
                 || !normalizedLabel
                 || (!isPlanLabel && !isExtraLabel);
@@ -9371,7 +9688,8 @@ class TimeTracker {
         }
         const label = typeof defaults.label === 'string' ? defaults.label : '';
         const source = typeof defaults.source === 'string' ? defaults.source : 'extra';
-        const newIndex = this.modalActualActivities.push({ label, seconds: 0, source }) - 1;
+        const seededRecorded = Number.isFinite(defaults.recordedSeconds) ? Math.max(0, Math.floor(defaults.recordedSeconds)) : null;
+        const newIndex = this.modalActualActivities.push({ label, seconds: 0, recordedSeconds: seededRecorded, source }) - 1;
         this.modalActualActiveRow = newIndex;
         this.modalActualDirty = true;
         if (this.modalActualHasPlanUnits) {
@@ -9387,7 +9705,6 @@ class TimeTracker {
 
     removeActualActivityRow(index) {
         if (!this.isValidActualRow(index)) return;
-        if ((this.modalActualActivities || []).length <= 1) return;
         const removed = this.modalActualActivities.splice(index, 1)[0];
         if (this.modalActualActivities.length > 0) {
             const targetIndex = Math.min(index, this.modalActualActivities.length - 1);
@@ -9438,8 +9755,14 @@ class TimeTracker {
             && this.modalActualPlanLabelSet.has(normalized);
         if (normalized) {
             item.source = isGridLabel ? 'grid' : 'extra';
+            if (isGridLabel) {
+                item.recordedSeconds = null;
+            } else if (!Number.isFinite(item.recordedSeconds)) {
+                item.recordedSeconds = null;
+            }
         } else {
             item.source = 'extra';
+            item.recordedSeconds = null;
         }
         this.modalActualActiveRow = index;
         this.modalActualDirty = true;
@@ -9609,7 +9932,12 @@ class TimeTracker {
         const isPlanLabel = (this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
             || (item && item.source === 'grid');
         if (!isPlanLabel) {
-            this.applyActualDurationChange(index, targetSeconds);
+            const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            let nextRecorded = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
+            if (assigned > 0) nextRecorded = Math.min(nextRecorded, assigned);
+            item.recordedSeconds = nextRecorded;
+            this.modalActualDirty = true;
+            this.updateActualSpinnerDisplays();
             return;
         }
 
@@ -9654,13 +9982,22 @@ class TimeTracker {
             ? this.normalizeActivityText(item && item.label || '')
             : String(item && item.label || '').trim();
         if (!label) return;
+        const step = this.getActualDurationStepSeconds();
         const isPlanLabel = (this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
             || (item && item.source === 'grid');
         if (!isPlanLabel) {
-            this.adjustActualActivityDuration(index, direction);
+            const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const currentRecorded = Number.isFinite(item.recordedSeconds)
+                ? Math.max(0, Math.floor(item.recordedSeconds))
+                : assigned;
+            let nextRecorded = currentRecorded + (direction * step);
+            nextRecorded = Math.max(0, nextRecorded);
+            if (assigned > 0) nextRecorded = Math.min(nextRecorded, assigned);
+            item.recordedSeconds = this.normalizeActualDurationStep(nextRecorded);
+            this.modalActualDirty = true;
+            this.updateActualSpinnerDisplays();
             return;
         }
-        const step = this.getActualDurationStepSeconds();
         const current = this.getActualGridSecondsForLabel(label);
         this.applyActualGridDurationChange(index, current + (direction * step));
     }
@@ -9679,11 +10016,14 @@ class TimeTracker {
             const normalizedLabel = this.normalizeActivityText
                 ? this.normalizeActivityText(item && item.label || '')
                 : String(item && item.label || '').trim();
-        const isPlanLabel = Boolean(normalizedLabel)
-            && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
-        const gridSeconds = normalizedLabel
-            ? (isPlanLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : (item.seconds || 0))
-            : 0;
+            const isPlanLabel = Boolean(normalizedLabel)
+                && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
+            const recordedSeconds = Number.isFinite(item.recordedSeconds)
+                ? Math.max(0, Math.floor(item.recordedSeconds))
+                : (Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0);
+            const gridSeconds = normalizedLabel
+                ? (isPlanLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : recordedSeconds)
+                : 0;
             const gridInput = list.querySelector(`.actual-grid-input[data-index="${idx}"]`);
             if (gridInput) {
                 gridInput.value = this.formatSecondsForInput(gridSeconds);
@@ -9984,7 +10324,7 @@ class TimeTracker {
                     const slot = this.timeSlots[i];
                     if (!slot) continue;
                     if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                     }
                     slot.activityLog.details = (i === start) ? details : '';
                 }
@@ -10005,7 +10345,7 @@ class TimeTracker {
                       const slot = this.timeSlots[i];
                       if (!slot) continue;
                       if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
                       }
                       slot.actual = (i === start) ? summary : '';
                       slot.activityLog.details = (i === start) ? details : '';
@@ -10013,14 +10353,17 @@ class TimeTracker {
                           slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
                           if (split.hasLabels) {
                               slot.activityLog.actualGridUnits = actualUnits.slice();
+                              slot.activityLog.actualExtraGridUnits = [];
                               slot.activityLog.actualOverride = (split.extraActivities && split.extraActivities.length > 0);
                           } else {
                               slot.activityLog.actualGridUnits = [];
+                              slot.activityLog.actualExtraGridUnits = [];
                               slot.activityLog.actualOverride = mergedActivities.length > 0;
                           }
                       } else {
                         slot.activityLog.subActivities = [];
                         slot.activityLog.actualGridUnits = [];
+                        slot.activityLog.actualExtraGridUnits = [];
                         slot.activityLog.actualOverride = false;
                     }
                 }
