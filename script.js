@@ -4535,6 +4535,48 @@ class TimeTracker {
         return this.normalizePlanActivitiesArray(slot && slot.planActivities);
     }
 
+    updatePlanActivitiesAssignment(baseIndex, label, seconds) {
+        if (!Number.isFinite(baseIndex) || baseIndex < 0 || baseIndex >= this.timeSlots.length) return false;
+        const normalizedLabel = this.normalizeActivityText
+            ? this.normalizeActivityText(label || '')
+            : String(label || '').trim();
+        if (!normalizedLabel) return false;
+        const plannedBaseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', baseIndex) : baseIndex;
+        const slot = this.timeSlots[plannedBaseIndex];
+        if (!slot) return false;
+        const normalizedSeconds = this.normalizeDurationStep(Number.isFinite(seconds) ? seconds : 0) || 0;
+        let planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
+        let updated = false;
+
+        if (planActivities.length > 0) {
+            let found = false;
+            planActivities = planActivities.map((item) => {
+                const itemLabel = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                if (!itemLabel) return item;
+                if (itemLabel === normalizedLabel) {
+                    found = true;
+                    updated = true;
+                    return { label: itemLabel, seconds: normalizedSeconds };
+                }
+                return item;
+            });
+            if (!found) {
+                planActivities.push({ label: normalizedLabel, seconds: normalizedSeconds });
+                updated = true;
+            }
+        } else {
+            planActivities = [{ label: normalizedLabel, seconds: normalizedSeconds }];
+            updated = true;
+        }
+
+        if (updated) {
+            slot.planActivities = planActivities.map(item => ({ ...item }));
+        }
+        return updated;
+    }
+
     getValidPlanActivitiesSeconds() {
         if (!Array.isArray(this.modalPlanActivities)) return 0;
         return this.modalPlanActivities.reduce((sum, item) => {
@@ -9333,7 +9375,7 @@ class TimeTracker {
             if (isPlanLabel) seenPlanLabels.add(label);
             if (isPlanLabel) {
                 const plannedSeconds = planAssignedMap.get(label);
-                if (Number.isFinite(plannedSeconds) && plannedSeconds > 0 && seconds <= 0) {
+                if (Number.isFinite(plannedSeconds) && plannedSeconds > 0) {
                     seconds = plannedSeconds;
                 }
             }
@@ -9777,7 +9819,7 @@ class TimeTracker {
         return order;
     }
 
-    applyActualDurationChange(index, targetSeconds) {
+    applyActualDurationChange(index, targetSeconds, options = {}) {
         if (!this.isValidActualRow(index)) return;
         const items = this.modalActualActivities || [];
         const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
@@ -9788,6 +9830,20 @@ class TimeTracker {
         if (this.modalActualHasPlanUnits) {
             items[index].seconds = nextSeconds;
             this.modalActualDirty = true;
+            if (options.updatePlan) {
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(items[index].label || '')
+                    : String(items[index].label || '').trim();
+                const isPlanLabel = label
+                    && ((this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
+                        || items[index].source === 'grid');
+                if (isPlanLabel) {
+                    const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+                    if (Number.isFinite(baseIndex)) {
+                        this.updatePlanActivitiesAssignment(baseIndex, label, nextSeconds);
+                    }
+                }
+            }
             this.balanceActualAssignmentsToTotal(index);
             this.clampActualGridToAssigned();
             this.updateActualSpinnerDisplays();
@@ -9966,13 +10022,13 @@ class TimeTracker {
         this.updateActualSpinnerDisplays();
     }
 
-    adjustActualActivityDuration(index, direction) {
+    adjustActualActivityDuration(index, direction, options = {}) {
         if (!this.isValidActualRow(index)) return;
         const step = this.getActualDurationStepSeconds();
         const current = Number.isFinite(this.modalActualActivities[index].seconds)
             ? Math.max(0, Math.floor(this.modalActualActivities[index].seconds))
             : 0;
-        this.applyActualDurationChange(index, current + (direction * step));
+        this.applyActualDurationChange(index, current + (direction * step), options);
     }
 
     adjustActualGridDuration(index, direction) {
@@ -10429,7 +10485,7 @@ class TimeTracker {
                         if (kind === 'grid') {
                             this.adjustActualGridDuration(idx, direction);
                         } else {
-                            this.adjustActualActivityDuration(idx, direction);
+                            this.adjustActualActivityDuration(idx, direction, { updatePlan: true });
                         }
                     }
                     return;
@@ -10484,7 +10540,7 @@ class TimeTracker {
                         return;
                     }
                     this.setActualActiveRow(idx);
-                    this.applyActualDurationChange(idx, parsed);
+                    this.applyActualDurationChange(idx, parsed, { updatePlan: true });
                     return;
                 }
 
