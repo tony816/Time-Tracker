@@ -3732,10 +3732,39 @@ class TimeTracker {
             return this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
         }
 
-        const sub = slot.activityLog && slot.activityLog.subActivities;
-        const normalizedActual = this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
-        const actualOverrideActive = Boolean(slot.activityLog && slot.activityLog.actualOverride);
-        const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
+          const sub = slot.activityLog && slot.activityLog.subActivities;
+          const normalizedActual = this.normalizeActivitiesArray(sub).map(item => ({ ...item }));
+          const actualOverrideActive = Boolean(slot.activityLog && slot.activityLog.actualOverride);
+          const planActs = this.normalizePlanActivitiesArray(slot.planActivities);
+
+          // actualOverrideActive + planned grid exists:
+          // render the main grid by "recorded" time for planned labels (from actualGridUnits),
+          // while keeping extra labels as-is (assigned == recorded for extras).
+          if (actualOverrideActive) {
+              const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+              const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
+              if (planUnits.length > 0) {
+                  const planLabelSet = new Set();
+                  planUnits.forEach((label) => {
+                      const normalized = this.normalizeActivityText
+                          ? this.normalizeActivityText(label || '')
+                          : String(label || '').trim();
+                      if (normalized) planLabelSet.add(normalized);
+                  });
+                  const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
+                  const recordMap = this.getActualGridSecondsMap(planUnits, actualUnits);
+                  return normalizedActual.map((item) => {
+                      const label = this.normalizeActivityText
+                          ? this.normalizeActivityText(item.label || '')
+                          : String(item.label || '').trim();
+                      if (label && planLabelSet.has(label)) {
+                          return { ...item, seconds: recordMap.get(label) || 0, source: 'grid' };
+                      }
+                      return { ...item };
+                  });
+              }
+              return normalizedActual;
+          }
 
         // 계획 분해가 있으면 계획 레이아웃 그대로 사용 (라벨 텍스트만)
         if (!actualOverrideActive && planActs && planActs.length > 0) {
@@ -9871,24 +9900,24 @@ class TimeTracker {
                     this.mergedFields.set(actualMergeKey, summary);
                 }
 
-                for (let i = start; i <= end; i++) {
-                    const slot = this.timeSlots[i];
-                    if (!slot) continue;
-                    if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
-                    }
-                    slot.actual = (i === start) ? summary : '';
-                    slot.activityLog.details = (i === start) ? details : '';
-                    if (i === start) {
-                        slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
-                        if (split.hasLabels) {
-                            slot.activityLog.actualGridUnits = actualUnits.slice();
-                            slot.activityLog.actualOverride = false;
-                        } else {
-                            slot.activityLog.actualGridUnits = [];
-                            slot.activityLog.actualOverride = mergedActivities.length > 0;
-                        }
-                    } else {
+                  for (let i = start; i <= end; i++) {
+                      const slot = this.timeSlots[i];
+                      if (!slot) continue;
+                      if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                      }
+                      slot.actual = (i === start) ? summary : '';
+                      slot.activityLog.details = (i === start) ? details : '';
+                      if (i === start) {
+                          slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
+                          if (split.hasLabels) {
+                              slot.activityLog.actualGridUnits = actualUnits.slice();
+                              slot.activityLog.actualOverride = (split.extraActivities && split.extraActivities.length > 0);
+                          } else {
+                              slot.activityLog.actualGridUnits = [];
+                              slot.activityLog.actualOverride = mergedActivities.length > 0;
+                          }
+                      } else {
                         slot.activityLog.subActivities = [];
                         slot.activityLog.actualGridUnits = [];
                         slot.activityLog.actualOverride = false;
