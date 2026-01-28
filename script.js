@@ -3092,7 +3092,7 @@ class TimeTracker {
         const titleHtml = showTitleBand
             ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
-                const color = this.getSplitColor(type, segment.label);
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices);
                 const emptyClass = segment.label ? '' : ' split-empty';
                 return `<div class="split-title-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${safeLabel}</div>`;
             }).join('')}</div>`
@@ -3100,7 +3100,7 @@ class TimeTracker {
 
         const gridHtml = hasGrid
             ? `<div class="split-grid">${gridSegments.map((segment) => {
-                const color = this.getSplitColor(type, segment.label);
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices);
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
@@ -3623,6 +3623,8 @@ class TimeTracker {
             const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
             const slice = units.length > 0 ? units.slice(startUnit, endUnit) : [];
 
+            const planLabelSet = options.planLabelSet instanceof Set ? options.planLabelSet : null;
+            const reservedIndices = options.reservedIndices instanceof Set ? options.reservedIndices : null;
             const gridSegments = [];
             if (slice.length === 0) {
                 for (let i = 0; i < unitsPerRow; i++) {
@@ -3630,7 +3632,8 @@ class TimeTracker {
                 }
             } else {
                 slice.forEach((label) => {
-                    gridSegments.push({ label, span: 1 });
+                    const isExtra = planLabelSet && label ? !planLabelSet.has(label) : false;
+                    gridSegments.push({ label, span: 1, isExtra, reservedIndices });
                 });
                 const remainder = slice.length % unitsPerRow;
                 if (remainder !== 0) {
@@ -3653,7 +3656,22 @@ class TimeTracker {
 
         if (shouldUseActualActivities) {
             const totalUnits = this.getActualGridUnitCount(baseIndex);
-            return buildGridSegmentsFromActivities(actualActivities, totalUnits, { toggleable: false, showLabels: false });
+            const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+            const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
+            const planLabelSet = new Set();
+            planUnits.forEach((label) => {
+                const normalized = this.normalizeActivityText
+                    ? this.normalizeActivityText(label || '')
+                    : String(label || '').trim();
+                if (normalized) planLabelSet.add(normalized);
+            });
+            const reservedIndices = this.getPaletteIndicesForLabels(planLabelSet);
+            return buildGridSegmentsFromActivities(actualActivities, totalUnits, {
+                toggleable: false,
+                showLabels: false,
+                planLabelSet,
+                reservedIndices
+            });
         }
 
         if (type === 'actual') {
@@ -3748,7 +3766,28 @@ class TimeTracker {
         return normalizedActual;
     }
 
-    getSplitColor(type, label) {
+    getPaletteIndexForLabel(label, paletteLength) {
+        if (!label || !paletteLength) return 0;
+        const base = Math.abs(this.hashStringColor(label));
+        return base % paletteLength;
+    }
+
+    getPaletteIndicesForLabels(labelSet) {
+        if (!(labelSet instanceof Set)) return new Set();
+        const plannedPalette = [
+            '#a6d9ff', '#ffdca3', '#c8f0c0', '#f8c7ce', '#d6ccf5',
+            '#ffe4b8', '#b8eef2', '#f5d6e8', '#d7f4d0', '#fff1b8'
+        ];
+        const indices = new Set();
+        labelSet.forEach((label) => {
+            if (!label) return;
+            const idx = this.getPaletteIndexForLabel(label, plannedPalette.length);
+            indices.add(idx);
+        });
+        return indices;
+    }
+
+    getSplitColor(type, label, isExtra = false, reservedIndices = null) {
         // 실제(우측)에서는 색상 키에서 시간 요약(예: "5초", "1시간 30분")을 제거하여
         // 좌측 계획과 동일한 라벨에 항상 같은 색을 사용한다.
         let colorKey = label;
@@ -3777,8 +3816,17 @@ class TimeTracker {
         // 우측 실제도 동일 팔레트로 맞춰 좌우 색상을 통일
         const actualPalette = plannedPalette;
         const palette = (type === 'planned') ? plannedPalette : actualPalette;
-        const base = Math.abs(this.hashStringColor(colorKey));
-        return palette[base % palette.length];
+        const baseIndex = this.getPaletteIndexForLabel(colorKey, palette.length);
+        if (type === 'actual' && isExtra && reservedIndices instanceof Set && reservedIndices.size > 0) {
+            let idx = baseIndex;
+            let attempts = 0;
+            while (reservedIndices.has(idx) && attempts < palette.length) {
+                idx = (idx + 1) % palette.length;
+                attempts += 1;
+            }
+            return palette[idx];
+        }
+        return palette[baseIndex];
     }
 
     hashStringColor(label) {
@@ -8671,9 +8719,24 @@ class TimeTracker {
                 labelSet.add(normalized);
             }
         });
+        const planActivities = this.getPlanActivitiesForIndex(baseIndex);
+        if (Array.isArray(planActivities)) {
+            planActivities.forEach((item) => {
+                if (!item) return;
+                const normalized = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                if (normalized) {
+                    labelSet.add(normalized);
+                }
+            });
+        }
         const planLabel = context && context.planLabel
             ? (this.normalizeActivityText ? this.normalizeActivityText(context.planLabel) : String(context.planLabel || '').trim())
             : '';
+        if (planLabel) {
+            labelSet.add(planLabel);
+        }
         return { units, labelSet, hasLabels: labelSet.size > 0, planLabel };
     }
 
@@ -9048,7 +9111,8 @@ class TimeTracker {
             if (!normalizedLabel) labelButton.classList.add('empty');
 
             const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const isPlanLabel = Boolean(normalizedLabel) && planLabelSet.has(normalizedLabel);
+            const isPlanLabel = Boolean(normalizedLabel)
+                && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
             const isExtraLabel = Boolean(normalizedLabel) && !isPlanLabel;
             if (isExtraLabel) row.classList.add('actual-row-extra');
             const gridSeconds = isPlanLabel
@@ -9268,7 +9332,9 @@ class TimeTracker {
             ? this.normalizeActivityText(item && item.label || '')
             : String(item && item.label || '').trim();
         if (!label) return;
-        if (!(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) {
+        const isPlanLabel = (this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
+            || (item && item.source === 'grid');
+        if (!isPlanLabel) {
             this.applyActualDurationChange(index, targetSeconds);
             return;
         }
@@ -9313,7 +9379,9 @@ class TimeTracker {
             ? this.normalizeActivityText(item && item.label || '')
             : String(item && item.label || '').trim();
         if (!label) return;
-        if (!(this.modalActualPlanLabelSet instanceof Set) || !this.modalActualPlanLabelSet.has(label)) {
+        const isPlanLabel = (this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
+            || (item && item.source === 'grid');
+        if (!isPlanLabel) {
             this.adjustActualActivityDuration(index, direction);
             return;
         }
@@ -9336,10 +9404,11 @@ class TimeTracker {
             const normalizedLabel = this.normalizeActivityText
                 ? this.normalizeActivityText(item && item.label || '')
                 : String(item && item.label || '').trim();
-            const isPlanLabel = Boolean(normalizedLabel) && planLabelSet.has(normalizedLabel);
-            const gridSeconds = normalizedLabel
-                ? (isPlanLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : (item.seconds || 0))
-                : 0;
+        const isPlanLabel = Boolean(normalizedLabel)
+            && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
+        const gridSeconds = normalizedLabel
+            ? (isPlanLabel ? (gridSecondsMap.get(normalizedLabel) || 0) : (item.seconds || 0))
+            : 0;
             const gridInput = list.querySelector(`.actual-grid-input[data-index="${idx}"]`);
             if (gridInput) {
                 gridInput.value = this.formatSecondsForInput(gridSeconds);
