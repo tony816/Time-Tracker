@@ -2690,18 +2690,40 @@ class TimeTracker {
             bindHover(actualOverlay);
             bindHover(actualSplitViz);
 
-            const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
-            if (actualGrid) {
-                actualGrid.addEventListener('click', (event) => {
-                    const segment = event.target.closest('.split-grid-segment');
-                    if (!segment || !actualGrid.contains(segment)) return;
-                    const unitIndex = parseInt(segment.dataset.unitIndex, 10);
-                    if (!Number.isFinite(unitIndex)) return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.toggleActualGridUnit(index, unitIndex);
-                });
-            }
+              const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
+              if (actualGrid) {
+                  actualGrid.addEventListener('click', (event) => {
+                      const segment = event.target.closest('.split-grid-segment');
+                      if (!segment || !actualGrid.contains(segment)) return;
+                      const unitIndex = parseInt(segment.dataset.unitIndex, 10);
+                      if (!Number.isFinite(unitIndex)) {
+                          const extraLabel = segment.dataset.extraLabel;
+                          if (extraLabel) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              this.openActivityLogModal(index);
+                              try {
+                                  const normalized = this.normalizeActivityText
+                                      ? this.normalizeActivityText(extraLabel)
+                                      : String(extraLabel || '').trim();
+                                  const found = (this.modalActualActivities || []).findIndex((it) => {
+                                      const lbl = this.normalizeActivityText
+                                          ? this.normalizeActivityText(it && it.label || '')
+                                          : String(it && it.label || '').trim();
+                                      return lbl && lbl === normalized;
+                                  });
+                                  if (found >= 0) {
+                                      this.setActualActiveRow(found, { focusLabel: true });
+                                  }
+                              } catch (_) {}
+                          }
+                          return;
+                      }
+                      event.preventDefault();
+                      event.stopPropagation();
+                      this.toggleActualGridUnit(index, unitIndex);
+                  });
+              }
         }
     }
 
@@ -3106,15 +3128,17 @@ class TimeTracker {
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
                 const safeLabel = (showLabels && segment.label) ? this.escapeHtml(segment.label) : '';
-                const labelHtml = safeLabel
-                    ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
-                    : '';
-                const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
-                    ? ` data-unit-index="${segment.unitIndex}"`
-                    : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
-            }).join('')}</div>`
-            : '';
+                  const labelHtml = safeLabel
+                      ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
+                      : '';
+                  const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
+                      ? ` data-unit-index="${segment.unitIndex}"`
+                      : '';
+                  const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
+                  const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
+                  return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
+              }).join('')}</div>`
+              : '';
 
         return `<div class="${classes.join(' ')}" aria-hidden="true">
                     ${titleHtml}
@@ -3325,6 +3349,15 @@ class TimeTracker {
             null,
             planContext && planContext.planLabel ? planContext.planLabel : ''
         );
+        const planLabelContext = this.getActualPlanLabelContext(baseIndex);
+        const planLabelSet = (planLabelContext && planLabelContext.labelSet) ? planLabelContext.labelSet : new Set();
+        const hasExtras = mergedActivities.some((item) => {
+            if (!item) return false;
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || '')
+                : String(item.label || '').trim();
+            return Boolean(label) && !planLabelSet.has(label);
+        });
         const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
         const actualMergeKey = this.findMergeKey('actual', baseIndex);
         const safeUnits = Array.isArray(actualUnits) ? actualUnits.map(value => Boolean(value)) : [];
@@ -3339,7 +3372,7 @@ class TimeTracker {
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
                     slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
                 }
-                slot.activityLog.actualOverride = false;
+                slot.activityLog.actualOverride = (i === start) ? hasExtras : false;
                 slot.actual = (i === start) ? summary : '';
                 if (i === start) {
                     slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
@@ -3356,7 +3389,7 @@ class TimeTracker {
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
             slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
         }
-        slot.activityLog.actualOverride = false;
+        slot.activityLog.actualOverride = hasExtras;
         slot.actual = summary;
         slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
         slot.activityLog.actualGridUnits = safeUnits.slice();
@@ -3364,7 +3397,6 @@ class TimeTracker {
 
     toggleActualGridUnit(index, unitIndex) {
         const baseIndex = this.getSplitBaseIndex('actual', index);
-        if (this.isActualOverrideActive(baseIndex)) return;
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
@@ -3654,25 +3686,94 @@ class TimeTracker {
             return { gridSegments, titleSegments, showTitleBand, ...options };
         };
 
-        if (shouldUseActualActivities) {
-            const totalUnits = this.getActualGridUnitCount(baseIndex);
-            const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
-            const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
-            const planLabelSet = new Set();
-            planUnits.forEach((label) => {
-                const normalized = this.normalizeActivityText
-                    ? this.normalizeActivityText(label || '')
-                    : String(label || '').trim();
-                if (normalized) planLabelSet.add(normalized);
-            });
-            const reservedIndices = this.getPaletteIndicesForLabels(planLabelSet);
-            return buildGridSegmentsFromActivities(actualActivities, totalUnits, {
-                toggleable: false,
-                showLabels: false,
-                planLabelSet,
-                reservedIndices
-            });
-        }
+          if (shouldUseActualActivities) {
+              const totalUnits = this.getActualGridUnitCount(baseIndex);
+              const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+              const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
+              const planLabelSet = new Set();
+              planUnits.forEach((label) => {
+                  const normalized = this.normalizeActivityText
+                      ? this.normalizeActivityText(label || '')
+                      : String(label || '').trim();
+                  if (normalized) planLabelSet.add(normalized);
+              });
+              const reservedIndices = this.getPaletteIndicesForLabels(planLabelSet);
+
+              // When we have planned grid units + extra activities, keep the plan-grid clickable,
+              // and "insert" extra segments into the remaining (unrecorded) slots for display.
+              if (type === 'actual' && actualOverrideActive && planUnits.length > 0) {
+                  const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
+                  const rawSub = (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities))
+                      ? slot.activityLog.subActivities
+                      : [];
+                  const normalizedSub = this.normalizeActivitiesArray(rawSub).map(item => ({ ...item }));
+                  const extras = normalizedSub.filter((item) => {
+                      const label = this.normalizeActivityText
+                          ? this.normalizeActivityText(item.label || '')
+                          : String(item.label || '').trim();
+                      return Boolean(label) && !planLabelSet.has(label);
+                  });
+
+                  const extraUnitLabels = [];
+                  extras.forEach((item) => {
+                      const label = this.normalizeActivityText
+                          ? this.normalizeActivityText(item.label || '')
+                          : String(item.label || '').trim();
+                      if (!label) return;
+                      const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                      const unitsCount = Math.max(0, Math.floor(seconds / 600));
+                      for (let i = 0; i < unitsCount; i++) {
+                          extraUnitLabels.push(label);
+                      }
+                  });
+
+                  const extraByUnitIndex = new Map();
+                  let cursor = 0;
+                  for (let i = planUnits.length - 1; i >= 0 && cursor < extraUnitLabels.length; i--) {
+                      if (actualUnits[i]) continue;
+                      extraByUnitIndex.set(i, extraUnitLabels[cursor]);
+                      cursor += 1;
+                  }
+
+                  const gridSegments = planUnits.map((label, unitIndex) => {
+                      const extraLabel = extraByUnitIndex.get(unitIndex);
+                      if (extraLabel) {
+                          return {
+                              label: extraLabel,
+                              span: 1,
+                              active: true,
+                              isExtra: true,
+                              reservedIndices,
+                              extraLabel
+                          };
+                      }
+                      return {
+                          label,
+                          span: 1,
+                          unitIndex,
+                          active: Boolean(actualUnits[unitIndex]),
+                          isExtra: false,
+                          reservedIndices
+                      };
+                  });
+
+                  const hasLabels = planUnits.some(label => label) || extras.length > 0;
+                  if (!hasLabels && !showTitleBand) {
+                      return null;
+                  }
+                  if (!hasLabels && showTitleBand) {
+                      return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
+                  }
+                  return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: false };
+              }
+
+              return buildGridSegmentsFromActivities(actualActivities, totalUnits, {
+                  toggleable: false,
+                  showLabels: false,
+                  planLabelSet,
+                  reservedIndices
+              });
+          }
 
         if (type === 'actual') {
             const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
