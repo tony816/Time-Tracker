@@ -2728,3 +2728,317 @@ h1 {
 .sub-activities-notice.ok {
   color: #2ecc71;
 }
+
+/* Mobile responsive enhancements */
+@media (max-width: 640px) {
+    .container {
+        margin: 0;
+        padding: 12px;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    header {
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    h1 {
+        font-size: 1.6em;
+    }
+
+    .header-controls {
+        width: 100%;
+        align-items: stretch;
+    }
+
+    .auth-controls {
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .auth-status {
+        font-size: 0.85em;
+    }
+
+    .date-selector {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .date-navigation {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .nav-btn,
+    .today-btn {
+        flex: 1;
+        padding: 10px 0;
+    }
+
+    .date-selector input {
+        width: 100%;
+        font-size: 14px;
+    }
+
+    .header-row,
+    .time-entry,
+    .summary-row {
+        grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+    }
+
+    .header-row > div,
+    .summary-row > div {
+        padding: 10px 8px;
+        font-size: 0.9em;
+    }
+
+    .time-slot-container {
+        padding: 6px 4px;
+        gap: 2px;
+    }
+
+    .time-slot-container .time-label {
+        font-size: 12px;
+    }
+
+    .input-field {
+        padding: 6px 8px;
+        font-size: 14px;
+    }
+
+    .actual-field-container {
+        padding: 6px 8px;
+        gap: 6px;
+    }
+
+    .timer-result-input {
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+
+    .timer-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
+    }
+
+    .timer-display {
+        font-size: 10px;
+        min-width: 56px;
+    }
+
+    .activity-log-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+        left: 88%;
+    }
+
+    .analysis-row {
+        grid-template-columns: 64px 1fr;
+    }
+
+    .analysis-label {
+        padding: 10px 6px;
+        font-size: 0.85em;
+    }
+
+    .analysis-content {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .analysis-item {
+        min-width: 120px;
+    }
+
+    .actions {
+        gap: 10px;
+    }
+
+    .actions button {
+        width: 100%;
+        max-width: 320px;
+    }
+
+    .modal-content {
+        width: 94%;
+        max-height: 90vh;
+    }
+
+    .modal-header,
+    .modal-body {
+        padding: 16px;
+    }
+
+    .modal-header h3 {
+        font-size: 1.25em;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-actions .save-btn,
+    .form-actions .cancel-btn {
+        width: 100%;
+    }
+
+    #scheduleModal .modal-content {
+        width: 96%;
+        max-width: none;
+        max-height: 90vh;
+    }
+
+    .schedule-preview {
+        padding: 12px;
+    }
+
+    .plan-controls-row {
+        align-items: stretch;
+    }
+
+    .plan-tabs {
+        flex-wrap: wrap;
+    }
+
+    .plan-tab {
+        flex: 1 1 120px;
+        text-align: center;
+    }
+
+    .inline-plan-input-row {
+        grid-template-columns: 1fr;
+    }
+
+    .inline-plan-add-btn,
+    .inline-plan-sync-btn {
+        width: 100%;
+    }
+
+    .inline-plan-sub-row {
+        grid-template-columns: 1fr;
+    }
+
+    .inline-plan-sub-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .inline-plan-sub-actions button {
+        width: 100%;
+    }
+
+    .sub-activities-list {
+        overflow-x: auto;
+    }
+
+    .sub-activity-row {
+        grid-template-columns: minmax(0, 1fr) minmax(88px, 0.6fr) 56px;
+    }
+
+    .sub-activity-row.actual-row {
+        grid-template-columns: minmax(0, 1fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) 48px;
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.45em;
+    }
+
+    .auth-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .nav-btn,
+    .today-btn {
+        font-size: 13px;
+    }
+
+    .header-row,
+    .time-entry,
+    .summary-row {
+        grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
+    }
+
+    .header-row > div,
+    .summary-row > div {
+        padding: 8px 6px;
+        font-size: 0.85em;
+    }
+
+    .input-field {
+        font-size: 13px;
+    }
+
+    .timer-controls {
+        gap: 4px;
+    }
+
+    .activity-log-btn {
+        left: 86%;
+    }
+
+    .analysis-row {
+        grid-template-columns: 56px 1fr;
+    }
+
+    .analysis-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .analysis-item {
+        width: 100%;
+    }
+
+    .schedule-preview {
+        padding: 10px;
+    }
+
+    .inline-plan-dropdown,
+    .plan-activity-menu {
+        max-width: 92vw;
+    }
+
+    .sub-activity-row,
+    .sub-activity-row.actual-row {
+        grid-template-columns: 1fr;
+    }
+
+    .actual-row-actions {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 6px;
+    }
+
+    .actual-row-actions .sub-activity-action-btn,
+    .actual-row-actions .actual-remove-btn {
+        width: auto;
+    }
+}
+
+@media (max-width: 360px) {
+    .header-row,
+    .time-entry,
+    .summary-row {
+        grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+    }
+
+    .time-slot-container .time-label {
+        font-size: 11px;
+    }
+
+    .timer-display {
+        min-width: 48px;
+    }
+}
