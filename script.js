@@ -9824,17 +9824,29 @@ class TimeTracker {
         if (!this.isValidActualRow(index)) return;
         const items = this.modalActualActivities || [];
         const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        const wasDirty = this.modalActualDirty;
+        const beforeSeconds = this.modalActualHasPlanUnits
+            ? items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0))
+            : null;
         const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
         let nextSeconds = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
 
         if (total > 0 && !this.modalActualHasPlanUnits) nextSeconds = Math.min(nextSeconds, total);
         if (this.modalActualHasPlanUnits) {
             items[index].seconds = nextSeconds;
-            this.modalActualDirty = true;
             this.balanceActualAssignmentsToTotal(index);
             this.clampActualGridToAssigned();
             this.updateActualSpinnerDisplays();
             this.updateActualActivitiesSummary();
+            const afterSeconds = items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0));
+            const changed = beforeSeconds
+                ? beforeSeconds.some((value, idx) => value !== afterSeconds[idx])
+                : false;
+            if (!changed) {
+                if (!wasDirty) this.modalActualDirty = false;
+                return;
+            }
+            this.modalActualDirty = true;
             if (options.updatePlan) {
                 const label = this.normalizeActivityText
                     ? this.normalizeActivityText(items[index].label || '')
