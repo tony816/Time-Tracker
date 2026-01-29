@@ -1,7 +1,7 @@
 class TimeTracker {
     constructor() {
         this.timeSlots = [];
-        this.currentDate = new Date().toISOString().split('T')[0];
+        this.currentDate = this.getTodayLocalDateString();
         this.selectedPlannedFields = new Set();
         this.selectedActualFields = new Set();
         this.isSelectingPlanned = false;
@@ -397,7 +397,7 @@ class TimeTracker {
         });
 
         document.getElementById('todayBtn').addEventListener('click', () => {
-            this.currentDate = new Date().toISOString().split('T')[0];
+            this.currentDate = this.getTodayLocalDateString();
             this.setCurrentDate();
             this.loadData();
         });
@@ -2091,6 +2091,9 @@ class TimeTracker {
         const d = String(dt.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
     }
+    getTodayLocalDateString() {
+        return this.formatDateFromMsLocal(Date.now());
+    }
     getLocalSlotStartMs(date, hour) {
         const parts = this.getLocalDateParts(date);
         if (!parts) return null;
@@ -2556,9 +2559,11 @@ class TimeTracker {
     }
 
     changeDate(days) {
-        const currentDate = new Date(this.currentDate);
+        const baseMs = this.getDateValue(this.currentDate);
+        if (!Number.isFinite(baseMs)) return;
+        const currentDate = new Date(baseMs);
         currentDate.setDate(currentDate.getDate() + days);
-        this.currentDate = currentDate.toISOString().split('T')[0];
+        this.currentDate = this.formatDateFromMsLocal(currentDate.getTime());
         this.setCurrentDate();
         this.loadData();
         try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch(_) {}
@@ -6128,7 +6133,7 @@ class TimeTracker {
 
     isCurrentDateToday() {
         try {
-            const today = new Date().toISOString().split('T')[0];
+            const today = this.getTodayLocalDateString();
             return this.currentDate === today;
         } catch (_) {
             return false;
