@@ -3278,6 +3278,20 @@ class TimeTracker {
         return units;
     }
 
+    getExtraActivityUnitCount(item) {
+        if (!item) return 0;
+        const assignedSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+        const recordedSeconds = Number.isFinite(item.recordedSeconds)
+            ? Math.max(0, Math.floor(item.recordedSeconds))
+            : assignedSeconds;
+        const step = this.getActualDurationStepSeconds();
+        let assignedUnits = assignedSeconds > 0 ? Math.floor(assignedSeconds / step) : 0;
+        let recordedUnits = recordedSeconds > 0 ? Math.floor(recordedSeconds / step) : 0;
+        if (assignedSeconds > 0 && assignedUnits === 0) assignedUnits = 1;
+        if (recordedSeconds > 0 && recordedUnits === 0) recordedUnits = 1;
+        return Math.max(assignedUnits, recordedUnits);
+    }
+
     buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null) {
         const slotsByIndex = Array.isArray(planUnits) ? new Array(planUnits.length).fill('') : [];
         const slotsByLabel = new Map();
@@ -3301,7 +3315,6 @@ class TimeTracker {
         }
         if (available.length === 0) return { slotsByIndex, slotsByLabel };
 
-        const step = this.getActualDurationStepSeconds();
         let cursor = 0;
         (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
             if (!item) return;
@@ -3309,15 +3322,7 @@ class TimeTracker {
                 ? this.normalizeActivityText(item.label || '')
                 : String(item.label || '').trim();
             if (!label) return;
-            const assignedSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const recordedSeconds = Number.isFinite(item.recordedSeconds)
-                ? Math.max(0, Math.floor(item.recordedSeconds))
-                : assignedSeconds;
-            let assignedUnits = assignedSeconds > 0 ? Math.floor(assignedSeconds / step) : 0;
-            let recordedUnits = recordedSeconds > 0 ? Math.floor(recordedSeconds / step) : 0;
-            if (assignedSeconds > 0 && assignedUnits === 0) assignedUnits = 1;
-            if (recordedSeconds > 0 && recordedUnits === 0) recordedUnits = 1;
-            let units = Math.max(assignedUnits, recordedUnits);
+            let units = this.getExtraActivityUnitCount(item);
             while (units > 0 && cursor < available.length) {
                 const unitIndex = available[cursor];
                 cursor += 1;
@@ -3361,6 +3366,67 @@ class TimeTracker {
                 seenIndices.add(idx);
                 orderIndices.push(idx);
             });
+        });
+
+        for (let i = 0; i < planUnits.length; i++) {
+            if (seenIndices.has(i)) continue;
+            seenIndices.add(i);
+            orderIndices.push(i);
+        }
+        return orderIndices;
+    }
+
+    getActualGridDisplayOrderIndicesWithExtras(planUnits, actualUnits, activities, planLabelSet) {
+        if (!Array.isArray(planUnits) || planUnits.length === 0) return [];
+        const labelSet = planLabelSet instanceof Set ? planLabelSet : new Set();
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const ordered = this.sortActivitiesByOrder(Array.isArray(activities) ? activities : []);
+        const labelToIndices = new Map();
+        planUnits.forEach((label, idx) => {
+            const normalized = normalize(label || '');
+            if (!labelToIndices.has(normalized)) {
+                labelToIndices.set(normalized, []);
+            }
+            labelToIndices.get(normalized).push(idx);
+        });
+
+        const safeActualUnits = Array.isArray(actualUnits) ? actualUnits : [];
+        const available = [];
+        for (let i = 0; i < planUnits.length; i++) {
+            if (!safeActualUnits[i]) available.push(i);
+        }
+
+        const orderIndices = [];
+        const seenIndices = new Set();
+        const seenLabels = new Set();
+        let availableCursor = 0;
+
+        ordered.forEach((item) => {
+            const normalized = normalize(item && item.label || '');
+            if (!normalized) return;
+            if (labelSet.has(normalized)) {
+                if (seenLabels.has(normalized)) return;
+                seenLabels.add(normalized);
+                const indices = labelToIndices.get(normalized) || [];
+                indices.forEach((idx) => {
+                    if (seenIndices.has(idx)) return;
+                    seenIndices.add(idx);
+                    orderIndices.push(idx);
+                });
+                return;
+            }
+
+            let units = this.getExtraActivityUnitCount(item);
+            while (units > 0 && availableCursor < available.length) {
+                const idx = available[availableCursor];
+                availableCursor += 1;
+                if (seenIndices.has(idx)) continue;
+                seenIndices.add(idx);
+                orderIndices.push(idx);
+                units -= 1;
+            }
         });
 
         for (let i = 0; i < planUnits.length; i++) {
@@ -3663,7 +3729,10 @@ class TimeTracker {
         });
         if (extras.length === 0) return;
 
-        const displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
+        let displayOrder = this.getActualGridDisplayOrderIndicesWithExtras(planUnits, actualUnits, orderedActual, planLabelSet);
+        if (displayOrder.length !== planUnits.length) {
+            displayOrder = planUnits.map((_, idx) => idx);
+        }
         const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder);
         const labelSlots = allocation && allocation.slotsByLabel
             ? allocation.slotsByLabel.get(normalizedLabel)
@@ -4001,7 +4070,7 @@ class TimeTracker {
                           : String(item.label || '').trim();
                       return Boolean(label) && !planLabelSet.has(label);
                   });
-                  let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
+                  let displayOrder = this.getActualGridDisplayOrderIndicesWithExtras(planUnits, actualUnits, orderedActual, planLabelSet);
                   if (displayOrder.length !== planUnits.length) {
                       displayOrder = planUnits.map((_, idx) => idx);
                   }
