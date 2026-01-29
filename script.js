@@ -4921,6 +4921,7 @@ class TimeTracker {
         input.dataset.kind = kind;
         input.dataset.index = String(index);
         input.value = this.formatSecondsForInput(Number.isFinite(seconds) ? seconds : 0);
+        input.readOnly = true;
         input.setAttribute('aria-label', kind === 'grid' ? '기록 시간' : '배정 시간');
 
         const downBtn = document.createElement('button');
@@ -9830,6 +9831,10 @@ class TimeTracker {
         if (this.modalActualHasPlanUnits) {
             items[index].seconds = nextSeconds;
             this.modalActualDirty = true;
+            this.balanceActualAssignmentsToTotal(index);
+            this.clampActualGridToAssigned();
+            this.updateActualSpinnerDisplays();
+            this.updateActualActivitiesSummary();
             if (options.updatePlan) {
                 const label = this.normalizeActivityText
                     ? this.normalizeActivityText(items[index].label || '')
@@ -9839,15 +9844,14 @@ class TimeTracker {
                         || items[index].source === 'grid');
                 if (isPlanLabel) {
                     const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+                    const finalSeconds = Number.isFinite(items[index].seconds)
+                        ? Math.max(0, Math.floor(items[index].seconds))
+                        : 0;
                     if (Number.isFinite(baseIndex)) {
-                        this.updatePlanActivitiesAssignment(baseIndex, label, nextSeconds);
+                        this.updatePlanActivitiesAssignment(baseIndex, label, finalSeconds);
                     }
                 }
             }
-            this.balanceActualAssignmentsToTotal(index);
-            this.clampActualGridToAssigned();
-            this.updateActualSpinnerDisplays();
-            this.updateActualActivitiesSummary();
             return;
         }
         if (items.length <= 1) {
@@ -10532,6 +10536,10 @@ class TimeTracker {
 
             actualList.addEventListener('change', (event) => {
                 if (event.target.classList.contains('actual-assign-input')) {
+                    if (event.target.readOnly) {
+                        this.updateActualSpinnerDisplays();
+                        return;
+                    }
                     const idx = parseInt(event.target.dataset.index, 10);
                     if (!Number.isFinite(idx)) return;
                     const parsed = this.parseActualDurationInput(event.target.value);
@@ -10545,6 +10553,10 @@ class TimeTracker {
                 }
 
                 if (event.target.classList.contains('actual-grid-input')) {
+                    if (event.target.readOnly) {
+                        this.updateActualSpinnerDisplays();
+                        return;
+                    }
                     const idx = parseInt(event.target.dataset.index, 10);
                     if (!Number.isFinite(idx)) return;
                     const parsed = this.parseActualDurationInput(event.target.value);
