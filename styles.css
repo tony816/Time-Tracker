@@ -2250,10 +2250,19 @@ h1 {
   color: #9aa3ad;
 }
 
+:root {
+    --actual-label-shift: 22px;
+    --actual-actions-shift: 16px;
+}
+
 .sub-activity-row.actual-row {
     grid-template-columns: minmax(0, 3fr) minmax(84px, 1fr) minmax(84px, 1fr) 56px;
     gap: 8px;
-    align-items: start;
+    align-items: center;
+}
+
+.sub-activity-row.actual-row .actual-activity-label {
+    margin-top: var(--actual-label-shift);
 }
 
 .actual-row-actions {
@@ -2261,6 +2270,8 @@ h1 {
     flex-direction: column;
     gap: 4px;
     min-width: 52px;
+    justify-content: center;
+    margin-top: var(--actual-actions-shift);
 }
 
 .actual-row-actions .sub-activity-action-btn,
