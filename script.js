@@ -10321,7 +10321,24 @@ class TimeTracker {
         const current = Number.isFinite(this.modalActualActivities[index].seconds)
             ? Math.max(0, Math.floor(this.modalActualActivities[index].seconds))
             : 0;
-        this.applyActualDurationChange(index, current + (direction * step), options);
+        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        let maxAllowed = total;
+        if (this.modalActualHasPlanUnits && total > 0) {
+            const items = this.modalActualActivities || [];
+            const otherSum = items.reduce((sum, item, idx) => {
+                if (idx === index) return sum;
+                const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return sum + this.normalizeActualDurationStep(seconds);
+            }, 0);
+            maxAllowed = Math.max(0, total - otherSum);
+        }
+        let nextSeconds;
+        if (direction < 0 && current === 0) {
+            nextSeconds = Number.isFinite(maxAllowed) ? maxAllowed : 0;
+        } else {
+            nextSeconds = current + (direction * step);
+        }
+        this.applyActualDurationChange(index, nextSeconds, options);
     }
 
     adjustActualGridDuration(index, direction) {
@@ -10339,7 +10356,12 @@ class TimeTracker {
             const currentRecorded = Number.isFinite(item.recordedSeconds)
                 ? Math.max(0, Math.floor(item.recordedSeconds))
                 : assigned;
-            let nextRecorded = currentRecorded + (direction * step);
+            let nextRecorded;
+            if (direction < 0 && currentRecorded === 0) {
+                nextRecorded = assigned;
+            } else {
+                nextRecorded = currentRecorded + (direction * step);
+            }
             nextRecorded = Math.max(0, nextRecorded);
             if (assigned > 0) nextRecorded = Math.min(nextRecorded, assigned);
             item.recordedSeconds = this.normalizeActualDurationStep(nextRecorded);
@@ -10348,7 +10370,14 @@ class TimeTracker {
             return;
         }
         const current = this.getActualGridSecondsForLabel(label);
-        this.applyActualGridDurationChange(index, current + (direction * step));
+        const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+        let nextSeconds;
+        if (direction < 0 && current === 0) {
+            nextSeconds = assigned;
+        } else {
+            nextSeconds = current + (direction * step);
+        }
+        this.applyActualGridDurationChange(index, nextSeconds);
     }
 
     updateActualSpinnerDisplays() {
