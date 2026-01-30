@@ -2661,6 +2661,27 @@ h1 {
   transition: opacity 0.15s ease;
 }
 
+.split-visualization-actual .split-grid-segment {
+  overflow: visible;
+}
+
+.split-visualization-actual .split-grid-label {
+  color: rgba(41, 128, 185, 0.45);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+.split-visualization-actual .split-grid-label.split-grid-label-boundary {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: auto;
+  text-align: center;
+  pointer-events: none;
+}
+
 .split-visualization-actual.split-readonly .split-grid-segment {
   cursor: default;
 }

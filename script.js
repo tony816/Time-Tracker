@@ -3163,16 +3163,55 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
+        let actualLabelFlags = null;
+        if (isActual && showLabels && Array.isArray(gridSegments) && gridSegments.length > 0) {
+            const unitsPerRow = 6;
+            actualLabelFlags = new Array(gridSegments.length).fill('');
+            for (let rowStart = 0; rowStart < gridSegments.length; rowStart += unitsPerRow) {
+                const rowEnd = Math.min(rowStart + unitsPerRow, gridSegments.length);
+                let i = rowStart;
+                while (i < rowEnd) {
+                    const baseLabel = gridSegments[i] && gridSegments[i].label
+                        ? String(gridSegments[i].label)
+                        : '';
+                    if (!baseLabel) {
+                        i += 1;
+                        continue;
+                    }
+                    let j = i + 1;
+                    while (j < rowEnd) {
+                        const nextLabel = gridSegments[j] && gridSegments[j].label
+                            ? String(gridSegments[j].label)
+                            : '';
+                        if (nextLabel !== baseLabel) break;
+                        j += 1;
+                    }
+                    const runLength = j - i;
+                    if (runLength % 2 === 0) {
+                        const leftCenterIndex = i + (runLength / 2 - 1);
+                        actualLabelFlags[leftCenterIndex] = 'boundary';
+                    } else {
+                        const centerIndex = i + Math.floor(runLength / 2);
+                        actualLabelFlags[centerIndex] = 'center';
+                    }
+                    i = j;
+                }
+            }
+        }
+
         const gridHtml = hasGrid
-            ? `<div class="split-grid">${gridSegments.map((segment) => {
+            ? `<div class="split-grid">${gridSegments.map((segment, idx) => {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices);
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
                 const safeLabel = (showLabels && segment.label) ? this.escapeHtml(segment.label) : '';
-                  const labelHtml = safeLabel
-                      ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
+                  const labelFlag = !isActual || !actualLabelFlags ? 'center' : actualLabelFlags[idx];
+                  const showActualLabel = !isActual || !actualLabelFlags || Boolean(labelFlag);
+                  const labelClass = (isActual && labelFlag === 'boundary') ? ' split-grid-label-boundary' : '';
+                  const labelHtml = (safeLabel && showActualLabel)
+                      ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                       : '';
                   const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
                       ? ` data-unit-index="${segment.unitIndex}"`
@@ -3313,6 +3352,9 @@ class TimeTracker {
         if (!Array.isArray(planUnits) || planUnits.length === 0) {
             return { slotsByIndex, slotsByLabel };
         }
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
         const available = [];
         const safeActualUnits = Array.isArray(actualUnits) ? actualUnits : [];
         const useOrder = Array.isArray(orderIndices) && orderIndices.length === planUnits.length
@@ -3321,10 +3363,14 @@ class TimeTracker {
         if (useOrder) {
             useOrder.forEach((idx) => {
                 if (!Number.isFinite(idx) || idx < 0 || idx >= planUnits.length) return;
+                const label = normalize(planUnits[idx] || '');
+                if (label) return;
                 if (!safeActualUnits[idx]) available.push(idx);
             });
         } else {
             for (let i = 0; i < planUnits.length; i++) {
+                const label = normalize(planUnits[i] || '');
+                if (label) continue;
                 if (!safeActualUnits[i]) available.push(i);
             }
         }
@@ -3761,11 +3807,35 @@ class TimeTracker {
             extras,
             slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
         );
-        const targetUnitIndex = Number.isFinite(unitIndex) ? unitIndex : labelSlots[labelSlots.length - 1];
-        if (!labelSlots.includes(targetUnitIndex)) return;
+        const sortedSlots = labelSlots.slice().sort((a, b) => a - b);
+        const targetUnitIndex = Number.isFinite(unitIndex) ? unitIndex : sortedSlots[sortedSlots.length - 1];
+        if (!sortedSlots.includes(targetUnitIndex)) return;
+
+        const unitsPerRow = 6;
+        const targetRow = Math.floor(targetUnitIndex / unitsPerRow);
+        const rowSlots = sortedSlots.filter(idx => Math.floor(idx / unitsPerRow) === targetRow);
+        if (rowSlots.length === 0) return;
+        const rowPos = rowSlots.indexOf(targetUnitIndex);
+        if (rowPos < 0) return;
+
+        let currentOnCount = 0;
+        for (let i = 0; i < rowSlots.length; i++) {
+            if (currentExtraUnits[rowSlots[i]]) {
+                currentOnCount += 1;
+            } else {
+                break;
+            }
+        }
+        const isClickedOn = Boolean(currentExtraUnits[targetUnitIndex]);
+        let newCount = rowPos + 1;
+        if (isClickedOn && currentOnCount === newCount) {
+            newCount = 0;
+        }
 
         const nextExtraUnits = currentExtraUnits.slice();
-        nextExtraUnits[targetUnitIndex] = !nextExtraUnits[targetUnitIndex];
+        rowSlots.forEach((idx, i) => {
+            nextExtraUnits[idx] = i < newCount;
+        });
 
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
             slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
@@ -3773,7 +3843,7 @@ class TimeTracker {
         slot.activityLog.actualExtraGridUnits = nextExtraUnits.slice();
 
         const step = this.getActualDurationStepSeconds();
-        const newRecordedUnits = labelSlots.reduce((sum, idx) => sum + (nextExtraUnits[idx] ? 1 : 0), 0);
+        const newRecordedUnits = sortedSlots.reduce((sum, idx) => sum + (nextExtraUnits[idx] ? 1 : 0), 0);
         const targetIndex = normalizedSub.findIndex((item) => {
             const label = this.normalizeActivityText
                 ? this.normalizeActivityText(item && item.label || '')
@@ -4128,9 +4198,9 @@ class TimeTracker {
                       return null;
                   }
                   if (!hasLabels && showTitleBand) {
-                      return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
+                      return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: true };
                   }
-                  return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: false };
+                  return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: true };
               }
 
               return buildGridSegmentsFromActivities(actualActivities, totalUnits, {
@@ -4172,9 +4242,9 @@ class TimeTracker {
                 return null;
             }
             if (!hasLabels && showTitleBand) {
-                return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
+                return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: true };
             }
-            return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: false };
+            return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: true };
         }
 
         const activities = this.getSplitActivities(type, baseIndex);
