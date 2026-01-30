@@ -83,6 +83,9 @@ class TimeTracker {
         this.actualActivityMenuContext = null;
         this.actualActivityMenuOutsideHandler = null;
         this.actualActivityMenuEscHandler = null;
+        this.splitColorRegistry = new Map();
+        this.splitColorUsed = new Set();
+        this.splitColorSeed = 0;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -3157,7 +3160,7 @@ class TimeTracker {
         const titleHtml = showTitleBand
             ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
-                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices);
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'title');
                 const emptyClass = segment.label ? '' : ' split-empty';
                 return `<div class="split-title-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${safeLabel}</div>`;
             }).join('')}</div>`
@@ -3201,7 +3204,7 @@ class TimeTracker {
 
         const gridHtml = hasGrid
             ? `<div class="split-grid">${gridSegments.map((segment, idx) => {
-                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices);
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
@@ -4368,9 +4371,7 @@ class TimeTracker {
         return indices;
     }
 
-    getSplitColor(type, label, isExtra = false, reservedIndices = null) {
-        // 실제(우측)에서는 색상 키에서 시간 요약(예: "5초", "1시간 30분")을 제거하여
-        // 좌측 계획과 동일한 라벨에 항상 같은 색을 사용한다.
+    normalizeSplitColorLabel(type, label) {
         let colorKey = label;
         if (type === 'actual') {
             const m = String(colorKey || '').match(/^(.+?)\s+\d+(시간|분|초)(\s+\d+(분|초))?$/);
@@ -4383,31 +4384,72 @@ class TimeTracker {
         } else {
             colorKey = String(colorKey || '').trim();
         }
-        if (!colorKey) {
-            return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
-        }
+        return colorKey;
+    }
 
+    getSplitColorKey(type, label, role = 'grid') {
+        const normalized = this.normalizeSplitColorLabel(type, label);
+        if (!normalized) return '';
+        const safeRole = role === 'title' ? 'title' : 'grid';
+        return `${safeRole}:${normalized}`;
+    }
 
-        // 더 넓은 색상 분산을 위해 해시 기반 팔레트 선택
-        // 유사도 낮추되 톤은 파스텔로 완화한 팔레트(계획/실제 공통)
-        const plannedPalette = [
+    getSplitColorBasePalette() {
+        return [
             '#a6d9ff', '#ffdca3', '#c8f0c0', '#f8c7ce', '#d6ccf5',
             '#ffe4b8', '#b8eef2', '#f5d6e8', '#d7f4d0', '#fff1b8'
         ];
-        // 우측 실제도 동일 팔레트로 맞춰 좌우 색상을 통일
-        const actualPalette = plannedPalette;
-        const palette = (type === 'planned') ? plannedPalette : actualPalette;
-        const baseIndex = this.getPaletteIndexForLabel(colorKey, palette.length);
-        if (type === 'actual' && isExtra && reservedIndices instanceof Set && reservedIndices.size > 0) {
-            let idx = baseIndex;
-            let attempts = 0;
-            while (reservedIndices.has(idx) && attempts < palette.length) {
-                idx = (idx + 1) % palette.length;
-                attempts += 1;
-            }
-            return palette[idx];
+    }
+
+    getSplitColorFromIndex(index) {
+        const palette = this.getSplitColorBasePalette();
+        if (index < palette.length) return palette[index];
+        const offset = index - palette.length;
+        const hue = (offset * 137.508) % 360;
+        const lightnessLevels = [82, 74, 66, 60];
+        const saturationLevels = [68, 60, 52];
+        const cycle = Math.floor(offset / 360);
+        const lightness = lightnessLevels[cycle % lightnessLevels.length];
+        const saturation = saturationLevels[Math.floor(cycle / lightnessLevels.length) % saturationLevels.length];
+        return `hsl(${hue.toFixed(1)}, ${saturation}%, ${lightness}%)`;
+    }
+
+    getNextSplitColor() {
+        if (!this.splitColorUsed) {
+            this.splitColorUsed = new Set();
         }
-        return palette[baseIndex];
+        if (!Number.isInteger(this.splitColorSeed)) {
+            this.splitColorSeed = 0;
+        }
+        let attempts = 0;
+        while (attempts < 5000) {
+            const color = this.getSplitColorFromIndex(this.splitColorSeed);
+            this.splitColorSeed += 1;
+            if (!this.splitColorUsed.has(color)) {
+                this.splitColorUsed.add(color);
+                return color;
+            }
+            attempts += 1;
+        }
+        return '#dfe4ea';
+    }
+
+    getSplitColor(type, label, isExtra = false, reservedIndices = null, role = 'grid') {
+        const colorKey = this.getSplitColorKey(type, label, role);
+        if (!colorKey) {
+            return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
+        }
+        if (!this.splitColorRegistry) {
+            this.splitColorRegistry = new Map();
+            this.splitColorUsed = new Set();
+            this.splitColorSeed = 0;
+        }
+        let color = this.splitColorRegistry.get(colorKey);
+        if (!color) {
+            color = this.getNextSplitColor();
+            this.splitColorRegistry.set(colorKey, color);
+        }
+        return color;
     }
 
     hashStringColor(label) {
