@@ -2249,6 +2249,16 @@ class TimeTracker {
         const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
         return !planned && !planTitle && planActivities.length === 0;
     }
+    isPlanSlotEmptyForInline(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return false;
+        const planned = this.getPlannedValueForIndex(index);
+        const slot = this.timeSlots[index];
+        const planTitle = this.normalizeActivityText
+            ? this.normalizeActivityText((slot && slot.planTitle) || '')
+            : String((slot && slot.planTitle) || '').trim();
+        const planActivities = this.normalizePlanActivitiesArray(slot && slot.planActivities);
+        return !planned && !planTitle && planActivities.length === 0;
+    }
     applyRoutinesToDate(date, options = {}) {
         if (!this.routinesLoaded) return false;
         const d = String(date || '').trim();
@@ -8514,7 +8524,21 @@ class TimeTracker {
             input.value = '';
             this.currentPlanSource = 'local';
             this.renderInlinePlanDropdownOptions();
-            this.applyInlinePlanSelection(val, options);
+            const target = this.inlinePlanTarget;
+            const startIndex = target && Number.isInteger(target.startIndex) ? target.startIndex : 0;
+            const endIndex = target && Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
+            const rangeStart = Math.min(startIndex, endIndex);
+            const rangeEnd = Math.max(startIndex, endIndex);
+            let canAutoApply = true;
+            for (let i = rangeStart; i <= rangeEnd; i++) {
+                if (!this.isPlanSlotEmptyForInline(i)) {
+                    canAutoApply = false;
+                    break;
+                }
+            }
+            if (canAutoApply) {
+                this.applyInlinePlanSelection(val, options);
+            }
         };
         const clearHandler = () => {
             const target = this.inlinePlanTarget;
