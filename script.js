@@ -3166,41 +3166,7 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
-        let actualLabelFlags = null;
-        if (isActual && showLabels && Array.isArray(gridSegments) && gridSegments.length > 0) {
-            const unitsPerRow = 6;
-            actualLabelFlags = new Array(gridSegments.length).fill('');
-            for (let rowStart = 0; rowStart < gridSegments.length; rowStart += unitsPerRow) {
-                const rowEnd = Math.min(rowStart + unitsPerRow, gridSegments.length);
-                let i = rowStart;
-                while (i < rowEnd) {
-                    const baseLabel = gridSegments[i] && gridSegments[i].label
-                        ? String(gridSegments[i].label)
-                        : '';
-                    if (!baseLabel) {
-                        i += 1;
-                        continue;
-                    }
-                    let j = i + 1;
-                    while (j < rowEnd) {
-                        const nextLabel = gridSegments[j] && gridSegments[j].label
-                            ? String(gridSegments[j].label)
-                            : '';
-                        if (nextLabel !== baseLabel) break;
-                        j += 1;
-                    }
-                    const runLength = j - i;
-                    if (runLength % 2 === 0) {
-                        const leftCenterIndex = i + (runLength / 2 - 1);
-                        actualLabelFlags[leftCenterIndex] = 'boundary';
-                    } else {
-                        const centerIndex = i + Math.floor(runLength / 2);
-                        actualLabelFlags[centerIndex] = 'center';
-                    }
-                    i = j;
-                }
-            }
-        }
+        const actualLabelFlags = null;
 
         const gridHtml = hasGrid
             ? `<div class="split-grid">${gridSegments.map((segment, idx) => {
@@ -3210,11 +3176,9 @@ class TimeTracker {
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
                 const safeLabel = (showLabels && segment.label) ? this.escapeHtml(segment.label) : '';
-                  const labelFlag = !isActual || !actualLabelFlags ? 'center' : actualLabelFlags[idx];
-                  const showActualLabel = !isActual || !actualLabelFlags || Boolean(labelFlag);
-                  const labelClass = (isActual && labelFlag === 'boundary') ? ' split-grid-label-boundary' : '';
+                  const showActualLabel = !isActual || !actualLabelFlags || Boolean(actualLabelFlags[idx]);
                   const labelHtml = (safeLabel && showActualLabel)
-                      ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
+                      ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
                       : '';
                   const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
                       ? ` data-unit-index="${segment.unitIndex}"`
