@@ -1,0 +1,105 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Actual Grid Palette Test</title>
+  <style>
+    :root {
+      --palette-1: #a6d9ff;
+      --palette-2: #ffdca3;
+      --palette-3: #c8f0c0;
+      --palette-4: #cbbef3;
+      --palette-5: #ffb2a3;
+      --palette-6: #fafca4;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #2c3e50;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 16px;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(120px, 1fr));
+      gap: 12px;
+      max-width: 900px;
+    }
+
+    .cell {
+      border-radius: 6px;
+      padding: 14px;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-weight: 600;
+      font-size: 12px;
+      color: #2c3e50;
+      box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.12);
+    }
+
+    .cell span {
+      background: rgba(255, 255, 255, 0.65);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Actual Grid Palette Test (6 Colors)</h1>
+  <div class="grid">
+    <div class="cell" style="background: var(--palette-1)"><span data-color-label></span></div>
+    <div class="cell" style="background: var(--palette-2)"><span data-color-label></span></div>
+    <div class="cell" style="background: var(--palette-3)"><span data-color-label></span></div>
+    <div class="cell" style="background: var(--palette-4)"><span data-color-label></span></div>
+    <div class="cell" style="background: var(--palette-5)"><span data-color-label></span></div>
+    <div class="cell" style="background: var(--palette-6)"><span data-color-label></span></div>
+  </div>
+  <script>
+    const toHex = (value) => {
+      const v = Number(value);
+      if (!Number.isFinite(v)) return '00';
+      return Math.max(0, Math.min(255, Math.round(v)))
+        .toString(16)
+        .padStart(2, '0');
+    };
+
+    const normalizeHex = (color) => {
+      if (!color) return '';
+      const str = String(color).trim().toLowerCase();
+      if (str.startsWith('#')) return str;
+      const rgb = str.match(/^rgba?\(([^)]+)\)$/);
+      if (rgb) {
+        const parts = rgb[1].split(',').map(item => item.trim());
+        if (parts.length >= 3) {
+          return `#${toHex(parts[0])}${toHex(parts[1])}${toHex(parts[2])}`;
+        }
+      }
+      return str;
+    };
+
+    const updateLabels = () => {
+      document.querySelectorAll('.cell').forEach((cell) => {
+        const label = cell.querySelector('[data-color-label]');
+        if (!label) return;
+        const bg = getComputedStyle(cell).backgroundColor;
+        label.textContent = normalizeHex(bg);
+      });
+    };
+
+    window.addEventListener('DOMContentLoaded', updateLabels);
+  </script>
+</body>
+</html>

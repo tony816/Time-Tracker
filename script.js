@@ -4323,8 +4323,8 @@ class TimeTracker {
     getPaletteIndicesForLabels(labelSet) {
         if (!(labelSet instanceof Set)) return new Set();
         const plannedPalette = [
-            '#a6d9ff', '#ffdca3', '#c8f0c0', '#f8c7ce', '#d6ccf5',
-            '#ffe4b8', '#b8eef2', '#f5d6e8', '#d7f4d0', '#fff1b8'
+            '#a6d9ff', '#ffdca3', '#c8f0c0',
+            '#cbbef3', '#ffb2a3', '#fafca4'
         ];
         const indices = new Set();
         labelSet.forEach((label) => {
@@ -4360,8 +4360,8 @@ class TimeTracker {
 
     getSplitColorBasePalette() {
         return [
-            '#a6d9ff', '#ffdca3', '#c8f0c0', '#f8c7ce', '#d6ccf5',
-            '#ffe4b8', '#b8eef2', '#f5d6e8', '#d7f4d0', '#fff1b8'
+            '#a6d9ff', '#ffdca3', '#c8f0c0',
+            '#cbbef3', '#ffb2a3', '#fafca4'
         ];
     }
 
