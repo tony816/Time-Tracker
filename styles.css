@@ -1783,6 +1783,8 @@ h1 {
   max-height: calc(100vh - 28px);
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
 }
 
 .inline-plan-dropdown .plan-tabs {

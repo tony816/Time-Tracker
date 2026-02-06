@@ -26,6 +26,7 @@ class TimeTracker {
         this.inlinePlanOutsideHandler = null;
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
+        this.inlinePlanWheelHandler = null;
         this.inlinePlanContext = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
@@ -8173,6 +8174,34 @@ class TimeTracker {
         return document.querySelector(`[data-index="${index}"] .planned-input`)
             || document.querySelector(`[data-index="${index}"]`);
     }
+    canInlineWheelScroll(targetEl, boundaryEl, deltaY) {
+        if (!boundaryEl || !targetEl || !Number.isFinite(deltaY) || deltaY === 0) return false;
+        let el = targetEl.nodeType === 1 ? targetEl : targetEl.parentElement;
+        while (el && boundaryEl.contains(el)) {
+            if (el instanceof HTMLElement) {
+                const style = window.getComputedStyle(el);
+                const overflowY = style ? style.overflowY : '';
+                const scrollable = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+                if (scrollable && (el.scrollHeight - el.clientHeight) > 1) {
+                    const maxTop = el.scrollHeight - el.clientHeight;
+                    const top = el.scrollTop;
+                    if (deltaY > 0 && top < (maxTop - 1)) return true;
+                    if (deltaY < 0 && top > 1) return true;
+                }
+            }
+            if (el === boundaryEl) break;
+            el = el.parentElement;
+        }
+        return false;
+    }
+    handleInlinePlanWheel(event) {
+        const dropdown = this.inlinePlanDropdown;
+        if (!dropdown) return;
+        const deltaY = Number(event.deltaY) || 0;
+        if (deltaY === 0) return;
+        if (this.canInlineWheelScroll(event.target, dropdown, deltaY)) return;
+        event.preventDefault();
+    }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
@@ -8635,6 +8664,8 @@ class TimeTracker {
         dropdown.style.visibility = 'hidden';
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
+        this.inlinePlanWheelHandler = (event) => this.handleInlinePlanWheel(event);
+        dropdown.addEventListener('wheel', this.inlinePlanWheelHandler, { passive: false });
 
         const input = dropdown.querySelector('.inline-plan-input');
         const addBtn = dropdown.querySelector('.inline-plan-add-btn');
@@ -8996,6 +9027,10 @@ class TimeTracker {
             window.removeEventListener('resize', this.inlinePlanScrollHandler);
             window.removeEventListener('scroll', this.inlinePlanScrollHandler, true);
             this.inlinePlanScrollHandler = null;
+        }
+        if (this.inlinePlanDropdown && this.inlinePlanWheelHandler) {
+            this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
+            this.inlinePlanWheelHandler = null;
         }
         if (this.inlinePlanDropdown && this.inlinePlanDropdown.parentNode) {
             this.inlinePlanDropdown.parentNode.removeChild(this.inlinePlanDropdown);
