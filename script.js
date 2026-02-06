@@ -3166,8 +3166,6 @@ class TimeTracker {
             }).join('')}</div>`
             : '';
 
-        const actualLabelFlags = null;
-
         const gridHtml = hasGrid
             ? `<div class="split-grid">${gridSegments.map((segment, idx) => {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
@@ -3175,19 +3173,20 @@ class TimeTracker {
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
-                const safeLabel = (showLabels && segment.label) ? this.escapeHtml(segment.label) : '';
-                  const showActualLabel = !isActual || !actualLabelFlags || Boolean(actualLabelFlags[idx]);
-                  const labelHtml = (safeLabel && showActualLabel)
-                      ? `<span class="split-grid-label" title="${safeLabel}">${safeLabel}</span>`
-                      : '';
-                  const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
-                      ? ` data-unit-index="${segment.unitIndex}"`
-                      : '';
-                  const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
-                  const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                  return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
-              }).join('')}</div>`
-              : '';
+                const canRenderLabel = (showLabels || Boolean(segment.alwaysVisibleLabel)) && segment.label;
+                const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
+                const labelClass = segment.alwaysVisibleLabel ? ' split-grid-label-persistent' : '';
+                const labelHtml = safeLabel
+                    ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
+                    : '';
+                const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
+                    ? ` data-unit-index="${segment.unitIndex}"`
+                    : '';
+                const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
+                const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
+            }).join('')}</div>`
+            : '';
 
         return `<div class="${classes.join(' ')}" aria-hidden="true">
                     ${titleHtml}
@@ -3522,14 +3521,12 @@ class TimeTracker {
         const label = planUnits[unitIndex];
         if (!label) return null;
 
-        const rowStart = Math.floor(unitIndex / unitsPerRow) * unitsPerRow;
-        const rowEnd = Math.min(rowStart + unitsPerRow - 1, planUnits.length - 1);
         let start = unitIndex;
-        while (start > rowStart && planUnits[start - 1] === label) {
+        while (start > 0 && planUnits[start - 1] === label) {
             start -= 1;
         }
         let end = unitIndex;
-        while (end < rowEnd && planUnits[end + 1] === label) {
+        while (end < planUnits.length - 1 && planUnits[end + 1] === label) {
             end += 1;
         }
         return { start, end, label };
@@ -3778,29 +3775,25 @@ class TimeTracker {
         const targetUnitIndex = Number.isFinite(unitIndex) ? unitIndex : sortedSlots[sortedSlots.length - 1];
         if (!sortedSlots.includes(targetUnitIndex)) return;
 
-        const unitsPerRow = 6;
-        const targetRow = Math.floor(targetUnitIndex / unitsPerRow);
-        const rowSlots = sortedSlots.filter(idx => Math.floor(idx / unitsPerRow) === targetRow);
-        if (rowSlots.length === 0) return;
-        const rowPos = rowSlots.indexOf(targetUnitIndex);
-        if (rowPos < 0) return;
+        const targetPos = sortedSlots.indexOf(targetUnitIndex);
+        if (targetPos < 0) return;
 
         let currentOnCount = 0;
-        for (let i = 0; i < rowSlots.length; i++) {
-            if (currentExtraUnits[rowSlots[i]]) {
+        for (let i = 0; i < sortedSlots.length; i++) {
+            if (currentExtraUnits[sortedSlots[i]]) {
                 currentOnCount += 1;
             } else {
                 break;
             }
         }
         const isClickedOn = Boolean(currentExtraUnits[targetUnitIndex]);
-        let newCount = rowPos + 1;
+        let newCount = targetPos + 1;
         if (isClickedOn && currentOnCount === newCount) {
             newCount = 0;
         }
 
         const nextExtraUnits = currentExtraUnits.slice();
-        rowSlots.forEach((idx, i) => {
+        sortedSlots.forEach((idx, i) => {
             nextExtraUnits[idx] = i < newCount;
         });
 
@@ -4065,7 +4058,9 @@ class TimeTracker {
 
             const planLabelSet = options.planLabelSet instanceof Set ? options.planLabelSet : null;
             const reservedIndices = options.reservedIndices instanceof Set ? options.reservedIndices : null;
+            const persistExtraFirstLabel = Boolean(options.persistExtraFirstLabel);
             const gridSegments = [];
+            const firstExtraSeen = new Set();
             if (slice.length === 0) {
                 for (let i = 0; i < unitsPerRow; i++) {
                     gridSegments.push({ label: '', span: 1 });
@@ -4073,7 +4068,16 @@ class TimeTracker {
             } else {
                 slice.forEach((label) => {
                     const isExtra = planLabelSet && label ? !planLabelSet.has(label) : false;
-                    gridSegments.push({ label, span: 1, isExtra, reservedIndices });
+                    const alwaysVisibleLabel = Boolean(
+                        persistExtraFirstLabel
+                        && label
+                        && isExtra
+                        && !firstExtraSeen.has(label)
+                    );
+                    if (alwaysVisibleLabel) {
+                        firstExtraSeen.add(label);
+                    }
+                    gridSegments.push({ label, span: 1, isExtra, reservedIndices, alwaysVisibleLabel });
                 });
                 const remainder = slice.length % unitsPerRow;
                 if (remainder !== 0) {
@@ -4133,6 +4137,7 @@ class TimeTracker {
                       extras,
                       slot && slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
                   );
+                  const shownExtraLabels = new Set();
 
                   const gridSegments = displayOrder.map((unitIndex) => {
                       const label = planUnits[unitIndex];
@@ -4140,6 +4145,10 @@ class TimeTracker {
                           ? allocation.slotsByIndex[unitIndex]
                           : '';
                       if (extraLabel) {
+                          const alwaysVisibleLabel = !shownExtraLabels.has(extraLabel);
+                          if (alwaysVisibleLabel) {
+                              shownExtraLabels.add(extraLabel);
+                          }
                           return {
                               label: extraLabel,
                               span: 1,
@@ -4147,7 +4156,8 @@ class TimeTracker {
                               active: Boolean(extraActiveUnits[unitIndex]),
                               isExtra: true,
                               reservedIndices,
-                              extraLabel
+                              extraLabel,
+                              alwaysVisibleLabel
                           };
                       }
                       return {
@@ -4174,7 +4184,8 @@ class TimeTracker {
                   toggleable: false,
                   showLabels: false,
                   planLabelSet,
-                  reservedIndices
+                  reservedIndices,
+                  persistExtraFirstLabel: true
               });
           }
 
@@ -10814,7 +10825,7 @@ class TimeTracker {
                         if (kind === 'grid') {
                             this.adjustActualGridDuration(idx, direction);
                         } else {
-                            this.adjustActualActivityDuration(idx, direction, { updatePlan: true });
+                            this.adjustActualActivityDuration(idx, direction);
                         }
                     }
                     return;
@@ -10873,7 +10884,7 @@ class TimeTracker {
                         return;
                     }
                     this.setActualActiveRow(idx);
-                    this.applyActualDurationChange(idx, parsed, { updatePlan: true });
+                    this.applyActualDurationChange(idx, parsed);
                     return;
                 }
 

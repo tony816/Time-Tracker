@@ -1780,6 +1780,9 @@ h1 {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
   padding: 10px;
   z-index: 50;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .inline-plan-dropdown .plan-tabs {
@@ -2688,6 +2691,11 @@ h1 {
 }
 
 .split-visualization-actual .split-grid-segment:hover .split-grid-label {
+  opacity: 1;
+  visibility: visible;
+}
+
+.split-visualization-actual .split-grid-label.split-grid-label-persistent {
   opacity: 1;
   visibility: visible;
 }
