@@ -8958,7 +8958,12 @@ class TimeTracker {
         };
         document.addEventListener('keydown', this.inlinePlanEscHandler);
 
-        this.inlinePlanScrollHandler = () => {
+        this.inlinePlanScrollHandler = (event) => {
+            if (this.inlinePlanDropdown && event && event.target) {
+                if (event.target === this.inlinePlanDropdown || this.inlinePlanDropdown.contains(event.target)) {
+                    return;
+                }
+            }
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor) this.positionInlinePlanDropdown(currentAnchor);
         };
