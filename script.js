@@ -3173,7 +3173,9 @@ class TimeTracker {
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
-                const canRenderLabel = (showLabels || Boolean(segment.alwaysVisibleLabel)) && segment.label;
+                const canRenderLabel = Boolean(segment.label)
+                    && !segment.suppressHoverLabel
+                    && (showLabels || Boolean(segment.alwaysVisibleLabel));
                 const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
                 const labelClass = segment.alwaysVisibleLabel ? ' split-grid-label-persistent' : '';
                 const labelHtml = safeLabel
@@ -4074,10 +4076,23 @@ class TimeTracker {
                         && isExtra
                         && !firstExtraSeen.has(label)
                     );
+                    const suppressHoverLabel = Boolean(
+                        persistExtraFirstLabel
+                        && label
+                        && isExtra
+                        && !alwaysVisibleLabel
+                    );
                     if (alwaysVisibleLabel) {
                         firstExtraSeen.add(label);
                     }
-                    gridSegments.push({ label, span: 1, isExtra, reservedIndices, alwaysVisibleLabel });
+                    gridSegments.push({
+                        label,
+                        span: 1,
+                        isExtra,
+                        reservedIndices,
+                        alwaysVisibleLabel,
+                        suppressHoverLabel
+                    });
                 });
                 const remainder = slice.length % unitsPerRow;
                 if (remainder !== 0) {
@@ -4146,6 +4161,7 @@ class TimeTracker {
                           : '';
                       if (extraLabel) {
                           const alwaysVisibleLabel = !shownExtraLabels.has(extraLabel);
+                          const suppressHoverLabel = !alwaysVisibleLabel;
                           if (alwaysVisibleLabel) {
                               shownExtraLabels.add(extraLabel);
                           }
@@ -4157,7 +4173,8 @@ class TimeTracker {
                               isExtra: true,
                               reservedIndices,
                               extraLabel,
-                              alwaysVisibleLabel
+                              alwaysVisibleLabel,
+                              suppressHoverLabel
                           };
                       }
                       return {
@@ -8165,15 +8182,58 @@ class TimeTracker {
         const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         const dropdown = this.inlinePlanDropdown;
-        const minWidth = Math.max(240, rect.width + 32);
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+        const margin = 12;
+        const gap = 6;
+
+        const maxWidth = Math.max(240, viewportWidth - (margin * 2));
+        const minWidth = Math.min(Math.max(240, rect.width + 32), maxWidth);
         dropdown.style.minWidth = `${minWidth}px`;
+        dropdown.style.width = `${minWidth}px`;
+
         let left = rect.left + scrollX;
-        let top = rect.bottom + scrollY + 6;
-        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || minWidth;
-        const maxLeft = scrollX + viewportWidth - minWidth - 12;
+        const maxLeft = scrollX + viewportWidth - minWidth - margin;
         if (left > maxLeft) {
-            left = Math.max(scrollX + 12, maxLeft);
+            left = Math.max(scrollX + margin, maxLeft);
         }
+
+        dropdown.style.visibility = 'hidden';
+        dropdown.style.left = '0px';
+        dropdown.style.top = '0px';
+        dropdown.style.maxHeight = '';
+
+        const naturalHeight = Math.max(
+            Number(dropdown.scrollHeight) || 0,
+            Number(dropdown.offsetHeight) || 0
+        );
+        const spaceBelow = Math.max(120, Math.floor(viewportHeight - rect.bottom - margin));
+        const spaceAbove = Math.max(120, Math.floor(rect.top - margin));
+
+        let placeAbove = false;
+        if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+            placeAbove = true;
+        }
+
+        let available = placeAbove ? spaceAbove : spaceBelow;
+        if (available < 120) {
+            placeAbove = spaceAbove > spaceBelow;
+            available = Math.max(spaceAbove, spaceBelow, 120);
+        }
+
+        const maxHeight = Math.max(120, Math.floor(available));
+        dropdown.style.maxHeight = `${maxHeight}px`;
+
+        const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
+        let top = placeAbove
+            ? (rect.top + scrollY - estimatedHeight - gap)
+            : (rect.bottom + scrollY + gap);
+
+        const minTop = scrollY + margin;
+        const maxTop = scrollY + viewportHeight - margin - estimatedHeight;
+        if (top < minTop) top = minTop;
+        if (top > maxTop) top = Math.max(minTop, maxTop);
+
         dropdown.style.left = `${Math.round(left)}px`;
         dropdown.style.top = `${Math.round(top)}px`;
         dropdown.style.visibility = 'visible';
