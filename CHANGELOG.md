@@ -34,7 +34,13 @@
 
 ### Tests
 - Added minimal pure utility tests for server helpers in `__tests__/server-utils.test.js`.
+- Added date-navigation regression guard test in `__tests__/date-transition-regression.test.js`.
 - Added `npm test` script (`node --test __tests__/*.test.js`).
+
+### 2026-02-13 Hotfix (date navigation)
+- Added `transitionToDate()` to centralize date switching with pre-switch timer commit.
+- Added `persistSnapshotForDate(date, slots, merged)` to persist a committed snapshot against the *previous* date explicitly.
+- Updated date input / today button / `changeDate()` to use the centralized transition path.
 
 ## Manual Test Checklist
 - [ ] 계획/실제 입력에 `<script>`/따옴표/특수문자 입력 시 화면/속성 깨짐 없이 정상 표시되는지 확인

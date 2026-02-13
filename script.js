@@ -364,9 +364,7 @@ class TimeTracker {
             });
         }
         document.getElementById('date').addEventListener('change', (e) => {
-            this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
-            this.currentDate = e.target.value;
-            this.loadData();
+            this.transitionToDate(e.target.value);
         });
         // 창 크기 변경 시 병합된 블록들의 시각적 높이를 재계산
         window.addEventListener('resize', () => {
@@ -404,10 +402,7 @@ class TimeTracker {
         });
 
         document.getElementById('todayBtn').addEventListener('click', () => {
-            this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
-            this.currentDate = this.getTodayLocalDateString();
-            this.setCurrentDate();
-            this.loadData();
+            this.transitionToDate(this.getTodayLocalDateString());
         });
 
         document.getElementById('nextDayBtn').addEventListener('click', () => {
@@ -924,6 +919,28 @@ class TimeTracker {
         } catch (_) {}
         // Supabase 동기화 스케줄링(옵션)
         try { this.scheduleSupabaseSave && this.scheduleSupabaseSave(); } catch(_) {}
+    }
+
+    createStateSnapshot(timeSlots = this.timeSlots, mergedFields = this.mergedFields) {
+        const safeSlots = Array.isArray(timeSlots) ? timeSlots : [];
+        let clonedSlots;
+        try {
+            clonedSlots = JSON.parse(JSON.stringify(safeSlots));
+        } catch (_) {
+            clonedSlots = safeSlots.map((slot) => ({ ...(slot || {}) }));
+        }
+
+        let mergedObject = {};
+        if (mergedFields instanceof Map) {
+            mergedObject = Object.fromEntries(mergedFields);
+        } else if (mergedFields && typeof mergedFields === 'object') {
+            mergedObject = { ...mergedFields };
+        }
+
+        return {
+            timeSlots: clonedSlots,
+            mergedFields: mergedObject
+        };
     }
 
     async loadData() {
@@ -1736,6 +1753,44 @@ class TimeTracker {
             return true;
         } catch(e) {
             console.warn('[supabase] upsert failed:', e);
+            return false;
+        }
+    }
+    async persistSnapshotForDate(date, snapshotSlots, snapshotMergedObj) {
+        if (!this.supabaseConfigured || !this.supabase) return false;
+        const identity = this.getSupabaseIdentity();
+        if (!identity) return false;
+        const day = String(date || '').trim();
+        if (!day) return false;
+
+        const contextSlots = Array.isArray(snapshotSlots) ? snapshotSlots : [];
+        const mergedMap = new Map(Object.entries(snapshotMergedObj || {}));
+
+        try {
+            const slotsJson = this.buildSlotsJsonForContext(contextSlots, mergedMap);
+            if (Object.keys(slotsJson).length === 0) {
+                const { error } = await this.supabase
+                    .from('timesheet_days')
+                    .delete()
+                    .eq('user_id', identity)
+                    .eq('day', day);
+                if (error) throw error;
+                this.clearTimesheetClearPending(day);
+                return true;
+            }
+            const payload = {
+                user_id: identity,
+                day,
+                slots: slotsJson,
+                updated_at: new Date().toISOString(),
+            };
+            const { error } = await this.supabase
+                .from('timesheet_days')
+                .upsert([payload], { onConflict: 'user_id,day' });
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn('[supabase] snapshot upsert failed:', e);
             return false;
         }
     }
@@ -2595,10 +2650,27 @@ class TimeTracker {
     changeDate(days) {
         const baseMs = this.getDateValue(this.currentDate);
         if (!Number.isFinite(baseMs)) return;
-        this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
         const currentDate = new Date(baseMs);
         currentDate.setDate(currentDate.getDate() + days);
-        this.currentDate = this.formatDateFromMsLocal(currentDate.getTime());
+        this.transitionToDate(this.formatDateFromMsLocal(currentDate.getTime()));
+    }
+
+    transitionToDate(nextDate) {
+        const targetDate = String(nextDate || '').trim();
+        if (!targetDate) return;
+
+        const previousDate = this.currentDate;
+        const committed = this.commitRunningTimers({ render: false, calculate: false, autoSave: false });
+
+        if (committed && previousDate) {
+            const snapshotSlots = JSON.parse(JSON.stringify(this.timeSlots || []));
+            const snapshotMergedObj = Object.fromEntries(this.mergedFields || new Map());
+            this.persistSnapshotForDate(previousDate, snapshotSlots, snapshotMergedObj).catch((e) => {
+                console.warn('[date-transition] snapshot persist failed:', e);
+            });
+        }
+
+        this.currentDate = targetDate;
         this.setCurrentDate();
         this.loadData();
         try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch(_) {}
