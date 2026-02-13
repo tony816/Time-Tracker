@@ -2,6 +2,7 @@ class TimeTracker {
     constructor() {
         this.timeSlots = [];
         this.currentDate = this.getTodayLocalDateString();
+        this.lastKnownTodayDate = this.currentDate;
         this.selectedPlannedFields = new Set();
         this.selectedActualFields = new Set();
         this.isSelectingPlanned = false;
@@ -4562,6 +4563,19 @@ class TimeTracker {
         return this.escapeHtml(text);
     }
 
+    normalizeMergeKey(rawMergeKey, expectedType = null) {
+        const match = /^(planned|actual|time)-(\d+)-(\d+)$/.exec(String(rawMergeKey || '').trim());
+        if (!match) return null;
+        const type = match[1];
+        const start = parseInt(match[2], 10);
+        const end = parseInt(match[3], 10);
+        if (expectedType && type !== expectedType) return null;
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end >= this.timeSlots.length) {
+            return null;
+        }
+        return `${type}-${start}-${end}`;
+    }
+
     createTimerField(index, slot) {
         return `<div class="actual-field-container">
                     <input type="text" class="input-field actual-input timer-result-input" 
@@ -4574,10 +4588,19 @@ class TimeTracker {
     }
 
     createMergedTimeField(mergeKey, index, slot) {
-        const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-        
+        const safeMergeKey = this.normalizeMergeKey(mergeKey, 'time');
+        if (!safeMergeKey) {
+            const timerControls = this.createTimerControls(index, slot);
+            return `<div class="time-slot-container">
+                        <div class="time-label">${slot.time}</div>
+                        ${timerControls}
+                    </div>`;
+        }
+
+        const [, startStr, endStr] = safeMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+
         if (index === start) {
             // 병합된 시간 필드의 주 셀 - 시간 범위 표시 및 단일 타이머 컨트롤
             const timerControls = this.createTimerControls(index, slot);
@@ -4588,7 +4611,7 @@ class TimeTracker {
             const timeRangeDisplay = `${startTime} ~ ${endTime}`;
             
             return `<div class="time-slot-container merged-time-main" 
-                           data-merge-key="${mergeKey}"
+                           data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
                         <div class="merged-time-content">
@@ -4599,7 +4622,7 @@ class TimeTracker {
         } else if (index === end) {
             // 병합된 시간 필드의 마지막 보조 셀 - 하단 경계선 유지
             return `<div class="time-slot-container merged-time-secondary merged-time-last" 
-                           data-merge-key="${mergeKey}"
+                           data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
                         <div class="time-label merged-secondary-hidden"></div>
@@ -4607,7 +4630,7 @@ class TimeTracker {
         } else {
             // 병합된 시간 필드의 중간 보조 셀 - 완전히 경계선 제거
             return `<div class="time-slot-container merged-time-secondary" 
-                           data-merge-key="${mergeKey}"
+                           data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
                         <div class="time-label merged-secondary-hidden"></div>
@@ -6426,23 +6449,35 @@ class TimeTracker {
     }
     
     createMergedField(mergeKey, type, index, value) {
-        const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-        const safeMergeValue = this.escapeAttribute(this.mergedFields.get(mergeKey) || '');
+        const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
+        if (!safeMergeKey) {
+            if (type === 'actual') {
+                return this.createTimerField(index, { ...this.timeSlots[index], actual: value || '' });
+            }
+            return `<input type="text" class="input-field ${type}-input" 
+                           data-index="${index}" 
+                           data-type="${type}" 
+                           value="${this.escapeAttribute(value || '')}"
+                           placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+        }
+
+        const [, startStr, endStr] = safeMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        const safeMergeValue = this.escapeAttribute(this.mergedFields.get(safeMergeKey) || '');
         
         if (type === 'actual') {
             // 우측 실제 활동 열의 경우 입력 필드와 버튼을 포함하는 컨테이너로 처리
             if (index === start) {
                 return `<div class="actual-field-container merged-actual-main" 
-                               data-merge-key="${mergeKey}"
+                               data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <div class="actual-merged-overlay">
                                 <input type="text" class="input-field actual-input timer-result-input merged-field" 
                                        data-index="${index}" 
                                        data-type="actual" 
-                                       data-merge-key="${mergeKey}"
+                                       data-merge-key="${safeMergeKey}"
                                        value="${safeMergeValue}"
                                        placeholder="활동 기록">
                                 <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
@@ -6451,13 +6486,13 @@ class TimeTracker {
             } else {
                 const isLast = index === end;
                 return `<div class="actual-field-container merged-actual-secondary ${isLast ? 'merged-actual-last' : ''}" 
-                               data-merge-key="${mergeKey}"
+                               data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <input type="text" class="input-field actual-input merged-secondary" 
                                    data-index="${index}" 
                                    data-type="actual" 
-                                   data-merge-key="${mergeKey}"
+                                   data-merge-key="${safeMergeKey}"
                                    value="${safeMergeValue}"
                                    readonly
                                    tabindex="-1"
@@ -6469,14 +6504,14 @@ class TimeTracker {
             // 좌측 계획 열도 절대배치 오버레이로 시각적 병합, 레이아웃 유지
             if (index === start) {
                 return `<div class="planned-merged-main-container" 
-                               data-merge-key="${mergeKey}"
+                               data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <div class="planned-merged-overlay">
                                 <input type="text" class="input-field ${type}-input merged-field merged-main" 
                                        data-index="${index}" 
                                        data-type="${type}" 
-                                       data-merge-key="${mergeKey}"
+                                       data-merge-key="${safeMergeKey}"
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
                                        value="${safeMergeValue}"
@@ -6488,7 +6523,7 @@ class TimeTracker {
                 return `<input type="text" class="input-field ${type}-input merged-secondary ${isLast ? 'merged-planned-last' : ''}" 
                                data-index="${index}" 
                                data-type="${type}" 
-                               data-merge-key="${mergeKey}"
+                               data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}"
                                value="${safeMergeValue}"
@@ -9545,8 +9580,18 @@ class TimeTracker {
     }
 
     updateRunningTimers() {
+        const today = this.getTodayLocalDateString();
+        if (this.lastKnownTodayDate !== today) {
+            this.lastKnownTodayDate = today;
+            const hasRunningBeforeRollover = this.timeSlots.some((slot) => slot && slot.timer && slot.timer.running);
+            if (hasRunningBeforeRollover && this.currentDate !== today) {
+                this.transitionToDate(today);
+                return;
+            }
+        }
+
         let hasRunningTimer = false;
-        
+
         this.timeSlots.forEach((slot, index) => {
             if (slot.timer.running) {
                 hasRunningTimer = true;
@@ -9557,7 +9602,7 @@ class TimeTracker {
                 }
             }
         });
-        
+
         if (!hasRunningTimer) {
             this.stopTimerInterval();
         }

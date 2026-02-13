@@ -2,7 +2,14 @@
 // - Serves static files (index.html, script.js, styles.css)
 // - Provides GET /api/notion/activities to return { activities: [{ id, title }] }
 
-require('dotenv').config();
+try {
+    // 테스트/배포 환경에서 optional dependency 누락 시 서버 전체가 죽지 않도록 방어
+    require('dotenv').config();
+} catch (err) {
+    const missingDotenv = err && err.code === 'MODULE_NOT_FOUND' && /dotenv/.test(String(err.message || ''));
+    if (!missingDotenv) throw err;
+    console.warn('[server] dotenv module not found; continuing with process.env only');
+}
 const path = require('path');
 const express = require('express');
 const { Client } = require('@notionhq/client');

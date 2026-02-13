@@ -42,6 +42,24 @@
 - Added `persistSnapshotForDate(date, slots, merged)` to persist a committed snapshot against the *previous* date explicitly.
 - Updated date input / today button / `changeDate()` to use the centralized transition path.
 
+### 2026-02-13 Overnight hardening
+
+### Stability / Test Infra
+- `server.js`에서 `dotenv` 로딩을 `try/catch`로 감싸 `MODULE_NOT_FOUND` 상황에서도 서버/테스트가 즉시 크래시하지 않도록 보완했습니다.
+
+### Core Risk Fixes
+- **날짜 전환(자정 롤오버) 리스크**: 타이머 실행 중 날짜가 바뀌면 `updateRunningTimers()`가 오늘 날짜로 `transitionToDate(today)`를 수행하도록 보완해, 실행 중 타이머가 이전 날짜 컨텍스트에 고정되는 문제를 줄였습니다.
+- **병합 키/렌더링 리스크**: `normalizeMergeKey()`를 추가해 `planned|actual|time-start-end` 형태와 범위를 검증합니다.
+  - `createMergedField()` / `createMergedTimeField()`에서 검증된 키만 렌더링에 사용
+  - 손상된/주입된 merge key는 안전한 기본 렌더링으로 폴백
+- **XSS 방어 강화(속성 주입면)**: 병합 키를 `data-merge-key`에 넣을 때 원본 문자열이 아니라 정규화된 안전 키만 반영하도록 변경했습니다.
+
+### Tests
+- `__tests__/security-and-rollover-regression.test.js` 추가:
+  - dotenv 가드 존재 회귀 테스트
+  - merge key 정규화 가드 회귀 테스트
+  - 자정 롤오버 시 오늘 날짜 전환 로직 회귀 테스트
+
 ## Manual Test Checklist
 - [ ] 계획/실제 입력에 `<script>`/따옴표/특수문자 입력 시 화면/속성 깨짐 없이 정상 표시되는지 확인
 - [ ] 실제 병합 영역에서 제한 초과 시간 입력 시 병합 시작칸 UI와 상태가 동일하게 clamp 되는지 확인
