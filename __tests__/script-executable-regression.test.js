@@ -115,6 +115,7 @@ const escapeHtml = buildMethod('escapeHtml(text)', '(text)');
 const escapeAttribute = buildMethod('escapeAttribute(text)', '(text)');
 const createTimerField = buildMethod('createTimerField(index, slot)', '(index, slot)');
 const updateRunningTimers = buildMethod('updateRunningTimers()', '()');
+const transitionToDate = buildMethod('transitionToDate(nextDate)', '(nextDate)');
 
 test('normalizeMergeKey accepts valid keys and rejects malformed values', () => {
   const ctx = { timeSlots: new Array(48).fill({}) };
@@ -183,4 +184,73 @@ test('updateRunningTimers stops interval when nothing is running', () => {
   }
 
   assert.deepEqual(calls, ['stop']);
+});
+
+test('transitionToDate commits timers and persists previous-date snapshot before switching date', async () => {
+  const calls = [];
+  const ctx = {
+    currentDate: '2026-02-13',
+    timeSlots: [{ id: 1 }],
+    mergedFields: new Map([['planned-0-0', 'deep-work']]),
+    commitRunningTimers(options) {
+      calls.push(['commit', options]);
+      return true;
+    },
+    persistSnapshotForDate(date, slots, mergedObj) {
+      calls.push(['persist', date, slots, mergedObj]);
+      return Promise.resolve();
+    },
+    setCurrentDate() {
+      calls.push(['setCurrentDate']);
+    },
+    loadData() {
+      calls.push(['loadData']);
+    },
+    resubscribeSupabaseRealtime() {
+      calls.push(['resubscribe']);
+    },
+  };
+
+  transitionToDate.call(ctx, '2026-02-14');
+
+  assert.equal(ctx.currentDate, '2026-02-14');
+  assert.equal(calls[0][0], 'commit');
+  assert.equal(calls[1][0], 'persist');
+  assert.deepEqual(calls[1][1], '2026-02-13');
+  assert.deepEqual(calls[2], ['setCurrentDate']);
+  assert.deepEqual(calls[3], ['loadData']);
+  assert.deepEqual(calls[4], ['resubscribe']);
+
+  const commitOptions = calls[0][1];
+  assert.equal(commitOptions.render, false);
+  assert.equal(commitOptions.calculate, false);
+  assert.equal(commitOptions.autoSave, false);
+});
+
+test('transitionToDate skips snapshot persistence when commit has no changes', () => {
+  const calls = [];
+  const ctx = {
+    currentDate: '2026-02-13',
+    timeSlots: [{ id: 1 }],
+    mergedFields: new Map(),
+    commitRunningTimers() {
+      calls.push('commit');
+      return false;
+    },
+    persistSnapshotForDate() {
+      calls.push('persist');
+      return Promise.resolve();
+    },
+    setCurrentDate() {
+      calls.push('setCurrentDate');
+    },
+    loadData() {
+      calls.push('loadData');
+    },
+  };
+
+  transitionToDate.call(ctx, '2026-02-14');
+
+  assert.equal(ctx.currentDate, '2026-02-14');
+  assert.deepEqual(calls, ['commit', 'setCurrentDate', 'loadData']);
 });

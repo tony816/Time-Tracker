@@ -59,10 +59,12 @@
   - dotenv 가드 존재 회귀 테스트
   - merge key 정규화 가드 회귀 테스트
   - 자정 롤오버 시 오늘 날짜 전환 로직 회귀 테스트
-- `__tests__/script-executable-regression.test.js` 추가(실행형 회귀 테스트):
+- `__tests__/script-executable-regression.test.js` 추가/확장(실행형 회귀 테스트):
   - `normalizeMergeKey()` 정상/비정상 key를 실제 실행으로 검증
   - `escapeHtml()` + `createTimerField()`에 XSS 페이로드를 주입해 raw `<script>/<img>`가 출력되지 않는지 검증
   - `updateRunningTimers()`가 자정 롤오버 시 `transitionToDate(today)`를 호출하는지, 실행 타이머가 없으면 인터벌을 중지하는지 검증
+  - `transitionToDate()`가 **commit → 이전 날짜 snapshot persist → currentDate 전환 → loadData** 순서로 동작하는지 실행형으로 검증
+  - commit 결과가 없을 때 snapshot persist를 생략하는 분기도 검증
 - `server.js`의 인라인 검증/캐시 정책을 테스트 가능한 유틸로 분리:
   - `isValidNotionDatabaseId()` 추가 및 API 경로에서 재사용
   - `getStaticCacheControl()` 추가 및 정적 파일 응답 헤더 계산에 재사용
