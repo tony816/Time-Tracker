@@ -76,7 +76,6 @@ class TimeTracker {
         this.modalActualBaseIndex = null;
         this.modalActualDirty = false;
         this.modalActualHasPlanUnits = false;
-        this.modalActualHasPlanUnits = false;
         this.modalActualPlanUnits = [];
         this.modalActualGridUnits = [];
         this.modalActualPlanLabelSet = new Set();
@@ -253,7 +252,7 @@ class TimeTracker {
                 `<input type="text" class="input-field planned-input" 
                         data-index="${index}" 
                         data-type="planned" 
-                        value="${slot.planned}"
+                        value="${this.escapeAttribute(slot.planned)}"
                         placeholder="" readonly tabindex="-1" style="cursor: default;">`;
 
             plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
@@ -338,9 +337,12 @@ class TimeTracker {
                     return;
                 }
                 if (this.supabaseUser) {
-                    this.supabase.auth.signOut().catch((err) => {
-                        console.warn('[auth] sign out failed', err);
-                        this.showNotification('로그아웃 중 오류가 발생했습니다.');
+                    this.commitRunningTimers({ render: true, calculate: true, autoSave: false });
+                    this.saveData().finally(() => {
+                        this.supabase.auth.signOut().catch((err) => {
+                            console.warn('[auth] sign out failed', err);
+                            this.showNotification('로그아웃 중 오류가 발생했습니다.');
+                        });
                     });
                 } else {
                     const options = {};
@@ -362,6 +364,7 @@ class TimeTracker {
             });
         }
         document.getElementById('date').addEventListener('change', (e) => {
+            this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
             this.currentDate = e.target.value;
             this.loadData();
         });
@@ -401,6 +404,7 @@ class TimeTracker {
         });
 
         document.getElementById('todayBtn').addEventListener('click', () => {
+            this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
             this.currentDate = this.getTodayLocalDateString();
             this.setCurrentDate();
             this.loadData();
@@ -758,16 +762,25 @@ class TimeTracker {
     calculateTotals() {
         let plannedSeconds = 0;
         let actualSeconds = 0;
+        const nowMs = Date.now();
 
         const handledPlannedMerges = new Set();
         const handledActualMerges = new Set();
+
+        const getTimerElapsedForSlot = (slot) => {
+            if (!slot || !slot.timer) return 0;
+            let elapsed = Number(slot.timer.elapsed) || 0;
+            if (slot.timer.running && Number.isFinite(slot.timer.startTime)) {
+                elapsed += Math.max(0, Math.floor((nowMs - slot.timer.startTime) / 1000));
+            }
+            return elapsed > 0 ? elapsed : 0;
+        };
 
         const sumTimerElapsedInRange = (start, end) => {
             let total = 0;
             for (let i = start; i <= end; i++) {
                 const slot = this.timeSlots[i];
-                if (!slot || !slot.timer) continue;
-                const elapsed = Number(slot.timer.elapsed) || 0;
+                const elapsed = getTimerElapsedForSlot(slot);
                 if (elapsed > 0) total += elapsed;
             }
             return total;
@@ -864,7 +877,8 @@ class TimeTracker {
         document.getElementById('totalPlanned').textContent = this.formatDurationSummary(plannedSeconds);
         document.getElementById('totalActual').textContent = this.formatDurationSummary(actualSeconds);
 
-        this.updateAnalysis(plannedSeconds, actualSeconds, actualSeconds);
+        const recordedSeconds = this.timeSlots.reduce((sum, slot) => sum + Math.floor(getTimerElapsedForSlot(slot)), 0);
+        this.updateAnalysis(plannedSeconds, actualSeconds, recordedSeconds);
     }
 
     updateAnalysis(plannedSeconds, actualSeconds, recordedSeconds) {
@@ -1050,6 +1064,7 @@ class TimeTracker {
     }
 
     clearData() {
+        this.commitRunningTimers({ render: false, calculate: false, autoSave: false });
         let routineChanged = false;
         if (this.routinesLoaded && Array.isArray(this.routines)) {
             this.routines.forEach((routine) => {
@@ -1100,6 +1115,7 @@ class TimeTracker {
         if (!this.supabaseConfigured || !this.supabase) return;
         const identity = this.getSupabaseIdentity();
         if (!identity) {
+            this.commitRunningTimers({ render: true, calculate: true, autoSave: false });
             this._lastSupabaseIdentity = null;
             this.clearSupabaseChannels();
             clearTimeout(this._sbSaveTimer);
@@ -1560,6 +1576,7 @@ class TimeTracker {
                 try {
                     const row = payload.new || payload.old;
                     if (!row || row.day !== this.currentDate) return;
+                    if (this.isTimesheetClearPending(row.day)) return;
                     const changed = this.applySlotsJson(row.slots || {});
                     if (changed) {
                         this.renderTimeEntries();
@@ -1616,12 +1633,13 @@ class TimeTracker {
         if (!this.supabaseConfigured || !this.supabase) return false;
         const identity = this.getSupabaseIdentity();
         if (!identity) return false;
+        const requestedDate = String(date || '');
         // If a clear/reset happened right before a refresh, remote data can be stale.
         // In that case, delete the remote row first and skip applying fetched slots.
-        if (this.isTimesheetClearPending(date)) {
-            const deleted = await this.deleteFromSupabaseForDate(date);
+        if (this.isTimesheetClearPending(requestedDate)) {
+            const deleted = await this.deleteFromSupabaseForDate(requestedDate);
             if (deleted) {
-                this.clearTimesheetClearPending(date);
+                this.clearTimesheetClearPending(requestedDate);
             }
             return true;
         }
@@ -1630,15 +1648,17 @@ class TimeTracker {
                 .from('timesheet_days')
                 .select('slots')
                 .eq('user_id', identity)
-                .eq('day', date)
+                .eq('day', requestedDate)
                 .maybeSingle();
             if (error && error.code !== 'PGRST116') throw error; // PGRST116: No rows
+            if (requestedDate !== this.currentDate) return false;
+            if (this.isTimesheetClearPending(requestedDate)) return true;
             let changed = false;
             if (data && data.slots) {
                 changed = this.applySlotsJson(data.slots);
             }
-            const routineApplied = (date === this.currentDate && this.applyRoutinesToDate)
-                ? this.applyRoutinesToDate(date, { reason: 'supabase-fetch' })
+            const routineApplied = (requestedDate === this.currentDate && this.applyRoutinesToDate)
+                ? this.applyRoutinesToDate(requestedDate, { reason: 'supabase-fetch' })
                 : false;
             if (changed || routineApplied) {
                 this.renderTimeEntries();
@@ -2575,6 +2595,7 @@ class TimeTracker {
     changeDate(days) {
         const baseMs = this.getDateValue(this.currentDate);
         if (!Number.isFinite(baseMs)) return;
+        this.commitRunningTimers({ render: false, calculate: false, autoSave: true });
         const currentDate = new Date(baseMs);
         currentDate.setDate(currentDate.getDate() + days);
         this.currentDate = this.formatDateFromMsLocal(currentDate.getTime());
@@ -4465,12 +4486,16 @@ class TimeTracker {
             .replace(/'/g, '&#39;');
     }
 
+    escapeAttribute(text) {
+        return this.escapeHtml(text);
+    }
+
     createTimerField(index, slot) {
         return `<div class="actual-field-container">
                     <input type="text" class="input-field actual-input timer-result-input" 
                            data-index="${index}" 
                            data-type="actual" 
-                           value="${slot.actual}"
+                           value="${this.escapeAttribute(slot.actual)}"
                            placeholder="활동 기록">
                     <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
                 </div>`;
@@ -4768,18 +4793,44 @@ class TimeTracker {
     }
 
     enforceActualLimit(index) {
-        const limit = this.getBlockLength('actual', index) * 3600;
+        const actualMergeKey = this.findMergeKey('actual', index);
+        let baseIndex = index;
+        let rangeStart = index;
+        let rangeEnd = index;
+        if (actualMergeKey) {
+            const [, startStr, endStr] = actualMergeKey.split('-');
+            const parsedStart = parseInt(startStr, 10);
+            const parsedEnd = parseInt(endStr, 10);
+            if (Number.isFinite(parsedStart)) {
+                baseIndex = parsedStart;
+                rangeStart = parsedStart;
+            }
+            if (Number.isFinite(parsedEnd)) {
+                rangeEnd = parsedEnd;
+            }
+        }
+        const limit = this.getBlockLength('actual', baseIndex) * 3600;
         if (!(limit > 0)) return;
-        const slot = this.timeSlots[index];
+        const slot = this.timeSlots[baseIndex];
         if (!slot) return;
-        const value = String(slot.actual || '').trim();
+        const value = actualMergeKey
+            ? String(this.mergedFields.get(actualMergeKey) || slot.actual || '').trim()
+            : String(slot.actual || '').trim();
         const secs = this.parseDurationFromText(value);
         if (secs != null && Number.isFinite(secs) && secs > limit) {
             const clamped = this.formatDurationSummary(limit);
-            if (slot.actual === clamped) return;
-            slot.actual = clamped;
+            if (actualMergeKey) {
+                this.mergedFields.set(actualMergeKey, clamped);
+                for (let i = rangeStart; i <= rangeEnd; i++) {
+                    if (!this.timeSlots[i]) continue;
+                    this.timeSlots[i].actual = (i === rangeStart) ? clamped : '';
+                }
+            } else {
+                if (slot.actual === clamped) return;
+                slot.actual = clamped;
+            }
             try {
-                const row = document.querySelector(`[data-index="${index}"]`);
+                const row = document.querySelector(`[data-index="${baseIndex}"]`);
                 if (row) {
                     const input = row.querySelector('.timer-result-input');
                     if (input) input.value = clamped;
@@ -6306,6 +6357,7 @@ class TimeTracker {
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
+        const safeMergeValue = this.escapeAttribute(this.mergedFields.get(mergeKey) || '');
         
         if (type === 'actual') {
             // 우측 실제 활동 열의 경우 입력 필드와 버튼을 포함하는 컨테이너로 처리
@@ -6319,7 +6371,7 @@ class TimeTracker {
                                        data-index="${index}" 
                                        data-type="actual" 
                                        data-merge-key="${mergeKey}"
-                                       value="${this.mergedFields.get(mergeKey)}"
+                                       value="${safeMergeValue}"
                                        placeholder="활동 기록">
                                 <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
                             </div>
@@ -6334,7 +6386,7 @@ class TimeTracker {
                                    data-index="${index}" 
                                    data-type="actual" 
                                    data-merge-key="${mergeKey}"
-                                   value="${this.mergedFields.get(mergeKey)}"
+                                   value="${safeMergeValue}"
                                    readonly
                                    tabindex="-1"
                                    style="cursor: pointer; opacity: 0;"
@@ -6355,7 +6407,7 @@ class TimeTracker {
                                        data-merge-key="${mergeKey}"
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
-                                       value="${this.mergedFields.get(mergeKey)}"
+                                       value="${safeMergeValue}"
                                        placeholder="" readonly tabindex="-1" style="cursor: default;">
                             </div>
                         </div>`;
@@ -6367,7 +6419,7 @@ class TimeTracker {
                                data-merge-key="${mergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}"
-                               value="${this.mergedFields.get(mergeKey)}"
+                               value="${safeMergeValue}"
                                readonly
                                tabindex="-1"
                                style="cursor: default;"
@@ -7212,7 +7264,7 @@ class TimeTracker {
                     : `<input type="text" class="input-field planned-input" 
                             data-index="${index}" 
                             data-type="planned" 
-                            value="${slot.planned}"
+                            value="${this.escapeAttribute(slot.planned)}"
                             placeholder="" readonly tabindex="-1" style="cursor: default;">`;
 
                 plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
@@ -9380,14 +9432,29 @@ class TimeTracker {
     }
 
     stopAllTimers() {
-        this.timeSlots.forEach((slot, index) => {
+        this.commitRunningTimers({ render: false, calculate: false, autoSave: false });
+    }
+
+    commitRunningTimers(options = {}) {
+        const shouldRender = Boolean(options.render);
+        const shouldCalculate = Boolean(options.calculate);
+        const shouldAutoSave = Boolean(options.autoSave);
+        const nowMs = Date.now();
+        let changed = false;
+        this.timeSlots.forEach((slot) => {
             if (slot.timer.running) {
-                slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+                slot.timer.elapsed += Math.max(0, Math.floor((nowMs - slot.timer.startTime) / 1000));
                 slot.timer.running = false;
                 slot.timer.startTime = null;
+                changed = true;
             }
         });
         this.stopTimerInterval();
+        if (!changed) return false;
+        if (shouldRender) this.renderTimeEntries();
+        if (shouldCalculate) this.calculateTotals();
+        if (shouldAutoSave) this.autoSave();
+        return true;
     }
 
     startTimerInterval() {

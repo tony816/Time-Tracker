@@ -7,3 +7,6 @@ package-lock.json
 
 # SQLite data
 data/
+
+# macOS
+.DS_Store

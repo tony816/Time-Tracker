@@ -4,18 +4,34 @@
 
 require('dotenv').config();
 const path = require('path');
-const fs = require('fs');
 const express = require('express');
 const { Client } = require('@notionhq/client');
 
 const app = express();
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '16kb', strict: true }));
 
 const NOTION_API_KEY = process.env.NOTION_API_KEY;
 const NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
 // Prefer SDK default Notion-Version to avoid bad header values from env
 const notion = new Client({
     auth: NOTION_API_KEY,
+});
+
+const STATIC_FILE_MAP = Object.freeze({
+    '/': 'index.html',
+    '/index.html': 'index.html',
+    '/styles.css': 'styles.css',
+    '/script.js': 'script.js',
+    '/actual-grid-palette-test.html': 'actual-grid-palette-test.html',
+});
+
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    next();
 });
 
 // Simple rate-limit aware wrapper (handles 429 Retry-After)
@@ -83,12 +99,14 @@ function extractPriorityRank(page, propertyName = 'Pr') {
 
 // Health check (useful for front-end detection if needed)
 app.get('/api/notion/ping', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
     res.json({ ok: true });
 });
 
 // Main API to surface activities to the SPA
 app.get('/api/notion/activities', async (_req, res) => {
     try {
+        res.set('Cache-Control', 'no-store');
         if (!NOTION_API_KEY || !NOTION_DATABASE_ID) {
             return res.status(500).json({ error: 'Notion is not configured on the server' });
         }
@@ -117,19 +135,51 @@ app.get('/api/notion/activities', async (_req, res) => {
     }
 });
 
-// Serve the static SPA from repo root
 const staticDir = path.resolve(__dirname);
-// Runtime config injection removed
+const indexPath = path.join(staticDir, 'index.html');
 
-app.use(express.static(staticDir));
+function sendStaticFileByRequestPath(req, res, next) {
+    const mapped = STATIC_FILE_MAP[req.path];
+    if (!mapped) return next();
+    const filePath = path.join(staticDir, mapped);
+    if (mapped.endsWith('.html')) {
+        res.set('Cache-Control', 'no-cache');
+    } else {
+        res.set('Cache-Control', 'public, max-age=300, immutable');
+    }
+    return res.sendFile(filePath);
+}
 
-// Fallback to index.html
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(staticDir, 'index.html'));
+app.get('/favicon.ico', (_req, res) => {
+    res.status(204).end();
+});
+
+app.get(['/','/index.html','/styles.css','/script.js','/actual-grid-palette-test.html'], sendStaticFileByRequestPath);
+
+app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+});
+
+// SPA fallback (non-API routes only)
+app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    res.set('Cache-Control', 'no-cache');
+    return res.sendFile(indexPath);
 });
 
 const port = Number(process.env.PORT || 3000);
-app.listen(port, () => {
-    console.log(`[server] Listening on http://localhost:${port}`);
-    console.log(`[server] Notion configured: key=${Boolean(NOTION_API_KEY)} db=${NOTION_DATABASE_ID ? '(set)' : '(missing)'}`);
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`[server] Listening on http://localhost:${port}`);
+        console.log(`[server] Notion configured: key=${Boolean(NOTION_API_KEY)} db=${NOTION_DATABASE_ID ? '(set)' : '(missing)'}`);
+    });
+}
+
+module.exports = {
+    app,
+    parsePriorityValue,
+    extractPriorityRank,
+    extractTitleFromPage,
+};
