@@ -7,9 +7,12 @@ const scriptPath = path.join(__dirname, '..', 'script.js');
 const source = fs.readFileSync(scriptPath, 'utf8');
 
 function extractMethodSource(signature) {
-  const start = source.indexOf(signature);
-  assert.ok(start >= 0, `method signature not found: ${signature}`);
+  const escapedSignature = signature.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declPattern = new RegExp(`(^|\\n)\\s*${escapedSignature}\\s*\\{`, 'm');
+  const match = declPattern.exec(source);
+  assert.ok(match, `method signature not found: ${signature}`);
 
+  const start = match.index + match[0].lastIndexOf(signature);
   const openBrace = source.indexOf('{', start);
   assert.ok(openBrace >= 0, `method body open brace not found: ${signature}`);
 
@@ -57,8 +60,16 @@ function extractMethodSource(signature) {
     }
 
     if (inTemplate) {
-      if (!escaped && ch === '`') inTemplate = false;
+      if (!escaped && ch === '`') {
+        inTemplate = false;
+        i += 1;
+        continue;
+      }
       escaped = !escaped && ch === '\\';
+      // 템플릿 문자열 내부의 ${ ... } 표현식에 포함된 중괄호는
+      // 메서드 본문 파싱 깊이에 반영해야 함수 경계를 정확히 찾을 수 있다.
+      if (ch === '{') depth += 1;
+      if (ch === '}') depth -= 1;
       i += 1;
       continue;
     }

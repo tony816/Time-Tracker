@@ -4555,8 +4555,8 @@ class TimeTracker {
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     escapeAttribute(text) {
