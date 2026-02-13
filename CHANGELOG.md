@@ -63,6 +63,12 @@
   - `normalizeMergeKey()` 정상/비정상 key를 실제 실행으로 검증
   - `escapeHtml()` + `createTimerField()`에 XSS 페이로드를 주입해 raw `<script>/<img>`가 출력되지 않는지 검증
   - `updateRunningTimers()`가 자정 롤오버 시 `transitionToDate(today)`를 호출하는지, 실행 타이머가 없으면 인터벌을 중지하는지 검증
+- `server.js`의 인라인 검증/캐시 정책을 테스트 가능한 유틸로 분리:
+  - `isValidNotionDatabaseId()` 추가 및 API 경로에서 재사용
+  - `getStaticCacheControl()` 추가 및 정적 파일 응답 헤더 계산에 재사용
+- `__tests__/server-utils.test.js` 확장:
+  - Notion DB ID 포맷 허용/거부 케이스
+  - 정적 파일 캐시 정책(`html` vs `css/js`) 회귀 테스트
 
 ## Manual Test Checklist
 - [ ] 계획/실제 입력에 `<script>`/따옴표/특수문자 입력 시 화면/속성 깨짐 없이 정상 표시되는지 확인

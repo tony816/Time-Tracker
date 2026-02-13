@@ -5,6 +5,8 @@ const {
     parsePriorityValue,
     extractPriorityRank,
     extractTitleFromPage,
+    isValidNotionDatabaseId,
+    getStaticCacheControl,
 } = require('../server');
 
 test('parsePriorityValue parses valid values', () => {
@@ -45,4 +47,22 @@ test('extractTitleFromPage composes plain_text title', () => {
         },
     };
     assert.equal(extractTitleFromPage(page), 'Daily Review');
+});
+
+test('isValidNotionDatabaseId accepts 32-hex and hyphenated UUID', () => {
+    assert.equal(isValidNotionDatabaseId('0123456789abcdef0123456789ABCDEF'), true);
+    assert.equal(isValidNotionDatabaseId('01234567-89ab-cdef-0123-456789abcdef'), true);
+});
+
+test('isValidNotionDatabaseId rejects malformed ids', () => {
+    assert.equal(isValidNotionDatabaseId(''), false);
+    assert.equal(isValidNotionDatabaseId('not-a-db-id'), false);
+    assert.equal(isValidNotionDatabaseId('01234567-89ab-cdef-0123-456789abcde'), false);
+    assert.equal(isValidNotionDatabaseId('0123456789abcdef0123456789abcdeZ'), false);
+});
+
+test('getStaticCacheControl uses no-cache for html and immutable cache for static assets', () => {
+    assert.equal(getStaticCacheControl('index.html'), 'no-cache');
+    assert.equal(getStaticCacheControl('styles.css'), 'public, max-age=300, immutable');
+    assert.equal(getStaticCacheControl('script.js'), 'public, max-age=300, immutable');
 });

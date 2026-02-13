@@ -104,6 +104,17 @@ function extractPriorityRank(page, propertyName = 'Pr') {
     return parsePriorityValue(prop.select?.name);
 }
 
+function isValidNotionDatabaseId(raw) {
+    const dbId = String(raw || '').trim();
+    return /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/.test(dbId);
+}
+
+function getStaticCacheControl(mappedFileName) {
+    return mappedFileName && mappedFileName.endsWith('.html')
+        ? 'no-cache'
+        : 'public, max-age=300, immutable';
+}
+
 // Health check (useful for front-end detection if needed)
 app.get('/api/notion/ping', (_req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -119,8 +130,7 @@ app.get('/api/notion/activities', async (_req, res) => {
         }
         // Basic validation for database id shape (32 hex or UUID with hyphens)
         const dbId = String(NOTION_DATABASE_ID).trim();
-        const looksValid = /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/.test(dbId);
-        if (!looksValid) {
+        if (!isValidNotionDatabaseId(dbId)) {
             return res.status(400).json({ error: 'Invalid NOTION_DATABASE_ID format. Use a 32-hex or hyphenated UUID from the database link.' });
         }
         const pages = await fetchAllDatabasePages(dbId);
@@ -149,11 +159,7 @@ function sendStaticFileByRequestPath(req, res, next) {
     const mapped = STATIC_FILE_MAP[req.path];
     if (!mapped) return next();
     const filePath = path.join(staticDir, mapped);
-    if (mapped.endsWith('.html')) {
-        res.set('Cache-Control', 'no-cache');
-    } else {
-        res.set('Cache-Control', 'public, max-age=300, immutable');
-    }
+    res.set('Cache-Control', getStaticCacheControl(mapped));
     return res.sendFile(filePath);
 }
 
@@ -189,4 +195,6 @@ module.exports = {
     parsePriorityValue,
     extractPriorityRank,
     extractTitleFromPage,
+    isValidNotionDatabaseId,
+    getStaticCacheControl,
 };
