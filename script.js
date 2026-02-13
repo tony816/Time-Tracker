@@ -4961,6 +4961,8 @@ class TimeTracker {
     renderPlanActivitiesList() {
         const { list } = this.getPlanUIElements();
         if (!list) return;
+        const dropdown = this.inlinePlanDropdown;
+        const previousDropdownScrollTop = dropdown ? dropdown.scrollTop : null;
         this.closePlanActivityMenu();
         list.innerHTML = '';
         (this.modalPlanActivities || []).forEach((item, idx) => {
@@ -5017,6 +5019,10 @@ class TimeTracker {
         this.updatePlanRowActiveStyles();
         this.syncPlanTitleBandToggleState();
         this.syncInlinePlanToSlots();
+        if (dropdown && previousDropdownScrollTop != null) {
+            const maxScrollTop = Math.max(0, dropdown.scrollHeight - dropdown.clientHeight);
+            dropdown.scrollTop = Math.min(previousDropdownScrollTop, maxScrollTop);
+        }
     }
 
     isValidPlanRow(index) {
@@ -5889,6 +5895,8 @@ class TimeTracker {
     syncInlinePlanToSlots() {
         const target = this.inlinePlanTarget;
         if (!target) return;
+        const dropdown = this.inlinePlanDropdown;
+        const previousDropdownScrollTop = dropdown ? dropdown.scrollTop : null;
         const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
         const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
         const baseIndex = Math.min(startIndex, endIndex);
@@ -5942,6 +5950,10 @@ class TimeTracker {
                 this.inlinePlanTarget.anchor = anchor;
                 this.positionInlinePlanDropdown(anchor);
             }
+        }
+        if (dropdown && previousDropdownScrollTop != null) {
+            const maxScrollTop = Math.max(0, dropdown.scrollHeight - dropdown.clientHeight);
+            dropdown.scrollTop = Math.min(previousDropdownScrollTop, maxScrollTop);
         }
         this.calculateTotals();
         this.autoSave();
@@ -8200,7 +8212,7 @@ class TimeTracker {
         const deltaY = Number(event.deltaY) || 0;
         if (deltaY === 0) return;
         if (this.canInlineWheelScroll(event.target, dropdown, deltaY)) return;
-        event.preventDefault();
+        // Allow page-level scroll when dropdown itself has reached scroll boundaries.
     }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
