@@ -22,25 +22,39 @@ body {
 }
 
 header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
   border-bottom: 2px solid #eee;
 }
 
 .header-controls {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  gap: 10px;
+}
+
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.header-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .auth-controls {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-left: auto;
 }
 
 .auth-status {
@@ -72,7 +86,8 @@ h1 {
 .date-selector {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .date-selector label {
@@ -3096,14 +3111,14 @@ h1 {
 }
 
 /* --- UX enhancement patch --- */
-.status-strip { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+.status-strip { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .status-chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#eef2f7; color:#445; }
 .status-success { background:#e8f8ef; color:#1d6f42; }
 .status-warn { background:#fff4df; color:#8a5a00; }
 .status-error { background:#fdecec; color:#a42323; }
 .status-info { background:#eaf4ff; color:#1f5c99; }
 .day-start-selector { display:flex; align-items:center; gap:6px; }
-.day-start-hint { font-size:12px; color:#667; }
+.day-start-hint { font-size:12px; color:#667; margin-left:2px; }
 
 .timer-btn { min-width:40px; height:34px; border-radius:8px; font-size:12px; font-weight:700; padding:0 8px; }
 .timer-controls { gap:6px; }

@@ -251,7 +251,7 @@ class TimeTracker {
     formatSlotTimeLabel(rawHour) {
         const hour = parseInt(String(rawHour), 10);
         if (!Number.isFinite(hour)) return String(rawHour || '');
-        return `${String(hour).padStart(2, '0')}:00`;
+        return String(hour).padStart(2, '0');
     }
 
     updateDayStartUI() {
@@ -2837,6 +2837,13 @@ class TimeTracker {
 
         this.currentDate = targetDate;
         this.setCurrentDate();
+
+        // 날짜 전환 시 이전 시트가 잠시라도 남지 않도록 즉시 초기화
+        if (typeof this.generateTimeSlots === 'function') this.generateTimeSlots();
+        if (this.mergedFields && typeof this.mergedFields.clear === 'function') this.mergedFields.clear();
+        if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries();
+        if (typeof this.calculateTotals === 'function') this.calculateTotals();
+
         this.loadData();
         try { this.resubscribeSupabaseRealtime && this.resubscribeSupabaseRealtime(); } catch(_) {}
     }

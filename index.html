@@ -9,34 +9,22 @@
   <body>
     <div class="container">
       <header>
-        <h1>타임시트</h1>
         <div class="header-controls">
-          <div class="auth-controls">
-            <span id="authStatus" class="auth-status">로그인 필요</span>
-            <button id="googleAuthBtn" type="button" class="auth-btn">Google 로그인</button>
-          </div>
-          <div class="date-selector">
-            <label for="date">날짜:</label>
-            <div class="date-navigation">
-              <button id="prevDayBtn" class="nav-btn">◀</button>
-              <button id="todayBtn" class="today-btn">오늘</button>
-              <button id="nextDayBtn" class="nav-btn">▶</button>
+          <div class="header-top-row">
+            <div class="date-selector">
+              <label for="date">날짜:</label>
+              <div class="date-navigation">
+                <button id="prevDayBtn" class="nav-btn">◀</button>
+                <button id="todayBtn" class="today-btn">오늘</button>
+                <button id="nextDayBtn" class="nav-btn">▶</button>
+              </div>
+              <input type="date" id="date" name="date" />
             </div>
-            <input type="date" id="date" name="date" />
+            <div class="auth-controls">
+              <span id="authStatus" class="auth-status">로그인 필요</span>
+              <button id="googleAuthBtn" type="button" class="auth-btn">Google 로그인</button>
+            </div>
           </div>
-          <div class="day-start-selector">
-            <label for="dayStartHour">하루 시작</label>
-            <select id="dayStartHour" aria-label="하루 시작 시각">
-              <option value="4" selected>04:00 (기본)</option>
-              <option value="0">00:00</option>
-            </select>
-          </div>
-        </div>
-        <div class="status-strip" aria-live="polite" aria-label="저장 및 동기화 상태">
-          <span id="saveStatus" class="status-chip status-idle" role="status" aria-live="polite">저장 대기</span>
-          <span id="syncStatus" class="status-chip status-idle" role="status" aria-live="polite">동기화 대기</span>
-          <span id="notionStatus" class="status-chip status-idle" role="status" aria-live="polite">노션 대기</span>
-          <span class="day-start-hint">시간표는 선택한 하루 시작 기준으로 24칸 표시됩니다.</span>
         </div>
       </header>
 
