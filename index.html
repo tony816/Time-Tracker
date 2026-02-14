@@ -24,6 +24,19 @@
             </div>
             <input type="date" id="date" name="date" />
           </div>
+          <div class="day-start-selector">
+            <label for="dayStartHour">하루 시작</label>
+            <select id="dayStartHour" aria-label="하루 시작 시각">
+              <option value="4" selected>04:00 (기본)</option>
+              <option value="0">00:00</option>
+            </select>
+          </div>
+        </div>
+        <div class="status-strip" aria-live="polite" aria-label="저장 및 동기화 상태">
+          <span id="saveStatus" class="status-chip status-idle" role="status" aria-live="polite">저장 대기</span>
+          <span id="syncStatus" class="status-chip status-idle" role="status" aria-live="polite">동기화 대기</span>
+          <span id="notionStatus" class="status-chip status-idle" role="status" aria-live="polite">노션 대기</span>
+          <span class="day-start-hint">시간표는 선택한 하루 시작 기준으로 24칸 표시됩니다.</span>
         </div>
       </header>
 
@@ -49,11 +62,11 @@
               <div class="analysis-label">분석</div>
               <div class="analysis-content" id="analysisContent">
                 <div class="analysis-item">
-                  <span class="analysis-metric">실행율:</span>
+                  <span class="analysis-metric">실행률:</span>
                   <span class="analysis-value" id="executionRate">0%</span>
                 </div>
                 <div class="analysis-item">
-                  <span class="analysis-metric">기록된 시간:</span>
+                  <span class="analysis-metric">타이머 기록:</span>
                   <span class="analysis-value" id="timerUsage">0시간</span>
                 </div>
               </div>

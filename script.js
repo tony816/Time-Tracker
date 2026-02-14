@@ -48,6 +48,9 @@ class TimeTracker {
         this.supabaseChannels = { timesheet: null, planned: null, routines: null };
         this.supabaseConfigured = false;
         this._sbSaveTimer = null;
+        this._sbRetryTimer = null;
+        this._sbRetryDelayMs = 2000;
+        this._hasPendingRemoteSync = false;
         this.supabaseUser = null;
         this._lastSupabaseIdentity = null;
         this.PLANNED_SENTINEL_DAY = '1970-01-01';
@@ -87,6 +90,15 @@ class TimeTracker {
         this.splitColorRegistry = new Map();
         this.splitColorUsed = new Set();
         this.splitColorSeed = 0;
+        this.saveStatusElement = null;
+        this.syncStatusElement = null;
+        this.notionStatusElement = null;
+        this.notificationRegion = null;
+        this.pendingClearUndo = null;
+        this.lastFocusedElementBeforeModal = null;
+        this.activityModalFocusHandler = null;
+        this.activityModalEscHandler = null;
+        this.dayStartHour = this.loadDayStartHour();
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -108,6 +120,7 @@ class TimeTracker {
 
     init() {
         this.cacheAuthElements();
+        this.cacheStatusElements();
         this.generateTimeSlots();
         this.renderTimeEntries();
         this.attachEventListeners();
@@ -118,6 +131,12 @@ class TimeTracker {
         this.attachActivityModalEventListeners();
         this.startChangeWatcher();
         this.updateAuthUI();
+        this.attachConnectivityListeners();
+        this.attachDayStartListeners();
+        this.updateDayStartUI();
+        this.setSaveStatus('idle', '저장 대기');
+        this.setSyncStatus('idle', '동기화 대기');
+        this.setNotionStatus('idle', this.notionEndpoint ? '노션 준비됨' : '노션 미설정');
         // Supabase(옵션) 초기화
         try { this.initSupabaseIntegration && this.initSupabaseIntegration(); } catch(_) {}
 
@@ -169,6 +188,75 @@ class TimeTracker {
         } catch (e) {
             console.warn('[auth-ui] update failed', e);
         }
+    }
+
+    cacheStatusElements() {
+        this.saveStatusElement = document.getElementById('saveStatus');
+        this.syncStatusElement = document.getElementById('syncStatus');
+        this.notionStatusElement = document.getElementById('notionStatus');
+    }
+
+    setStatusChip(element, kind, message) {
+        if (!element) return;
+        element.className = `status-chip status-${kind || 'idle'}`;
+        element.textContent = message || '';
+    }
+
+    setSaveStatus(kind, message) { this.setStatusChip(this.saveStatusElement, kind, message); }
+    setSyncStatus(kind, message) { this.setStatusChip(this.syncStatusElement, kind, message); }
+    setNotionStatus(kind, message) { this.setStatusChip(this.notionStatusElement, kind, message); }
+
+    attachConnectivityListeners() {
+        const setNetworkState = () => {
+            const online = navigator.onLine;
+            if (!online) {
+                this.setSyncStatus('warn', '오프라인 (로컬 저장)');
+                return;
+            }
+            if (this._hasPendingRemoteSync) {
+                this.setSyncStatus('info', '온라인 복구, 동기화 재시도…');
+                this.scheduleSupabaseSave && this.scheduleSupabaseSave();
+                return;
+            }
+            this.setSyncStatus('idle', '동기화 대기');
+        };
+        window.addEventListener('online', setNetworkState);
+        window.addEventListener('offline', setNetworkState);
+        setNetworkState();
+    }
+
+    loadDayStartHour() {
+        try {
+            const raw = localStorage.getItem('tt.dayStartHour');
+            const parsed = parseInt(raw, 10);
+            return parsed === 0 ? 0 : 4;
+        } catch (_) {
+            return 4;
+        }
+    }
+
+    attachDayStartListeners() {
+        const select = document.getElementById('dayStartHour');
+        if (!select) return;
+        select.value = String(this.dayStartHour === 0 ? 0 : 4);
+        select.addEventListener('change', () => {
+            const parsed = parseInt(select.value, 10);
+            this.dayStartHour = parsed === 0 ? 0 : 4;
+            try { localStorage.setItem('tt.dayStartHour', String(this.dayStartHour)); } catch (_) {}
+            this.renderTimeEntries(true);
+            this.updateDayStartUI();
+        });
+    }
+
+    formatSlotTimeLabel(rawHour) {
+        const hour = parseInt(String(rawHour), 10);
+        if (!Number.isFinite(hour)) return String(rawHour || '');
+        return `${String(hour).padStart(2, '0')}:00`;
+    }
+
+    updateDayStartUI() {
+        const select = document.getElementById('dayStartHour');
+        if (select) select.value = String(this.dayStartHour === 0 ? 0 : 4);
     }
 
     
@@ -254,7 +342,7 @@ class TimeTracker {
                         data-index="${index}" 
                         data-type="planned" 
                         value="${this.escapeAttribute(slot.planned)}"
-                        placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+                        placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
 
             plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
 
@@ -273,7 +361,7 @@ class TimeTracker {
                 timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
             } else {
                 timeContent = `<div class="time-slot-container">
-                    <div class="time-label">${slot.time}</div>
+                    <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
                     ${timerControls}
                 </div>`;
             }
@@ -389,13 +477,42 @@ class TimeTracker {
             }
         });
 
+        document.getElementById('timeEntries').addEventListener('keydown', (e) => {
+            const planned = e.target.closest('.planned-input');
+            if (!planned) return;
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            const index = parseInt(planned.dataset.index, 10);
+            if (Number.isFinite(index)) {
+                this.openScheduleModal('planned', index);
+            }
+        });
+
         // 수동 저장/불러오기 제거(완전 자동 저장)
 
         document.getElementById('clearBtn').addEventListener('click', () => {
-            if (confirm('모든 데이터를 초기화하시겠습니까?')) {
-                this.clearData();
-                this.showNotification('데이터가 초기화되었습니다!');
-            }
+            if (!confirm('모든 데이터를 초기화하시겠습니까? (5초 안에 실행 취소 가능)')) return;
+            const snapshot = this.createStateSnapshot();
+            this.clearData();
+            this.pendingClearUndo = snapshot;
+            this.showNotification('데이터가 초기화되었습니다. 실행 취소 가능', 'warn', {
+                duration: 5000,
+                actionLabel: '실행 취소',
+                onAction: () => {
+                    if (!this.pendingClearUndo) return;
+                    this.timeSlots = this.pendingClearUndo.timeSlots;
+                    this.mergedFields = new Map(Object.entries(this.pendingClearUndo.mergedFields || {}));
+                    this.clearTimesheetClearPending(this.currentDate);
+                    this.renderTimeEntries();
+                    this.calculateTotals();
+                    this.autoSave();
+                    this._hasPendingRemoteSync = true;
+                    this.scheduleSupabaseSave && this.scheduleSupabaseSave();
+                    this.pendingClearUndo = null;
+                    this.showNotification('초기화를 되돌렸습니다.', 'success');
+                },
+                onClose: () => { this.pendingClearUndo = null; }
+            });
         });
 
         document.getElementById('prevDayBtn').addEventListener('click', () => {
@@ -904,13 +1021,17 @@ class TimeTracker {
         const data = {
             date: this.currentDate,
             timeSlots: this.timeSlots,
-            mergedFields: Object.fromEntries(this.mergedFields)
+            mergedFields: Object.fromEntries(this.mergedFields),
+            savedAt: Date.now()
         };
-        // 로컬 저장
+        this.setSaveStatus('info', '저장 중…');
         try {
-            // local storage disabled
-        } catch (_) {}
-        // 마지막 저장 스냅샷 업데이트(워처 중복 저장 방지)
+            localStorage.setItem(`timesheetData:${this.currentDate}`, JSON.stringify(data));
+            localStorage.setItem('timesheetData:last', JSON.stringify(data));
+            this.setSaveStatus('success', `저장됨 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
+        } catch (_) {
+            this.setSaveStatus('error', '로컬 저장 실패');
+        }
         try {
             this._lastSavedSignature = JSON.stringify({
                 date: this.currentDate,
@@ -918,8 +1039,11 @@ class TimeTracker {
                 mergedFields: Object.fromEntries(this.mergedFields)
             });
         } catch (_) {}
-        // Supabase 동기화 스케줄링(옵션)
-        try { this.scheduleSupabaseSave && this.scheduleSupabaseSave(); } catch(_) {}
+        try {
+            this._hasPendingRemoteSync = true;
+            this.setSyncStatus(navigator.onLine ? 'info' : 'warn', navigator.onLine ? '동기화 예약됨' : '오프라인 (온라인 시 동기화)');
+            this.scheduleSupabaseSave && this.scheduleSupabaseSave();
+        } catch(_) {}
     }
 
     createStateSnapshot(timeSlots = this.timeSlots, mergedFields = this.mergedFields) {
@@ -946,7 +1070,12 @@ class TimeTracker {
 
     async loadData() {
         // 로컬에서 로드
-        const savedData = null;
+        let savedData = null;
+        try {
+            savedData = localStorage.getItem(`timesheetData:${this.currentDate}`) || localStorage.getItem('timesheetData:last');
+        } catch (_) {
+            savedData = null;
+        }
         if (savedData) {
             const data = JSON.parse(savedData);
             this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
@@ -1103,7 +1232,9 @@ class TimeTracker {
         this.calculateTotals();
         this.renderInlinePlanDropdownOptions();
         this.closeRoutineMenu();
-        try { /* local storage disabled */ } catch (_) {}
+        try {
+            localStorage.removeItem(`timesheetData:${this.currentDate}`);
+        } catch (_) {}
         // If user refreshes quickly, Supabase fetch could re-apply stale data.
         // Mark this day as "pending clear" so the next load will delete remote first.
         this.markTimesheetClearPending(this.currentDate);
@@ -1137,6 +1268,9 @@ class TimeTracker {
             this._lastSupabaseIdentity = null;
             this.clearSupabaseChannels();
             clearTimeout(this._sbSaveTimer);
+            clearTimeout(this._sbRetryTimer);
+            this._sbRetryDelayMs = 2000;
+            this._hasPendingRemoteSync = false;
             clearTimeout(this._plannedSaveTimer);
             this._lastSupabasePlannedSignature = '';
             clearTimeout(this._routineSaveTimer);
@@ -1691,10 +1825,20 @@ class TimeTracker {
     }
     scheduleSupabaseSave() {
         if (!this.supabaseConfigured || !this.supabase) return;
+        if (!navigator.onLine) return;
         const identity = this.getSupabaseIdentity();
         if (!identity) return;
         clearTimeout(this._sbSaveTimer);
         this._sbSaveTimer = setTimeout(() => { try { this.saveToSupabase && this.saveToSupabase(); } catch(_) {} }, 500);
+    }
+    scheduleSupabaseRetry() {
+        clearTimeout(this._sbRetryTimer);
+        if (!this._hasPendingRemoteSync || !navigator.onLine) return;
+        const nextDelay = Number.isFinite(this._sbRetryDelayMs) ? this._sbRetryDelayMs : 2000;
+        this._sbRetryTimer = setTimeout(() => {
+            this.scheduleSupabaseSave && this.scheduleSupabaseSave();
+        }, nextDelay);
+        this._sbRetryDelayMs = Math.min(nextDelay * 2, 30000);
     }
     getTimesheetClearPendingKey(date) {
         return String(date || '');
@@ -1730,14 +1874,27 @@ class TimeTracker {
     }
     async saveToSupabase() {
         if (!this.supabaseConfigured || !this.supabase) return false;
+        if (!navigator.onLine) {
+            this._hasPendingRemoteSync = true;
+            this.setSyncStatus('warn', '오프라인 (온라인 시 동기화)');
+            return false;
+        }
         const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
+        if (!identity) {
+            this._hasPendingRemoteSync = true;
+            this.setSyncStatus('warn', '로그인 후 동기화됩니다');
+            return false;
+        }
         try {
             const slotsJson = this.buildSlotsJson();
             if (Object.keys(slotsJson).length === 0) {
                 const deleted = await this.deleteFromSupabaseForDate(this.currentDate);
                 if (deleted) {
                     this.clearTimesheetClearPending(this.currentDate);
+                    this._hasPendingRemoteSync = false;
+                    this._sbRetryDelayMs = 2000;
+                    clearTimeout(this._sbRetryTimer);
+                    this.setSyncStatus('success', '동기화 완료');
                 }
                 return deleted;
             }
@@ -1751,9 +1908,16 @@ class TimeTracker {
                 .from('timesheet_days')
                 .upsert([payload], { onConflict: 'user_id,day' });
             if (error) throw error;
+            this._hasPendingRemoteSync = false;
+            this._sbRetryDelayMs = 2000;
+            clearTimeout(this._sbRetryTimer);
+            this.setSyncStatus('success', `동기화 완료 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
             return true;
         } catch(e) {
             console.warn('[supabase] upsert failed:', e);
+            this._hasPendingRemoteSync = true;
+            this.setSyncStatus('error', '동기화 실패 (자동 재시도)');
+            this.scheduleSupabaseRetry && this.scheduleSupabaseRetry();
             return false;
         }
     }
@@ -4583,7 +4747,7 @@ class TimeTracker {
                            data-type="actual" 
                            value="${this.escapeAttribute(slot.actual)}"
                            placeholder="활동 기록">
-                    <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
                 </div>`;
     }
 
@@ -4592,7 +4756,7 @@ class TimeTracker {
         if (!safeMergeKey) {
             const timerControls = this.createTimerControls(index, slot);
             return `<div class="time-slot-container">
-                        <div class="time-label">${slot.time}</div>
+                        <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
                         ${timerControls}
                     </div>`;
         }
@@ -4606,8 +4770,8 @@ class TimeTracker {
             const timerControls = this.createTimerControls(index, slot);
             
             // 시간 범위 생성 (예: 12 ~ 13 형태)
-            const startTime = this.timeSlots[start].time;
-            const endTime = this.timeSlots[end].time;
+            const startTime = this.formatSlotTimeLabel(this.timeSlots[start].time);
+            const endTime = this.formatSlotTimeLabel(this.timeSlots[end].time);
             const timeRangeDisplay = `${startTime} ~ ${endTime}`;
             
             return `<div class="time-slot-container merged-time-main" 
@@ -4670,17 +4834,17 @@ class TimeTracker {
         const isRunning = slot.timer.running;
         const hasElapsed = slot.timer.elapsed > 0;
 
-        let buttonIcon = '▶️';
+        let buttonIcon = '시작';
         let buttonAction = 'start';
         let buttonDisabled = (!canStart && !isRunning) || disabledByDate;
         let buttonTitle = '';
 
         if (isRunning) {
-            buttonIcon = '⏸️';
+            buttonIcon = '일시정지';
             buttonAction = 'pause';
             buttonDisabled = false;
         } else if (hasElapsed) {
-            buttonIcon = '▶️';
+            buttonIcon = '재개';
             buttonAction = 'resume';
             buttonDisabled = !canStart || disabledByDate;
         }
@@ -4709,14 +4873,14 @@ class TimeTracker {
                 <div class="timer-controls">
                     <button class="timer-btn timer-start-pause" 
                             data-index="${index}" 
-                            data-action="${buttonAction}"${startButtonAttrString}>
+                            data-action="${buttonAction}" aria-label="타이머 ${buttonIcon}"${startButtonAttrString}>
                         ${buttonIcon}
                     </button>
                     <button class="timer-btn timer-stop" 
                             data-index="${index}" 
-                            data-action="stop"
+                            data-action="stop" aria-label="타이머 정지"
                             style="${stopButtonStyle}">
-                        ⏹️
+                        정지
                     </button>
                 </div>
                 <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
@@ -6414,12 +6578,16 @@ class TimeTracker {
     }
 
     canStartTimer(index) {
+        return this.getTimerStartBlockReason(index) === null;
+    }
+
+    getTimerStartBlockReason(index) {
         if (!this.isCurrentDateToday()) {
-            return false;
+            return '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
         }
         const slot = this.timeSlots[index];
         const currentTimeIndex = this.getCurrentTimeIndex();
-        if (currentTimeIndex < 0) return false;
+        if (currentTimeIndex < 0) return '현재 시간 슬롯에서만 시작할 수 있습니다.';
 
         // 시간 병합 범위 고려
         let timeStart = index;
@@ -6445,7 +6613,9 @@ class TimeTracker {
 
         const hasPlannedActivity = plannedText !== '';
         const isCurrentInRange = currentTimeIndex >= timeStart && currentTimeIndex <= timeEnd;
-        return hasPlannedActivity && isCurrentInRange;
+        if (!hasPlannedActivity) return '계획된 활동이 있어야 타이머를 시작할 수 있습니다.';
+        if (!isCurrentInRange) return '현재 시간 범위의 칸에서만 타이머를 시작할 수 있습니다.';
+        return null;
     }
     
     createMergedField(mergeKey, type, index, value) {
@@ -6458,7 +6628,7 @@ class TimeTracker {
                            data-index="${index}" 
                            data-type="${type}" 
                            value="${this.escapeAttribute(value || '')}"
-                           placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+                           placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         }
 
         const [, startStr, endStr] = safeMergeKey.split('-');
@@ -6480,7 +6650,7 @@ class TimeTracker {
                                        data-merge-key="${safeMergeKey}"
                                        value="${safeMergeValue}"
                                        placeholder="활동 기록">
-                                <button class="activity-log-btn" data-index="${index}" title="상세 기록">📝</button>
+                                <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
                             </div>
                         </div>`;
             } else {
@@ -6515,7 +6685,7 @@ class TimeTracker {
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
                                        value="${safeMergeValue}"
-                                       placeholder="" readonly tabindex="-1" style="cursor: default;">
+                                       placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
                             </div>
                         </div>`;
             } else {
@@ -7372,7 +7542,7 @@ class TimeTracker {
                             data-index="${index}" 
                             data-type="planned" 
                             value="${this.escapeAttribute(slot.planned)}"
-                            placeholder="" readonly tabindex="-1" style="cursor: default;">`;
+                            placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
 
                 plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
 
@@ -8804,7 +8974,7 @@ class TimeTracker {
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
             </div>
-            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해 (준비중)">세부 활동 분해 (준비중)</button>
+            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해" hidden>세부 활동 분해</button>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-title-area">
                     <div class="title-band-toggle inline-plan-title-toggle">
@@ -9261,7 +9431,12 @@ class TimeTracker {
     }
     async prefetchNotionActivitiesIfConfigured() {
         const url = this.notionEndpoint;
-        if (!url) return false;
+        if (!url) {
+            this.setNotionStatus('warn', '노션 미설정');
+            return false;
+        }
+
+        this.setNotionStatus('info', '노션 동기화 중…');
 
         let changed = false;
 
@@ -9282,9 +9457,18 @@ class TimeTracker {
             const normalized = this.normalizeNotionActivities(items);
             this.notionActivitiesCache = normalized;
             const fetchChanged = this.mergeNotionActivities(normalized);
+            this.setNotionStatus('success', `노션 동기화 완료 (${normalized.length}개)`);
             return changed || fetchChanged;
         } catch (e) {
             console.warn('Notion activities fetch failed:', e);
+            this.setNotionStatus('error', '노션 동기화 실패 (재시도 가능)');
+            this.showNotification('노션 동기화에 실패했습니다.', 'warn', {
+                duration: 5000,
+                actionLabel: '재시도',
+                onAction: () => {
+                    this.prefetchNotionActivitiesIfConfigured && this.prefetchNotionActivitiesIfConfigured();
+                }
+            });
             return changed;
         }
     }
@@ -9374,30 +9558,46 @@ class TimeTracker {
         return changed;
     }
 
-    showNotification(message) {
+    showNotification(message, type = 'info', options = {}) {
+        if (!this.notificationRegion) {
+            const region = document.createElement('div');
+            region.className = 'notification-region';
+            region.setAttribute('role', 'region');
+            region.setAttribute('aria-label', '알림');
+            region.setAttribute('aria-live', 'polite');
+            region.setAttribute('aria-atomic', 'true');
+            document.body.appendChild(region);
+            this.notificationRegion = region;
+        }
         const notification = document.createElement('div');
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #27ae60;
-            color: white;
-            padding: 15px 20px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        `;
-        
-        document.body.appendChild(notification);
-        
+        notification.className = `toast toast-${type}`;
+        notification.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        notification.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        const text = document.createElement('span');
+        text.textContent = message;
+        notification.appendChild(text);
+        if (options.actionLabel && typeof options.onAction === 'function') {
+            const actionBtn = document.createElement('button');
+            actionBtn.type = 'button';
+            actionBtn.className = 'toast-action';
+            actionBtn.textContent = options.actionLabel;
+            actionBtn.setAttribute('aria-label', `${options.actionLabel} 실행`);
+            actionBtn.addEventListener('click', () => {
+                options.onAction();
+                notification.remove();
+            });
+            notification.appendChild(actionBtn);
+        }
+        this.notificationRegion.appendChild(notification);
+
+        const duration = Number.isFinite(options.duration) ? options.duration : 3000;
         setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
+            notification.classList.add('toast-exit');
             setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 3000);
+                notification.remove();
+                if (typeof options.onClose === 'function') options.onClose();
+            }, 250);
+        }, duration);
     }
 
     // 타이머 관련 메서드들 추가
@@ -9429,7 +9629,15 @@ class TimeTracker {
     }
 
     startTimer(index) {
-        if (!this.canStartTimer(index)) return;
+        const reason = this.getTimerStartBlockReason(index);
+        if (reason) {
+            this.showNotification(reason, 'warn');
+            if (reason.includes('계획된 활동')) {
+                const plannedInput = document.querySelector(`.planned-input[data-index="${index}"]`);
+                if (plannedInput && typeof plannedInput.focus === 'function') plannedInput.focus();
+            }
+            return;
+        }
         
         // 다른 모든 타이머 정지
         this.stopAllTimers();
@@ -9456,7 +9664,15 @@ class TimeTracker {
     }
 
     resumeTimer(index) {
-        if (!this.canStartTimer(index)) return;
+        const reason = this.getTimerStartBlockReason(index);
+        if (reason) {
+            this.showNotification(reason, 'warn');
+            if (reason.includes('계획된 활동')) {
+                const plannedInput = document.querySelector(`.planned-input[data-index="${index}"]`);
+                if (plannedInput && typeof plannedInput.focus === 'function') plannedInput.focus();
+            }
+            return;
+        }
         
         // 다른 모든 타이머 정지
         this.stopAllTimers();
@@ -10923,8 +11139,8 @@ class TimeTracker {
         const range = this.getSplitRange('actual', baseIndex);
         const startSlot = this.timeSlots[range.start] || baseSlot;
         const endSlot = this.timeSlots[range.end] || baseSlot;
-        const startLabel = startSlot && startSlot.time ? startSlot.time : '';
-        const endLabel = endSlot && endSlot.time ? endSlot.time : '';
+        const startLabel = startSlot && startSlot.time ? this.formatSlotTimeLabel(startSlot.time) : '';
+        const endLabel = endSlot && endSlot.time ? this.formatSlotTimeLabel(endSlot.time) : '';
         const timeLabel = (range.start === range.end || !endLabel) ? startLabel : `${startLabel} ~ ${endLabel}`;
         document.getElementById('activityTime').value = timeLabel;
         // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
@@ -10964,17 +11180,24 @@ class TimeTracker {
         this.modalActualDirty = false;
         this.renderActualActivitiesList();
 
+        this.lastFocusedElementBeforeModal = document.activeElement;
         modal.style.display = 'flex';
         modal.dataset.index = index;
         modal.dataset.baseIndex = String(baseIndex);
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
 
         setTimeout(() => {
             document.getElementById('activityDetails').focus();
         }, 100);
     }
 
-    closeActivityLogModal() {
+    closeActivityLogModal(options = {}) {
         const modal = document.getElementById('activityLogModal');
+        if (!options.force && this.modalActualDirty) {
+            const discard = confirm('저장하지 않은 실제 활동 변경사항이 있습니다. 닫을까요?');
+            if (!discard) return;
+        }
         modal.style.display = 'none';
         
         document.getElementById('activityDetails').value = '';
@@ -10997,6 +11220,9 @@ class TimeTracker {
         
         delete modal.dataset.index;
         delete modal.dataset.baseIndex;
+        if (this.lastFocusedElementBeforeModal && typeof this.lastFocusedElementBeforeModal.focus === 'function') {
+            try { this.lastFocusedElementBeforeModal.focus(); } catch (_) {}
+        }
     }
 
     saveActivityLogFromModal() {
@@ -11066,7 +11292,7 @@ class TimeTracker {
             this.autoSave();
         }
 
-        this.closeActivityLogModal();
+        this.closeActivityLogModal({ force: true });
     }
 
     attachActivityModalEventListeners() {
@@ -11094,8 +11320,23 @@ class TimeTracker {
         });
         
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.style.display === 'flex') {
+            if (modal.style.display !== 'flex') return;
+            if (e.key === 'Escape') {
                 this.closeActivityLogModal();
+                return;
+            }
+            if (e.key === 'Tab') {
+                const focusable = modal.querySelectorAll('button, input, textarea, select, [tabindex]:not([tabindex="-1"])');
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
             }
         });
 

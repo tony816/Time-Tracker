@@ -3094,3 +3094,42 @@ h1 {
         min-width: 48px;
     }
 }
+
+/* --- UX enhancement patch --- */
+.status-strip { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+.status-chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#eef2f7; color:#445; }
+.status-success { background:#e8f8ef; color:#1d6f42; }
+.status-warn { background:#fff4df; color:#8a5a00; }
+.status-error { background:#fdecec; color:#a42323; }
+.status-info { background:#eaf4ff; color:#1f5c99; }
+.day-start-selector { display:flex; align-items:center; gap:6px; }
+.day-start-hint { font-size:12px; color:#667; }
+
+.timer-btn { min-width:40px; height:34px; border-radius:8px; font-size:12px; font-weight:700; padding:0 8px; }
+.timer-controls { gap:6px; }
+.timer-display { font-size:12px; min-width:78px; }
+
+@media (hover: none), (pointer: coarse) {
+  .activity-log-btn { opacity: 1; pointer-events: auto; left: calc(100% - 22px); }
+}
+
+.notification-region { position:fixed; top:14px; right:14px; z-index:5000; display:flex; flex-direction:column; gap:8px; }
+.toast { display:flex; align-items:center; gap:10px; min-width:220px; max-width:360px; padding:10px 12px; border-radius:10px; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.16); animation:toastIn .22s ease; }
+.toast-info { background:#2f7ad0; }
+.toast-success { background:#2d9d61; }
+.toast-warn { background:#b7791f; }
+.toast-error { background:#c0392b; }
+.toast-action { margin-left:auto; border:none; background:rgba(255,255,255,.2); color:#fff; border-radius:6px; padding:4px 8px; cursor:pointer; }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.toast-action:focus-visible,
+.timer-btn:focus-visible,
+.activity-log-btn:focus-visible {
+  outline: 3px solid #1f6feb;
+  outline-offset: 2px;
+}
+.toast-exit { animation:toastOut .22s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateY(-6px);} to { opacity:1; transform:translateY(0);} }
+@keyframes toastOut { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-5px);} }
