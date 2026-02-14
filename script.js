@@ -8541,7 +8541,7 @@ class TimeTracker {
         const deltaY = Number(event.deltaY) || 0;
         if (deltaY === 0) return;
         if (this.canInlineWheelScroll(event.target, dropdown, deltaY)) return;
-        // Allow page-level scroll when dropdown itself has reached scroll boundaries.
+        event.preventDefault();
     }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
@@ -8974,7 +8974,7 @@ class TimeTracker {
             <div class="inline-plan-options dropdown">
                 <ul class="inline-plan-options-list"></ul>
             </div>
-            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해" hidden>세부 활동 분해</button>
+            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해">세부 활동 분해</button>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-title-area">
                     <div class="title-band-toggle inline-plan-title-toggle">
