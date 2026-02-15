@@ -755,6 +755,12 @@ class TimeTracker {
             this.dragStartIndex = -1;
             this.currentColumnType = null;
         });
+        document.addEventListener('touchend', () => {
+            this.isSelectingPlanned = false;
+            this.isSelectingActual = false;
+            this.dragStartIndex = -1;
+            this.currentColumnType = null;
+        }, { passive: true });
 
         window.addEventListener('resize', () => {
             this.updateSelectionOverlay('planned');
@@ -2941,6 +2947,68 @@ class TimeTracker {
                     this.currentColumnType = null;
                 }
             });
+
+            // 모바일: 롱프레스 후 드래그로 범위 선택 (PC 드래그와 유사)
+            let plannedTouchLongPressTimer = null;
+            let plannedTouchLongPressActive = false;
+            const clearPlannedTouchLongPress = () => {
+                if (plannedTouchLongPressTimer) {
+                    clearTimeout(plannedTouchLongPressTimer);
+                    plannedTouchLongPressTimer = null;
+                }
+            };
+
+            plannedField.addEventListener('touchstart', (e) => {
+                if (this.findMergeKey('planned', index)) return;
+                if (!e.touches || e.touches.length !== 1) return;
+                plannedTouchLongPressActive = false;
+                plannedMouseMoved = false;
+                clearPlannedTouchLongPress();
+                plannedTouchLongPressTimer = setTimeout(() => {
+                    plannedTouchLongPressActive = true;
+                    this.closeInlinePlanDropdown();
+                    this.dragStartIndex = index;
+                    this.currentColumnType = 'planned';
+                    this.isSelectingPlanned = true;
+                    this.clearAllSelections();
+                    this.selectFieldRange('planned', index, index);
+                    try { plannedField.blur(); } catch (_) {}
+                }, 280);
+            }, { passive: true });
+
+            plannedField.addEventListener('touchmove', (e) => {
+                if (!plannedTouchLongPressActive) return;
+                const t = e.touches && e.touches[0];
+                if (!t) return;
+                e.preventDefault();
+                const hoverIndex = this.getIndexAtClientPosition('planned', t.clientX, t.clientY);
+                if (!Number.isInteger(hoverIndex)) return;
+                if (this.currentColumnType !== 'planned') return;
+                plannedMouseMoved = true;
+                this.clearSelection('planned');
+                this.selectFieldRange('planned', this.dragStartIndex, hoverIndex);
+            }, { passive: false });
+
+            plannedField.addEventListener('touchend', (e) => {
+                clearPlannedTouchLongPress();
+                if (plannedTouchLongPressActive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.isSelectingPlanned = false;
+                    this.currentColumnType = null;
+                    this.dragStartIndex = -1;
+                }
+                plannedTouchLongPressActive = false;
+            }, { passive: false });
+
+            plannedField.addEventListener('touchcancel', () => {
+                clearPlannedTouchLongPress();
+                plannedTouchLongPressActive = false;
+                this.isSelectingPlanned = false;
+                this.currentColumnType = null;
+                this.dragStartIndex = -1;
+            }, { passive: true });
+
             plannedField.addEventListener('mouseenter', (e) => {
                 // 드래그 중이 아닐 때는 선택 유무와 관계없이 (단, 멀티선택/자기 자신은 내부 가드) 호버 버튼 표시
                 if (!this.isSelectingPlanned) {
@@ -3254,39 +3322,123 @@ class TimeTracker {
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
-        
-        this.mergedFields.delete(mergeKey);
-        
-        // 좌측 계획 열 병합 해제 시 모든 열 동기화 해제
-        if (type === 'planned') {
-            // 중앙 시간 열과 우측 실제 활동 열 병합도 함께 해제
-            const timeRangeKey = `time-${start}-${end}`;
-            const actualMergeKey = `actual-${start}-${end}`;
-            this.mergedFields.delete(timeRangeKey);
-            this.mergedFields.delete(actualMergeKey);
-            
-            for (let i = start; i <= end; i++) {
-                this.timeSlots[i].planned = '';
-                this.timeSlots[i].actual = '';
-                if (this.timeSlots[i].activityLog && this.timeSlots[i].activityLog.subActivities) {
-                    this.timeSlots[i].activityLog.subActivities = [];
-                    this.timeSlots[i].activityLog.titleBandOn = false;
-                    this.timeSlots[i].activityLog.actualOverride = false;
-                    if (Array.isArray(this.timeSlots[i].activityLog.actualGridUnits)) {
-                        this.timeSlots[i].activityLog.actualGridUnits = [];
-                    }
-                    if (Array.isArray(this.timeSlots[i].activityLog.actualExtraGridUnits)) {
-                        this.timeSlots[i].activityLog.actualExtraGridUnits = [];
-                    }
+        const slotCount = Math.max(1, (end - start + 1));
+
+        const timeRangeKey = `time-${start}-${end}`;
+        const actualMergeKey = `actual-${start}-${end}`;
+        const baseSlot = this.timeSlots[start] || {};
+
+        const mergedPlannedText = String(this.mergedFields.get(mergeKey) ?? baseSlot.planned ?? '').trim();
+        const mergedActualText = String(this.mergedFields.get(actualMergeKey) ?? baseSlot.actual ?? '').trim();
+        const mergedPlanTitle = String(baseSlot.planTitle || '').trim();
+
+        const sourcePlanActivities = this.normalizePlanActivitiesArray(baseSlot.planActivities);
+        const sourceActualActivities = this.normalizeActivitiesArray(baseSlot.activityLog && baseSlot.activityLog.subActivities);
+
+        const splitSecondsEvenly = (totalSeconds, count) => {
+            const safeTotal = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+            const n = Math.max(1, Math.floor(Number(count) || 1));
+            const base = Math.floor(safeTotal / n);
+            let rem = safeTotal - (base * n);
+            const out = new Array(n).fill(base);
+            for (let i = 0; i < n && rem > 0; i += 1, rem -= 1) out[i] += 1;
+            return out;
+        };
+
+        const splitActivitiesBySlots = (items, count, isActual = false) => {
+            const normalized = Array.isArray(items) ? items : [];
+            const perSlot = Array.from({ length: count }, () => []);
+            normalized.forEach((item) => {
+                if (!item) return;
+                const totalSec = Math.max(0, Math.floor(Number(item.seconds) || 0));
+                if (totalSec <= 0) return;
+                const secChunks = splitSecondsEvenly(totalSec, count);
+
+                let recChunks = null;
+                if (isActual) {
+                    const rec = Number.isFinite(item.recordedSeconds)
+                        ? Math.max(0, Math.floor(Number(item.recordedSeconds)))
+                        : totalSec;
+                    recChunks = splitSecondsEvenly(rec, count);
                 }
-                if (Array.isArray(this.timeSlots[i].planActivities)) {
-                    this.timeSlots[i].planActivities = [];
+
+                for (let idx = 0; idx < count; idx++) {
+                    const sec = secChunks[idx] || 0;
+                    if (sec <= 0) continue;
+                    const next = { ...item, seconds: sec };
+                    if (isActual) {
+                        next.recordedSeconds = recChunks ? (recChunks[idx] || sec) : sec;
+                    }
+                    perSlot[idx].push(next);
                 }
-                this.timeSlots[i].planTitle = '';
-                this.timeSlots[i].planTitleBandOn = false;
+            });
+            return perSlot;
+        };
+
+        const summarizeLabel = (items, fallbackText) => {
+            const arr = Array.isArray(items) ? items : [];
+            if (arr.length <= 0) return String(fallbackText || '').trim();
+            const labels = arr
+                .map((it) => String(it && it.label ? it.label : '').trim())
+                .filter(Boolean);
+            if (labels.length <= 0) return String(fallbackText || '').trim();
+            if (labels.length === 1) return labels[0];
+            return `${labels[0]} 외 ${labels.length - 1}`;
+        };
+
+        const splitBooleanUnits = (units, count) => {
+            const src = Array.isArray(units) ? units.map(v => Boolean(v)) : [];
+            const n = Math.max(1, Math.floor(Number(count) || 1));
+            const lengths = splitSecondsEvenly(src.length, n);
+            const out = [];
+            let offset = 0;
+            for (let i = 0; i < n; i++) {
+                const len = lengths[i] || 0;
+                out.push(src.slice(offset, offset + len));
+                offset += len;
             }
+            return out;
+        };
+
+        const planBySlot = splitActivitiesBySlots(sourcePlanActivities, slotCount, false);
+        const actualBySlot = splitActivitiesBySlots(sourceActualActivities, slotCount, true);
+        const baseLog = (baseSlot && baseSlot.activityLog && typeof baseSlot.activityLog === 'object')
+            ? baseSlot.activityLog
+            : {};
+        const actualUnitsBySlot = splitBooleanUnits(baseLog.actualGridUnits, slotCount);
+        const extraUnitsBySlot = splitBooleanUnits(baseLog.actualExtraGridUnits, slotCount);
+
+        // 병합 키 제거
+        this.mergedFields.delete(mergeKey);
+        this.mergedFields.delete(timeRangeKey);
+        this.mergedFields.delete(actualMergeKey);
+
+        for (let i = start; i <= end; i++) {
+            const rel = i - start;
+            const slot = this.timeSlots[i];
+            if (!slot) continue;
+
+            if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+            }
+
+            const slotPlanActivities = Array.isArray(planBySlot[rel]) ? planBySlot[rel] : [];
+            const slotActualActivities = Array.isArray(actualBySlot[rel]) ? actualBySlot[rel] : [];
+
+            slot.planActivities = slotPlanActivities.map(item => ({ ...item }));
+            slot.activityLog.subActivities = slotActualActivities.map(item => ({ ...item }));
+
+            slot.planned = summarizeLabel(slotPlanActivities, mergedPlannedText);
+            slot.actual = summarizeLabel(slotActualActivities, mergedActualText);
+
+            slot.planTitle = slot.planned ? mergedPlanTitle : '';
+            slot.planTitleBandOn = Boolean(slot.planTitle && slotPlanActivities.length > 0);
+            slot.activityLog.titleBandOn = Boolean(slot.activityLog.titleBandOn && slotActualActivities.length > 0);
+            slot.activityLog.actualOverride = false;
+            slot.activityLog.actualGridUnits = Array.isArray(actualUnitsBySlot[rel]) ? actualUnitsBySlot[rel].slice() : [];
+            slot.activityLog.actualExtraGridUnits = Array.isArray(extraUnitsBySlot[rel]) ? extraUnitsBySlot[rel].slice() : [];
         }
-        
+
         this.renderTimeEntries();
         this.clearAllSelections();
         this.calculateTotals();
