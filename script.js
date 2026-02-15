@@ -171,6 +171,27 @@ class TimeTracker {
         }
     }
 
+    getSupabaseRedirectTo() {
+        try {
+            const configured = (typeof window !== 'undefined' && typeof window.SUPABASE_REDIRECT_URL === 'string')
+                ? window.SUPABASE_REDIRECT_URL.trim()
+                : '';
+            if (configured) return configured;
+        } catch (_) {}
+
+        try {
+            if (typeof location !== 'undefined' && /^https?:$/i.test(String(location.protocol || ''))) {
+                const origin = String(location.origin || '').trim();
+                if (!origin) return null;
+                const normalizedPath = String(location.pathname || '/').trim() || '/';
+                const isRootLike = normalizedPath === '/' || normalizedPath === '/index.html';
+                return isRootLike ? origin : `${origin}/auth/callback`;
+            }
+        } catch (_) {}
+
+        return null;
+    }
+
     updateAuthUI() {
         try {
             if (this.authStatusElement) {
@@ -435,18 +456,17 @@ class TimeTracker {
                     });
                 } else {
                     const options = {};
-                    try {
-                        if (location && location.protocol && location.protocol.startsWith('http')) {
-                            options.redirectTo = location.origin;
-                        }
-                    } catch (_) {}
+                    const redirectTo = this.getSupabaseRedirectTo();
+                    if (redirectTo) {
+                        options.redirectTo = redirectTo;
+                    }
                     const params = { provider: 'google' };
                     if (Object.keys(options).length > 0) {
                         params.options = options;
                     }
                     this.loginIntent = 'google';
                     this.supabase.auth.signInWithOAuth(params).catch((err) => {
-                        console.warn('[auth] sign in failed', err);
+                        console.warn('[auth] sign in failed', err, { redirectTo: options.redirectTo || null });
                         this.showNotification('Google 로그인에 실패했습니다.');
                     });
                 }
