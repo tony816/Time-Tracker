@@ -247,6 +247,14 @@ class TimeTracker {
     }
 
     loadDayStartHour() {
+        const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+            ? globalThis.TimeTrackerStorage
+            : null;
+        if (storage && typeof storage.getDayStartHour === 'function') {
+            try {
+                return storage.getDayStartHour(4);
+            } catch (_) {}
+        }
         try {
             const raw = localStorage.getItem('tt.dayStartHour');
             const parsed = parseInt(raw, 10);
@@ -263,7 +271,14 @@ class TimeTracker {
         select.addEventListener('change', () => {
             const parsed = parseInt(select.value, 10);
             this.dayStartHour = parsed === 0 ? 0 : 4;
-            try { localStorage.setItem('tt.dayStartHour', String(this.dayStartHour)); } catch (_) {}
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.setDayStartHour === 'function') {
+                try { storage.setDayStartHour(this.dayStartHour); } catch (_) {}
+            } else {
+                try { localStorage.setItem('tt.dayStartHour', String(this.dayStartHour)); } catch (_) {}
+            }
             this.renderTimeEntries(true);
             this.updateDayStartUI();
         });
@@ -1029,10 +1044,23 @@ class TimeTracker {
             mergedFields: Object.fromEntries(this.mergedFields),
             savedAt: Date.now()
         };
+        const serializedData = JSON.stringify(data);
         this.setSaveStatus('info', '저장 중…');
         try {
-            localStorage.setItem(`timesheetData:${this.currentDate}`, JSON.stringify(data));
-            localStorage.setItem('timesheetData:last', JSON.stringify(data));
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            let stored = false;
+            if (storage && typeof storage.setTimesheetData === 'function') {
+                stored = Boolean(storage.setTimesheetData(this.currentDate, serializedData));
+            } else {
+                localStorage.setItem(`timesheetData:${this.currentDate}`, serializedData);
+                localStorage.setItem('timesheetData:last', serializedData);
+                stored = true;
+            }
+            if (!stored) {
+                throw new Error('local storage unavailable');
+            }
             this.setSaveStatus('success', `저장됨 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`);
         } catch (_) {
             this.setSaveStatus('error', '로컬 저장 실패');
@@ -1077,7 +1105,14 @@ class TimeTracker {
         // 로컬에서 로드
         let savedData = null;
         try {
-            savedData = localStorage.getItem(`timesheetData:${this.currentDate}`) || localStorage.getItem('timesheetData:last');
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.getTimesheetData === 'function') {
+                savedData = storage.getTimesheetData(this.currentDate);
+            } else {
+                savedData = localStorage.getItem(`timesheetData:${this.currentDate}`) || localStorage.getItem('timesheetData:last');
+            }
         } catch (_) {
             savedData = null;
         }
@@ -1238,7 +1273,14 @@ class TimeTracker {
         this.renderInlinePlanDropdownOptions();
         this.closeRoutineMenu();
         try {
-            localStorage.removeItem(`timesheetData:${this.currentDate}`);
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.removeTimesheetData === 'function') {
+                storage.removeTimesheetData(this.currentDate);
+            } else {
+                localStorage.removeItem(`timesheetData:${this.currentDate}`);
+            }
         } catch (_) {}
         // If user refreshes quickly, Supabase fetch could re-apply stale data.
         // Mark this day as "pending clear" so the next load will delete remote first.
