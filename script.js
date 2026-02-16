@@ -332,6 +332,83 @@ class TimeTracker {
         this.timeSlots = this.createEmptyTimeSlots();
     }
 
+    buildTimeEntryRowModel(slot, index) {
+        const renderer = (typeof globalThis !== 'undefined' && globalThis.TimeEntryRenderer)
+            ? globalThis.TimeEntryRenderer
+            : null;
+        if (renderer && typeof renderer.buildRowRenderModel === 'function') {
+            return renderer.buildRowRenderModel({
+                slot,
+                index,
+                currentDate: this.currentDate,
+                findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
+                createMergedField: (mergeKey, type, rowIndex, value) => this.createMergedField(mergeKey, type, rowIndex, value),
+                createTimerField: (rowIndex, rowSlot) => this.createTimerField(rowIndex, rowSlot),
+                wrapWithSplitVisualization: (type, rowIndex, content) => this.wrapWithSplitVisualization(type, rowIndex, content),
+                createTimerControls: (rowIndex, rowSlot) => this.createTimerControls(rowIndex, rowSlot),
+                createMergedTimeField: (mergeKey, rowIndex, rowSlot) => this.createMergedTimeField(mergeKey, rowIndex, rowSlot),
+                formatSlotTimeLabel: (rawHour) => this.formatSlotTimeLabel(rawHour),
+                escapeAttribute: (value) => this.escapeAttribute(value),
+                getRoutineForPlannedIndex: (rowIndex, date) => this.getRoutineForPlannedIndex(rowIndex, date),
+            });
+        }
+
+        const plannedMergeKey = this.findMergeKey('planned', index);
+        const actualMergeKey = this.findMergeKey('actual', index);
+
+        let plannedContent = plannedMergeKey
+            ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
+            : `<input type="text" class="input-field planned-input" 
+                        data-index="${index}" 
+                        data-type="planned" 
+                        value="${this.escapeAttribute(slot.planned)}"
+                        placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
+        plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
+
+        let actualContent = actualMergeKey
+            ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
+            : this.createTimerField(index, slot);
+        actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
+
+        const timeMergeKey = this.findMergeKey('time', index);
+        const timerControls = this.createTimerControls(index, slot);
+        let timeContent;
+        if (timeMergeKey) {
+            timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
+        } else {
+            timeContent = `<div class="time-slot-container">
+                    <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
+                    ${timerControls}
+                </div>`;
+        }
+
+        const parseMergeRange = (mergeKey) => {
+            if (!mergeKey || typeof mergeKey !== 'string') return null;
+            const parts = mergeKey.split('-');
+            if (parts.length !== 3) return null;
+            const start = parseInt(parts[1], 10);
+            const end = parseInt(parts[2], 10);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+            return { start, end };
+        };
+
+        const plannedRange = parseMergeRange(plannedMergeKey);
+        const actualRange = parseMergeRange(actualMergeKey);
+
+        return {
+            plannedMergeKey,
+            actualMergeKey,
+            routineMatch: this.getRoutineForPlannedIndex(index, this.currentDate),
+            hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
+            hasActualMergeContinuation: Boolean(actualRange && index >= actualRange.start && index < actualRange.end),
+            innerHtml: `
+                ${plannedContent}
+                ${timeContent}
+                ${actualContent}
+            `,
+        };
+    }
+
     renderTimeEntries(preserveInlineDropdown = false) {
         if (!preserveInlineDropdown) {
             this.closeInlinePlanDropdown();
@@ -342,81 +419,36 @@ class TimeTracker {
         this.timeSlots.forEach((slot, index) => {
             const entryDiv = document.createElement('div');
             entryDiv.className = 'time-entry';
-            
-            const plannedMergeKey = this.findMergeKey('planned', index);
-            const actualMergeKey = this.findMergeKey('actual', index);
-            
-            let plannedContent = plannedMergeKey ? 
-                this.createMergedField(plannedMergeKey, 'planned', index, slot.planned) :
-                `<input type="text" class="input-field planned-input" 
-                        data-index="${index}" 
-                        data-type="planned" 
-                        value="${this.escapeAttribute(slot.planned)}"
-                        placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
 
-            plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
-
-            let actualContent = actualMergeKey ? 
-                this.createMergedField(actualMergeKey, 'actual', index, slot.actual) :
-                this.createTimerField(index, slot);
-
-            actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
-            
-            // 시간 열 병합 확인
-            const timeMergeKey = this.findMergeKey('time', index);
-            const timerControls = this.createTimerControls(index, slot);
-            
-            let timeContent;
-            if (timeMergeKey) {
-                timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
-            } else {
-                timeContent = `<div class="time-slot-container">
-                    <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
-                    ${timerControls}
-                </div>`;
-            }
-            
-            entryDiv.innerHTML = `
-                ${plannedContent}
-                ${timeContent}
-                ${actualContent}
-            `;
-            
+            const rowModel = this.buildTimeEntryRowModel(slot, index);
+            entryDiv.innerHTML = rowModel.innerHtml;
             entryDiv.dataset.index = index;
-            const routineMatch = this.getRoutineForPlannedIndex(index, this.currentDate);
+            const routineMatch = rowModel.routineMatch;
             if (routineMatch) {
                 entryDiv.classList.add('routine-planned');
                 entryDiv.dataset.routineId = routineMatch.id;
             }
-            
-            if (plannedMergeKey) {
-                const plannedStart = parseInt(plannedMergeKey.split('-')[1]);
-                const plannedEnd = parseInt(plannedMergeKey.split('-')[2]);
-                if (index >= plannedStart && index < plannedEnd) {
-                    entryDiv.classList.add('has-planned-merge');
-                }
+
+            if (rowModel.hasPlannedMergeContinuation) {
+                entryDiv.classList.add('has-planned-merge');
             }
-            
-            if (actualMergeKey) {
-                const actualStart = parseInt(actualMergeKey.split('-')[1]);
-                const actualEnd = parseInt(actualMergeKey.split('-')[2]);
-                if (index >= actualStart && index < actualEnd) {
-                    entryDiv.classList.add('has-actual-merge');
-                }
+
+            if (rowModel.hasActualMergeContinuation) {
+                entryDiv.classList.add('has-actual-merge');
             }
-            
+
             const plannedField = entryDiv.querySelector('.planned-input');
             const actualField = entryDiv.querySelector('.actual-input');
-            
+
             if (plannedField || actualField) {
                 this.attachFieldSelectionListeners(entryDiv, index);
                 this.attachCellClickListeners(entryDiv, index);
             }
-            
+
             // 타이머 이벤트 리스너 추가
             this.attachTimerListeners(entryDiv, index);
             this.attachActivityLogListener(entryDiv, index);
-            
+
             this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
         });
