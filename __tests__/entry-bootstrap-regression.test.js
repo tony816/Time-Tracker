@@ -20,6 +20,7 @@ test('main.js is responsible for app bootstrap and animation keyframes injection
 });
 
 test('index.html loads main.js after script.js', () => {
+    const actualGridCoreIdx = htmlSource.indexOf('<script src="core/actual-grid-core.js"></script>');
     const dateCoreIdx = htmlSource.indexOf('<script src="core/date-core.js"></script>');
     const timeCoreIdx = htmlSource.indexOf('<script src="core/time-core.js"></script>');
     const scriptIdx = htmlSource.indexOf('<script src="script.js"></script>');
@@ -27,9 +28,11 @@ test('index.html loads main.js after script.js', () => {
 
     assert.ok(timeCoreIdx >= 0, 'core/time-core.js include should exist');
     assert.ok(dateCoreIdx >= 0, 'core/date-core.js include should exist');
+    assert.ok(actualGridCoreIdx >= 0, 'core/actual-grid-core.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
     assert.ok(timeCoreIdx < dateCoreIdx, 'date-core.js should load after time-core.js');
-    assert.ok(dateCoreIdx < scriptIdx, 'date-core.js should load before script.js');
+    assert.ok(dateCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after date-core.js');
+    assert.ok(actualGridCoreIdx < scriptIdx, 'actual-grid-core.js should load before script.js');
     assert.ok(scriptIdx < mainIdx, 'main.js should load after script.js');
 });

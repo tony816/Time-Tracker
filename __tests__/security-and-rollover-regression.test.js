@@ -36,6 +36,7 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/styles\/interactions\.css':\s*'styles\/interactions\.css'/);
   assert.match(serverSource, /'\/styles\/responsive\.css':\s*'styles\/responsive\.css'/);
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
+  assert.match(serverSource, /'\/core\/actual-grid-core\.js':\s*'core\/actual-grid-core\.js'/);
   assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
@@ -55,4 +56,15 @@ test('script date helpers prefer TimeTrackerDateCore when available', () => {
   assert.match(snippet, /dateCore\.getTodayLocalDateString/);
   assert.match(snippet, /dateCore\.getLocalSlotStartMs/);
   assert.match(snippet, /dateCore\.getDayOfWeek/);
+});
+
+test('script actual-grid helpers prefer TimeTrackerActualGridCore when available', () => {
+  const start = scriptSource.indexOf('getExtraActivityUnitCount(item)');
+  assert.ok(start >= 0, 'getExtraActivityUnitCount() should exist');
+  const snippet = scriptSource.slice(start, start + 18000);
+  assert.match(snippet, /globalThis\.TimeTrackerActualGridCore/);
+  assert.match(snippet, /actualGridCore\.getExtraActivityUnitCount/);
+  assert.match(snippet, /actualGridCore\.getActualGridBlockRange/);
+  assert.match(snippet, /actualGridCore\.buildActualUnitsFromActivities/);
+  assert.match(snippet, /actualGridCore\.buildActualActivitiesFromGrid/);
 });

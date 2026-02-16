@@ -3857,6 +3857,12 @@ class TimeTracker {
     }
 
     getExtraActivityUnitCount(item) {
+        const actualGridCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActualGridCore)
+            ? globalThis.TimeTrackerActualGridCore
+            : null;
+        if (actualGridCore && typeof actualGridCore.getExtraActivityUnitCount === 'function') {
+            return actualGridCore.getExtraActivityUnitCount(item, this.getActualDurationStepSeconds());
+        }
         if (!item) return 0;
         const assignedSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
         const recordedSeconds = Number.isFinite(item.recordedSeconds)
@@ -4074,6 +4080,12 @@ class TimeTracker {
     }
 
     getActualGridBlockRange(planUnits, unitIndex, unitsPerRow = 6) {
+        const actualGridCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActualGridCore)
+            ? globalThis.TimeTrackerActualGridCore
+            : null;
+        if (actualGridCore && typeof actualGridCore.getActualGridBlockRange === 'function') {
+            return actualGridCore.getActualGridBlockRange(planUnits, unitIndex, unitsPerRow);
+        }
         if (!Array.isArray(planUnits) || !Number.isFinite(unitIndex)) return null;
         if (unitIndex < 0 || unitIndex >= planUnits.length) return null;
         const label = planUnits[unitIndex];
@@ -4091,6 +4103,17 @@ class TimeTracker {
     }
 
     buildActualUnitsFromActivities(planUnits, activities) {
+        const actualGridCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActualGridCore)
+            ? globalThis.TimeTrackerActualGridCore
+            : null;
+        if (actualGridCore && typeof actualGridCore.buildActualUnitsFromActivities === 'function') {
+            return actualGridCore.buildActualUnitsFromActivities(planUnits, activities, {
+                stepSeconds: this.getActualDurationStepSeconds(),
+                normalizeLabel: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+            });
+        }
         if (!Array.isArray(planUnits) || !Array.isArray(activities)) return [];
         const counts = new Map();
         activities.forEach((item) => {
@@ -4119,6 +4142,14 @@ class TimeTracker {
     }
 
     buildActualActivitiesFromGrid(planUnits, actualUnits) {
+        const actualGridCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActualGridCore)
+            ? globalThis.TimeTrackerActualGridCore
+            : null;
+        if (actualGridCore && typeof actualGridCore.buildActualActivitiesFromGrid === 'function') {
+            return actualGridCore.buildActualActivitiesFromGrid(planUnits, actualUnits, {
+                stepSeconds: this.getActualDurationStepSeconds(),
+            });
+        }
         if (!Array.isArray(planUnits) || !Array.isArray(actualUnits)) return [];
         const counts = new Map();
         for (let i = 0; i < planUnits.length; i++) {
