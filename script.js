@@ -811,8 +811,9 @@ class TimeTracker {
             if (e.type === 'mousedown') return; // 클릭에서 처리
             if (this.isMergeRangeSelected('planned', mergeKey)) this.clearSelection('planned');
             else {
-                this.clearAllSelections();
-                this.selectMergedRange('planned', mergeKey);
+                const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
+                if (!canAppend) this.clearAllSelections();
+                this.selectMergedRange('planned', mergeKey, { append: canAppend });
             }
             if (e.type === 'click') {
                 const [, startStr, endStr] = mergeKey.split('-');
@@ -848,7 +849,11 @@ class TimeTracker {
                         e.stopPropagation();
                         if (e.type === 'click') {
                             if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
-                            else { this.clearAllSelections(); this.selectMergedRange('planned', mk); }
+                            else {
+                                const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
+                                if (!canAppend) this.clearAllSelections();
+                                this.selectMergedRange('planned', mk, { append: canAppend });
+                            }
                         }
                         return;
                     }
@@ -2889,8 +2894,9 @@ class TimeTracker {
                 if (this.isMergeRangeSelected('planned', mergeKey)) {
                     this.clearSelection('planned');
                 } else {
-                    this.clearAllSelections();
-                    this.selectMergedRange('planned', mergeKey);
+                    const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
+                    if (!canAppend) this.clearAllSelections();
+                    this.selectMergedRange('planned', mergeKey, { append: canAppend });
                 }
                 const [, startStr] = mergeKey.split('-');
                 const parsedStart = parseInt(startStr, 10);
@@ -2951,6 +2957,7 @@ class TimeTracker {
             // 모바일: 롱프레스 후 드래그로 범위 선택 (PC 드래그와 유사)
             let plannedTouchLongPressTimer = null;
             let plannedTouchLongPressActive = false;
+            let plannedTouchBaseRange = null; // { start, end }
             const clearPlannedTouchLongPress = () => {
                 if (plannedTouchLongPressTimer) {
                     clearTimeout(plannedTouchLongPressTimer);
@@ -2959,19 +2966,34 @@ class TimeTracker {
             };
 
             plannedField.addEventListener('touchstart', (e) => {
-                if (this.findMergeKey('planned', index)) return;
                 if (!e.touches || e.touches.length !== 1) return;
                 plannedTouchLongPressActive = false;
+                plannedTouchBaseRange = null;
                 plannedMouseMoved = false;
                 clearPlannedTouchLongPress();
+
+                const mergeKeyAtStart = this.findMergeKey('planned', index);
+                let rangeStart = index;
+                let rangeEnd = index;
+                if (mergeKeyAtStart) {
+                    const [, sStr, eStr] = String(mergeKeyAtStart).split('-');
+                    const parsedStart = parseInt(sStr, 10);
+                    const parsedEnd = parseInt(eStr, 10);
+                    if (Number.isFinite(parsedStart) && Number.isFinite(parsedEnd)) {
+                        rangeStart = parsedStart;
+                        rangeEnd = parsedEnd;
+                    }
+                }
+
                 plannedTouchLongPressTimer = setTimeout(() => {
                     plannedTouchLongPressActive = true;
+                    plannedTouchBaseRange = { start: rangeStart, end: rangeEnd };
                     this.closeInlinePlanDropdown();
-                    this.dragStartIndex = index;
+                    this.dragStartIndex = rangeStart;
                     this.currentColumnType = 'planned';
                     this.isSelectingPlanned = true;
                     this.clearAllSelections();
-                    this.selectFieldRange('planned', index, index);
+                    this.selectFieldRange('planned', rangeStart, rangeEnd);
                     try { plannedField.blur(); } catch (_) {}
                 }, 280);
             }, { passive: true });
@@ -2985,8 +3007,12 @@ class TimeTracker {
                 if (!Number.isInteger(hoverIndex)) return;
                 if (this.currentColumnType !== 'planned') return;
                 plannedMouseMoved = true;
+
+                const base = plannedTouchBaseRange || { start: this.dragStartIndex, end: this.dragStartIndex };
+                const nextStart = Math.min(base.start, hoverIndex);
+                const nextEnd = Math.max(base.end, hoverIndex);
                 this.clearSelection('planned');
-                this.selectFieldRange('planned', this.dragStartIndex, hoverIndex);
+                this.selectFieldRange('planned', nextStart, nextEnd);
             }, { passive: false });
 
             plannedField.addEventListener('touchend', (e) => {
@@ -2999,11 +3025,13 @@ class TimeTracker {
                     this.dragStartIndex = -1;
                 }
                 plannedTouchLongPressActive = false;
+                plannedTouchBaseRange = null;
             }, { passive: false });
 
             plannedField.addEventListener('touchcancel', () => {
                 clearPlannedTouchLongPress();
                 plannedTouchLongPressActive = false;
+                plannedTouchBaseRange = null;
                 this.isSelectingPlanned = false;
                 this.currentColumnType = null;
                 this.dragStartIndex = -1;
@@ -7017,25 +7045,39 @@ class TimeTracker {
     // (의도 변경) 좌측 계획 입력은 모달로만 편집하며
     // 인풋 필드는 표시/선택 용도로만 사용합니다.
 
-    selectMergedRange(type, mergeKey) {
+    selectMergedRange(type, mergeKey, opts = {}) {
         if (type !== 'planned') return; // 우측 열 병합 범위 선택 금지
         const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-        
-        this.clearSelection(type);
-        
+        let start = parseInt(startStr, 10);
+        let end = parseInt(endStr, 10);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+
+        const append = Boolean(opts && opts.append);
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        
+
+        if (append && selectedSet && selectedSet.size > 0) {
+            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
+            const curStart = selectedIndices[0];
+            const curEnd = selectedIndices[selectedIndices.length - 1];
+            start = Math.min(start, curStart);
+            end = Math.max(end, curEnd);
+        }
+
+        this.clearSelection(type);
+
         for (let i = start; i <= end; i++) {
             selectedSet.add(i);
             // 선택 시각 효과는 공통 오버레이로 대체
         }
-        
+
         this.updateSelectionOverlay(type);
         this.showScheduleButtonForSelection(type);
-        // Undo 버튼은 좌측(계획) 열에서만 제공 - 스케줄 버튼 생성 후 즉시 정렬
-        if (type === 'planned') {
+        if (type === 'planned' && selectedSet.size > 1) {
+            this.showMergeButton('planned');
+        }
+
+        // Undo 버튼은 "기존 병합 블록 단독 선택"일 때만 노출
+        if (!append && type === 'planned') {
             this.showUndoButton(type, mergeKey);
         } else {
             this.hideUndoButton();
