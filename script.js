@@ -5042,6 +5042,12 @@ class TimeTracker {
     }
 
     escapeHtml(text) {
+        const textCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerTextCore)
+            ? globalThis.TimeTrackerTextCore
+            : null;
+        if (textCore && typeof textCore.escapeHtml === 'function') {
+            return textCore.escapeHtml(text);
+        }
         if (text == null) return '';
         return String(text)
             .replace(/&/g, '&amp;')
@@ -5052,10 +5058,23 @@ class TimeTracker {
     }
 
     escapeAttribute(text) {
+        const textCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerTextCore)
+            ? globalThis.TimeTrackerTextCore
+            : null;
+        if (textCore && typeof textCore.escapeAttribute === 'function') {
+            return textCore.escapeAttribute(text);
+        }
         return this.escapeHtml(text);
     }
 
     normalizeMergeKey(rawMergeKey, expectedType = null) {
+        const textCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerTextCore)
+            ? globalThis.TimeTrackerTextCore
+            : null;
+        if (textCore && typeof textCore.normalizeMergeKey === 'function') {
+            const slotCount = Array.isArray(this.timeSlots) ? this.timeSlots.length : null;
+            return textCore.normalizeMergeKey(rawMergeKey, expectedType, slotCount);
+        }
         const match = /^(planned|actual|time)-(\d+)-(\d+)$/.exec(String(rawMergeKey || '').trim());
         if (!match) return null;
         const type = match[1];
@@ -8205,6 +8224,12 @@ class TimeTracker {
         return this.modalSelectedActivities.length !== before;
     }
     normalizeActivityText(text) {
+        const textCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerTextCore)
+            ? globalThis.TimeTrackerTextCore
+            : null;
+        if (textCore && typeof textCore.normalizeActivityText === 'function') {
+            return textCore.normalizeActivityText(text);
+        }
         if (!text) return '';
         // 제거: 줄바꿈/탭, 공백 축약
         return String(text)
