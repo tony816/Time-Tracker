@@ -270,6 +270,12 @@ class TimeTracker {
     }
 
     formatSlotTimeLabel(rawHour) {
+        const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerCore)
+            ? globalThis.TimeTrackerCore
+            : null;
+        if (core && typeof core.formatSlotTimeLabel === 'function') {
+            return core.formatSlotTimeLabel(rawHour);
+        }
         const hour = parseInt(String(rawHour), 10);
         if (!Number.isFinite(hour)) return String(rawHour || '');
         return String(hour).padStart(2, '0');
@@ -283,21 +289,20 @@ class TimeTracker {
     
 
     createEmptyTimeSlots() {
-        const slots = [];
-        for (let hour = 4; hour <= 23; hour++) {
-            slots.push({
-                time: `${hour}`,
-                planned: '',
-                actual: '',
-                planActivities: [],
-                planTitle: '',
-                planTitleBandOn: false,
-                timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-                activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
-            });
+        const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerCore)
+            ? globalThis.TimeTrackerCore
+            : null;
+        if (core && typeof core.createEmptyTimeSlots === 'function') {
+            return core.createEmptyTimeSlots();
         }
-        slots.push({
-            time: '00',
+
+        const labels = [];
+        for (let hour = 4; hour <= 23; hour++) {
+            labels.push(String(hour));
+        }
+        labels.push('00', '1', '2', '3');
+        return labels.map((time) => ({
+            time,
             planned: '',
             actual: '',
             planActivities: [],
@@ -305,38 +310,7 @@ class TimeTracker {
             planTitleBandOn: false,
             timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
-        });
-        slots.push({
-            time: '1',
-            planned: '',
-            actual: '',
-            planActivities: [],
-            planTitle: '',
-            planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
-        });
-        slots.push({
-            time: '2',
-            planned: '',
-            actual: '',
-            planActivities: [],
-            planTitle: '',
-            planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
-        });
-        slots.push({
-            time: '3',
-            planned: '',
-            actual: '',
-            planActivities: [],
-            planTitle: '',
-            planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
-            activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
-        });
-        return slots;
+        }));
     }
 
     generateTimeSlots() {
@@ -6684,6 +6658,13 @@ class TimeTracker {
     // 텍스트에서 시간값(HH:MM(:SS) 또는 1h/분/초 표기)을 초로 파싱
     // 규칙: 문자열 어디에 있든 "마지막으로 등장한" 시간을 우선 사용
     parseDurationFromText(text) {
+        const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerCore)
+            ? globalThis.TimeTrackerCore
+            : null;
+        if (core && typeof core.parseDurationFromText === 'function') {
+            return core.parseDurationFromText(text, (seconds) => this.normalizeDurationStep(seconds));
+        }
+
         if (!text || typeof text !== 'string') return null;
         const t = text.trim();
 
