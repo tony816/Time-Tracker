@@ -22,18 +22,21 @@ test('main.js is responsible for app bootstrap and animation keyframes injection
 test('index.html loads main.js after script.js', () => {
     const actualGridCoreIdx = htmlSource.indexOf('<script src="core/actual-grid-core.js"></script>');
     const dateCoreIdx = htmlSource.indexOf('<script src="core/date-core.js"></script>');
+    const durationCoreIdx = htmlSource.indexOf('<script src="core/duration-core.js"></script>');
     const textCoreIdx = htmlSource.indexOf('<script src="core/text-core.js"></script>');
     const timeCoreIdx = htmlSource.indexOf('<script src="core/time-core.js"></script>');
     const scriptIdx = htmlSource.indexOf('<script src="script.js"></script>');
     const mainIdx = htmlSource.indexOf('<script src="main.js"></script>');
 
     assert.ok(timeCoreIdx >= 0, 'core/time-core.js include should exist');
+    assert.ok(durationCoreIdx >= 0, 'core/duration-core.js include should exist');
     assert.ok(dateCoreIdx >= 0, 'core/date-core.js include should exist');
     assert.ok(textCoreIdx >= 0, 'core/text-core.js include should exist');
     assert.ok(actualGridCoreIdx >= 0, 'core/actual-grid-core.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
-    assert.ok(timeCoreIdx < dateCoreIdx, 'date-core.js should load after time-core.js');
+    assert.ok(timeCoreIdx < durationCoreIdx, 'duration-core.js should load after time-core.js');
+    assert.ok(durationCoreIdx < dateCoreIdx, 'date-core.js should load after duration-core.js');
     assert.ok(dateCoreIdx < textCoreIdx, 'text-core.js should load after date-core.js');
     assert.ok(textCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after text-core.js');
     assert.ok(actualGridCoreIdx < scriptIdx, 'actual-grid-core.js should load before script.js');

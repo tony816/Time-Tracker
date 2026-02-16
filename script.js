@@ -5228,6 +5228,12 @@ class TimeTracker {
     }
     
     formatTime(seconds) {
+        const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
+            ? globalThis.TimeTrackerDurationCore
+            : null;
+        if (durationCore && typeof durationCore.formatTime === 'function') {
+            return durationCore.formatTime(seconds);
+        }
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = seconds % 60;
@@ -5235,6 +5241,12 @@ class TimeTracker {
     }
 
     formatDurationSummary(rawSeconds) {
+        const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
+            ? globalThis.TimeTrackerDurationCore
+            : null;
+        if (durationCore && typeof durationCore.formatDurationSummary === 'function') {
+            return durationCore.formatDurationSummary(rawSeconds);
+        }
         if (!Number.isFinite(rawSeconds) || rawSeconds <= 0) {
             return '0시간';
         }
@@ -5275,6 +5287,12 @@ class TimeTracker {
     }
 
     normalizeDurationStep(seconds) {
+        const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
+            ? globalThis.TimeTrackerDurationCore
+            : null;
+        if (durationCore && typeof durationCore.normalizeDurationStep === 'function') {
+            return durationCore.normalizeDurationStep(seconds);
+        }
         if (!Number.isFinite(seconds)) return null;
         // 더 작은 단위(초)도 보존하도록 변경
         return Math.max(0, Math.floor(seconds));
@@ -5285,6 +5303,12 @@ class TimeTracker {
     }
 
     normalizeActualDurationStep(seconds) {
+        const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
+            ? globalThis.TimeTrackerDurationCore
+            : null;
+        if (durationCore && typeof durationCore.normalizeActualDurationStep === 'function') {
+            return durationCore.normalizeActualDurationStep(seconds, this.getActualDurationStepSeconds());
+        }
         if (!Number.isFinite(seconds)) return 0;
         const step = this.getActualDurationStepSeconds();
         return Math.max(0, Math.round(seconds / step) * step);

@@ -38,6 +38,7 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
   assert.match(serverSource, /'\/core\/actual-grid-core\.js':\s*'core\/actual-grid-core\.js'/);
   assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
+  assert.match(serverSource, /'\/core\/duration-core\.js':\s*'core\/duration-core\.js'/);
   assert.match(serverSource, /'\/core\/text-core\.js':\s*'core\/text-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
@@ -86,4 +87,15 @@ test('script normalizeActivityText prefers TimeTrackerTextCore when available', 
   const snippet = scriptSource.slice(start, start + 1200);
   assert.match(snippet, /globalThis\.TimeTrackerTextCore/);
   assert.match(snippet, /textCore\.normalizeActivityText/);
+});
+
+test('script duration helpers prefer TimeTrackerDurationCore when available', () => {
+  const start = scriptSource.indexOf('formatTime(seconds)');
+  assert.ok(start >= 0, 'formatTime() should exist');
+  const snippet = scriptSource.slice(start, start + 3800);
+  assert.match(snippet, /globalThis\.TimeTrackerDurationCore/);
+  assert.match(snippet, /durationCore\.formatTime/);
+  assert.match(snippet, /durationCore\.formatDurationSummary/);
+  assert.match(snippet, /durationCore\.normalizeDurationStep/);
+  assert.match(snippet, /durationCore\.normalizeActualDurationStep/);
 });
