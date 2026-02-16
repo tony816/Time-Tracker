@@ -33,5 +33,6 @@ test('server serves split bootstrap/core/infra static files', () => {
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
+  assert.match(serverSource, /'\/controllers\/timer-controller\.js':\s*'controllers\/timer-controller\.js'/);
   assert.match(serverSource, /'\/ui\/time-entry-renderer\.js':\s*'ui\/time-entry-renderer\.js'/);
 });

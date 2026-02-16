@@ -5058,59 +5058,51 @@ class TimeTracker {
     }
 
     createTimerControls(index, slot) {
-        // 허용 여부 계산: 병합된 계획/시간 범위 고려
-        const currentIndex = this.getCurrentTimeIndex();
-        // 시간 병합 범위 확인 (없으면 현재 인덱스 단일 셀 취급)
-        let timeStart = index;
-        let timeEnd = index;
-        const timeMergeKey = this.findMergeKey('time', index);
-        if (timeMergeKey) {
-            const parts = timeMergeKey.split('-');
-            timeStart = parseInt(parts[1], 10);
-            timeEnd = parseInt(parts[2], 10);
-        }
-
-        // 계획 텍스트 존재 여부: 병합된 계획값을 우선 사용
-        let plannedText = '';
-        const plannedMergeKeyForIndex = this.findMergeKey('planned', index);
-        const plannedMergeKeyForCurrent = (currentIndex >= 0) ? this.findMergeKey('planned', currentIndex) : null;
-        if (plannedMergeKeyForIndex) {
-            plannedText = (this.mergedFields.get(plannedMergeKeyForIndex) || '').trim();
-        } else if (plannedMergeKeyForCurrent) {
-            plannedText = (this.mergedFields.get(plannedMergeKeyForCurrent) || '').trim();
-        } else {
-            plannedText = (slot.planned || '').trim();
-        }
-
-        const hasPlannedActivity = plannedText !== '';
-        const isCurrentTimeInRange = currentIndex >= timeStart && currentIndex <= timeEnd;
-        const disabledByDate = !this.isCurrentDateToday();
-        const canStart = hasPlannedActivity && isCurrentTimeInRange;
         const isRunning = slot.timer.running;
         const hasElapsed = slot.timer.elapsed > 0;
+        const eligibility = this.getTimerEligibility(index, slot);
 
         let buttonIcon = '시작';
         let buttonAction = 'start';
-        let buttonDisabled = (!canStart && !isRunning) || disabledByDate;
+        let buttonDisabled = (!eligibility.canStartWithoutDate && !isRunning) || eligibility.disabledByDate;
         let buttonTitle = '';
 
-        if (isRunning) {
-            buttonIcon = '일시정지';
-            buttonAction = 'pause';
-            buttonDisabled = false;
-        } else if (hasElapsed) {
-            buttonIcon = '재개';
-            buttonAction = 'resume';
-            buttonDisabled = !canStart || disabledByDate;
-        }
+        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
+            ? globalThis.TimerController
+            : null;
+        if (timerController && typeof timerController.resolveTimerControlState === 'function') {
+            const state = timerController.resolveTimerControlState(
+                eligibility,
+                { isRunning, hasElapsed },
+                {
+                    notToday: '오늘 날짜에서만 타이머를 사용할 수 있습니다.',
+                    noPlanned: '계획을 먼저 입력해주세요.',
+                    outOfRange: '현재 시간 범위에서만 시작할 수 있습니다.',
+                }
+            );
+            buttonIcon = state.buttonIcon;
+            buttonAction = state.buttonAction;
+            buttonDisabled = state.buttonDisabled;
+            buttonTitle = state.buttonTitle;
+        } else {
+            if (isRunning) {
+                buttonIcon = '일시정지';
+                buttonAction = 'pause';
+                buttonDisabled = false;
+            } else if (hasElapsed) {
+                buttonIcon = '재개';
+                buttonAction = 'resume';
+                buttonDisabled = !eligibility.canStartWithoutDate || eligibility.disabledByDate;
+            }
 
-        if (buttonDisabled) {
-            if (disabledByDate) {
-                buttonTitle = '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
-            } else if (!hasPlannedActivity) {
-                buttonTitle = '계획을 먼저 입력해주세요.';
-            } else if (!isCurrentTimeInRange) {
-                buttonTitle = '현재 시간 범위에서만 시작할 수 있습니다.';
+            if (buttonDisabled) {
+                if (eligibility.disabledByDate) {
+                    buttonTitle = '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
+                } else if (!eligibility.hasPlannedActivity) {
+                    buttonTitle = '계획을 먼저 입력해주세요.';
+                } else if (!eligibility.isCurrentTimeInRange) {
+                    buttonTitle = '현재 시간 범위에서만 시작할 수 있습니다.';
+                }
             }
         }
 
@@ -6839,19 +6831,25 @@ class TimeTracker {
         }
     }
 
-    canStartTimer(index) {
-        return this.getTimerStartBlockReason(index) === null;
-    }
+    getTimerEligibility(index, slotOverride = null) {
+        const slot = slotOverride || this.timeSlots[index] || {};
+        const currentIndex = this.getCurrentTimeIndex();
+        const isCurrentDateToday = this.isCurrentDateToday();
 
-    getTimerStartBlockReason(index) {
-        if (!this.isCurrentDateToday()) {
-            return '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
+        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
+            ? globalThis.TimerController
+            : null;
+        if (timerController && typeof timerController.resolveTimerEligibility === 'function') {
+            return timerController.resolveTimerEligibility({
+                index,
+                currentIndex,
+                isCurrentDateToday,
+                slotPlanned: slot.planned,
+                findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
+                getMergedField: (mergeKey) => this.mergedFields.get(mergeKey),
+            });
         }
-        const slot = this.timeSlots[index];
-        const currentTimeIndex = this.getCurrentTimeIndex();
-        if (currentTimeIndex < 0) return '현재 시간 슬롯에서만 시작할 수 있습니다.';
 
-        // 시간 병합 범위 고려
         let timeStart = index;
         let timeEnd = index;
         const timeMergeKey = this.findMergeKey('time', index);
@@ -6861,22 +6859,66 @@ class TimeTracker {
             timeEnd = parseInt(parts[2], 10);
         }
 
-        // 계획 텍스트 존재 여부: 병합된 계획값 포함해서 판단
         let plannedText = '';
         const plannedMergeKeyForIndex = this.findMergeKey('planned', index);
-        const plannedMergeKeyForCurrent = this.findMergeKey('planned', currentTimeIndex);
+        const plannedMergeKeyForCurrent = currentIndex >= 0 ? this.findMergeKey('planned', currentIndex) : null;
         if (plannedMergeKeyForIndex) {
             plannedText = (this.mergedFields.get(plannedMergeKeyForIndex) || '').trim();
         } else if (plannedMergeKeyForCurrent) {
             plannedText = (this.mergedFields.get(plannedMergeKeyForCurrent) || '').trim();
         } else {
-            plannedText = (slot.planned || '').trim();
+            plannedText = String(slot.planned || '').trim();
         }
 
         const hasPlannedActivity = plannedText !== '';
-        const isCurrentInRange = currentTimeIndex >= timeStart && currentTimeIndex <= timeEnd;
-        if (!hasPlannedActivity) return '계획된 활동이 있어야 타이머를 시작할 수 있습니다.';
-        if (!isCurrentInRange) return '현재 시간 범위의 칸에서만 타이머를 시작할 수 있습니다.';
+        const isCurrentTimeInRange = currentIndex >= timeStart && currentIndex <= timeEnd;
+        const disabledByDate = !isCurrentDateToday;
+        const canStartWithoutDate = hasPlannedActivity && isCurrentTimeInRange;
+
+        return {
+            index,
+            currentIndex,
+            isCurrentDateToday,
+            timeStart,
+            timeEnd,
+            plannedText,
+            hasPlannedActivity,
+            isCurrentTimeInRange,
+            disabledByDate,
+            canStartWithoutDate,
+        };
+    }
+
+    canStartTimer(index) {
+        return this.getTimerStartBlockReason(index) === null;
+    }
+
+    getTimerStartBlockReason(index) {
+        const eligibility = this.getTimerEligibility(index);
+        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
+            ? globalThis.TimerController
+            : null;
+        if (timerController && typeof timerController.getStartBlockReason === 'function') {
+            return timerController.getStartBlockReason(eligibility, {
+                notToday: '오늘 날짜에서만 타이머를 사용할 수 있습니다.',
+                invalidCurrentSlot: '현재 시간 슬롯에서만 시작할 수 있습니다.',
+                noPlanned: '계획된 활동이 있어야 타이머를 시작할 수 있습니다.',
+                outOfRange: '현재 시간 범위의 칸에서만 타이머를 시작할 수 있습니다.',
+            });
+        }
+
+        if (!eligibility.isCurrentDateToday) {
+            return '오늘 날짜에서만 타이머를 사용할 수 있습니다.';
+        }
+        if (!Number.isFinite(eligibility.currentIndex) || eligibility.currentIndex < 0) {
+            return '현재 시간 슬롯에서만 시작할 수 있습니다.';
+        }
+        if (!eligibility.hasPlannedActivity) {
+            return '계획된 활동이 있어야 타이머를 시작할 수 있습니다.';
+        }
+        if (!eligibility.isCurrentTimeInRange) {
+            return '현재 시간 범위의 칸에서만 타이머를 시작할 수 있습니다.';
+        }
         return null;
     }
     

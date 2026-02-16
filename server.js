@@ -33,6 +33,7 @@ const STATIC_FILE_MAP = Object.freeze({
     '/main.js': 'main.js',
     '/core/time-core.js': 'core/time-core.js',
     '/infra/storage-adapter.js': 'infra/storage-adapter.js',
+    '/controllers/timer-controller.js': 'controllers/timer-controller.js',
     '/ui/time-entry-renderer.js': 'ui/time-entry-renderer.js',
     '/actual-grid-palette-test.html': 'actual-grid-palette-test.html',
 });
@@ -179,6 +180,7 @@ app.get([
     '/main.js',
     '/core/time-core.js',
     '/infra/storage-adapter.js',
+    '/controllers/timer-controller.js',
     '/ui/time-entry-renderer.js',
     '/actual-grid-palette-test.html',
 ], sendStaticFileByRequestPath);
