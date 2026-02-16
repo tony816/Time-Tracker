@@ -72,6 +72,7 @@ Time-Tracker/
 ├── core/activity-core.js         # 활동 배열/요약 정규화 유틸
 ├── core/date-core.js             # 순수 날짜/캘린더 유틸
 ├── core/duration-core.js         # 시간 포맷/단위 정규화 유틸
+├── core/grid-metrics-core.js     # Actual Grid 집계/맵 계산 유틸
 ├── core/input-format-core.js     # 입력 필드 시간/분 포맷 유틸
 ├── core/text-core.js             # 문자열/보안(escape/정규화) 유틸
 ├── core/time-core.js             # 순수 시간 유틸

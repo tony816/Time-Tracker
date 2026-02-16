@@ -40,6 +40,7 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/core\/activity-core\.js':\s*'core\/activity-core\.js'/);
   assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
   assert.match(serverSource, /'\/core\/duration-core\.js':\s*'core\/duration-core\.js'/);
+  assert.match(serverSource, /'\/core\/grid-metrics-core\.js':\s*'core\/grid-metrics-core\.js'/);
   assert.match(serverSource, /'\/core\/input-format-core\.js':\s*'core\/input-format-core\.js'/);
   assert.match(serverSource, /'\/core\/text-core\.js':\s*'core\/text-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
@@ -120,4 +121,15 @@ test('script input-format helpers prefer TimeTrackerInputFormatCore when availab
   assert.match(snippet, /inputFormatCore\.formatSecondsForInput/);
   assert.match(snippet, /inputFormatCore\.formatMinutesForInput/);
   assert.match(snippet, /inputFormatCore\.formatSpinnerValue/);
+});
+
+test('script grid-metrics helpers prefer TimeTrackerGridMetricsCore when available', () => {
+  const start = scriptSource.indexOf('getActualGridSecondsMap(planUnits = null, actualUnits = null)');
+  assert.ok(start >= 0, 'getActualGridSecondsMap() should exist');
+  const snippet = scriptSource.slice(start, start + 5200);
+  assert.match(snippet, /globalThis\.TimeTrackerGridMetricsCore/);
+  assert.match(snippet, /gridMetricsCore\.getActualGridSecondsMap/);
+  assert.match(snippet, /gridMetricsCore\.getActualGridSecondsForLabel/);
+  assert.match(snippet, /gridMetricsCore\.getActualGridUnitCounts/);
+  assert.match(snippet, /gridMetricsCore\.getActualAssignedSecondsMap/);
 });

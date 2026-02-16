@@ -10064,6 +10064,19 @@ class TimeTracker {
     }
 
     getActualGridSecondsMap(planUnits = null, actualUnits = null) {
+        const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
+            ? globalThis.TimeTrackerGridMetricsCore
+            : null;
+        if (gridMetricsCore && typeof gridMetricsCore.getActualGridSecondsMap === 'function') {
+            return gridMetricsCore.getActualGridSecondsMap(planUnits, actualUnits, {
+                fallbackPlanUnits: this.modalActualPlanUnits,
+                fallbackActualUnits: this.modalActualGridUnits,
+                stepSeconds: this.getActualDurationStepSeconds(),
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+            });
+        }
         const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
         const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
         const map = new Map();
@@ -10081,6 +10094,18 @@ class TimeTracker {
     }
 
     getActualGridSecondsForLabel(label, gridMap = null) {
+        const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
+            ? globalThis.TimeTrackerGridMetricsCore
+            : null;
+        if (gridMetricsCore && typeof gridMetricsCore.getActualGridSecondsForLabel === 'function') {
+            return gridMetricsCore.getActualGridSecondsForLabel(label, {
+                gridMap,
+                resolveGridMap: () => this.getActualGridSecondsMap(),
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+            });
+        }
         const normalized = this.normalizeActivityText
             ? this.normalizeActivityText(label || '')
             : String(label || '').trim();
@@ -10090,6 +10115,18 @@ class TimeTracker {
     }
 
     getActualGridUnitCounts(planUnits = null, actualUnits = null) {
+        const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
+            ? globalThis.TimeTrackerGridMetricsCore
+            : null;
+        if (gridMetricsCore && typeof gridMetricsCore.getActualGridUnitCounts === 'function') {
+            return gridMetricsCore.getActualGridUnitCounts(planUnits, actualUnits, {
+                fallbackPlanUnits: this.modalActualPlanUnits,
+                fallbackActualUnits: this.modalActualGridUnits,
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+            });
+        }
         const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
         const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
         const counts = new Map();
@@ -10106,6 +10143,16 @@ class TimeTracker {
     }
 
     getActualAssignedSecondsMap() {
+        const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
+            ? globalThis.TimeTrackerGridMetricsCore
+            : null;
+        if (gridMetricsCore && typeof gridMetricsCore.getActualAssignedSecondsMap === 'function') {
+            return gridMetricsCore.getActualAssignedSecondsMap(this.modalActualActivities, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+            });
+        }
         const map = new Map();
         (this.modalActualActivities || []).forEach((item) => {
             if (!item) return;
