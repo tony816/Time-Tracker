@@ -29,7 +29,12 @@ test('updateRunningTimers handles date rollover by transitioning to today', () =
   assert.match(snippet, /this\.transitionToDate\(today\)/);
 });
 
-test('server serves split bootstrap/core/infra static files', () => {
+test('server serves split bootstrap/core/infra/css static files', () => {
+  assert.match(serverSource, /'\/styles\.css':\s*'styles\.css'/);
+  assert.match(serverSource, /'\/styles\/foundation\.css':\s*'styles\/foundation\.css'/);
+  assert.match(serverSource, /'\/styles\/modal\.css':\s*'styles\/modal\.css'/);
+  assert.match(serverSource, /'\/styles\/interactions\.css':\s*'styles\/interactions\.css'/);
+  assert.match(serverSource, /'\/styles\/responsive\.css':\s*'styles\/responsive\.css'/);
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);

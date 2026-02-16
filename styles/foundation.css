@@ -1,0 +1,735 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #eee;
+}
+
+.header-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.header-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.auth-status {
+  font-size: 0.9em;
+  color: #555;
+}
+
+.auth-btn {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.auth-btn:hover {
+  background-color: #f0f0f0;
+  border-color: #ccc;
+}
+
+h1 {
+  color: #2c3e50;
+  font-size: 2.2em;
+}
+
+.date-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-selector label {
+  font-weight: 600;
+  color: #555;
+}
+
+.date-navigation {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nav-btn,
+.today-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  touch-action: manipulation;
+}
+
+.nav-btn:hover {
+  background-color: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.today-btn {
+  background-color: #27ae60;
+  color: white;
+  border-color: #27ae60;
+}
+
+.today-btn:hover {
+  background-color: #229954;
+  border-color: #229954;
+}
+
+.date-selector input {
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.timesheet {
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.header-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  background-color: #34495e;
+  color: white;
+  font-weight: 600;
+}
+
+.header-row>div {
+  padding: 15px;
+  text-align: center;
+  border-right: 1px solid #2c3e50;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.header-row>div:last-child {
+  border-right: none;
+}
+
+.planned-label,
+.time-label,
+.actual-label {
+  color: white;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* 헤더의 '시간' 라벨이 본문 시간 라벨 스타일에 영향을 받지 않도록 명시 */
+.header-row .time-label {
+  color: white !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+}
+
+.time-entry {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  border-bottom: 2px solid #ccc;
+  background-color: white;
+  user-select: none;
+  position: relative;
+}
+
+.time-entry:nth-child(even) .time-slot {
+  background-color: #f8f9fa;
+}
+
+.time-entry:nth-child(even) {
+  background-color: white;
+}
+
+.time-slot-container {
+  padding: 8px;
+  text-align: center;
+  font-weight: 600;
+  background-color: #ecf0f1;
+  border-right: 2px solid #ddd;
+  /* 시간열 우측 테두리 두께 */
+  border-left: 2px solid #ddd;
+  /* 시간열 좌측 테두리 두께 - 우측과 동일하게 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.time-slot-container .time-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.input-field {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  /* 레이아웃 일관성을 위해 투명 테두리 유지 */
+  background: white;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  text-align: center;
+  font-size: 16px;
+  box-sizing: border-box;
+  /* 테두리 유무에 따른 폭 변화 방지 */
+}
+
+.time-entry.routine-planned .planned-input {
+  box-shadow: inset 4px 0 0 rgba(39, 174, 96, 0.75);
+  background-image: linear-gradient(90deg, rgba(39, 174, 96, 0.12) 0, rgba(39, 174, 96, 0.0) 45%);
+}
+
+.time-entry.routine-planned .planned-merged-main-container,
+.time-entry.routine-planned .split-cell-wrapper.split-type-planned {
+  box-shadow: inset 4px 0 0 rgba(39, 174, 96, 0.75);
+  background-image: linear-gradient(90deg, rgba(39, 174, 96, 0.12) 0, rgba(39, 174, 96, 0.0) 45%);
+}
+
+.planned-input {
+  border-right: 0;
+  /* 시간열과 맞닿는 우측 경계선 제거 (겹침 방지) */
+}
+
+.actual-input {
+  border-left: 0;
+  /* 시간열과 맞닿는 좌측 경계선 제거 (겹침 방지) */
+}
+
+.actual-input {
+  border-right: none;
+}
+
+.input-field:focus {
+  background-color: #fff;
+  outline: 2px solid #3498db;
+  outline-offset: -2px;
+}
+
+.input-field:hover {
+  background-color: #e8f4fd;
+}
+
+.summary {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr;
+  font-weight: 600;
+  font-size: 1.1em;
+}
+
+.summary-row>div {
+  padding: 15px;
+  text-align: center;
+  border-right: 1px solid #34495e;
+}
+
+.summary-row>div:last-child {
+  border-right: none;
+}
+
+.analysis-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  background-color: #34495e;
+  border-top: 1px solid #2c3e50;
+}
+
+.analysis-label {
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  color: white;
+  border-right: 1px solid #2c3e50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analysis-content {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px;
+  gap: 20px;
+}
+
+.analysis-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.analysis-metric {
+  font-size: 12px;
+  color: #bdc3c7;
+  font-weight: 500;
+}
+
+.analysis-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.analysis-value.good {
+  color: #2ecc71;
+}
+
+.analysis-value.warning {
+  color: #f39c12;
+}
+
+.analysis-value.poor {
+  color: #e74c3c;
+}
+
+.actions {
+  margin-top: 30px;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.actions button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+#saveBtn {
+  background-color: #27ae60;
+  color: white;
+}
+
+#saveBtn:hover {
+  background-color: #229954;
+}
+
+#loadBtn {
+  background-color: #3498db;
+  color: white;
+}
+
+#loadBtn:hover {
+  background-color: #2980b9;
+}
+
+
+#clearBtn {
+  background-color: #e74c3c;
+  color: white;
+}
+
+#clearBtn:hover {
+  background-color: #c0392b;
+}
+
+@media (max-width: 768px) {
+  .container {
+    margin: 10px;
+    padding: 15px;
+  }
+
+  header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+
+  h1 {
+    font-size: 1.8em;
+  }
+
+  .header-row,
+  .time-entry,
+  .summary-row {
+    grid-template-columns: 1fr 60px 1fr;
+  }
+
+  .time-slot,
+  .input-field,
+  .summary-row>div {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .actions button {
+    width: 200px;
+  }
+}
+
+.input-field.field-selected {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+.input-field.field-selected::placeholder {
+  color: inherit !important;
+  opacity: 0.7;
+}
+
+.header-row {
+  user-select: none;
+  pointer-events: none;
+}
+
+.header-row>div {
+  pointer-events: none;
+}
+
+.merge-button {
+  position: absolute;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease;
+}
+
+.merge-button:hover {
+  background-color: #c0392b;
+}
+
+.undo-button {
+  position: absolute;
+  background: #3498db;
+  /* schedule-button와 동일 */
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  /* schedule-button와 동일 */
+  height: 28px;
+  /* schedule-button와 동일 */
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+  /* schedule-button와 동일 */
+  transition: all 0.3s ease;
+  /* schedule-button와 동일 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.undo-button:hover {
+  background: #2980b9;
+  /* schedule-button와 동일 */
+  transform: translateY(-1px);
+  /* schedule-button와 동일 */
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+  /* schedule-button와 동일 */
+}
+
+.undo-button::before {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 4px;
+  /* 28px 버튼에서 중앙 정렬 */
+  left: 4px;
+  /* 28px 버튼에서 중앙 정렬 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='1.5' stroke='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.undo-button::after {
+  content: none !important;
+}
+
+.merged-field {
+  border-bottom: none !important;
+}
+
+.merged-secondary {
+  opacity: 0;
+  visibility: visible;
+  pointer-events: none;
+
+  border: none !important;
+  background: transparent !important;
+
+  /* 각 행의 기본 높이를 유지하여 전체 시트 높이를 보존 */
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  caret-color: transparent;
+  user-select: none;
+  outline: none;
+}
+
+.merged-field {
+  background-color: white !important;
+  border: 1px solid #ddd !important;
+  border-bottom: none !important;
+  border-top: none !important;
+  /* 상단 중복 라인 방지 */
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+/* 병합된 입력도 호버 시 연한 파란색 강조가 나타나도록 복원 */
+.merged-field:hover {
+  background-color: #e8f4fd !important;
+}
+
+/* 좌측 병합 메인 컨테이너: 내부 입력을 절대위치로 확장 */
+.planned-merged-main-container {
+  position: relative;
+  z-index: 7;
+  /* 행 내부 오버레이 위 */
+  overflow: visible;
+}
+
+.planned-merged-main-container .merged-field {
+  box-sizing: border-box !important;
+  /* 높이, 위치는 JS에서 runtime으로 설정 */
+}
+
+/* 좌측(계획) 병합 블록: 상/하 라인은 행 경계선(2px)을 그대로 사용 */
+.planned-merged-main-container::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--merged-planned-block-height, 44px);
+  border: none;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 병합된 계획 입력을 전체 병합 높이에 맞춰 절대배치 */
+.planned-merged-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  /* 덮개/막대 용 스택 컨텍스트를 만들어 자식 z-index를 제어 */
+  /* 하단 2px(행 경계선)을 가리지 않도록 높이를 2px 줄임 */
+  height: calc(var(--merged-planned-block-height, 44px) - 2px);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.planned-merged-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 2px 0 2px 0;
+  /* 상·하 테두리를 남기고 내부 행 경계선만 덮음 */
+  background: #fff;
+  border-radius: inherit;
+  z-index: 0;
+  /* 덮개는 가장 뒤, 막대는 위로 올림 */
+  pointer-events: none;
+}
+
+.planned-merged-overlay .merged-field {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  /* 배경(::before)보다 위로 올림 */
+  z-index: 1;
+}
+
+/* 좌측(계획) 병합 필드: 시간열과 맞닿는 우측 경계선 제거 */
+.planned-input.merged-field,
+.planned-input.merged-main {
+  border-right: 0 !important;
+  border-left-color: transparent !important;
+  /* 외곽(타임시트) 좌측 2px와 겹치지 않도록 숨김 */
+}
+
+/* 선택 효과는 투명 오버레이로만 사용: 필드 자체 배경/색상 변경 제거 */
+.merged-field.field-selected {
+  background-color: transparent !important;
+  color: inherit !important;
+  border-color: inherit !important;
+}
+
+.merged-secondary.field-selected {
+  background-color: transparent !important;
+  color: inherit !important;
+  border-color: inherit !important;
+  box-shadow: none !important;
+}
+
+.selected-merged-planned {
+  position: relative;
+}
+
+.selected-merged-planned::after {
+  content: none !important;
+}
+
+.selected-merged-actual {
+  position: relative;
+}
+
+.selected-merged-actual::before {
+  content: none !important;
+}
+
+.merged-field.field-selected,
+.merged-secondary.field-selected {
+  position: static !important;
+}
+
+.merged-field.field-selected::after,
+.merged-secondary.field-selected::after {
+  content: none !important;
+}
+
+.has-planned-merge {
+  position: relative;
+}
+
+.has-planned-merge::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: calc(50% + 40px);
+  height: 2px;
+  background-color: white;
+  z-index: 1;
+}
+
+.has-actual-merge {
+  position: relative;
+}
+
+.has-actual-merge::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: calc(50% + 40px);
+  right: 0;
+  height: 2px;
+  background-color: white;
+  z-index: 1;
+}
+
+.selection-overlay {
+    position: absolute;
+    background-color: rgba(52, 152, 219, 0.25);
+  /* 투명 파란 오버레이만 */
+  /* 테두리는 인셋 박스섀도우로 통일된 진하기 유지 (행 하단선과 겹침 방지) */
+  box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.55);
+  border-radius: 4px;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 900;
+  /* 콘텐츠/오버레이 위, 버튼(1000) 아래 */
+}
+
+.selection-overlay[data-type="planned"][data-fill="outline"] {
+    background-color: transparent;
+}
+
+.hover-selection-overlay {
+  pointer-events: none;
+  z-index: 880;
+}
+
+.selected-merged-planned::after,
+.selected-merged-actual::before,
+.has-planned-merge::after,
+.has-actual-merge::before,
+.merged-field.field-selected::after,
+.merged-secondary.field-selected::after {
+  pointer-events: none;
+}
+

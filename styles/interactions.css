@@ -1,0 +1,1743 @@
+/* 타이머 UI 스타일 */
+.timer-controls-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.timer-controls-container.timer-running {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.timer-controls {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.timer-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(231, 76, 60, 0.3);
+}
+
+.timer-btn:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(231, 76, 60, 0.4);
+}
+
+.timer-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.timer-display {
+  font-family: "Courier New", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #2c3e50;
+  background: #f8f9fa;
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid #ddd;
+  min-width: 50px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.timer-running .timer-display {
+  background: #ffffff;
+  border-color: #e74c3c;
+  color: #e74c3c;
+  font-weight: 700;
+}
+
+.timer-result-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 14px;
+  text-align: center;
+  background: white;
+  min-width: 0;
+  /* 좌측열 병합 시 행 하단 가림요소(::after) 등보다 위에서 테두리를 보이도록 */
+  position: relative;
+  z-index: 4;
+}
+
+.timer-result-input:focus {
+  outline: 2px solid #3498db;
+  outline-offset: -2px;
+  border-color: #3498db;
+}
+
+.timer-result-input::placeholder {
+  color: #95a5a6;
+  font-style: normal;
+  text-align: center;
+}
+
+.activity-log-btn {
+  position: absolute;
+  top: 50%;
+  left: 90%;
+  /* 우측 정렬(right: 25px)에서 중앙 정렬로 변경 */
+  transform: translate(-50%, -50%);
+  /* 정확한 중앙 배치를 위해 X축 이동 추가 */
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  /* 터치 영역 확대 */
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  touch-action: manipulation;
+}
+
+.activity-log-btn:hover {
+  background: #2980b9;
+  transform: translate(-50%, calc(-50% - 1px));
+  /* 호버 시 위로 살짝 이동 (X축 유지) */
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.activity-log-btn.activity-log-btn-floating {
+  position: absolute;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1200;
+}
+
+.activity-log-btn-floating:hover {
+  transform: translateY(-1px);
+}
+
+/* 활동 기록 입력창 호버/포커스 시 버튼 노출 */
+.actual-field-container .timer-result-input:hover~.activity-log-btn,
+.actual-field-container .timer-result-input:focus~.activity-log-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 좌우 패딩을 맞춰 플레이스홀더를 정확히 중앙에 배치 */
+.actual-field-container .timer-result-input {
+  padding: 8px 12px;
+}
+
+.actual-field-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-right: none;
+  /* 좌측열 병합 시 생성되는 하단 가림(overlay)보다 위에서 표시되어
+     우측 입력창(활동 기록)의 테두리가 사라져 보이지 않도록 보정 */
+  position: relative;
+  z-index: 3;
+}
+
+
+/* 병합된 시간 필드 스타일 */
+.merged-time-main {
+  background-color: #ecf0f1 !important;
+  /* 좌우 테두리는 각 셀이 직접 그리도록 하여 두께 일관성 확보 */
+  border-left: 2px solid #ddd !important;
+  border-right: 2px solid #ddd !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  padding-top: 0 !important;
+  /* 오버레이 높이 계산과 일치시키기 위해 수직 패딩 제거 */
+  padding-bottom: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  position: relative;
+  /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
+  overflow: visible;
+  z-index: 5;
+}
+
+/* 병합된 시간열: 보조셀도 열의 배경/테두리를 유지해서
+   전체가 하나의 긴 블록처럼 보이도록 한다 */
+.merged-time-secondary {
+  background-color: #ecf0f1 !important;
+  /* 시간열 기본 배경 유지 */
+  /* 세로 경계는 셀 자체가 그림 (겹침과 두께 불일치 방지) */
+  border-left: 2px solid #ddd !important;
+  border-right: 2px solid #ddd !important;
+  border-top: none !important;
+  /* 상단 경계선 제거 */
+  border-bottom: none !important;
+  /* 하단 경계선 제거 */
+
+  /* 셀 높이/정렬은 기존 행과 동일 */
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+
+  /* 더 이상 숨기지 않음 */
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+  /* 클릭은 막되, 모양만 유지 */
+
+  /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
+  position: relative;
+}
+
+/* 병합된 시간열의 마지막 셀: 하단 경계선만 유지 */
+.merged-time-last {
+  /* 별도 하단 테두리 지정 없음: 행의 2px 경계선 노출로 두께 일관성 유지 */
+}
+
+.merged-secondary-hidden {
+  display: none !important;
+}
+
+/* 병합된 실제 활동 필드 스타일 */
+.merged-actual-main {
+  background-color: white !important;
+  /* 컨테이너는 테두리를 그리지 않고, 내부 입력의 테두리를 사용 */
+  border: none !important;
+  padding: 0 !important;
+  /* 오버레이 높이 계산과 일치시키기 위해 패딩 제거 */
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  position: relative;
+  /* 외곽선 오버레이 배치 기준 */
+  overflow: visible;
+  /* 오버레이가 아래 행으로 시각 확장되도록 */
+}
+
+/* 실제(우측) 병합 컨테이너 내부 인풋은 항상 자체 테두리를 표시 */
+.merged-actual-main .merged-field {
+  border: 1px solid #ddd !important;
+  /* 실제 입력 자체의 테두리: 상/하 포함 */
+  border-top: 1px solid #ddd !important;
+  border-bottom: 1px solid #ddd !important;
+  position: relative;
+  z-index: 3;
+  /* 외곽선 오버레이(2) 위, 선택오버레이(5) 아래 */
+}
+
+/* 병합된 실제 활동 블록의 상/하 라인은 행 경계선(2px)을 그대로 사용 */
+.merged-actual-main::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--merged-actual-block-height, 100%);
+  border: none;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 실제(우측) 병합된 입력과 버튼을 전체 병합 높이에 맞춰 절대배치로 오버레이 */
+.actual-merged-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 하단 2px(행 경계선)을 가리지 않도록 높이를 2px 줄임 */
+  height: calc(var(--merged-actual-block-height, 44px) - 2px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.actual-merged-overlay .timer-result-input {
+  padding: 8px 12px;
+}
+
+.merged-actual-main .actual-merged-overlay .timer-result-input {
+  height: 100%;
+}
+
+.merged-actual-secondary {
+  background: transparent !important;
+  border: none !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+/* 가운데 시간대 열 병합 시, 내부 가로 구분선 숨기기
+   - 각 병합 구간의 중간(마지막 제외) 보조셀 아래쪽에
+     배경색 바를 덮어써서 .time-entry 의 하단 테두리를 가린다 */
+.merged-time-secondary:not(.merged-time-last)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  /* 셀 내부 폭만 덮어, 좌우 열에 침범하지 않음 */
+  right: 0;
+  bottom: -2px;
+  /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
+  height: 2px;
+  background: #ecf0f1;
+  /* 시간열 배경과 동일 */
+  pointer-events: none;
+  z-index: 2;
+  /* 부모 행의 테두리 위에 표시 */
+}
+
+/* 병합된 시간열의 첫 번째(메인) 셀 아래 구분선도 가리기 */
+.merged-time-main::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  /* 셀 내부 폭만 덮음 */
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: #ecf0f1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 병합된 시간열: 상/하 라인은 행 경계선(2px)을 그대로 사용 (중복 두께 방지) */
+.merged-time-main::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--merged-block-height, 100%);
+  border: none;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */
+.merged-time-content {
+  position: relative;
+  z-index: 10;
+  /* 외곽선/가림 오버레이보다 위 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Multi-select dropdown for schedule modal */
+.multi-select {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.plan-title-group {
+  margin-top: 16px;
+}
+
+.title-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#planTitleInput,
+.plan-title-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #dcdfe3;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.plan-title-input {
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  padding-right: 26px;
+}
+
+.plan-title-input::after {
+  content: '▾';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+.plan-title-input.empty {
+  color: #9aa3ad;
+}
+
+.title-clear-btn {
+  padding: 6px 12px;
+  border: 1px solid #dcdfe3;
+  border-radius: 6px;
+  background: #f5f7fa;
+  color: #34495e;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.title-clear-btn:hover {
+  background: #ecf0f1;
+}
+
+.title-dropdown {
+  margin-top: 6px;
+  display: none;
+}
+
+.title-dropdown.open {
+  display: block;
+}
+
+#planTitleOptions {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+#planTitleOptions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#planTitleOptions li:hover,
+#planTitleOptions li.active {
+  background: #f5f9ff;
+}
+
+#planTitleOptions .title-option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+#planTitleOptions .title-option-meta {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.selected-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.title-band-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.title-band-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.title-band-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.plan-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.plan-tab {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: #f4f6f8;
+  color: #2c3e50;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.plan-tab:hover {
+  background: #e9edf2;
+}
+
+.plan-tab.active {
+  background: #fff;
+  border-color: #2980b9;
+  color: #1f2d3d;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.plan-tab.empty {
+  opacity: 0.7;
+}
+
+.plan-tab:focus {
+  outline: 2px solid #2980b9;
+  outline-offset: 2px;
+}
+
+.chip {
+  background: #ecf5ff;
+  color: #2c3e50;
+  border: 1px solid #b6dbff;
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-label {
+  white-space: nowrap;
+}
+
+.pr-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e6e9ef;
+  color: #34495e;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.pr-badge[data-pr="1"] {
+  background: #f4d2d1;
+  color: #9f3a3a;
+}
+
+.pr-badge[data-pr="2"] {
+  background: #f3e2b5;
+  color: #8a5c14;
+}
+
+.pr-badge[data-pr="3"] {
+  background: #e5dcf4;
+  color: #684699;
+}
+
+.pr-badge[data-pr="4"] {
+  background: #d6e7f4;
+  color: #2a6693;
+}
+
+.pr-badge[data-pr="5"] {
+  background: #d6e8dd;
+  color: #2f6144;
+}
+
+.pr-badge[data-pr="6"] {
+  background: #e5d8cd;
+  color: #71533c;
+}
+
+.pr-badge[data-pr="7"] {
+  background: #f3d2e6;
+  color: #984472;
+}
+
+.pr-badge[data-pr="8"] {
+  background: #efd9c3;
+  color: #8b4d20;
+}
+
+.pr-badge[data-pr="9"] {
+  background: #dcdfe3;
+  color: #4a4f55;
+}
+
+.pr-badge[data-pr="10"] {
+  background: #e7e6e2;
+  color: #5a5a57;
+}
+
+.chip .remove-chip {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #2980b9;
+}
+
+.multi-input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#activityInput {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.add-option-btn {
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.add-option-btn:hover {
+  background: #2980b9;
+}
+
+.sync-btn {
+  background: #7f8c8d;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.sync-btn:hover {
+  background: #707b7c;
+}
+
+.dropdown {
+  border: 1px solid #eee;
+  border-radius: 6px;
+  margin-top: 6px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+#activityOptions {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+#activityOptions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+#activityOptions li.disabled-option {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#activityOptions li.disabled-option .option-label {
+  color: #95a5a6;
+}
+
+#activityOptions li.disabled-option input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+#activityOptions li:hover {
+  background: #f5f9ff;
+}
+
+.option-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.empty-option {
+  padding: 10px;
+  color: #7f8c8d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.opt-btn {
+  border: none;
+  background: #ecf0f1;
+  color: #2c3e50;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.opt-btn:hover {
+  background: #dfe6e9;
+}
+
+#activityOptions li span {
+  white-space: nowrap;
+}
+
+.inline-plan-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  z-index: 50;
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+}
+
+.inline-plan-dropdown .plan-tabs {
+  margin-bottom: 8px;
+}
+
+.inline-plan-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inline-plan-input {
+  padding: 8px 10px;
+  border: 1px solid #dcdfe3;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.inline-plan-add-btn,
+.inline-plan-sync-btn {
+    padding: 8px 10px;
+    border: 1px solid #dcdfe3;
+    border-radius: 8px;
+  background: #f4f6f8;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-add-btn {
+  background: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+
+.inline-plan-sync-btn {
+  background: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+}
+
+.inline-plan-add-btn:hover {
+    background: #2980b9;
+}
+
+.inline-plan-sync-btn:hover {
+    background: #c0392b;
+    border-color: #c0392b;
+}
+
+.inline-plan-options {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.inline-plan-options-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.inline-plan-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.inline-plan-option:hover {
+  background: #f5f9ff;
+}
+
+.inline-plan-option.selected {
+  background: #ecf5ff;
+  border: 1px solid #b6dbff;
+}
+
+.inline-plan-option-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-plan-option-label {
+  font-size: 14px;
+  color: #1f2d3d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inline-plan-option-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.inline-plan-option-source {
+    background: #f4f6f8;
+    color: #2c3e50;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.inline-plan-option-routine {
+  border: 1px solid rgba(52, 152, 219, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #f5f9ff;
+  color: #1f5fa5;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.inline-plan-option-routine:hover {
+  background: #eaf4ff;
+  border-color: rgba(52, 152, 219, 0.55);
+}
+
+.inline-plan-option-routine.active {
+  background: #3498db;
+  border-color: #3498db;
+  color: #fff;
+}
+
+.inline-plan-option-remove {
+    border: 1px solid #f0b3b3;
+    border-radius: 999px;
+    padding: 2px 8px;
+    background: #fff5f5;
+    color: #a53b3b;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.inline-plan-option-remove:hover {
+    background: #ffe9e9;
+    border-color: #e79a9a;
+}
+
+.inline-plan-option-time {
+  color: #2980b9;
+  font-weight: 700;
+}
+
+.routine-menu {
+  position: absolute;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  z-index: 70;
+}
+
+.routine-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.routine-menu-item:hover {
+  background: #f5f9ff;
+}
+
+.routine-menu-item.active {
+  background: #ecf5ff;
+  color: #1f5fa5;
+}
+
+.routine-menu-item.danger {
+  color: #c0392b;
+}
+
+.routine-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.routine-menu-divider {
+  height: 1px;
+  background: #eef1f4;
+  margin: 6px 2px;
+}
+
+.plan-activity-menu {
+  position: absolute;
+  min-width: 220px;
+  max-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e6ebf1;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  padding: 8px;
+  z-index: 80;
+}
+
+.actual-activity-menu {
+  z-index: 2105;
+}
+
+.plan-activity-menu-section {
+  margin-top: 8px;
+}
+
+.plan-activity-menu-section:first-of-type {
+  margin-top: 0;
+}
+
+.plan-activity-menu-title {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7f8c8d;
+}
+
+.plan-activity-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.plan-activity-menu-item:hover {
+  background: #f5f9ff;
+}
+
+.plan-activity-menu-item.active {
+  background: #ecf5ff;
+  color: #1f5fa5;
+}
+
+.plan-activity-menu-item.plan-activity-menu-clear {
+  color: #7f8c8d;
+}
+
+.plan-activity-menu-empty {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+.plan-activity-menu-divider {
+  height: 1px;
+  background: #eef1f4;
+  margin: 6px 2px;
+}
+
+.inline-plan-empty {
+  padding: 10px;
+  text-align: center;
+  color: #7f8c8d;
+  font-size: 13px;
+}
+
+.inline-plan-split-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed #b6dbff;
+  border-radius: 10px;
+  background: #f7fbff;
+  color: #1f2d3d;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-split-btn:hover {
+  background: #ecf5ff;
+  border-color: #3498db;
+}
+
+.inline-plan-subsection {
+  margin-top: 10px;
+  border: 1px solid #eef1f4;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.inline-plan-sub-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #34495e;
+  margin-bottom: 10px;
+}
+
+.inline-plan-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline-plan-sub-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e6ebf1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.inline-plan-sub-input {
+  padding: 8px 10px;
+  border: 1px solid #dcdfe3;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #f9fbff;
+}
+
+.inline-plan-sub-time {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2c3e50;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  border: 1px solid #e1e7ef;
+}
+
+.inline-plan-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inline-plan-sub-actions button {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #dcdfe3;
+  background: #f4f6f8;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.inline-plan-sub-actions button:hover {
+  background: #e9edf2;
+  border-color: #cdd4dc;
+}
+
+.inline-plan-sub-note {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.sub-activities-group {
+  border: 1px solid #eef1f4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
+.split-toggle-btn {
+  width: 100%;
+  background: #ecf5ff;
+  border: 1px solid #b6dbff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #1f2d3d;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.split-toggle-btn:hover {
+  background: #dcefff;
+}
+
+.sub-activities-section {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sub-activities-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #34495e;
+}
+
+.sub-activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sub-activities-empty {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.sub-activity-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(110px, auto) 60px;
+  gap: 8px;
+  align-items: center;
+}
+
+.sub-activity-row input,
+.sub-activity-row select,
+.sub-activity-row button.plan-activity-label,
+.sub-activity-row button.actual-activity-label {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.sub-activity-row .plan-activity-label,
+.sub-activity-row .actual-activity-label {
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  padding-right: 26px;
+}
+
+.sub-activity-row .plan-activity-label::after,
+.sub-activity-row .actual-activity-label::after {
+  content: '▾';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+.sub-activity-row .plan-activity-label.empty,
+.sub-activity-row .actual-activity-label.empty {
+  color: #9aa3ad;
+}
+
+:root {
+    --actual-label-shift: 22px;
+    --actual-actions-shift: 16px;
+}
+
+.sub-activity-row.actual-row {
+    grid-template-columns: minmax(0, 3fr) minmax(84px, 1fr) minmax(84px, 1fr) 56px;
+    gap: 8px;
+    align-items: center;
+}
+
+.sub-activity-row.actual-row .actual-activity-label {
+    margin-top: var(--actual-label-shift);
+}
+
+.actual-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 52px;
+    justify-content: center;
+    margin-top: var(--actual-actions-shift);
+}
+
+.actual-row-actions .sub-activity-action-btn,
+.actual-row-actions .actual-remove-btn {
+  width: 100%;
+}
+
+.actual-row-actions .sub-activity-action-btn {
+  padding: 4px 6px;
+  font-size: 10px;
+  min-width: 0;
+}
+
+.actual-remove-btn {
+  border: 1px solid #f0b3b3;
+  border-radius: 4px;
+  background: #fff5f5;
+  color: #a53b3b;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.actual-remove-btn:hover {
+    background: #ffe9e9;
+}
+
+.actual-time-control {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.actual-time-caption {
+    font-size: 11px;
+    font-weight: 700;
+    color: #5c6b7a;
+    text-align: center;
+}
+
+.actual-time-control.is-disabled {
+    opacity: 0.55;
+}
+
+.actual-time-btn {
+    border: 1px solid #d0d6dc;
+    border-radius: 4px;
+    background: #f5f7fa;
+    height: 18px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.actual-time-btn:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.actual-time-control.actual-time-grid .actual-time-input {
+    background: #f3f7ff;
+}
+
+.actual-time-control.actual-time-assign .actual-time-input {
+    background: #fff;
+}
+
+.actual-time-control.actual-time-extra .actual-time-input,
+.actual-row-extra .actual-time-control.actual-time-grid .actual-time-input {
+    background: #fff2e1;
+    border-color: #f0c27a;
+}
+
+.actual-row-extra .actual-activity-label {
+    border-color: #f0c27a;
+    background: #fff8ee;
+}
+
+.actual-duration-input {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.time-spinner[data-kind="actual"] .spinner-display {
+  min-width: 52px;
+  padding: 6px 4px;
+}
+
+.actual-time-input {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    padding: 6px 4px;
+}
+
+.actual-duration-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.actual-time-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.sub-activity-row.active {
+  background: #f0f6ff;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(52, 152, 219, 0.38);
+}
+
+.sub-activity-row.active .plan-activity-label,
+.sub-activity-row.active .actual-activity-label,
+.sub-activity-row.active .actual-time-input {
+  border-color: #3498db;
+}
+
+.sub-activity-row.active .spinner-display {
+  border-color: #3498db;
+}
+
+.sub-activity-row.invalid .spinner-display {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.time-spinner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spinner-display {
+  min-width: 70px;
+  padding: 6px 10px;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.spinner-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spinner-btn {
+  width: 24px;
+  height: 18px;
+  background: #f4f6f8;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.spinner-btn:hover {
+  background: #e9edf2;
+}
+
+.spinner-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.split-cell-wrapper {
+  position: relative;
+  min-height: 56px;
+}
+
+.split-cell-wrapper.split-has-data> :first-child {
+  position: relative;
+  z-index: 1;
+}
+
+.split-cell-wrapper.split-has-data .input-field {
+  border-color: transparent;
+  background: transparent;
+}
+
+.split-cell-wrapper.split-type-planned.split-has-data .input-field {
+  color: transparent;
+  caret-color: transparent;
+  opacity: 0;
+}
+
+.split-cell-wrapper.split-type-planned.split-has-data .input-field::placeholder {
+  color: transparent;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input {
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  pointer-events: none;
+  /* 그리드가 있을 때 기본 텍스트 입력창과 상호작용 불가 */
+  opacity: 0;
+  /* ???? ?? ? ?? ??? ?? */
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input::placeholder {
+  color: transparent;
+}
+
+
+/* 실제 열에 그리드가 있을 때는 상세 기록 버튼을 항상 노출 */
+.split-cell-wrapper.split-type-actual.split-has-data .activity-log-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.split-cell-wrapper .split-visualization {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(223, 228, 234, 0.6);
+  z-index: 2;
+  /* 기본적으로 컨텐츠 위에 표시 */
+}
+
+.split-plan-merged-visualization {
+  top: 6px;
+  bottom: auto;
+  height: var(--split-plan-merged-height, auto);
+}
+
+.split-visualization-planned {
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.5);
+  z-index: 3;
+}
+
+.split-visualization-actual {
+  box-shadow: inset 0 0 0 1px rgba(96, 110, 128, 0.24);
+  background: rgba(240, 244, 248, 0.92);
+  z-index: 3;
+  /* ?????? ????? ?????? ?????? ?????? */
+}
+
+.split-cell-wrapper .split-visualization.split-visualization-actual {
+  pointer-events: auto;
+}
+
+.split-visualization.no-title {
+  justify-content: center;
+}
+
+.split-visualization-single-title .split-title-band {
+  gap: 0;
+}
+
+.split-visualization-single-title .split-title-segment {
+  border-radius: 6px;
+}
+
+.split-title-band {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: minmax(18px, 1fr);
+  /* 줄 간격 최소 18px, 여분 공간은 균등 분배 */
+  row-gap: 0;
+  column-gap: 0;
+  align-content: stretch;
+  flex: 1;
+  /* Fill extra space within the overlay */
+}
+
+.split-grid-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+
+.split-title-segment {
+  background: var(--split-segment-color, rgba(223, 228, 234, 0.6));
+  border-radius: 4px;
+  padding: 2px 4px;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-title-segment.split-empty {
+  background: rgba(236, 240, 241, 0.35);
+  color: transparent;
+}
+
+.split-grid-segment {
+  min-height: 0;
+  border-radius: 3px;
+  background: var(--split-segment-color, rgba(223, 228, 234, 0.5));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-bottom: 3px solid #fff;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px rgba(44, 62, 80, 0.08);
+}
+
+.split-visualization .split-title-segment,
+.split-visualization .split-grid-segment {
+  position: relative;
+  z-index: 2;
+  /* 덮개(::before)보다 위에 표시해 막대가 가려지지 않도록 */
+}
+
+.split-grid-segment.connect-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.split-grid-segment.connect-bottom {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  /* 하단 분리선 색을 고정해 이어지는 막대도 동일한 높이로 보이도록 */
+  border-bottom-color: #fff;
+}
+
+.split-visualization-actual .split-grid-segment {
+  box-shadow: inset 0 0 0 1px rgba(96, 110, 128, 0.22);
+  filter: saturate(1.12) brightness(0.95);
+}
+
+.split-visualization-actual .split-grid-segment.is-off {
+  opacity: 0.55;
+  filter: saturate(0.9) brightness(1.02);
+}
+
+.split-visualization-actual .split-grid-segment.is-on {
+  opacity: 1;
+  filter: saturate(1.12) brightness(0.95);
+}
+
+.split-visualization-actual .split-grid-segment {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.split-visualization-actual .split-grid-segment {
+  overflow: visible;
+}
+
+.split-visualization-actual .split-grid-label {
+  color: rgba(41, 128, 185, 0.45);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: auto;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #f3f9ff;
+  box-shadow: 0 0 0 1px rgba(41, 128, 185, 0.25);
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+.split-visualization-actual .split-grid-segment:hover .split-grid-label {
+  opacity: 1;
+  visibility: visible;
+}
+
+.split-visualization-actual .split-grid-label.split-grid-label-persistent {
+  opacity: 1;
+  visibility: visible;
+}
+
+.split-visualization-actual.split-readonly .split-grid-segment {
+  cursor: default;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container .timer-result-input {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
+  background: transparent;
+}
+
+.split-grid-segment.split-empty {
+  background: rgba(236, 240, 241, 0.25);
+  border-bottom-color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(189, 195, 199, 0.2);
+  color: transparent;
+}
+
+.split-visualization-actual .split-grid-segment.split-empty {
+  background: rgba(232, 238, 246, 0.38);
+  box-shadow: inset 0 0 0 1px rgba(96, 110, 128, 0.16);
+}
+
+.split-grid>.split-grid-segment:last-child {
+  border-bottom-color: transparent;
+}
+
+
+.remove-sub-activity {
+  background: transparent;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.remove-sub-activity:hover {
+  text-decoration: underline;
+}
+
+.sub-activities-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sub-activity-action-btn {
+  background: #f4f6f8;
+  border: 1px solid #d0d6dc;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #2c3e50;
+}
+
+.sub-activity-action-btn:hover {
+  background: #e9edf2;
+}
+
+.sub-activity-action-btn.sub-activity-action-compact {
+  padding: 6px 8px;
+  font-size: 11px;
+  min-width: 52px;
+  text-align: center;
+}
+
+.sub-activities-notice {
+  font-size: 12px;
+  color: #e67e22;
+}
+
+.sub-activities-notice.ok {
+  color: #2ecc71;
+}
+

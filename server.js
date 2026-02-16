@@ -1,5 +1,5 @@
 // Minimal Express server to bridge Notion API to the SPA
-// - Serves static files (index.html, script.js, styles.css)
+// - Serves static files (index.html, script.js, styles.css + styles/*.css)
 // - Provides GET /api/notion/activities to return { activities: [{ id, title }] }
 
 try {
@@ -29,6 +29,10 @@ const STATIC_FILE_MAP = Object.freeze({
     '/': 'index.html',
     '/index.html': 'index.html',
     '/styles.css': 'styles.css',
+    '/styles/foundation.css': 'styles/foundation.css',
+    '/styles/modal.css': 'styles/modal.css',
+    '/styles/interactions.css': 'styles/interactions.css',
+    '/styles/responsive.css': 'styles/responsive.css',
     '/script.js': 'script.js',
     '/main.js': 'main.js',
     '/core/time-core.js': 'core/time-core.js',
@@ -176,6 +180,10 @@ app.get([
     '/',
     '/index.html',
     '/styles.css',
+    '/styles/foundation.css',
+    '/styles/modal.css',
+    '/styles/interactions.css',
+    '/styles/responsive.css',
     '/script.js',
     '/main.js',
     '/core/time-core.js',

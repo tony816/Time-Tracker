@@ -59,12 +59,22 @@
 
 ```
 Time-Tracker/
-├── index.html      # UI
-├── styles.css      # 스타일
-├── script.js       # 로직(슬롯/병합/타이머/로그/인라인 계획 편집/저장)
-├── server.js       # (선택) Notion 브리지 서버
-├── package.json    # (선택) 서버 실행 스크립트/의존성
-└── README.md       # 문서
+├── index.html                    # UI
+├── styles.css                    # 스타일 엔트리(@import 허브)
+├── styles/
+│   ├── foundation.css            # 기본 레이아웃/그리드
+│   ├── modal.css                 # 모달 계열 스타일
+│   ├── interactions.css          # 타이머/상호작용 UI
+│   └── responsive.css            # 반응형/UX 보강
+├── script.js                     # 앱 오케스트레이션(상태/이벤트)
+├── main.js                       # 부트스트랩 진입점
+├── core/time-core.js             # 순수 시간 유틸
+├── infra/storage-adapter.js      # 저장소 어댑터(LocalStorage)
+├── controllers/timer-controller.js # 타이머 상태 계산
+├── ui/time-entry-renderer.js     # 행 렌더 모델 빌더
+├── server.js                     # (선택) Notion 브리지 서버
+├── package.json                  # (선택) 서버 실행 스크립트/의존성
+└── README.md                     # 문서
 ```
 
 ## 데이터 저장
