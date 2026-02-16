@@ -5,9 +5,11 @@
 - 기존 시각 결과를 유지하면서 로딩 순서와 서버 정적 서빙 경로를 고정한다.
 
 ## 적용 내용
-- `styles.css`
-  - 엔트리 파일 역할로 축소 (`@import` 4개만 유지)
+- `index.html`
+  - 분리 CSS 파일을 직접 `<link>`로 로드하도록 변경
   - 로딩 순서: `foundation -> modal -> interactions -> responsive`
+- `styles.css`
+  - 호환용 엔트리 파일로 유지 (`@import` 4개)
 - 신규 디렉터리: `styles/`
   - `foundation.css`: 기본 레이아웃/그리드
   - `modal.css`: 모달 관련 스타일

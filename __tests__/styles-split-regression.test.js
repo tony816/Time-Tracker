@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const rootDir = path.join(__dirname, '..');
 const entryCssPath = path.join(rootDir, 'styles.css');
+const indexPath = path.join(rootDir, 'index.html');
 const foundationCssPath = path.join(rootDir, 'styles', 'foundation.css');
 const modalCssPath = path.join(rootDir, 'styles', 'modal.css');
 const interactionsCssPath = path.join(rootDir, 'styles', 'interactions.css');
@@ -33,4 +34,20 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\/\*\s*타이머 UI 스타일\s*\*\//);
     assert.match(responsiveSource, /\/\*\s*Mobile responsive enhancements\s*\*\//);
     assert.match(responsiveSource, /\/\*\s*--- UX enhancement patch ---\s*\*\//);
+});
+
+test('index.html links split css files directly in order', () => {
+    const htmlSource = fs.readFileSync(indexPath, 'utf8');
+    const foundationIdx = htmlSource.indexOf('<link rel="stylesheet" href="styles/foundation.css" />');
+    const modalIdx = htmlSource.indexOf('<link rel="stylesheet" href="styles/modal.css" />');
+    const interactionsIdx = htmlSource.indexOf('<link rel="stylesheet" href="styles/interactions.css" />');
+    const responsiveIdx = htmlSource.indexOf('<link rel="stylesheet" href="styles/responsive.css" />');
+
+    assert.ok(foundationIdx >= 0, 'foundation.css link should exist');
+    assert.ok(modalIdx >= 0, 'modal.css link should exist');
+    assert.ok(interactionsIdx >= 0, 'interactions.css link should exist');
+    assert.ok(responsiveIdx >= 0, 'responsive.css link should exist');
+    assert.ok(foundationIdx < modalIdx, 'foundation.css should load before modal.css');
+    assert.ok(modalIdx < interactionsIdx, 'modal.css should load before interactions.css');
+    assert.ok(interactionsIdx < responsiveIdx, 'interactions.css should load before responsive.css');
 });

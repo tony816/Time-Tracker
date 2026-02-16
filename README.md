@@ -60,7 +60,7 @@
 ```
 Time-Tracker/
 ├── index.html                    # UI
-├── styles.css                    # 스타일 엔트리(@import 허브)
+├── styles.css                    # 스타일 엔트리(@import 허브, 호환용)
 ├── styles/
 │   ├── foundation.css            # 기본 레이아웃/그리드
 │   ├── modal.css                 # 모달 계열 스타일
