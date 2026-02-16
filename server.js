@@ -30,6 +30,9 @@ const STATIC_FILE_MAP = Object.freeze({
     '/index.html': 'index.html',
     '/styles.css': 'styles.css',
     '/script.js': 'script.js',
+    '/main.js': 'main.js',
+    '/core/time-core.js': 'core/time-core.js',
+    '/infra/storage-adapter.js': 'infra/storage-adapter.js',
     '/actual-grid-palette-test.html': 'actual-grid-palette-test.html',
 });
 
@@ -167,7 +170,16 @@ app.get('/favicon.ico', (_req, res) => {
     res.status(204).end();
 });
 
-app.get(['/','/index.html','/styles.css','/script.js','/actual-grid-palette-test.html'], sendStaticFileByRequestPath);
+app.get([
+    '/',
+    '/index.html',
+    '/styles.css',
+    '/script.js',
+    '/main.js',
+    '/core/time-core.js',
+    '/infra/storage-adapter.js',
+    '/actual-grid-palette-test.html',
+], sendStaticFileByRequestPath);
 
 app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' });
