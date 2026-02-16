@@ -834,12 +834,6 @@ h1 {
   color: #7f8c8d;
 }
 
-#scheduleModal .modal-content {
-  width: 92%;
-  max-width: 980px;
-  max-height: 85vh;
-}
-
 .schedule-modal-layout {
   display: flex;
   gap: 24px;
@@ -934,10 +928,6 @@ h1 {
 
 
 @media (max-width: 960px) {
-  #scheduleModal .modal-content {
-    max-width: 720px;
-  }
-
   .schedule-modal-layout {
     flex-direction: column;
   }
@@ -2956,12 +2946,6 @@ h1 {
     .form-actions .save-btn,
     .form-actions .cancel-btn {
         width: 100%;
-    }
-
-    #scheduleModal .modal-content {
-        width: 96%;
-        max-width: none;
-        max-height: 90vh;
     }
 
     .schedule-preview {

@@ -8,7 +8,7 @@
 - 3열 구성: 좌측 계획 | 중앙 시간/타이머 | 우측 실제 활동
 - 날짜 네비게이션: 어제/오늘/내일 버튼과 달력 입력
 - 병합 스케줄링: 계획 열을 여러 칸 선택 후 병합하면 시간/실제 열도 자동 동기화 병합
-- 스케줄 입력 모달: 계획 열은 직접 편집하지 않고 모달에서 다중 선택(칩)으로 입력/수정
+- 인라인 계획 입력: 계획 열은 직접 타이핑하지 않고 인라인 드롭다운/메뉴에서 선택·분해·수정
 - 타이머: 현재 시간 범위+계획이 있을 때만 ▶️ 활성화, ⏸️/⏹️ 지원, 종료 시 실제 칸에 자동 기록(“공부 (00:25:10)” 등)
 - 활동 로그: 우측 칸의 📝 버튼으로 제목/피드백 모달, 제목은 실제 칸과 동기화
 - 성과 분석: 실행율(%)과 타이머 사용량(시/분/초) 표시, 색상으로 상태 구분
@@ -23,8 +23,8 @@
 - 범위 선택: 클릭 후 드래그(좌측 열만 가능)
 - 병합: 2칸 이상 선택 시 중앙에 “병합” 버튼 표시 → 클릭
 - 되돌리기: 병합된 범위를 선택하면 “되돌리기(Undo)” 버튼 표시
-- 스케줄 입력: 선택 시 오버레이 중앙의 📅 버튼 또는 좌측 셀 호버 시 📅 버튼 → 모달에서 다중 선택/추가/편집/삭제 가능
-- 참고: 좌측 입력 필드는 읽기 전용이며, 편집은 모달로만 수행합니다.
+- 스케줄 입력: 선택 시 오버레이 중앙의 📅 버튼 또는 좌측 셀 호버 시 📅 버튼 → 인라인 드롭다운에서 선택/추가/편집/삭제
+- 참고: 좌측 입력 필드는 읽기 전용이며, 편집은 인라인 드롭다운/메뉴로 수행합니다.
 
 ### 실제 활동(우측)과 로그
 - 각 행 우측의 입력칸에서 직접 편집 가능
@@ -47,15 +47,13 @@
 - Notion 연동 서버(선택): 아래 “Notion 연동” 참고
  - Supabase 연동(선택): 아래 “Supabase 연동” 참고
 
-## 서버 DB(선택) & 마이그레이션
+## 서버 역할(선택)
 
-- 서버는 SQLite를 사용해 날짜별 문서를 그대로 저장합니다.
-  - 테이블: `timesheets(id, user_id, date, doc_json, exec_rate, total_seconds, created_at, updated_at)`
-  - `doc_json`은 `{ date, timeSlots, mergedFields }` 원형 그대로 저장되어 타임시트 문서 구조와 1:1 대응합니다.
-- 계획 활동 카탈로그(로컬 추가분): `activity_catalog(title, source='local', external_id)`
-- 마이그레이션: 앱 하단의 “서버로 마이그레이션” 버튼으로 LocalStorage의 모든 날짜/활동을 서버 DB로 이전할 수 있습니다.
-  - 서버가 실행 중이어야 합니다(`npm start`).
-  - API: `POST /api/migrate`로 `{ timesheets: [...], activities: [...] }`를 전송합니다.
+- `server.js`는 Express 기반의 정적 파일 서버 + Notion 브리지입니다.
+- 포함 API:
+  - `GET /api/notion/ping`
+  - `GET /api/notion/activities`
+- 현재 서버에는 SQLite 기반 마이그레이션 API가 포함되어 있지 않습니다.
 
 ## 저장소 구조
 
@@ -63,7 +61,7 @@
 Time-Tracker/
 ├── index.html      # UI
 ├── styles.css      # 스타일
-├── script.js       # 로직(슬롯/병합/타이머/로그/모달/저장)
+├── script.js       # 로직(슬롯/병합/타이머/로그/인라인 계획 편집/저장)
 ├── server.js       # (선택) Notion 브리지 서버
 ├── package.json    # (선택) 서버 실행 스크립트/의존성
 └── README.md       # 문서
@@ -71,8 +69,9 @@ Time-Tracker/
 
 ## 데이터 저장
 
-- 날짜별 타임시트: `timesheet_YYYY-MM-DD`
-- 계획 활동 카탈로그: `planned_activities`
+- 날짜별 타임시트: `timesheetData:YYYY-MM-DD`
+- 마지막 스냅샷: `timesheetData:last`
+- 하루 시작 기준(0시/4시): `tt.dayStartHour`
 - “초기화” 버튼은 현재 선택한 날짜의 데이터만 초기화합니다.
 
 ## Notion 연동(선택)
@@ -102,7 +101,7 @@ npm start
 
 ### 동작/제한
 - 읽기 전용: Notion에서 받아온 제목은 로컬 후보 목록에만 병합되며, Notion으로 되돌려 쓰지는 않습니다.
-- 캐시: 세션 내 1회 응답을 메모리 캐시에 보관하여 모달 재진입 시 빠르게 병합합니다.
+- 캐시: 세션 내 1회 응답을 메모리 캐시에 보관하여 드롭다운 재진입 시 빠르게 병합합니다.
 - CORS: SPA와 API를 같은 포트(3000)에서 띄우는 것을 권장합니다(다른 포트에서 사용하려면 서버에 CORS 허용 추가 필요).
 
 ## 색상/분석 규칙
@@ -121,35 +120,29 @@ npm start
 
 - 필요한 공개 설정(클라이언트에서 사용):
   - `SUPABASE_URL`, `SUPABASE_ANON_KEY`
-  - 설정 방법 1: 브라우저 콘솔에서 저장 후 새로고침
-    - `localStorage.setItem('supabase_url','https://YOUR-PROJECT.supabase.co')`
-    - `localStorage.setItem('supabase_anon_key','YOUR-ANON-KEY')`
-  - 설정 방법 2: `index.html`에서 전역 변수로 지정
+  - 설정 방법: `index.html`에서 전역 변수로 지정
     - `<script>window.SUPABASE_URL='https://...'; window.SUPABASE_ANON_KEY='...';</script>`
 
 - 테이블 스키마(예시: SQL)
 ```
-create table if not exists public.timesheet_slots (
-  id uuid primary key default gen_random_uuid(),
-  device_id text not null,
-  date text not null, -- 'YYYY-MM-DD'
-  time_label text not null, -- '4'..'23','00','1','2','3'
-  planned text not null default '',
-  actual text not null default '',
-  details text not null default '',
+create table if not exists public.timesheet_days (
+  user_id text not null,
+  day text not null, -- 'YYYY-MM-DD' 또는 sentinel day
+  slots jsonb not null default '{}'::jsonb,
+  updated_by text,
   updated_at timestamptz not null default now()
 );
-create unique index if not exists uq_timesheet_slots_key on public.timesheet_slots(device_id, date, time_label);
+create unique index if not exists uq_timesheet_days_user_day on public.timesheet_days(user_id, day);
 ```
 
-- Realtime 설정: Supabase UI → Realtime → `timesheet_slots` 테이블 Enable
+- Realtime 설정: Supabase UI → Realtime → `timesheet_days` 테이블 Enable
 
 - RLS(권장 아님): 간편 테스트를 위해 RLS를 비활성화하거나, anon 역할에 대해서 읽기/쓰기 허용 정책을 구성하세요. 민감한 데이터 저장은 지양하세요.
 
 - 동작 방식
-  - 저장 시: 현재 날짜의 24개 슬롯을 `upsert(device_id,date,time_label)`로 저장합니다.
-  - 로드 시: 같은 키로 select하여 `planned/actual/details`를 반영합니다.
-  - 실시간: 해당 `(device_id,date)`로 필터링된 변경사항을 구독하여 모달/그리드를 갱신합니다.
+  - 저장 시: 현재 날짜를 `upsert(user_id,day)`로 저장하며 `slots` JSON 전체를 반영합니다.
+  - 로드 시: 동일한 `(user_id,day)` 키를 조회해 시트를 반영합니다.
+  - 실시간: `timesheet_days` 변경사항 구독으로 그리드/활동 옵션을 갱신합니다.
 
 - 400 invalid_request_url: 데이터베이스 ID 형식/공유 설정 확인. DB 링크의 32자리 hex(또는 하이픈 포함 UUID)를 사용하고, 통합을 DB에 초대하세요.
 - 동기화 후 변화 없음: 새 제목이 없으면 목록 시각적 변화가 없을 수 있습니다.
