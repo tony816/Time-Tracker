@@ -40,6 +40,7 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/core\/activity-core\.js':\s*'core\/activity-core\.js'/);
   assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
   assert.match(serverSource, /'\/core\/duration-core\.js':\s*'core\/duration-core\.js'/);
+  assert.match(serverSource, /'\/core\/input-format-core\.js':\s*'core\/input-format-core\.js'/);
   assert.match(serverSource, /'\/core\/text-core\.js':\s*'core\/text-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
@@ -109,4 +110,14 @@ test('script activity helpers prefer TimeTrackerActivityCore when available', ()
   assert.match(snippet, /activityCore\.formatActivitiesSummary/);
   assert.match(snippet, /activityCore\.normalizeActivitiesArray/);
   assert.match(snippet, /activityCore\.normalizePlanActivitiesArray/);
+});
+
+test('script input-format helpers prefer TimeTrackerInputFormatCore when available', () => {
+  const start = scriptSource.indexOf('formatSecondsForInput(seconds)');
+  assert.ok(start >= 0, 'formatSecondsForInput() should exist');
+  const snippet = scriptSource.slice(start, start + 2400);
+  assert.match(snippet, /globalThis\.TimeTrackerInputFormatCore/);
+  assert.match(snippet, /inputFormatCore\.formatSecondsForInput/);
+  assert.match(snippet, /inputFormatCore\.formatMinutesForInput/);
+  assert.match(snippet, /inputFormatCore\.formatSpinnerValue/);
 });

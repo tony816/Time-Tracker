@@ -5391,6 +5391,12 @@ class TimeTracker {
     }
 
     formatSecondsForInput(seconds) {
+        const inputFormatCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerInputFormatCore)
+            ? globalThis.TimeTrackerInputFormatCore
+            : null;
+        if (inputFormatCore && typeof inputFormatCore.formatSecondsForInput === 'function') {
+            return inputFormatCore.formatSecondsForInput(seconds);
+        }
         if (!Number.isFinite(seconds) || seconds <= 0) return '00:00';
         const total = Math.floor(seconds);
         const hrs = Math.floor(total / 3600);
@@ -5403,11 +5409,23 @@ class TimeTracker {
     }
 
     formatMinutesForInput(seconds) {
+        const inputFormatCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerInputFormatCore)
+            ? globalThis.TimeTrackerInputFormatCore
+            : null;
+        if (inputFormatCore && typeof inputFormatCore.formatMinutesForInput === 'function') {
+            return inputFormatCore.formatMinutesForInput(seconds);
+        }
         if (!Number.isFinite(seconds) || seconds <= 0) return '0';
         return String(Math.round(seconds / 60));
     }
 
     formatSpinnerValue(kind, seconds) {
+        const inputFormatCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerInputFormatCore)
+            ? globalThis.TimeTrackerInputFormatCore
+            : null;
+        if (inputFormatCore && typeof inputFormatCore.formatSpinnerValue === 'function') {
+            return inputFormatCore.formatSpinnerValue(kind, seconds);
+        }
         return kind === 'actual'
             ? this.formatMinutesForInput(seconds)
             : this.formatSecondsForInput(seconds);
