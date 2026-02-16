@@ -2383,6 +2383,12 @@ class TimeTracker {
         }
     }
     getLocalDateParts(date) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.parseLocalDateParts === 'function') {
+            return dateCore.parseLocalDateParts(date);
+        }
         const s = String(date || '').trim();
         const [yStr, mStr, dStr] = s.split('-');
         const year = parseInt(yStr, 10);
@@ -2392,12 +2398,24 @@ class TimeTracker {
         return { year, month, day };
     }
     getDateValue(date) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.getDateValue === 'function') {
+            return dateCore.getDateValue(date);
+        }
         const parts = this.getLocalDateParts(date);
         if (!parts) return null;
         const ms = new Date(parts.year, parts.month - 1, parts.day, 0, 0, 0, 0).getTime();
         return Number.isFinite(ms) ? ms : null;
     }
     compareDateStrings(a, b) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.compareDateStrings === 'function') {
+            return dateCore.compareDateStrings(a, b);
+        }
         const av = this.getDateValue(a);
         const bv = this.getDateValue(b);
         if (!Number.isFinite(av) || !Number.isFinite(bv)) return 0;
@@ -2406,6 +2424,12 @@ class TimeTracker {
         return 0;
     }
     formatDateFromMsLocal(ms) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.formatDateFromMsLocal === 'function') {
+            return dateCore.formatDateFromMsLocal(ms);
+        }
         if (!Number.isFinite(ms)) return '';
         const dt = new Date(ms);
         if (isNaN(dt.getTime())) return '';
@@ -2415,9 +2439,21 @@ class TimeTracker {
         return `${y}-${m}-${d}`;
     }
     getTodayLocalDateString() {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.getTodayLocalDateString === 'function') {
+            return dateCore.getTodayLocalDateString();
+        }
         return this.formatDateFromMsLocal(Date.now());
     }
     getLocalSlotStartMs(date, hour) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.getLocalSlotStartMs === 'function') {
+            return dateCore.getLocalSlotStartMs(date, hour);
+        }
         const parts = this.getLocalDateParts(date);
         if (!parts) return null;
         const h = Number.isFinite(hour) ? Math.floor(Number(hour)) : 0;
@@ -2426,6 +2462,12 @@ class TimeTracker {
         return Number.isFinite(ms) ? ms : null;
     }
     getDayOfWeek(date) {
+        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
+            ? globalThis.TimeTrackerDateCore
+            : null;
+        if (dateCore && typeof dateCore.getDayOfWeek === 'function') {
+            return dateCore.getDayOfWeek(date);
+        }
         const parts = this.getLocalDateParts(date);
         if (!parts) return 0;
         return new Date(parts.year, parts.month - 1, parts.day).getDay();

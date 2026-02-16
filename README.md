@@ -68,6 +68,7 @@ Time-Tracker/
 │   └── responsive.css            # 반응형/UX 보강
 ├── script.js                     # 앱 오케스트레이션(상태/이벤트)
 ├── main.js                       # 부트스트랩 진입점
+├── core/date-core.js             # 순수 날짜/캘린더 유틸
 ├── core/time-core.js             # 순수 시간 유틸
 ├── infra/storage-adapter.js      # 저장소 어댑터(LocalStorage)
 ├── controllers/timer-controller.js # 타이머 상태 계산

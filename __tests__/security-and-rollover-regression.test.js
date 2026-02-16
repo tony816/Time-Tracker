@@ -36,8 +36,23 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/styles\/interactions\.css':\s*'styles\/interactions\.css'/);
   assert.match(serverSource, /'\/styles\/responsive\.css':\s*'styles\/responsive\.css'/);
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
+  assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
   assert.match(serverSource, /'\/controllers\/timer-controller\.js':\s*'controllers\/timer-controller\.js'/);
   assert.match(serverSource, /'\/ui\/time-entry-renderer\.js':\s*'ui\/time-entry-renderer\.js'/);
+});
+
+test('script date helpers prefer TimeTrackerDateCore when available', () => {
+  const start = scriptSource.indexOf('getLocalDateParts(date)');
+  assert.ok(start >= 0, 'getLocalDateParts() should exist');
+  const snippet = scriptSource.slice(start, start + 5200);
+  assert.match(snippet, /globalThis\.TimeTrackerDateCore/);
+  assert.match(snippet, /dateCore\.parseLocalDateParts/);
+  assert.match(snippet, /dateCore\.getDateValue/);
+  assert.match(snippet, /dateCore\.compareDateStrings/);
+  assert.match(snippet, /dateCore\.formatDateFromMsLocal/);
+  assert.match(snippet, /dateCore\.getTodayLocalDateString/);
+  assert.match(snippet, /dateCore\.getLocalSlotStartMs/);
+  assert.match(snippet, /dateCore\.getDayOfWeek/);
 });
