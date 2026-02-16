@@ -37,6 +37,7 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/styles\/responsive\.css':\s*'styles\/responsive\.css'/);
   assert.match(serverSource, /'\/main\.js':\s*'main\.js'/);
   assert.match(serverSource, /'\/core\/actual-grid-core\.js':\s*'core\/actual-grid-core\.js'/);
+  assert.match(serverSource, /'\/core\/activity-core\.js':\s*'core\/activity-core\.js'/);
   assert.match(serverSource, /'\/core\/date-core\.js':\s*'core\/date-core\.js'/);
   assert.match(serverSource, /'\/core\/duration-core\.js':\s*'core\/duration-core\.js'/);
   assert.match(serverSource, /'\/core\/text-core\.js':\s*'core\/text-core\.js'/);
@@ -92,10 +93,20 @@ test('script normalizeActivityText prefers TimeTrackerTextCore when available', 
 test('script duration helpers prefer TimeTrackerDurationCore when available', () => {
   const start = scriptSource.indexOf('formatTime(seconds)');
   assert.ok(start >= 0, 'formatTime() should exist');
-  const snippet = scriptSource.slice(start, start + 3800);
+  const snippet = scriptSource.slice(start, start + 6200);
   assert.match(snippet, /globalThis\.TimeTrackerDurationCore/);
   assert.match(snippet, /durationCore\.formatTime/);
   assert.match(snippet, /durationCore\.formatDurationSummary/);
   assert.match(snippet, /durationCore\.normalizeDurationStep/);
   assert.match(snippet, /durationCore\.normalizeActualDurationStep/);
+});
+
+test('script activity helpers prefer TimeTrackerActivityCore when available', () => {
+  const start = scriptSource.indexOf('formatActivitiesSummary(activities, options = {})');
+  assert.ok(start >= 0, 'formatActivitiesSummary() should exist');
+  const snippet = scriptSource.slice(start, start + 9000);
+  assert.match(snippet, /globalThis\.TimeTrackerActivityCore/);
+  assert.match(snippet, /activityCore\.formatActivitiesSummary/);
+  assert.match(snippet, /activityCore\.normalizeActivitiesArray/);
+  assert.match(snippet, /activityCore\.normalizePlanActivitiesArray/);
 });

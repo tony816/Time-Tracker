@@ -5266,6 +5266,19 @@ class TimeTracker {
     }
 
     formatActivitiesSummary(activities, options = {}) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.formatActivitiesSummary === 'function') {
+            return activityCore.formatActivitiesSummary(activities, {
+                hideTotal: Boolean(options && options.hideTotal),
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+                formatDurationSummary: (seconds) => this.formatDurationSummary(seconds),
+            });
+        }
         const items = Array.isArray(activities) ? activities : [];
         if (items.length === 0) return '';
         const normalized = items
@@ -5315,6 +5328,17 @@ class TimeTracker {
     }
 
     normalizeActivitiesArray(raw) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.normalizeActivitiesArray === 'function') {
+            return activityCore.normalizeActivitiesArray(raw, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
         if (!Array.isArray(raw)) return [];
         return raw
             .filter(item => item && typeof item === 'object')
@@ -5342,6 +5366,17 @@ class TimeTracker {
     }
 
     normalizePlanActivitiesArray(raw) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.normalizePlanActivitiesArray === 'function') {
+            return activityCore.normalizePlanActivitiesArray(raw, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
         if (!Array.isArray(raw)) return [];
         return raw
             .filter(item => item && typeof item === 'object')

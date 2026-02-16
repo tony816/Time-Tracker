@@ -69,6 +69,7 @@ Time-Tracker/
 ├── script.js                     # 앱 오케스트레이션(상태/이벤트)
 ├── main.js                       # 부트스트랩 진입점
 ├── core/actual-grid-core.js      # Actual Grid 순수 계산 유틸
+├── core/activity-core.js         # 활동 배열/요약 정규화 유틸
 ├── core/date-core.js             # 순수 날짜/캘린더 유틸
 ├── core/duration-core.js         # 시간 포맷/단위 정규화 유틸
 ├── core/text-core.js             # 문자열/보안(escape/정규화) 유틸
