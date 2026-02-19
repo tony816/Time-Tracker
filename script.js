@@ -3636,12 +3636,56 @@ class TimeTracker {
         
         if (selectedSet.size > 1) {
             const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const startIndex = selectedIndices[0];
-            const endIndex = selectedIndices[selectedIndices.length - 1];
-            
+            let startIndex = selectedIndices[0];
+            let endIndex = selectedIndices[selectedIndices.length - 1];
+
+            const collectOverlappingMergeKeys = (targetTypes, rangeStart, rangeEnd) => {
+                const typeSet = new Set(Array.isArray(targetTypes) ? targetTypes : []);
+                if (typeSet.size === 0) return [];
+                const keys = [];
+                for (const key of this.mergedFields.keys()) {
+                    const parts = String(key || '').split('-');
+                    if (parts.length !== 3) continue;
+                    const keyType = parts[0];
+                    if (!typeSet.has(keyType)) continue;
+                    const keyStart = parseInt(parts[1], 10);
+                    const keyEnd = parseInt(parts[2], 10);
+                    if (!Number.isInteger(keyStart) || !Number.isInteger(keyEnd)) continue;
+                    if (keyEnd < rangeStart || keyStart > rangeEnd) continue;
+                    keys.push({ key, start: keyStart, end: keyEnd });
+                }
+                return keys;
+            };
+
+            const overlappingTypes = type === 'planned'
+                ? ['planned', 'time', 'actual']
+                : ['actual'];
+
+            // 기존 병합과 일부만 겹치는 경우에도 전체 병합 블록 단위로 확장해 orphan 보조 슬롯을 방지한다.
+            let overlappingEntries = [];
+            while (true) {
+                const found = collectOverlappingMergeKeys(overlappingTypes, startIndex, endIndex);
+                if (found.length === 0) {
+                    overlappingEntries = [];
+                    break;
+                }
+                let nextStart = startIndex;
+                let nextEnd = endIndex;
+                for (const entry of found) {
+                    if (entry.start < nextStart) nextStart = entry.start;
+                    if (entry.end > nextEnd) nextEnd = entry.end;
+                }
+                overlappingEntries = found;
+                if (nextStart === startIndex && nextEnd === endIndex) break;
+                startIndex = nextStart;
+                endIndex = nextEnd;
+            }
+
             const firstField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const mergedValue = firstField ? firstField.value : '';
-            
+
+            overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
+
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
             this.mergedFields.set(mergeKey, mergedValue);
             
