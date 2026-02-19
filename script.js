@@ -12,6 +12,8 @@ class TimeTracker {
         this.currentColumnType = null;
         this.mergeButton = null;
         this.undoButton = null;
+        this.pendingMergedMouseSelection = null;
+        this.suppressMergedClickOnce = false;
         this.mergedFields = new Map(); // {type-startIndex-endIndex: mergedValue}
         this.selectionOverlay = { planned: null, actual: null };
         this.hoverSelectionOverlay = { planned: null, actual: null };
@@ -772,6 +774,25 @@ class TimeTracker {
         });
 
         document.addEventListener('mousemove', (e) => {
+            if (!this.isSelectingPlanned && this.pendingMergedMouseSelection) {
+                if (typeof e.buttons === 'number' && e.buttons === 0) {
+                    this.pendingMergedMouseSelection = null;
+                } else {
+                    const pending = this.pendingMergedMouseSelection;
+                    const dx = (Number.isFinite(e.clientX) && Number.isFinite(pending.startX))
+                        ? (e.clientX - pending.startX)
+                        : 0;
+                    const dy = (Number.isFinite(e.clientY) && Number.isFinite(pending.startY))
+                        ? (e.clientY - pending.startY)
+                        : 0;
+                    const movedPx = Math.hypot(dx, dy);
+                    const elapsedMs = Date.now() - (Number.isFinite(pending.startTime) ? pending.startTime : 0);
+                    if (elapsedMs >= 220 && movedPx >= 4) {
+                        this.beginMergedPlannedMouseSelection(pending.mergeKey, pending.fallbackIndex);
+                        this.suppressMergedClickOnce = true;
+                    }
+                }
+            }
             if (!this.isSelectingPlanned || this.currentColumnType !== 'planned') return;
             if (typeof e.buttons === 'number' && e.buttons === 0) return;
             const hoverIndex = this.getIndexAtClientPosition('planned', e.clientX, e.clientY);
@@ -787,13 +808,20 @@ class TimeTracker {
         document.addEventListener('mouseup', () => {
             this.isSelectingPlanned = false;
             this.isSelectingActual = false;
+            this.pendingMergedMouseSelection = null;
             this.dragStartIndex = -1;
             this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
+            if (this.suppressMergedClickOnce) {
+                setTimeout(() => {
+                    this.suppressMergedClickOnce = false;
+                }, 0);
+            }
         });
         document.addEventListener('touchend', () => {
             this.isSelectingPlanned = false;
             this.isSelectingActual = false;
+            this.pendingMergedMouseSelection = null;
             this.dragStartIndex = -1;
             this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
@@ -819,7 +847,7 @@ class TimeTracker {
         document.getElementById('date').value = this.currentDate;
     }
 
-    beginMergedPlannedMouseSelection(mergeKey, fallbackIndex = null) {
+    getMergeRangeBounds(mergeKey, fallbackIndex = null) {
         if (!mergeKey || typeof mergeKey !== 'string') return null;
         const [, startStr, endStr] = mergeKey.split('-');
         const parsedStart = parseInt(startStr, 10);
@@ -828,15 +856,45 @@ class TimeTracker {
         const start = Number.isFinite(parsedStart) ? parsedStart : fallback;
         const end = Number.isFinite(parsedEnd) ? parsedEnd : start;
         if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+        return { start: Math.min(start, end), end: Math.max(start, end) };
+    }
 
-        const safeStart = Math.min(start, end);
-        const safeEnd = Math.max(start, end);
+    activateMergedPlannedSelection(mergeKey, fallbackIndex = null) {
+        const range = this.getMergeRangeBounds(mergeKey, fallbackIndex);
+        if (!range) return null;
+        this.clearAllSelections();
+        this.selectMergedRange('planned', mergeKey, { append: false });
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList && activeEl.classList.contains('planned-input')) {
+            try { activeEl.blur(); } catch (_) {}
+        }
+        return range;
+    }
+
+    queueMergedPlannedMouseSelection(mergeKey, fallbackIndex = null, clientX = 0, clientY = 0) {
+        const range = this.getMergeRangeBounds(mergeKey, fallbackIndex);
+        if (!range) return null;
+        const fallback = Number.isFinite(fallbackIndex) ? fallbackIndex : parseInt(fallbackIndex, 10);
+        this.pendingMergedMouseSelection = {
+            mergeKey,
+            fallbackIndex: Number.isFinite(fallback) ? fallback : range.start,
+            startX: Number.isFinite(clientX) ? clientX : 0,
+            startY: Number.isFinite(clientY) ? clientY : 0,
+            startTime: Date.now(),
+        };
+        return range;
+    }
+
+    beginMergedPlannedMouseSelection(mergeKey, fallbackIndex = null) {
+        const range = this.getMergeRangeBounds(mergeKey, fallbackIndex);
+        if (!range) return null;
+        this.pendingMergedMouseSelection = null;
         this.closeInlinePlanDropdown();
-        this.dragStartIndex = safeStart;
-        this.dragBaseEndIndex = safeEnd;
+        this.dragStartIndex = range.start;
+        this.dragBaseEndIndex = range.end;
         this.currentColumnType = 'planned';
         this.isSelectingPlanned = true;
-        return { start: safeStart, end: safeEnd };
+        return range;
     }
 
     // 병합 셀 내부 어디를 클릭해도 전체 병합 범위를 선택하도록 캡처 처리
@@ -866,22 +924,24 @@ class TimeTracker {
             e.preventDefault();
             e.stopPropagation();
             if (e.type === 'mousedown') {
-                this.beginMergedPlannedMouseSelection(mergeKey, parseInt(plannedEl.dataset.index, 10));
+                this.queueMergedPlannedMouseSelection(
+                    mergeKey,
+                    parseInt(plannedEl.dataset.index, 10),
+                    e.clientX,
+                    e.clientY
+                );
                 return;
             }
-            if (this.isMergeRangeSelected('planned', mergeKey)) this.clearSelection('planned');
-            else {
-                const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
-                if (!canAppend) this.clearAllSelections();
-                this.selectMergedRange('planned', mergeKey, { append: canAppend });
-            }
             if (e.type === 'click') {
-                const [, startStr, endStr] = mergeKey.split('-');
-                const startIdx = parseInt(startStr, 10);
-                const endIdx = parseInt(endStr, 10);
-                const safeStart = Number.isFinite(startIdx) ? startIdx : parseInt(plannedEl.dataset.index, 10);
-                const safeEnd = Number.isFinite(endIdx) ? endIdx : safeStart;
-                if (!Number.isFinite(safeStart)) return;
+                if (this.suppressMergedClickOnce) {
+                    this.suppressMergedClickOnce = false;
+                    return;
+                }
+                this.pendingMergedMouseSelection = null;
+                const range = this.activateMergedPlannedSelection(mergeKey, parseInt(plannedEl.dataset.index, 10));
+                if (!range) return;
+                const safeStart = range.start;
+                const safeEnd = range.end;
                 const anchor = document.querySelector(`[data-index="${safeStart}"] .planned-input`) || plannedEl;
                 this.openInlinePlanDropdown(safeStart, anchor, safeEnd);
             }
@@ -908,16 +968,19 @@ class TimeTracker {
                         e.preventDefault();
                         e.stopPropagation();
                         if (e.type === 'mousedown') {
-                            this.beginMergedPlannedMouseSelection(mk, index);
+                            this.queueMergedPlannedMouseSelection(mk, index, e.clientX, e.clientY);
                             return;
                         }
                         if (e.type === 'click') {
-                            if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
-                            else {
-                                const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
-                                if (!canAppend) this.clearAllSelections();
-                                this.selectMergedRange('planned', mk, { append: canAppend });
+                            if (this.suppressMergedClickOnce) {
+                                this.suppressMergedClickOnce = false;
+                                return;
                             }
+                            this.pendingMergedMouseSelection = null;
+                            const range = this.activateMergedPlannedSelection(mk, index);
+                            if (!range) return;
+                            const anchor = document.querySelector(`[data-index="${range.start}"] .planned-input`) || prEl;
+                            this.openInlinePlanDropdown(range.start, anchor, range.end);
                         }
                         return;
                     }
@@ -3023,19 +3086,12 @@ class TimeTracker {
 
                 e.preventDefault();
                 e.stopPropagation();
-
-                if (this.isMergeRangeSelected('planned', mergeKey)) {
-                    this.clearSelection('planned');
-                } else {
-                    const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
-                    if (!canAppend) this.clearAllSelections();
-                    this.selectMergedRange('planned', mergeKey, { append: canAppend });
-                }
-                const [, startStr] = mergeKey.split('-');
-                const parsedStart = parseInt(startStr, 10);
-                const mergeStart = Number.isInteger(parsedStart) ? parsedStart : index;
+                const range = this.activateMergedPlannedSelection(mergeKey, index);
+                if (!range) return;
+                const mergeStart = range.start;
+                const mergeEnd = range.end;
                 const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                this.openInlinePlanDropdown(mergeStart, anchor);
+                this.openInlinePlanDropdown(mergeStart, anchor, mergeEnd);
             });
         }
         // 우측(실제) 열은 개별 선택/드래그/병합 조작을 제공하지 않음
@@ -7454,7 +7510,8 @@ class TimeTracker {
         this.updateSelectionOverlay(type);
         this.showScheduleButtonForSelection(type);
         if (type === 'planned' && selectedSet.size > 1) {
-            this.showMergeButton('planned');
+            if (append) this.showMergeButton('planned');
+            else this.hideMergeButton();
         }
 
         // Undo 버튼은 "기존 병합 블록 단독 선택"일 때만 노출
@@ -7705,8 +7762,10 @@ class TimeTracker {
                     if (mk) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
-                        else this.selectMergedRange('planned', mk);
+                        const range = this.activateMergedPlannedSelection(mk, index);
+                        if (!range) return;
+                        const anchor = entryDiv.querySelector('.planned-input') || document.querySelector(`[data-index="${range.start}"] .planned-input`);
+                        if (anchor) this.openInlinePlanDropdown(range.start, anchor, range.end);
                         return;
                     }
                 }

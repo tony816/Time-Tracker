@@ -738,3 +738,9 @@ h1 {
   pointer-events: none;
 }
 
+
+.planned-input.merged-field:focus,
+.planned-input.merged-main:focus,
+.planned-input.merged-secondary.planned-merged-secondary:focus {
+  outline: none !important;
+}
