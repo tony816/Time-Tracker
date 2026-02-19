@@ -819,6 +819,26 @@ class TimeTracker {
         document.getElementById('date').value = this.currentDate;
     }
 
+    beginMergedPlannedMouseSelection(mergeKey, fallbackIndex = null) {
+        if (!mergeKey || typeof mergeKey !== 'string') return null;
+        const [, startStr, endStr] = mergeKey.split('-');
+        const parsedStart = parseInt(startStr, 10);
+        const parsedEnd = parseInt(endStr, 10);
+        const fallback = Number.isFinite(fallbackIndex) ? fallbackIndex : parseInt(fallbackIndex, 10);
+        const start = Number.isFinite(parsedStart) ? parsedStart : fallback;
+        const end = Number.isFinite(parsedEnd) ? parsedEnd : start;
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+
+        const safeStart = Math.min(start, end);
+        const safeEnd = Math.max(start, end);
+        this.closeInlinePlanDropdown();
+        this.dragStartIndex = safeStart;
+        this.dragBaseEndIndex = safeEnd;
+        this.currentColumnType = 'planned';
+        this.isSelectingPlanned = true;
+        return { start: safeStart, end: safeEnd };
+    }
+
     // 병합 셀 내부 어디를 클릭해도 전체 병합 범위를 선택하도록 캡처 처리
     handleMergedClickCapture(e) {
         const target = e.target;
@@ -845,7 +865,10 @@ class TimeTracker {
             if (!mergeKey) return;
             e.preventDefault();
             e.stopPropagation();
-            if (e.type === 'mousedown') return; // 클릭에서 처리
+            if (e.type === 'mousedown') {
+                this.beginMergedPlannedMouseSelection(mergeKey, parseInt(plannedEl.dataset.index, 10));
+                return;
+            }
             if (this.isMergeRangeSelected('planned', mergeKey)) this.clearSelection('planned');
             else {
                 const canAppend = this.selectedPlannedFields && this.selectedPlannedFields.size > 0;
@@ -884,6 +907,10 @@ class TimeTracker {
                     if (mk) {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (e.type === 'mousedown') {
+                            this.beginMergedPlannedMouseSelection(mk, index);
+                            return;
+                        }
                         if (e.type === 'click') {
                             if (this.isMergeRangeSelected('planned', mk)) this.clearSelection('planned');
                             else {
