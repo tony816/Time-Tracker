@@ -3763,6 +3763,9 @@ class TimeTracker {
             
             this.renderTimeEntries();
             this.clearAllSelections();
+            if (type === 'planned') {
+                this.showUndoButton('planned', mergeKey);
+            }
             this.calculateTotals();
             this.autoSave();
         }
