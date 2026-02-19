@@ -1,3 +1,23 @@
+const UI_LABELS = Object.freeze({
+    plannedHeader: '\uacc4\ud68d\ub41c \ud65c\ub3d9',
+    timeHeader: '\uc2dc\uac04',
+    actualHeader: '\uc2e4\uc81c \ud65c\ub3d9',
+    dateLabel: '\ub0a0\uc9dc:',
+    todayButton: '\uc624\ub298',
+    clearButton: '\ucd08\uae30\ud654',
+    authRequired: '\ub85c\uadf8\uc778 \ud544\uc694',
+    googleLogin: 'Google \ub85c\uadf8\uc778',
+    activityLogTitle: '\ud65c\ub3d9 \uc0c1\uc138 \uae30\ub85d',
+    timeFieldLabel: '\uc2dc\uac04',
+    memoFieldLabel: '\uba54\ubaa8',
+    actualDetailLabel: '\uc2e4\uc81c \uc138\ubd80 \ud65c\ub3d9',
+    actualEditBadge: '\uae30\ub85d \ud3b8\uc9d1',
+    addActualDetail: '+ \uc138\ubd80 \ud65c\ub3d9',
+    actualHint: '\uae30\ub85d/\ubc30\uc815\uc740 10\ubd84 \ub2e8\uc704\ub85c \uc870\uc808\ub429\ub2c8\ub2e4. \ud569\uacc4\ub294 \ubcd1\ud569 \uc2dc\uac04\uc5d0 \uc790\ub3d9 \ub9de\ucda4\ub429\ub2c8\ub2e4.',
+    saveButton: '\uc800\uc7a5',
+    cancelButton: '\ucde8\uc18c',
+});
+
 class TimeTracker {
     constructor() {
         this.timeSlots = [];
@@ -124,6 +144,7 @@ class TimeTracker {
     init() {
         this.cacheAuthElements();
         this.cacheStatusElements();
+        this.applyEncodingSafeLabels();
         this.generateTimeSlots();
         this.renderTimeEntries();
         this.attachEventListeners();
@@ -156,6 +177,32 @@ class TimeTracker {
                 this.startChangeWatcher();
             }
         });
+    }
+
+    applyEncodingSafeLabels() {
+        const setText = (selector, text) => {
+            const element = document.querySelector(selector);
+            if (element) element.textContent = text;
+        };
+
+        setText('.header-row .planned-label', UI_LABELS.plannedHeader);
+        setText('.header-row .time-label', UI_LABELS.timeHeader);
+        setText('.header-row .actual-label', UI_LABELS.actualHeader);
+        setText('label[for="date"]', UI_LABELS.dateLabel);
+        setText('#todayBtn', UI_LABELS.todayButton);
+        setText('#clearBtn', UI_LABELS.clearButton);
+        setText('#authStatus', UI_LABELS.authRequired);
+        setText('#googleAuthBtn', UI_LABELS.googleLogin);
+
+        setText('#activityLogModal .modal-header h3', UI_LABELS.activityLogTitle);
+        setText('#activityLogModal label[for="activityTime"]', UI_LABELS.timeFieldLabel);
+        setText('#activityLogModal label[for="activityDetails"]', UI_LABELS.memoFieldLabel);
+        setText('#activityLogModal .actual-sub-activities-header > label', UI_LABELS.actualDetailLabel);
+        setText('#activityLogModal .actual-edit-badge', UI_LABELS.actualEditBadge);
+        setText('#addActualActivityRow', UI_LABELS.addActualDetail);
+        setText('#activityLogModal .actual-sub-activities-hint', UI_LABELS.actualHint);
+        setText('#saveActivityLog', UI_LABELS.saveButton);
+        setText('#cancelActivityLog', UI_LABELS.cancelButton);
     }
 
     // 디버그 겸 편의 저장 호출 래퍼
