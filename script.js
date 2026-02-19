@@ -8,6 +8,7 @@ class TimeTracker {
         this.isSelectingPlanned = false;
         this.isSelectingActual = false;
         this.dragStartIndex = -1;
+        this.dragBaseEndIndex = -1;
         this.currentColumnType = null;
         this.mergeButton = null;
         this.undoButton = null;
@@ -770,16 +771,31 @@ class TimeTracker {
             }
         });
 
+        document.addEventListener('mousemove', (e) => {
+            if (!this.isSelectingPlanned || this.currentColumnType !== 'planned') return;
+            if (typeof e.buttons === 'number' && e.buttons === 0) return;
+            const hoverIndex = this.getIndexAtClientPosition('planned', e.clientX, e.clientY);
+            if (!Number.isInteger(hoverIndex)) return;
+            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
+            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
+                ? this.dragBaseEndIndex
+                : baseStart;
+            this.clearSelection('planned');
+            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
+        });
+
         document.addEventListener('mouseup', () => {
             this.isSelectingPlanned = false;
             this.isSelectingActual = false;
             this.dragStartIndex = -1;
+            this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
         });
         document.addEventListener('touchend', () => {
             this.isSelectingPlanned = false;
             this.isSelectingActual = false;
             this.dragStartIndex = -1;
+            this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
         }, { passive: true });
 
@@ -3021,6 +3037,7 @@ class TimeTracker {
 
                     plannedMouseBaseRange = { start: rangeStart, end: rangeEnd };
                     this.dragStartIndex = rangeStart;
+                    this.dragBaseEndIndex = rangeEnd;
                     this.currentColumnType = 'planned';
                     this.isSelectingPlanned = true;
                 }
@@ -3058,6 +3075,7 @@ class TimeTracker {
                     }
                     this.isSelectingPlanned = false;
                     this.currentColumnType = null;
+                    this.dragBaseEndIndex = -1;
                     plannedMouseBaseRange = null;
                 }
             });
@@ -3098,6 +3116,7 @@ class TimeTracker {
                     plannedTouchBaseRange = { start: rangeStart, end: rangeEnd };
                     this.closeInlinePlanDropdown();
                     this.dragStartIndex = rangeStart;
+                    this.dragBaseEndIndex = rangeEnd;
                     this.currentColumnType = 'planned';
                     this.isSelectingPlanned = true;
                     this.clearAllSelections();
@@ -3131,6 +3150,7 @@ class TimeTracker {
                     this.isSelectingPlanned = false;
                     this.currentColumnType = null;
                     this.dragStartIndex = -1;
+                    this.dragBaseEndIndex = -1;
                 }
                 plannedTouchLongPressActive = false;
                 plannedTouchBaseRange = null;
@@ -3143,6 +3163,7 @@ class TimeTracker {
                 this.isSelectingPlanned = false;
                 this.currentColumnType = null;
                 this.dragStartIndex = -1;
+                this.dragBaseEndIndex = -1;
             }, { passive: true });
 
             plannedField.addEventListener('mouseenter', (e) => {
