@@ -2998,49 +2998,67 @@ class TimeTracker {
         // 우측(실제) 열은 개별 선택/드래그/병합 조작을 제공하지 않음
 
         let plannedMouseMoved = false;
+        let plannedMouseBaseRange = null; // { start, end }
         if (plannedField) {
             plannedField.addEventListener('mousedown', (e) => {
-                if (this.findMergeKey('planned', index)) return;
                 this.closeInlinePlanDropdown();
                 if (e.target === plannedField && !plannedField.matches(':focus')) {
                     e.preventDefault();
                     plannedMouseMoved = false;
-                    this.dragStartIndex = index;
+
+                    const mergeKeyAtStart = this.findMergeKey('planned', index);
+                    let rangeStart = index;
+                    let rangeEnd = index;
+                    if (mergeKeyAtStart) {
+                        const [, sStr, eStr] = String(mergeKeyAtStart).split('-');
+                        const parsedStart = parseInt(sStr, 10);
+                        const parsedEnd = parseInt(eStr, 10);
+                        if (Number.isFinite(parsedStart) && Number.isFinite(parsedEnd)) {
+                            rangeStart = parsedStart;
+                            rangeEnd = parsedEnd;
+                        }
+                    }
+
+                    plannedMouseBaseRange = { start: rangeStart, end: rangeEnd };
+                    this.dragStartIndex = rangeStart;
                     this.currentColumnType = 'planned';
                     this.isSelectingPlanned = true;
                 }
             });
             plannedField.addEventListener('mousemove', (e) => {
-                if (this.findMergeKey('planned', index)) return;
                 if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
                     plannedMouseMoved = true;
                 }
             });
             plannedField.addEventListener('mouseup', (e) => {
-                if (this.findMergeKey('planned', index)) return;
                 if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
                     e.preventDefault();
                     e.stopPropagation();
-                    
+
+                    const base = plannedMouseBaseRange || { start: index, end: index };
+                    const nextStart = Math.min(base.start, index);
+                    const nextEnd = Math.max(base.end, index);
+
                     if (!plannedMouseMoved) {
                         if (this.selectedPlannedFields.has(index) && this.selectedPlannedFields.size === 1) {
                             this.clearSelection('planned');
                         } else {
                             this.clearAllSelections();
-                            this.selectFieldRange('planned', index, index);
+                            this.selectFieldRange('planned', nextStart, nextEnd);
                         }
                         if (!e.ctrlKey && !e.metaKey) {
                             const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                            this.openInlinePlanDropdown(index, anchor);
+                            this.openInlinePlanDropdown(base.start, anchor);
                         }
                     } else {
                         if (!e.ctrlKey && !e.metaKey) {
                             this.clearSelection('planned');
                         }
-                        this.selectFieldRange('planned', this.dragStartIndex, index);
+                        this.selectFieldRange('planned', nextStart, nextEnd);
                     }
                     this.isSelectingPlanned = false;
                     this.currentColumnType = null;
+                    plannedMouseBaseRange = null;
                 }
             });
 
@@ -3133,13 +3151,15 @@ class TimeTracker {
                     this.showScheduleButtonOnHover(index);
                 }
                 // 병합 셀에서는 드래그 확장 업데이트만 생략
-                if (this.findMergeKey('planned', index)) return;
-                if (this.isSelectingPlanned && this.currentColumnType === 'planned' && this.dragStartIndex !== index) {
+                if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
                     plannedMouseMoved = true;
                     if (!e.ctrlKey && !e.metaKey) {
                         this.clearSelection('planned');
                     }
-                    this.selectFieldRange('planned', this.dragStartIndex, index);
+                    const base = plannedMouseBaseRange || { start: this.dragStartIndex, end: this.dragStartIndex };
+                    const nextStart = Math.min(base.start, index);
+                    const nextEnd = Math.max(base.end, index);
+                    this.selectFieldRange('planned', nextStart, nextEnd);
                 }
             });
             plannedField.addEventListener('mouseleave', (e) => {
@@ -7163,7 +7183,7 @@ class TimeTracker {
                         </div>`;
             } else {
                 const isLast = index === end;
-                return `<input type="text" class="input-field ${type}-input merged-secondary ${isLast ? 'merged-planned-last' : ''}" 
+                return `<input type="text" class="input-field ${type}-input merged-secondary planned-merged-secondary ${isLast ? 'merged-planned-last' : ''}" 
                                data-index="${index}" 
                                data-type="${type}" 
                                data-merge-key="${safeMergeKey}"
@@ -7172,7 +7192,7 @@ class TimeTracker {
                                value="${safeMergeValue}"
                                readonly
                                tabindex="-1"
-                               style="cursor: default;"
+                               style="cursor: pointer;"
                                placeholder="">`;
             }
         }
@@ -7419,6 +7439,11 @@ class TimeTracker {
             if (el.matches && el.matches(selector)) {
                 const idx = el.getAttribute('data-index');
                 if (idx !== null) return parseInt(idx, 10);
+            }
+            const row = el.closest && el.closest('.time-entry[data-index]');
+            if (row) {
+                const rowIdx = row.getAttribute('data-index');
+                if (rowIdx !== null) return parseInt(rowIdx, 10);
             }
         }
         return null;

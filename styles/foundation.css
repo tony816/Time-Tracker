@@ -546,6 +546,11 @@ h1 {
   outline: none;
 }
 
+/* 계획 병합 보조 슬롯은 터치/마우스 드래그 시작점으로 사용 */
+.planned-input.merged-secondary.planned-merged-secondary {
+  pointer-events: auto;
+}
+
 .merged-field {
   background-color: white !important;
   border: 1px solid #ddd !important;
