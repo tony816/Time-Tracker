@@ -5100,7 +5100,18 @@ class TimeTracker {
         const slot = this.timeSlots[baseIndex];
         if (!slot) return [];
         if (type === 'planned') {
-            return this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
+            const planActivities = this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
+            if (planActivities.length > 0) {
+                return planActivities;
+            }
+
+            const planLabel = this.getPlannedLabelForIndex(baseIndex);
+            if (planLabel) {
+                const blockSeconds = Math.max(3600, this.getBlockLength('planned', baseIndex) * 3600);
+                return [{ label: planLabel, seconds: blockSeconds, source: 'plan-template' }];
+            }
+
+            return [];
         }
 
           const sub = slot.activityLog && slot.activityLog.subActivities;
