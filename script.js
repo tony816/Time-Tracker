@@ -833,8 +833,7 @@ class TimeTracker {
                         ? (e.clientY - pending.startY)
                         : 0;
                     const movedPx = Math.hypot(dx, dy);
-                    const elapsedMs = Date.now() - (Number.isFinite(pending.startTime) ? pending.startTime : 0);
-                    if (elapsedMs >= 220 && movedPx >= 4) {
+                    if (movedPx >= 4) {
                         this.beginMergedPlannedMouseSelection(pending.mergeKey, pending.fallbackIndex);
                         this.suppressMergedClickOnce = true;
                     }
@@ -3434,13 +3433,36 @@ class TimeTracker {
         if (type !== 'planned') return; // 우측 열 멀티 선택 금지
         this.clearSelection(type);
         
-        const start = Math.min(startIndex, endIndex);
-        const end = Math.max(startIndex, endIndex);
+        let start = Math.min(startIndex, endIndex);
+        let end = Math.max(startIndex, endIndex);
+
+        if (Number.isInteger(start) && Number.isInteger(end)) {
+            const startInfo = this.getPlannedRangeInfo
+                ? this.getPlannedRangeInfo(start)
+                : { startIndex: start, endIndex: start };
+            const endInfo = this.getPlannedRangeInfo
+                ? this.getPlannedRangeInfo(end)
+                : { startIndex: end, endIndex: end };
+
+            if (startInfo) {
+                if (Number.isInteger(startInfo.startIndex)) start = Math.min(start, startInfo.startIndex);
+                if (Number.isInteger(startInfo.endIndex)) end = Math.max(end, startInfo.endIndex);
+            }
+            if (endInfo) {
+                if (Number.isInteger(endInfo.startIndex)) start = Math.min(start, endInfo.startIndex);
+                if (Number.isInteger(endInfo.endIndex)) end = Math.max(end, endInfo.endIndex);
+            }
+        }
+
+        const maxIndex = Array.isArray(this.timeSlots) ? this.timeSlots.length - 1 : end;
+        if (!Number.isFinite(maxIndex) || maxIndex < 0) return;
+        start = Math.max(0, start);
+        end = Math.min(maxIndex, end);
+        if (start > end) return;
         
         for (let i = start; i <= end; i++) {
             const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
             selectedSet.add(i);
-            const field = document.querySelector(`[data-index="${i}"] .${type}-input`);
             // 필드 클래스 하이라이트는 사용하지 않음 (투명 오버레이만)
         }
         
