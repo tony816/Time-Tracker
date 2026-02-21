@@ -3437,6 +3437,11 @@ class TimeTracker {
                       }
                       event.preventDefault();
                       event.stopPropagation();
+                      if (payload.segment && payload.segment.classList && payload.segment.classList.contains('is-failed')) {
+                          this.toggleActualFailedGridUnit(index, payload.unitIndex);
+                      } else {
+                          this.clearActualFailedGridUnitOnNormalClick(index, payload.unitIndex);
+                      }
                       if (payload.extraLabel) {
                           this.toggleExtraGridUnit(index, payload.extraLabel, payload.unitIndex);
                           return;

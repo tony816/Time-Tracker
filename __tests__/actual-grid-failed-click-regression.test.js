@@ -51,43 +51,75 @@ test('clearActualFailedGridUnitOnNormalClick is no-op when target is not failed'
     assert.deepEqual(slots[0].activityLog.actualFailedGridUnits, [false, false]);
 });
 
-test('toggleActualGridUnit keeps existing toggle behavior and clears failed state first', () => {
-    let clearArgs = null;
-    let syncArgs = null;
+test('toggleActualGridUnit clears failed X and still performs normal toggle (index=3, unit=5)', () => {
+    const slot = {
+        activityLog: {
+            actualGridUnits: [false, false, false, false, false, false],
+            actualExtraGridUnits: [],
+            actualFailedGridUnits: [false, false, false, false, false, true],
+            subActivities: [],
+            titleBandOn: false,
+            actualOverride: false,
+            title: '',
+            details: '',
+        },
+    };
+    const timeSlots = Array.from({ length: 8 }, () => ({
+        activityLog: {
+            actualGridUnits: [],
+            actualExtraGridUnits: [],
+            actualFailedGridUnits: [],
+            subActivities: [],
+            titleBandOn: false,
+            actualOverride: false,
+            title: '',
+            details: '',
+        },
+    }));
+    timeSlots[3] = slot;
+
     let rendered = false;
     let calculated = false;
     let saved = false;
 
     const ctx = {
-        getSplitBaseIndex: () => 2,
-        buildPlanUnitsForActualGrid: () => ({ units: ['focus', 'focus'], planLabel: 'focus' }),
-        clearActualFailedGridUnitOnNormalClick: (index, unitIndex, totalUnits) => {
-            clearArgs = { index, unitIndex, totalUnits };
-            return true;
+        timeSlots,
+        getSplitBaseIndex: () => 3,
+        buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A', 'A', 'A', 'A', 'A'], planLabel: 'A' }),
+        clearActualFailedGridUnitOnNormalClick(index, unitIndex, totalUnits) {
+            return clearActualFailedGridUnitOnNormalClick.call(this, index, unitIndex, totalUnits);
         },
         getBlockLength: () => 1,
-        getActualGridBlockRange: () => ({ start: 0, end: 1, label: 'focus' }),
-        getActualGridUnitsForBase: () => [false, false],
-        syncActualGridToSlots: (baseIndex, planUnits, actualUnits) => {
-            syncArgs = {
-                baseIndex,
-                planUnits: planUnits.slice(),
-                actualUnits: actualUnits.slice(),
-            };
+        getActualGridBlockRange: () => ({ start: 0, end: 5, label: 'A' }),
+        getActualGridUnitsForBase(baseIndex, totalUnits) {
+            const raw = this.timeSlots[baseIndex].activityLog.actualGridUnits.slice();
+            if (raw.length < totalUnits) {
+                return raw.concat(new Array(totalUnits - raw.length).fill(false));
+            }
+            return raw.slice(0, totalUnits);
+        },
+        getActualFailedGridUnitsForBase(baseIndex, totalUnits) {
+            const raw = this.timeSlots[baseIndex].activityLog.actualFailedGridUnits.slice();
+            if (raw.length < totalUnits) {
+                return raw.concat(new Array(totalUnits - raw.length).fill(false));
+            }
+            return raw.slice(0, totalUnits);
+        },
+        findMergeKey: () => null,
+        syncActualGridToSlots(baseIndex, _planUnits, actualUnits) {
+            this.timeSlots[baseIndex].activityLog.actualGridUnits = actualUnits.slice();
         },
         renderTimeEntries: () => { rendered = true; },
         calculateTotals: () => { calculated = true; },
         autoSave: () => { saved = true; },
     };
 
-    toggleActualGridUnit.call(ctx, 5, 1);
+    assert.equal(ctx.timeSlots[3].activityLog.actualFailedGridUnits[5], true);
+    toggleActualGridUnit.call(ctx, 3, 5);
 
-    assert.deepEqual(clearArgs, { index: 5, unitIndex: 1, totalUnits: 2 });
-    assert.deepEqual(syncArgs, {
-        baseIndex: 2,
-        planUnits: ['focus', 'focus'],
-        actualUnits: [true, true],
-    });
+    assert.equal(ctx.timeSlots[3].activityLog.actualFailedGridUnits[5], false);
+    assert.equal(ctx.timeSlots[3].activityLog.actualGridUnits[5], true);
+    assert.deepEqual(ctx.timeSlots[3].activityLog.actualGridUnits, [true, true, true, true, true, true]);
     assert.equal(rendered, true);
     assert.equal(calculated, true);
     assert.equal(saved, true);
