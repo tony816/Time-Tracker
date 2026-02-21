@@ -4748,6 +4748,7 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+        this.clearActualFailedGridUnitOnNormalClick(index, unitIndex, planContext.units.length);
         const isMultiRow = this.getBlockLength('actual', baseIndex) > 1;
         const baseLabel = planContext.planLabel || '';
         const isSingleLabel = Boolean(baseLabel) && planContext.units.every(label => label === baseLabel);
@@ -4779,6 +4780,47 @@ class TimeTracker {
         this.renderTimeEntries(true);
         this.calculateTotals();
         this.autoSave();
+    }
+
+    clearActualFailedGridUnitOnNormalClick(index, unitIndex, totalUnits = null) {
+        if (!Number.isFinite(unitIndex)) return false;
+        const baseIndex = this.getSplitBaseIndex('actual', index);
+        const fallbackContext = (!Number.isFinite(totalUnits) || totalUnits <= 0)
+            ? this.buildPlanUnitsForActualGrid(baseIndex)
+            : null;
+        const unitsLength = Number.isFinite(totalUnits) && totalUnits > 0
+            ? Math.floor(totalUnits)
+            : ((fallbackContext && Array.isArray(fallbackContext.units)) ? fallbackContext.units.length : 0);
+        if (!Number.isFinite(unitsLength) || unitsLength <= 0) return false;
+        if (unitIndex < 0 || unitIndex >= unitsLength) return false;
+
+        const failedUnits = this.getActualFailedGridUnitsForBase(baseIndex, unitsLength);
+        if (!Array.isArray(failedUnits) || !failedUnits[unitIndex]) return false;
+        failedUnits[unitIndex] = false;
+
+        const actualMergeKey = this.findMergeKey('actual', baseIndex);
+        if (actualMergeKey) {
+            const [, startStr, endStr] = actualMergeKey.split('-');
+            const start = parseInt(startStr, 10);
+            const end = parseInt(endStr, 10);
+            for (let i = start; i <= end; i++) {
+                const slot = this.timeSlots[i];
+                if (!slot) continue;
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+                }
+                slot.activityLog.actualFailedGridUnits = (i === start) ? failedUnits.slice() : [];
+            }
+            return true;
+        }
+
+        const slot = this.timeSlots[baseIndex];
+        if (!slot) return false;
+        if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+        }
+        slot.activityLog.actualFailedGridUnits = failedUnits.slice();
+        return true;
     }
 
     toggleActualFailedGridUnit(index, unitIndex) {
@@ -4830,6 +4872,7 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
         if (planUnits.length === 0) return;
+        this.clearActualFailedGridUnitOnNormalClick(index, unitIndex, planUnits.length);
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
         const rawSub = (slot.activityLog && Array.isArray(slot.activityLog.subActivities))
             ? slot.activityLog.subActivities
