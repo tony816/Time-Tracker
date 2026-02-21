@@ -113,6 +113,9 @@ class TimeTracker {
         this.splitColorRegistry = new Map();
         this.splitColorUsed = new Set();
         this.splitColorSeed = 0;
+        this.ACTUAL_GRID_LONG_PRESS_MS = 450;
+        this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD = 10;
+        this.lastActualGridLongPress = null;
         this.saveStatusElement = null;
         this.syncStatusElement = null;
         this.notionStatusElement = null;
@@ -1305,7 +1308,7 @@ class TimeTracker {
             this.timeSlots = (data.timeSlots || this.timeSlots).map((slot) => {
                 // activityLog 구조 정규화 및 legacy 필드(outcome) 제거
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                 } else {
                     if (typeof slot.activityLog.title !== 'string') {
                         slot.activityLog.title = String(slot.activityLog.title || '');
@@ -1327,6 +1330,11 @@ class TimeTracker {
                         slot.activityLog.actualExtraGridUnits = [];
                     } else {
                         slot.activityLog.actualExtraGridUnits = slot.activityLog.actualExtraGridUnits.map(value => Boolean(value));
+                    }
+                    if (!Array.isArray(slot.activityLog.actualFailedGridUnits)) {
+                        slot.activityLog.actualFailedGridUnits = [];
+                    } else {
+                        slot.activityLog.actualFailedGridUnits = slot.activityLog.actualFailedGridUnits.map(value => Boolean(value));
                     }
                     if ('outcome' in slot.activityLog) {
                         try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
@@ -1643,6 +1651,10 @@ class TimeTracker {
                         ? startSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
                         : [];
                     const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
+                    const actualFailedGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualFailedGridUnits))
+                        ? startSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+                        : [];
+                    const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
 
                     if (plannedValue === ''
                         && actualValue === ''
@@ -1682,6 +1694,9 @@ class TimeTracker {
                     if (hasActualExtraGridUnits) {
                         slots[storageKey].actualExtraGridUnits = actualExtraGridUnits;
                     }
+                    if (hasActualFailedGridUnits) {
+                        slots[storageKey].actualFailedGridUnits = actualFailedGridUnits;
+                    }
                     return;
                 }
 
@@ -1704,6 +1719,10 @@ class TimeTracker {
                     ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
                     : [];
                 const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
+                const actualFailedGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualFailedGridUnits))
+                    ? slot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+                    : [];
+                const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
                 if (planned !== ''
                     || actual !== ''
                     || details !== ''
@@ -1731,6 +1750,9 @@ class TimeTracker {
                     }
                     if (hasActualExtraGridUnits) {
                         entry.actualExtraGridUnits = actualExtraGridUnits;
+                    }
+                    if (hasActualFailedGridUnits) {
+                        entry.actualFailedGridUnits = actualFailedGridUnits;
                     }
                     slots[String(hour)] = entry;
                 }
@@ -1768,6 +1790,9 @@ class TimeTracker {
                 const actualExtraGridUnits = Array.isArray(row.actualExtraGridUnits)
                     ? row.actualExtraGridUnits.map(value => Boolean(value))
                     : [];
+                const actualFailedGridUnits = Array.isArray(row.actualFailedGridUnits)
+                    ? row.actualFailedGridUnits.map(value => Boolean(value))
+                    : [];
 
                 if (row && row.merged && typeof row.timeRange === 'string') {
                     const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
@@ -1794,7 +1819,7 @@ class TimeTracker {
                                 if (slot.planned !== nextPlanned) { slot.planned = nextPlanned; changed = true; }
                                 if (slot.actual !== nextActual) { slot.actual = nextActual; changed = true; }
                                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                                 }
                                 const desiredDetails = (i === startIdx) ? detailsValue : '';
                                 if (slot.activityLog.details !== desiredDetails) {
@@ -1819,9 +1844,11 @@ class TimeTracker {
                                 if (i === startIdx) {
                                     slot.activityLog.actualGridUnits = actualGridUnits.slice();
                                     slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
+                                    slot.activityLog.actualFailedGridUnits = actualFailedGridUnits.slice();
                                 } else {
                                     slot.activityLog.actualGridUnits = [];
                                     slot.activityLog.actualExtraGridUnits = [];
+                                    slot.activityLog.actualFailedGridUnits = [];
                                 }
                                 if (hasActivities) {
                                     const desiredActivities = (i === startIdx) ? activitiesValue : [];
@@ -1852,7 +1879,7 @@ class TimeTracker {
                 const slot = this.timeSlots[idx];
                 if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
                 if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
-                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                 if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
                 const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
                 const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
@@ -1863,6 +1890,7 @@ class TimeTracker {
                 if (slot.activityLog.titleBandOn !== appliedTitleBand) { slot.activityLog.titleBandOn = appliedTitleBand; changed = true; }
                 slot.activityLog.actualGridUnits = actualGridUnits.slice();
                 slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
+                slot.activityLog.actualFailedGridUnits = actualFailedGridUnits.slice();
                 if (hasActivities) {
                     const currentActivities = Array.isArray(slot.activityLog.subActivities) ? slot.activityLog.subActivities : [];
                     const desiredSignature = JSON.stringify(normalizedActivities);
@@ -3047,7 +3075,7 @@ class TimeTracker {
         try {
             if (!slot || typeof slot !== 'object') return slot;
             if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
             } else {
                 if ('outcome' in slot.activityLog) {
                     try { delete slot.activityLog.outcome; } catch (_) { slot.activityLog.outcome = undefined; }
@@ -3073,6 +3101,11 @@ class TimeTracker {
                     slot.activityLog.actualExtraGridUnits = [];
                 } else {
                     slot.activityLog.actualExtraGridUnits = slot.activityLog.actualExtraGridUnits.map(value => Boolean(value));
+                }
+                if (!Array.isArray(slot.activityLog.actualFailedGridUnits)) {
+                    slot.activityLog.actualFailedGridUnits = [];
+                } else {
+                    slot.activityLog.actualFailedGridUnits = slot.activityLog.actualFailedGridUnits.map(value => Boolean(value));
                 }
                 slot.activityLog.actualOverride = Boolean(slot.activityLog.actualOverride);
             }
@@ -3382,22 +3415,156 @@ class TimeTracker {
 
               const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
               if (actualGrid) {
-                  actualGrid.addEventListener('click', (event) => {
-                      const segment = event.target.closest('.split-grid-segment');
-                      if (!segment || !actualGrid.contains(segment)) return;
+                  const resolveSegmentPayload = (target) => {
+                      const segment = target && target.closest
+                          ? target.closest('.split-grid-segment')
+                          : null;
+                      if (!segment || !actualGrid.contains(segment)) return null;
                       const unitIndex = parseInt(segment.dataset.unitIndex, 10);
-                      const extraLabel = segment.dataset.extraLabel;
-                      if (extraLabel) {
+                      if (!Number.isFinite(unitIndex)) return null;
+                      const extraLabel = segment.dataset.extraLabel || '';
+                      return { segment, unitIndex, extraLabel };
+                  };
+
+                  const handleGridClick = (event) => {
+                      const payload = resolveSegmentPayload(event.target);
+                      if (!payload) return;
+                      const baseIndex = this.getSplitBaseIndex('actual', index);
+                      if (this.shouldSuppressActualGridClick(baseIndex, payload.unitIndex)) {
                           event.preventDefault();
                           event.stopPropagation();
-                          this.toggleExtraGridUnit(index, extraLabel, unitIndex);
                           return;
                       }
-                      if (!Number.isFinite(unitIndex)) return;
                       event.preventDefault();
                       event.stopPropagation();
-                      this.toggleActualGridUnit(index, unitIndex);
-                  });
+                      if (payload.extraLabel) {
+                          this.toggleExtraGridUnit(index, payload.extraLabel, payload.unitIndex);
+                          return;
+                      }
+                      this.toggleActualGridUnit(index, payload.unitIndex);
+                  };
+
+                  const LONG_PRESS_MS = Number.isFinite(this.ACTUAL_GRID_LONG_PRESS_MS)
+                      ? this.ACTUAL_GRID_LONG_PRESS_MS
+                      : 450;
+                  const MOVE_THRESHOLD = Number.isFinite(this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD)
+                      ? this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD
+                      : 10;
+
+                  let longPressTimer = null;
+                  let longPressState = null;
+
+                  const clearLongPress = () => {
+                      if (longPressTimer) {
+                          clearTimeout(longPressTimer);
+                          longPressTimer = null;
+                      }
+                      longPressState = null;
+                  };
+
+                  const cancelIfMoved = (clientX, clientY) => {
+                      if (!longPressState || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+                      const dx = clientX - longPressState.startX;
+                      const dy = clientY - longPressState.startY;
+                      if (Math.hypot(dx, dy) >= MOVE_THRESHOLD) {
+                          clearLongPress();
+                      }
+                  };
+
+                  const beginLongPress = (payload, pointerId, clientX, clientY, pointerType = '') => {
+                      clearLongPress();
+                      longPressState = {
+                          unitIndex: payload.unitIndex,
+                          pointerId,
+                          pointerType,
+                          startX: Number.isFinite(clientX) ? clientX : 0,
+                          startY: Number.isFinite(clientY) ? clientY : 0,
+                          triggered: false,
+                      };
+                      longPressTimer = setTimeout(() => {
+                          if (!longPressState) return;
+                          const baseIndex = this.getSplitBaseIndex('actual', index);
+                          longPressState.triggered = true;
+                          this.markActualGridLongPress(baseIndex, longPressState.unitIndex);
+                          this.toggleActualFailedGridUnit(index, longPressState.unitIndex);
+                      }, LONG_PRESS_MS);
+                  };
+
+                  if (typeof window !== 'undefined' && 'PointerEvent' in window) {
+                      actualGrid.addEventListener('pointerdown', (event) => {
+                          if (event.button !== undefined && event.button !== 0) return;
+                          const payload = resolveSegmentPayload(event.target);
+                          if (!payload) return;
+                          beginLongPress(payload, event.pointerId, event.clientX, event.clientY, event.pointerType || '');
+                      });
+                      actualGrid.addEventListener('pointermove', (event) => {
+                          if (!longPressState) return;
+                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
+                          cancelIfMoved(event.clientX, event.clientY);
+                      });
+                      const endPointerLongPress = (event) => {
+                          if (!longPressState) return;
+                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
+                          const shouldBlockClick = longPressState.triggered;
+                          clearLongPress();
+                          if (shouldBlockClick) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                          }
+                      };
+                      actualGrid.addEventListener('pointerup', endPointerLongPress);
+                      actualGrid.addEventListener('pointercancel', () => clearLongPress());
+                      actualGrid.addEventListener('pointerleave', (event) => {
+                          if (!longPressState || longPressState.pointerType !== 'mouse') return;
+                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
+                          clearLongPress();
+                      });
+                  } else {
+                      actualGrid.addEventListener('mousedown', (event) => {
+                          if (event.button !== 0) return;
+                          const payload = resolveSegmentPayload(event.target);
+                          if (!payload) return;
+                          beginLongPress(payload, null, event.clientX, event.clientY, 'mouse');
+                      });
+                      actualGrid.addEventListener('mousemove', (event) => {
+                          cancelIfMoved(event.clientX, event.clientY);
+                      });
+                      actualGrid.addEventListener('mouseup', (event) => {
+                          if (!longPressState) return;
+                          const shouldBlockClick = longPressState.triggered;
+                          clearLongPress();
+                          if (shouldBlockClick) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                          }
+                      });
+                      actualGrid.addEventListener('mouseleave', () => clearLongPress());
+
+                      actualGrid.addEventListener('touchstart', (event) => {
+                          if (!event.touches || event.touches.length !== 1) return;
+                          const payload = resolveSegmentPayload(event.target);
+                          if (!payload) return;
+                          const touch = event.touches[0];
+                          beginLongPress(payload, touch.identifier, touch.clientX, touch.clientY, 'touch');
+                      }, { passive: true });
+                      actualGrid.addEventListener('touchmove', (event) => {
+                          if (!longPressState || !event.touches || event.touches.length !== 1) return;
+                          const touch = event.touches[0];
+                          cancelIfMoved(touch.clientX, touch.clientY);
+                      }, { passive: true });
+                      actualGrid.addEventListener('touchend', (event) => {
+                          if (!longPressState) return;
+                          const shouldBlockClick = longPressState.triggered;
+                          clearLongPress();
+                          if (shouldBlockClick) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                          }
+                      }, { passive: false });
+                      actualGrid.addEventListener('touchcancel', () => clearLongPress(), { passive: true });
+                  }
+
+                  actualGrid.addEventListener('click', handleGridClick);
               }
         }
     }
@@ -3718,6 +3885,7 @@ class TimeTracker {
             : {};
         const actualUnitsBySlot = splitBooleanUnits(baseLog.actualGridUnits, slotCount);
         const extraUnitsBySlot = splitBooleanUnits(baseLog.actualExtraGridUnits, slotCount);
+        const failedUnitsBySlot = splitBooleanUnits(baseLog.actualFailedGridUnits, slotCount);
 
         // 병합 키 제거
         this.mergedFields.delete(mergeKey);
@@ -3730,7 +3898,7 @@ class TimeTracker {
             if (!slot) continue;
 
             if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
             }
 
             const slotPlanActivities = Array.isArray(planBySlot[rel]) ? planBySlot[rel] : [];
@@ -3748,6 +3916,7 @@ class TimeTracker {
             slot.activityLog.actualOverride = false;
             slot.activityLog.actualGridUnits = Array.isArray(actualUnitsBySlot[rel]) ? actualUnitsBySlot[rel].slice() : [];
             slot.activityLog.actualExtraGridUnits = Array.isArray(extraUnitsBySlot[rel]) ? extraUnitsBySlot[rel].slice() : [];
+            slot.activityLog.actualFailedGridUnits = Array.isArray(failedUnitsBySlot[rel]) ? failedUnitsBySlot[rel].slice() : [];
         }
 
         this.renderTimeEntries();
@@ -3837,7 +4006,7 @@ class TimeTracker {
                     this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
@@ -3858,13 +4027,18 @@ class TimeTracker {
                     } else if (i !== startIndex) {
                         this.timeSlots[i].activityLog.actualExtraGridUnits = [];
                     }
+                    if (Array.isArray(this.timeSlots[i].activityLog.actualFailedGridUnits)) {
+                        this.timeSlots[i].activityLog.actualFailedGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualFailedGridUnits : [];
+                    } else if (i !== startIndex) {
+                        this.timeSlots[i].activityLog.actualFailedGridUnits = [];
+                    }
                 }
             } else {
                 // 우측 열만 병합하는 경우
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                        this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     this.timeSlots[i].activityLog.actualOverride = i === startIndex
@@ -3882,6 +4056,11 @@ class TimeTracker {
                         this.timeSlots[i].activityLog.actualExtraGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualExtraGridUnits : [];
                     } else if (i !== startIndex) {
                         this.timeSlots[i].activityLog.actualExtraGridUnits = [];
+                    }
+                    if (Array.isArray(this.timeSlots[i].activityLog.actualFailedGridUnits)) {
+                        this.timeSlots[i].activityLog.actualFailedGridUnits = i === startIndex ? this.timeSlots[i].activityLog.actualFailedGridUnits : [];
+                    } else if (i !== startIndex) {
+                        this.timeSlots[i].activityLog.actualFailedGridUnits = [];
                     }
                 }
             }
@@ -3967,6 +4146,7 @@ class TimeTracker {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
+                const failedClass = (isActual && toggleable && segment.failed) ? ' is-failed' : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
                 const canRenderLabel = Boolean(segment.label)
@@ -3977,12 +4157,15 @@ class TimeTracker {
                 const labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
+                const failedIconHtml = failedClass
+                    ? '<span class="split-grid-failed-mark" aria-hidden="true">X</span>'
+                    : '';
                 const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
                     ? ` data-unit-index="${segment.unitIndex}"`
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${failedClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
             }).join('')}</div>`
             : '';
 
@@ -4066,18 +4249,14 @@ class TimeTracker {
         const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualGridUnits))
             ? slot.activityLog.actualGridUnits.map(value => Boolean(value))
             : [];
-        if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
-        let units = raw;
-        if (units.length > totalUnits) units = units.slice(0, totalUnits);
-        if (units.length < totalUnits) units = units.concat(new Array(totalUnits - units.length).fill(false));
+        let units = this.normalizeActualGridBooleanUnits(raw, totalUnits);
 
         const hasAny = units.some(value => value);
         if (!hasAny && Array.isArray(planUnits) && planUnits.length > 0) {
             const activities = this.normalizeActivitiesArray(slot && slot.activityLog && slot.activityLog.subActivities);
             if (activities.length > 0) {
                 units = this.buildActualUnitsFromActivities(planUnits, activities);
-                if (units.length > totalUnits) units = units.slice(0, totalUnits);
-                if (units.length < totalUnits) units = units.concat(new Array(totalUnits - units.length).fill(false));
+                units = this.normalizeActualGridBooleanUnits(units, totalUnits);
             }
         }
 
@@ -4089,11 +4268,51 @@ class TimeTracker {
         const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
             ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
             : [];
+        return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+    }
+
+    getActualFailedGridUnitsForBase(baseIndex, totalUnits) {
+        const slot = this.timeSlots[baseIndex];
+        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualFailedGridUnits))
+            ? slot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+            : [];
+        return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+    }
+
+    normalizeActualGridBooleanUnits(units, totalUnits) {
         if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
-        let units = raw;
-        if (units.length > totalUnits) units = units.slice(0, totalUnits);
-        if (units.length < totalUnits) units = units.concat(new Array(totalUnits - units.length).fill(false));
-        return units;
+        let safe = Array.isArray(units) ? units.map(value => Boolean(value)) : [];
+        if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
+        if (safe.length < totalUnits) safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
+        return safe;
+    }
+
+    markActualGridLongPress(baseIndex, unitIndex) {
+        this.lastActualGridLongPress = {
+            baseIndex: Number.isFinite(baseIndex) ? baseIndex : null,
+            unitIndex: Number.isFinite(unitIndex) ? unitIndex : null,
+            timestamp: Date.now(),
+        };
+    }
+
+    shouldSuppressActualGridClick(baseIndex, unitIndex) {
+        const info = this.lastActualGridLongPress;
+        if (!info || !Number.isFinite(info.timestamp)) return false;
+        if ((Date.now() - info.timestamp) > 1000) {
+            this.lastActualGridLongPress = null;
+            return false;
+        }
+        const sameBase = Number.isFinite(baseIndex) && info.baseIndex === baseIndex;
+        const sameUnit = Number.isFinite(unitIndex) && info.unitIndex === unitIndex;
+        const shouldSuppress = sameBase && sameUnit;
+        if (shouldSuppress) {
+            this.lastActualGridLongPress = null;
+            return true;
+        }
+        if (sameBase) {
+            this.lastActualGridLongPress = null;
+        }
+        return false;
     }
 
     getExtraActivityUnitCount(item) {
@@ -4472,14 +4691,17 @@ class TimeTracker {
         const rawExtraUnits = (baseSlot && baseSlot.activityLog && Array.isArray(baseSlot.activityLog.actualExtraGridUnits))
             ? baseSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
             : [];
+        const rawFailedUnits = (baseSlot && baseSlot.activityLog && Array.isArray(baseSlot.activityLog.actualFailedGridUnits))
+            ? baseSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+            : [];
         let safeExtraUnits = rawExtraUnits;
+        let safeFailedUnits = rawFailedUnits;
         if (Array.isArray(planUnits) && planUnits.length > 0) {
-            if (safeExtraUnits.length > planUnits.length) safeExtraUnits = safeExtraUnits.slice(0, planUnits.length);
-            if (safeExtraUnits.length < planUnits.length) {
-                safeExtraUnits = safeExtraUnits.concat(new Array(planUnits.length - safeExtraUnits.length).fill(false));
-            }
+            safeExtraUnits = this.normalizeActualGridBooleanUnits(safeExtraUnits, planUnits.length);
+            safeFailedUnits = this.normalizeActualGridBooleanUnits(safeFailedUnits, planUnits.length);
         } else {
             safeExtraUnits = [];
+            safeFailedUnits = [];
         }
 
         if (actualMergeKey) {
@@ -4490,7 +4712,7 @@ class TimeTracker {
             for (let i = start; i <= end; i++) {
                 const slot = this.timeSlots[i];
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                 }
                 slot.activityLog.actualOverride = (i === start) ? hasExtras : false;
                 slot.actual = (i === start) ? summary : '';
@@ -4498,10 +4720,12 @@ class TimeTracker {
                     slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
                     slot.activityLog.actualGridUnits = safeUnits.slice();
                     slot.activityLog.actualExtraGridUnits = safeExtraUnits.slice();
+                    slot.activityLog.actualFailedGridUnits = safeFailedUnits.slice();
                 } else {
                     slot.activityLog.subActivities = [];
                     slot.activityLog.actualGridUnits = [];
                     slot.activityLog.actualExtraGridUnits = [];
+                    slot.activityLog.actualFailedGridUnits = [];
                 }
             }
             return;
@@ -4509,13 +4733,14 @@ class TimeTracker {
 
         const slot = this.timeSlots[baseIndex];
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
         }
         slot.activityLog.actualOverride = hasExtras;
         slot.actual = summary;
         slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
         slot.activityLog.actualGridUnits = safeUnits.slice();
         slot.activityLog.actualExtraGridUnits = safeExtraUnits.slice();
+        slot.activityLog.actualFailedGridUnits = safeFailedUnits.slice();
     }
 
     toggleActualGridUnit(index, unitIndex) {
@@ -4550,6 +4775,44 @@ class TimeTracker {
         for (let i = start; i <= end; i++) {
             actualUnits[i] = i < start + newCount;
         }
+        this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+    }
+
+    toggleActualFailedGridUnit(index, unitIndex) {
+        const baseIndex = this.getSplitBaseIndex('actual', index);
+        const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+        if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
+        if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+
+        const failedUnits = this.getActualFailedGridUnitsForBase(baseIndex, planContext.units.length);
+        failedUnits[unitIndex] = !failedUnits[unitIndex];
+        const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
+
+        const actualMergeKey = this.findMergeKey('actual', baseIndex);
+        if (actualMergeKey) {
+            const [, startStr, endStr] = actualMergeKey.split('-');
+            const start = parseInt(startStr, 10);
+            const end = parseInt(endStr, 10);
+            for (let i = start; i <= end; i++) {
+                const slot = this.timeSlots[i];
+                if (!slot) continue;
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+                }
+                slot.activityLog.actualFailedGridUnits = (i === start) ? failedUnits.slice() : [];
+            }
+        } else {
+            const slot = this.timeSlots[baseIndex];
+            if (!slot) return;
+            if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+            }
+            slot.activityLog.actualFailedGridUnits = failedUnits.slice();
+        }
+
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
         this.renderTimeEntries(true);
         this.calculateTotals();
@@ -4627,7 +4890,7 @@ class TimeTracker {
         });
 
         if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+            slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
         }
         slot.activityLog.actualExtraGridUnits = nextExtraUnits.slice();
 
@@ -4957,6 +5220,7 @@ class TimeTracker {
               // and "insert" extra segments into the remaining (unrecorded) slots for display.
               if (type === 'actual' && actualOverrideActive && planUnits.length > 0) {
                   const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
+                  const failedUnits = this.getActualFailedGridUnitsForBase(baseIndex, planUnits.length);
                   const rawSub = (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities))
                       ? slot.activityLog.subActivities
                       : [];
@@ -4997,6 +5261,7 @@ class TimeTracker {
                               span: 1,
                               unitIndex,
                               active: Boolean(extraActiveUnits[unitIndex]),
+                              failed: Boolean(failedUnits[unitIndex]),
                               isExtra: true,
                               reservedIndices,
                               extraLabel,
@@ -5009,6 +5274,7 @@ class TimeTracker {
                           span: 1,
                           unitIndex,
                           active: Boolean(actualUnits[unitIndex]),
+                          failed: Boolean(failedUnits[unitIndex]),
                           isExtra: false,
                           reservedIndices
                       };
@@ -5041,6 +5307,7 @@ class TimeTracker {
                 return { gridSegments: [], titleSegments, showTitleBand, toggleable: true, showLabels: false };
             }
             const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
+            const failedUnits = this.getActualFailedGridUnitsForBase(baseIndex, planUnits.length);
             const planLabelSet = new Set();
             planUnits.forEach((label) => {
                 const normalized = this.normalizeActivityText
@@ -5057,7 +5324,8 @@ class TimeTracker {
                 label: planUnits[unitIndex],
                 span: 1,
                 unitIndex,
-                active: Boolean(actualUnits[unitIndex])
+                active: Boolean(actualUnits[unitIndex]),
+                failed: Boolean(failedUnits[unitIndex]),
             }));
             const hasLabels = planUnits.some(label => label);
             if (!hasLabels && !showTitleBand) {
@@ -5700,6 +5968,9 @@ class TimeTracker {
                     if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
                         slot.activityLog.actualExtraGridUnits = [];
                     }
+                    if (Array.isArray(slot.activityLog.actualFailedGridUnits)) {
+                        slot.activityLog.actualFailedGridUnits = [];
+                    }
                 }
             }
         } else {
@@ -5713,6 +5984,9 @@ class TimeTracker {
                 }
                 if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
                     slot.activityLog.actualExtraGridUnits = [];
+                }
+                if (Array.isArray(slot.activityLog.actualFailedGridUnits)) {
+                    slot.activityLog.actualFailedGridUnits = [];
                 }
             }
         }
@@ -8211,9 +8485,15 @@ class TimeTracker {
                         : [],
                     actualGridUnits: Array.isArray(slot.activityLog.actualGridUnits)
                         ? slot.activityLog.actualGridUnits.slice()
+                        : [],
+                    actualExtraGridUnits: Array.isArray(slot.activityLog.actualExtraGridUnits)
+                        ? slot.activityLog.actualExtraGridUnits.slice()
+                        : [],
+                    actualFailedGridUnits: Array.isArray(slot.activityLog.actualFailedGridUnits)
+                        ? slot.activityLog.actualFailedGridUnits.slice()
                         : []
                 }
-                : { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualOverride: false };
+                : { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
             const planActivities = Array.isArray(slot.planActivities)
                 ? slot.planActivities.map(item => ({ ...item }))
                 : [];
@@ -9451,11 +9731,12 @@ class TimeTracker {
             for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
                 if (!this.timeSlots[i]) continue;
                 if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                    this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                    this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                 }
                 this.timeSlots[i].activityLog.subActivities = [];
                 this.timeSlots[i].activityLog.actualGridUnits = [];
                 this.timeSlots[i].activityLog.actualExtraGridUnits = [];
+                this.timeSlots[i].activityLog.actualFailedGridUnits = [];
                 this.timeSlots[i].activityLog.actualOverride = false;
             }
             this.modalPlanActivities = [];
@@ -11650,7 +11931,7 @@ class TimeTracker {
                     const slot = this.timeSlots[i];
                     if (!slot) continue;
                     if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     slot.activityLog.details = (i === start) ? details : '';
                 }
@@ -11671,7 +11952,7 @@ class TimeTracker {
                       const slot = this.timeSlots[i];
                       if (!slot) continue;
                       if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false };
+                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                       }
                       slot.actual = (i === start) ? summary : '';
                       slot.activityLog.details = (i === start) ? details : '';
@@ -11680,16 +11961,19 @@ class TimeTracker {
                           if (split.hasLabels) {
                               slot.activityLog.actualGridUnits = actualUnits.slice();
                               slot.activityLog.actualExtraGridUnits = [];
+                              slot.activityLog.actualFailedGridUnits = [];
                               slot.activityLog.actualOverride = (split.extraActivities && split.extraActivities.length > 0);
                           } else {
                               slot.activityLog.actualGridUnits = [];
                               slot.activityLog.actualExtraGridUnits = [];
+                              slot.activityLog.actualFailedGridUnits = [];
                               slot.activityLog.actualOverride = mergedActivities.length > 0;
                           }
                       } else {
                         slot.activityLog.subActivities = [];
                         slot.activityLog.actualGridUnits = [];
                         slot.activityLog.actualExtraGridUnits = [];
+                        slot.activityLog.actualFailedGridUnits = [];
                         slot.activityLog.actualOverride = false;
                     }
                 }
