@@ -20,16 +20,20 @@ test('main.js is responsible for app bootstrap and animation keyframes injection
 });
 
 test('index.html loads main.js after script.js', () => {
-    const actualGridCoreIdx = htmlSource.indexOf('<script src="core/actual-grid-core.js"></script>');
-    const activityCoreIdx = htmlSource.indexOf('<script src="core/activity-core.js"></script>');
-    const dateCoreIdx = htmlSource.indexOf('<script src="core/date-core.js"></script>');
-    const durationCoreIdx = htmlSource.indexOf('<script src="core/duration-core.js"></script>');
-    const gridMetricsCoreIdx = htmlSource.indexOf('<script src="core/grid-metrics-core.js"></script>');
-    const inputFormatCoreIdx = htmlSource.indexOf('<script src="core/input-format-core.js"></script>');
-    const textCoreIdx = htmlSource.indexOf('<script src="core/text-core.js"></script>');
-    const timeCoreIdx = htmlSource.indexOf('<script src="core/time-core.js"></script>');
-    const scriptIdx = htmlSource.indexOf('<script src="script.js"></script>');
-    const mainIdx = htmlSource.indexOf('<script src="main.js"></script>');
+    const scriptTagIndex = (srcPath) => htmlSource.search(
+        new RegExp(`<script[^>]*\\bsrc="${srcPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*></script>`)
+    );
+
+    const actualGridCoreIdx = scriptTagIndex('core/actual-grid-core.js');
+    const activityCoreIdx = scriptTagIndex('core/activity-core.js');
+    const dateCoreIdx = scriptTagIndex('core/date-core.js');
+    const durationCoreIdx = scriptTagIndex('core/duration-core.js');
+    const gridMetricsCoreIdx = scriptTagIndex('core/grid-metrics-core.js');
+    const inputFormatCoreIdx = scriptTagIndex('core/input-format-core.js');
+    const textCoreIdx = scriptTagIndex('core/text-core.js');
+    const timeCoreIdx = scriptTagIndex('core/time-core.js');
+    const scriptIdx = scriptTagIndex('script.js');
+    const mainIdx = scriptTagIndex('main.js');
 
     assert.ok(timeCoreIdx >= 0, 'core/time-core.js include should exist');
     assert.ok(durationCoreIdx >= 0, 'core/duration-core.js include should exist');
