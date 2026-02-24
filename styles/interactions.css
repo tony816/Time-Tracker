@@ -1460,8 +1460,8 @@
 
 /* 실제 열에 그리드가 있을 때는 상세 기록 버튼을 항상 노출 */
 .split-cell-wrapper.split-type-actual.split-has-data .activity-log-btn {
-  opacity: 1;
-  pointer-events: auto;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .split-cell-wrapper .split-visualization {
@@ -1613,6 +1613,7 @@
 
 .split-visualization-actual .split-grid {
   touch-action: pan-y;
+  overflow: hidden;
 }
 
 .split-visualization-actual .split-grid-segment.is-off {
@@ -1633,6 +1634,15 @@
   opacity: 0.95;
   cursor: not-allowed;
   pointer-events: none;
+  overflow: hidden;
+  border-bottom-width: 0 !important;
+  border-bottom-color: transparent !important;
+}
+
+.split-visualization-actual .split-grid-segment.is-locked .split-grid-label {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
 }
 
 .split-visualization-actual .split-grid-segment {

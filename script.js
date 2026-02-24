@@ -4141,9 +4141,9 @@ class TimeTracker {
             ? slot.activityLog.actualGridUnits.map(value => Boolean(value))
             : [];
         let units = this.normalizeActualGridBooleanUnits(raw, totalUnits);
+        const hasStoredGridUnits = raw.length > 0;
 
-        const hasAny = units.some(value => value);
-        if (!hasAny && Array.isArray(planUnits) && planUnits.length > 0) {
+        if (!hasStoredGridUnits && Array.isArray(planUnits) && planUnits.length > 0) {
             const activities = this.normalizeActivitiesArray(slot && slot.activityLog && slot.activityLog.subActivities);
             if (activities.length > 0) {
                 units = this.buildActualUnitsFromActivities(planUnits, activities);
@@ -4295,9 +4295,6 @@ class TimeTracker {
         if (!Array.isArray(planUnits) || planUnits.length === 0) {
             return { slotsByIndex, slotsByLabel };
         }
-        const normalize = (value) => this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : String(value || '').trim();
         const available = [];
         const safeActualUnits = Array.isArray(actualUnits) ? actualUnits : [];
         const useOrder = Array.isArray(orderIndices) && orderIndices.length === planUnits.length
@@ -4306,14 +4303,10 @@ class TimeTracker {
         if (useOrder) {
             useOrder.forEach((idx) => {
                 if (!Number.isFinite(idx) || idx < 0 || idx >= planUnits.length) return;
-                const label = normalize(planUnits[idx] || '');
-                if (label) return;
                 if (!safeActualUnits[idx]) available.push(idx);
             });
         } else {
             for (let i = 0; i < planUnits.length; i++) {
-                const label = normalize(planUnits[i] || '');
-                if (label) continue;
                 if (!safeActualUnits[i]) available.push(i);
             }
         }
@@ -4828,7 +4821,6 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
         if (planUnits.length === 0) return;
-        if (Number.isFinite(unitIndex) && this.isActualGridUnitLocked(baseIndex, unitIndex, planUnits)) return;
         this.clearActualFailedGridUnitOnNormalClick(index, unitIndex, planUnits.length);
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
         const rawSub = (slot.activityLog && Array.isArray(slot.activityLog.subActivities))
@@ -5262,7 +5254,7 @@ class TimeTracker {
                               span: 1,
                               unitIndex,
                               active: Boolean(extraActiveUnits[unitIndex]),
-                              locked: Boolean(lockedUnits[unitIndex]),
+                              locked: false,
                               failed: Boolean(failedUnits[unitIndex]),
                               isExtra: true,
                               reservedIndices,
@@ -10928,6 +10920,16 @@ class TimeTracker {
             });
         }
 
+        const step = this.getActualDurationStepSeconds();
+        const planAssignedMap = new Map();
+        (Array.isArray(planUnits) ? planUnits : []).forEach((label) => {
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(label || '')
+                : String(label || '').trim();
+            if (!normalized) return;
+            planAssignedMap.set(normalized, (planAssignedMap.get(normalized) || 0) + step);
+        });
+
         const gridSecondsMap = new Map();
         (Array.isArray(gridActivities) ? gridActivities : []).forEach((item) => {
             if (!item || !item.label) return;
@@ -10959,7 +10961,11 @@ class TimeTracker {
                     : null;
                 if (!label && seconds <= 0) return;
                 if (label && labelSet.has(label)) {
-                    merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+                    // Keep assigned seconds for planned labels; grid click should only change recorded units.
+                    const assignedSeconds = Number.isFinite(seconds)
+                        ? seconds
+                        : (planAssignedMap.get(label) || 0);
+                    merged.push({ label, seconds: assignedSeconds, source: 'grid' });
                     seenGrid.add(label);
                 } else {
                     const source = (item.source && item.source !== 'grid') ? item.source : 'extra';
@@ -10973,7 +10979,13 @@ class TimeTracker {
         const orderedLabels = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
         orderedLabels.forEach((label) => {
             if (seenGrid.has(label)) return;
-            merged.push({ label, seconds: gridSecondsMap.get(label) || 0, source: 'grid' });
+            const assignedSeconds = planAssignedMap.get(label) || 0;
+            const fallbackGridSeconds = gridSecondsMap.get(label) || 0;
+            merged.push({
+                label,
+                seconds: assignedSeconds > 0 ? assignedSeconds : fallbackGridSeconds,
+                source: 'grid'
+            });
             seenGrid.add(label);
         });
 

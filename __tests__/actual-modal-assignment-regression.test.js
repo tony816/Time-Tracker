@@ -37,6 +37,18 @@ const getActualGridLockedUnitsForBase = buildMethod(
     'getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
 );
+const getActualGridUnitsForBase = buildMethod(
+    'getActualGridUnitsForBase(baseIndex, totalUnits, planUnits = null)',
+    '(baseIndex, totalUnits, planUnits = null)'
+);
+const buildExtraSlotAllocation = buildMethod(
+    'buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null)',
+    '(planUnits, actualUnits, extraActivities, orderIndices = null)'
+);
+const mergeActualActivitiesWithGrid = buildMethod(
+    'mergeActualActivitiesWithGrid(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = \'\')',
+    '(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = \'\')'
+);
 const finalizeActualActivitiesForSave = buildMethod(
     'finalizeActualActivitiesForSave()',
     '()'
@@ -343,6 +355,155 @@ test('getActualGridLockedUnitsForBase unlocks when assigned time increases', () 
 
     assert.deepEqual(lockedWhenShort, [false, true]);
     assert.deepEqual(lockedWhenExpanded, [false, false]);
+});
+
+test('getActualGridUnitsForBase keeps explicit all-off grid without rebuilding from activities', () => {
+    const ctx = {
+        timeSlots: [{
+            activityLog: {
+                actualGridUnits: [false, false, false, false, false, false],
+                subActivities: [{ label: 'A', seconds: 3600, source: 'grid' }],
+            }
+        }],
+        normalizeActualGridBooleanUnits(units, totalUnits) {
+            let safe = Array.isArray(units) ? units.map((value) => Boolean(value)) : [];
+            if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
+            if (safe.length < totalUnits) safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
+            return safe;
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw : [];
+        },
+        buildActualUnitsFromActivities(planUnits) {
+            this.rebuildCalls = (this.rebuildCalls || 0) + 1;
+            return new Array(planUnits.length).fill(true);
+        },
+    };
+
+    const result = getActualGridUnitsForBase.call(
+        ctx,
+        0,
+        6,
+        ['A', 'A', 'A', 'A', 'A', 'A']
+    );
+
+    assert.deepEqual(result, [false, false, false, false, false, false]);
+    assert.equal(ctx.rebuildCalls || 0, 0);
+});
+
+test('getActualGridUnitsForBase rebuilds from activities only when stored units are missing', () => {
+    const ctx = {
+        timeSlots: [{
+            activityLog: {
+                actualGridUnits: [],
+                subActivities: [{ label: 'A', seconds: 3600, source: 'grid' }],
+            }
+        }],
+        normalizeActualGridBooleanUnits(units, totalUnits) {
+            let safe = Array.isArray(units) ? units.map((value) => Boolean(value)) : [];
+            if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
+            if (safe.length < totalUnits) safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
+            return safe;
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw : [];
+        },
+        buildActualUnitsFromActivities(planUnits) {
+            this.rebuildCalls = (this.rebuildCalls || 0) + 1;
+            return new Array(planUnits.length).fill(true);
+        },
+    };
+
+    const result = getActualGridUnitsForBase.call(
+        ctx,
+        0,
+        6,
+        ['A', 'A', 'A', 'A', 'A', 'A']
+    );
+
+    assert.deepEqual(result, [true, true, true, true, true, true]);
+    assert.equal(ctx.rebuildCalls || 0, 1);
+});
+
+test('buildExtraSlotAllocation can place extras into inactive planned-labeled units', () => {
+    const ctx = {
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getExtraActivityUnitCount(item) {
+            const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return Math.floor(seconds / STEP_SECONDS);
+        },
+    };
+
+    const result = buildExtraSlotAllocation.call(
+        ctx,
+        ['A', 'A', 'A', 'A', 'A', 'A'],
+        [true, true, true, false, false, false],
+        [{ label: 'X', seconds: 1800, source: 'extra', recordedSeconds: 1800 }],
+        [0, 1, 2, 3, 4, 5]
+    );
+
+    assert.deepEqual(result.slotsByIndex, ['', '', '', 'X', 'X', 'X']);
+    assert.deepEqual(result.slotsByLabel.get('X'), [3, 4, 5]);
+});
+
+test('mergeActualActivitiesWithGrid keeps planned assignment when existing list is empty', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualActivitiesList(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        getPlanLabelOrderForActual() {
+            return ['A'];
+        },
+    };
+
+    const result = mergeActualActivitiesWithGrid.call(
+        ctx,
+        0,
+        ['A', 'A', 'A', 'A', 'A', 'A'],
+        [{ label: 'A', seconds: 600, source: 'grid' }],
+        null,
+        'A'
+    );
+
+    assert.deepEqual(result, [{ label: 'A', seconds: 3600, source: 'grid' }]);
+});
+
+test('mergeActualActivitiesWithGrid preserves existing planned assignment on grid click', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [{ label: 'A', seconds: 1800, source: 'grid' }] } }],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualActivitiesList(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        getPlanLabelOrderForActual() {
+            return ['A'];
+        },
+    };
+
+    const result = mergeActualActivitiesWithGrid.call(
+        ctx,
+        0,
+        ['A', 'A', 'A', 'A', 'A', 'A'],
+        [{ label: 'A', seconds: 600, source: 'grid' }],
+        null,
+        'A'
+    );
+
+    assert.deepEqual(result, [{ label: 'A', seconds: 1800, source: 'grid' }]);
 });
 
 test('finalizeActualActivitiesForSave does not force-fill total allocation', () => {
