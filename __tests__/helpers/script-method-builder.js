@@ -12,7 +12,7 @@ function extractMethodSource(signature) {
     assert.ok(match, `method signature not found: ${signature}`);
 
     const start = match.index + match[0].lastIndexOf(signature);
-    const openBrace = source.indexOf('{', start);
+    const openBrace = source.indexOf('{', start + signature.length);
     assert.ok(openBrace >= 0, `method body open brace not found: ${signature}`);
 
     let i = openBrace + 1;
@@ -115,7 +115,11 @@ function extractMethodSource(signature) {
 
 function buildMethod(signature, args) {
     const methodSource = extractMethodSource(signature);
-    return new Function(`return (function ${args} ${methodSource.slice(methodSource.indexOf('{'))});`)();
+    const signatureStart = methodSource.indexOf(signature);
+    const searchFrom = signatureStart >= 0 ? signatureStart + signature.length : 0;
+    const bodyStart = methodSource.indexOf('{', searchFrom);
+    assert.ok(bodyStart >= 0, `method body start not found: ${signature}`);
+    return new Function(`return (function ${args} ${methodSource.slice(bodyStart)});`)();
 }
 
 module.exports = {

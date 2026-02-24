@@ -7,6 +7,7 @@ const clearActualFailedGridUnitOnNormalClick = buildMethod(
     '(index, unitIndex, totalUnits = null)'
 );
 const toggleActualGridUnit = buildMethod('toggleActualGridUnit(index, unitIndex)', '(index, unitIndex)');
+const toggleActualFailedGridUnit = buildMethod('toggleActualFailedGridUnit(index, unitIndex)', '(index, unitIndex)');
 const toggleExtraGridUnit = buildMethod('toggleExtraGridUnit(index, extraLabel, unitIndex = null)', '(index, extraLabel, unitIndex = null)');
 
 test('clearActualFailedGridUnitOnNormalClick clears only target failed unit in merged range', () => {
@@ -86,6 +87,7 @@ test('toggleActualGridUnit clears failed X and still performs normal toggle (ind
         timeSlots,
         getSplitBaseIndex: () => 3,
         buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A', 'A', 'A', 'A', 'A'], planLabel: 'A' }),
+        isActualGridUnitLocked: () => false,
         clearActualFailedGridUnitOnNormalClick(index, unitIndex, totalUnits) {
             return clearActualFailedGridUnitOnNormalClick.call(this, index, unitIndex, totalUnits);
         },
@@ -133,6 +135,7 @@ test('toggleExtraGridUnit clears failed mark before running extra toggle logic',
         getSplitBaseIndex: () => 0,
         normalizeActivityText: (value) => String(value || '').trim(),
         buildPlanUnitsForActualGrid: () => ({ units: ['A', ''] }),
+        isActualGridUnitLocked: () => false,
         clearActualFailedGridUnitOnNormalClick: (index, unitIndex, totalUnits) => {
             clearArgs = { index, unitIndex, totalUnits };
             return true;
@@ -146,4 +149,54 @@ test('toggleExtraGridUnit clears failed mark before running extra toggle logic',
     toggleExtraGridUnit.call(ctx, 0, 'extra-task', 1);
 
     assert.deepEqual(clearArgs, { index: 0, unitIndex: 1, totalUnits: 2 });
+});
+
+test('toggleActualGridUnit is no-op when target unit is locked', () => {
+    let cleared = false;
+    let synced = false;
+    let rendered = false;
+    let saved = false;
+    const ctx = {
+        getSplitBaseIndex: () => 3,
+        buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A', 'A'] }),
+        isActualGridUnitLocked: () => true,
+        clearActualFailedGridUnitOnNormalClick: () => {
+            cleared = true;
+            return true;
+        },
+        syncActualGridToSlots: () => { synced = true; },
+        renderTimeEntries: () => { rendered = true; },
+        calculateTotals: () => {},
+        autoSave: () => { saved = true; },
+    };
+
+    toggleActualGridUnit.call(ctx, 3, 2);
+
+    assert.equal(cleared, false);
+    assert.equal(synced, false);
+    assert.equal(rendered, false);
+    assert.equal(saved, false);
+});
+
+test('toggleActualFailedGridUnit is no-op when target unit is locked', () => {
+    let rendered = false;
+    let saved = false;
+    const ctx = {
+        getSplitBaseIndex: () => 1,
+        buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A'] }),
+        isActualGridUnitLocked: () => true,
+        getActualFailedGridUnitsForBase: () => [false, false],
+        getActualGridUnitsForBase: () => [false, false],
+        findMergeKey: () => null,
+        timeSlots: [{ activityLog: {} }, { activityLog: {} }],
+        syncActualGridToSlots: () => {},
+        renderTimeEntries: () => { rendered = true; },
+        calculateTotals: () => {},
+        autoSave: () => { saved = true; },
+    };
+
+    toggleActualFailedGridUnit.call(ctx, 1, 1);
+
+    assert.equal(rendered, false);
+    assert.equal(saved, false);
 });

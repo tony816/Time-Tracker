@@ -82,13 +82,18 @@
 
     function getActualAssignedSecondsMap(activities = null, options = {}) {
         const normalizeActivityText = resolveNormalizeActivityText(options.normalizeActivityText);
+        const aggregateDuplicates = options.aggregateDuplicates === true;
         const map = new Map();
         (Array.isArray(activities) ? activities : []).forEach((item) => {
             if (!item) return;
             const label = normalizeActivityText(item.label || '');
             if (!label) return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            map.set(label, seconds);
+            if (aggregateDuplicates) {
+                map.set(label, (map.get(label) || 0) + seconds);
+            } else {
+                map.set(label, seconds);
+            }
         });
         return map;
     }

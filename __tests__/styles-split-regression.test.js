@@ -30,10 +30,12 @@ test('split css files exist and keep section anchors', () => {
     const responsiveSource = fs.readFileSync(responsiveCssPath, 'utf8');
 
     assert.ok(foundationSource.length > 0);
-    assert.match(modalSource, /\/\*\s*모달 스타일\s*\*\//);
-    assert.match(interactionsSource, /\/\*\s*타이머 UI 스타일\s*\*\//);
-    assert.match(responsiveSource, /\/\*\s*Mobile responsive enhancements\s*\*\//);
-    assert.match(responsiveSource, /\/\*\s*--- UX enhancement patch ---\s*\*\//);
+    assert.match(modalSource, /\.modal-overlay/);
+    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-off/);
+    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-locked/);
+    assert.match(interactionsSource, /cursor:\s*not-allowed;/);
+    assert.match(responsiveSource, /Mobile responsive enhancements/);
+    assert.match(responsiveSource, /--- UX enhancement patch ---/);
 });
 
 test('index.html links split css files directly in order', () => {

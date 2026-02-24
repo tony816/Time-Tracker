@@ -3301,12 +3301,18 @@ class TimeTracker {
                       const unitIndex = parseInt(segment.dataset.unitIndex, 10);
                       if (!Number.isFinite(unitIndex)) return null;
                       const extraLabel = segment.dataset.extraLabel || '';
-                      return { segment, unitIndex, extraLabel };
+                      const locked = segment.classList && segment.classList.contains('is-locked');
+                      return { segment, unitIndex, extraLabel, locked };
                   };
 
                   const handleGridClick = (event) => {
                       const payload = resolveSegmentPayload(event.target);
                       if (!payload) return;
+                      if (payload.locked) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          return;
+                      }
                       const baseIndex = this.getSplitBaseIndex('actual', index);
                       if (this.shouldSuppressActualGridClick(baseIndex, payload.unitIndex)) {
                           event.preventDefault();
@@ -3355,6 +3361,7 @@ class TimeTracker {
                   };
 
                   const beginLongPress = (payload, pointerId, clientX, clientY, pointerType = '') => {
+                      if (!payload || payload.locked) return;
                       clearLongPress();
                       longPressState = {
                           unitIndex: payload.unitIndex,
@@ -4029,6 +4036,7 @@ class TimeTracker {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
+                const lockedClass = (isActual && toggleable && segment.locked) ? ' is-locked' : '';
                 const failedClass = (isActual && toggleable && segment.failed) ? ' is-failed' : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
@@ -4048,7 +4056,7 @@ class TimeTracker {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${failedClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
             }).join('')}</div>`
             : '';
 
@@ -4144,6 +4152,69 @@ class TimeTracker {
         }
 
         return units;
+    }
+
+    getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null) {
+        const units = Array.isArray(planUnits) ? planUnits.slice() : [];
+        if (units.length === 0) return [];
+        const slot = this.timeSlots[baseIndex];
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const sourceActivities = Array.isArray(activities)
+            ? activities
+            : this.normalizeActivitiesArray(slot && slot.activityLog && slot.activityLog.subActivities);
+        if (!Array.isArray(sourceActivities) || sourceActivities.length === 0) {
+            return new Array(units.length).fill(false);
+        }
+        const step = this.getActualDurationStepSeconds();
+        const allowedCounts = new Map();
+        (Array.isArray(sourceActivities) ? sourceActivities : []).forEach((item) => {
+            if (!item) return;
+            const label = normalize(item.label || '');
+            if (!label) return;
+            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            const allowed = seconds > 0 ? Math.floor(seconds / step) : 0;
+            allowedCounts.set(label, (allowedCounts.get(label) || 0) + allowed);
+        });
+
+        const currentCounts = new Map();
+        units.forEach((label) => {
+            const normalized = normalize(label || '');
+            if (!normalized) return;
+            currentCounts.set(normalized, (currentCounts.get(normalized) || 0) + 1);
+        });
+
+        const allLabels = new Set();
+        currentCounts.forEach((_value, label) => allLabels.add(label));
+        allowedCounts.forEach((_value, label) => allLabels.add(label));
+
+        const lockedUnits = new Array(units.length).fill(false);
+        allLabels.forEach((label) => {
+            const current = currentCounts.get(label) || 0;
+            const allowed = allowedCounts.get(label) || 0;
+            if (current <= allowed) return;
+            let excess = current - allowed;
+            for (let i = units.length - 1; i >= 0 && excess > 0; i--) {
+                const normalized = normalize(units[i] || '');
+                if (!normalized || normalized !== label) continue;
+                lockedUnits[i] = true;
+                excess -= 1;
+            }
+        });
+
+        return lockedUnits;
+    }
+
+    isActualGridUnitLocked(baseIndex, unitIndex, planUnits = null, activities = null) {
+        if (!Number.isFinite(unitIndex)) return false;
+        const units = Array.isArray(planUnits)
+            ? planUnits
+            : (this.buildPlanUnitsForActualGrid(baseIndex).units || []);
+        if (!Array.isArray(units) || units.length === 0) return false;
+        if (unitIndex < 0 || unitIndex >= units.length) return false;
+        const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, units, activities);
+        return Boolean(Array.isArray(lockedUnits) && lockedUnits[unitIndex]);
     }
 
     getActualExtraGridUnitsForBase(baseIndex, totalUnits) {
@@ -4631,6 +4702,7 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+        if (this.isActualGridUnitLocked(baseIndex, unitIndex, planContext.units)) return;
         this.clearActualFailedGridUnitOnNormalClick(index, unitIndex, planContext.units.length);
         const isMultiRow = this.getBlockLength('actual', baseIndex) > 1;
         const baseLabel = planContext.planLabel || '';
@@ -4711,6 +4783,7 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+        if (this.isActualGridUnitLocked(baseIndex, unitIndex, planContext.units)) return;
 
         const failedUnits = this.getActualFailedGridUnitsForBase(baseIndex, planContext.units.length);
         failedUnits[unitIndex] = !failedUnits[unitIndex];
@@ -4755,6 +4828,7 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         const planUnits = (planContext && Array.isArray(planContext.units)) ? planContext.units : [];
         if (planUnits.length === 0) return;
+        if (Number.isFinite(unitIndex) && this.isActualGridUnitLocked(baseIndex, unitIndex, planUnits)) return;
         this.clearActualFailedGridUnitOnNormalClick(index, unitIndex, planUnits.length);
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planUnits.length, planUnits);
         const rawSub = (slot.activityLog && Array.isArray(slot.activityLog.subActivities))
@@ -5152,6 +5226,7 @@ class TimeTracker {
                       : [];
                   const normalizedSub = this.normalizeActivitiesArray(rawSub).map(item => ({ ...item }));
                   const orderedActual = this.sortActivitiesByOrder(normalizedSub);
+                  const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
                   const extras = orderedActual.filter((item) => {
                       const label = this.normalizeActivityText
                           ? this.normalizeActivityText(item.label || '')
@@ -5187,6 +5262,7 @@ class TimeTracker {
                               span: 1,
                               unitIndex,
                               active: Boolean(extraActiveUnits[unitIndex]),
+                              locked: Boolean(lockedUnits[unitIndex]),
                               failed: Boolean(failedUnits[unitIndex]),
                               isExtra: true,
                               reservedIndices,
@@ -5200,6 +5276,7 @@ class TimeTracker {
                           span: 1,
                           unitIndex,
                           active: Boolean(actualUnits[unitIndex]),
+                          locked: Boolean(lockedUnits[unitIndex]),
                           failed: Boolean(failedUnits[unitIndex]),
                           isExtra: false,
                           reservedIndices
@@ -5242,6 +5319,7 @@ class TimeTracker {
                 if (normalized) planLabelSet.add(normalized);
             });
             const orderedActual = this.sortActivitiesByOrder(actualActivities);
+            const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
             let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
@@ -5251,6 +5329,7 @@ class TimeTracker {
                 span: 1,
                 unitIndex,
                 active: Boolean(actualUnits[unitIndex]),
+                locked: Boolean(lockedUnits[unitIndex]),
                 failed: Boolean(failedUnits[unitIndex]),
             }));
             const hasLabels = planUnits.some(label => label);
@@ -10614,6 +10693,7 @@ class TimeTracker {
             : null;
         if (gridMetricsCore && typeof gridMetricsCore.getActualAssignedSecondsMap === 'function') {
             return gridMetricsCore.getActualAssignedSecondsMap(this.modalActualActivities, {
+                aggregateDuplicates: true,
                 normalizeActivityText: (value) => this.normalizeActivityText
                     ? this.normalizeActivityText(value || '')
                     : String(value || '').trim(),
@@ -10627,7 +10707,7 @@ class TimeTracker {
                 : String(item.label || '').trim();
             if (!label) return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            map.set(label, seconds);
+            map.set(label, (map.get(label) || 0) + seconds);
         });
         return map;
     }
@@ -10650,7 +10730,11 @@ class TimeTracker {
 
         const currentCounts = this.getActualGridUnitCounts(planUnits, gridUnits);
         let changed = false;
-        allowedCounts.forEach((allowed, label) => {
+        const allLabels = new Set();
+        currentCounts.forEach((_value, label) => allLabels.add(label));
+        allowedCounts.forEach((_value, label) => allLabels.add(label));
+        allLabels.forEach((label) => {
+            const allowed = allowedCounts.get(label) || 0;
             const current = currentCounts.get(label) || 0;
             if (current <= allowed) return;
             let excess = current - allowed;
@@ -10761,6 +10845,7 @@ class TimeTracker {
         const hasGrid = Array.from(gridSecondsMap.values()).some(seconds => seconds > 0);
         const planOrder = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
         const existing = this.normalizeActualActivitiesList(existingActivities);
+        const hadExistingActivities = existing.length > 0;
 
         let baseList = existing;
         if (baseList.length === 0) {
@@ -10786,10 +10871,11 @@ class TimeTracker {
             const rawRecorded = Number.isFinite(item.recordedSeconds) ? Math.max(0, Math.floor(item.recordedSeconds)) : null;
             if (!label && seconds <= 0) return;
             const isPlanLabel = label && planLabelSet.has(label);
-            if (isPlanLabel) seenPlanLabels.add(label);
             if (isPlanLabel) {
+                seenPlanLabels.add(label);
                 const plannedSeconds = planAssignedMap.get(label);
-                if (Number.isFinite(plannedSeconds) && plannedSeconds > 0) {
+                // Keep previously saved assigned seconds; only backfill when empty.
+                if (seconds <= 0 && Number.isFinite(plannedSeconds) && plannedSeconds > 0) {
                     seconds = plannedSeconds;
                 }
             }
@@ -10803,15 +10889,17 @@ class TimeTracker {
             merged.push(entry);
         });
 
-        planOrder.forEach((label) => {
-            if (!label || seenPlanLabels.has(label)) return;
-            const plannedSeconds = planAssignedMap.get(label);
-            const seconds = Number.isFinite(plannedSeconds) && plannedSeconds > 0
-                ? plannedSeconds
-                : (gridSecondsMap.get(label) || 0);
-            merged.push({ label, seconds, source: 'grid' });
-            seenPlanLabels.add(label);
-        });
+        if (!hadExistingActivities) {
+            planOrder.forEach((label) => {
+                if (!label || seenPlanLabels.has(label)) return;
+                const plannedSeconds = planAssignedMap.get(label);
+                const seconds = Number.isFinite(plannedSeconds) && plannedSeconds > 0
+                    ? plannedSeconds
+                    : (gridSecondsMap.get(label) || 0);
+                merged.push({ label, seconds, source: 'grid' });
+                seenPlanLabels.add(label);
+            });
+        }
 
         return merged;
     }
@@ -10983,6 +11071,34 @@ class TimeTracker {
         noticeEl.textContent = '';
         noticeEl.classList.remove('ok');
         if (this.modalActualHasPlanUnits) {
+            const normalize = (value) => this.normalizeActivityText
+                ? this.normalizeActivityText(value || '')
+                : String(value || '').trim();
+            const planLabelSet = (this.modalActualPlanLabelSet instanceof Set)
+                ? this.modalActualPlanLabelSet
+                : new Set();
+            const gridSecondsMap = this.getActualGridSecondsMap();
+            let recorded = 0;
+            gridSecondsMap.forEach((seconds) => {
+                const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+                recorded += safe;
+            });
+            (this.modalActualActivities || []).forEach((item) => {
+                if (!item) return;
+                const label = normalize(item.label || '');
+                const isPlanLabel = Boolean(label)
+                    && (planLabelSet.has(label) || item.source === 'grid');
+                if (isPlanLabel) return;
+                const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                let rowRecorded = Number.isFinite(item.recordedSeconds)
+                    ? Math.max(0, Math.floor(item.recordedSeconds))
+                    : assigned;
+                if (assigned > 0 && rowRecorded > assigned) rowRecorded = assigned;
+                recorded += rowRecorded;
+            });
+            const unassigned = Math.max(0, total - used);
+            noticeEl.textContent = `Assigned ${this.formatDurationSummary(used)} | Recorded ${this.formatDurationSummary(recorded)} | Unassigned ${this.formatDurationSummary(unassigned)}`;
+            noticeEl.classList.add('ok');
             return;
         }
         if (!Array.isArray(this.modalActualActivities) || this.modalActualActivities.length === 0) {
@@ -11148,11 +11264,18 @@ class TimeTracker {
         const newIndex = this.modalActualActivities.push({ label, seconds: 0, recordedSeconds: seededRecorded, source }) - 1;
         this.modalActualActiveRow = newIndex;
         this.modalActualDirty = true;
-        if (this.modalActualHasPlanUnits) {
-            this.normalizeActualActivitiesToStep();
-        } else {
-            this.normalizeActualActivitiesToTotal();
+        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
+        if (total > 0 && this.modalActualActivities[newIndex]) {
+            const usedByOthers = this.modalActualActivities.reduce((sum, item, idx) => {
+                if (!item || idx === newIndex) return sum;
+                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return sum + this.normalizeActualDurationStep(seconds);
+            }, 0);
+            const remaining = Math.max(0, total - usedByOthers);
+            this.modalActualActivities[newIndex].seconds = this.normalizeActualDurationStep(remaining);
         }
+        this.normalizeActualActivitiesToStep();
+        this.clampActualGridToAssigned();
         this.renderActualActivitiesList();
         if (defaults.focusLabel !== false) {
             this.focusActualRowLabel(newIndex);
@@ -11161,26 +11284,16 @@ class TimeTracker {
 
     removeActualActivityRow(index) {
         if (!this.isValidActualRow(index)) return;
-        const removed = this.modalActualActivities.splice(index, 1)[0];
+        this.modalActualActivities.splice(index, 1);
         if (this.modalActualActivities.length > 0) {
             const targetIndex = Math.min(index, this.modalActualActivities.length - 1);
-            if (!this.modalActualHasPlanUnits) {
-                const extra = Number.isFinite(removed.seconds) ? Math.max(0, Math.floor(removed.seconds)) : 0;
-                const current = Number.isFinite(this.modalActualActivities[targetIndex].seconds)
-                    ? Math.max(0, Math.floor(this.modalActualActivities[targetIndex].seconds))
-                    : 0;
-                this.modalActualActivities[targetIndex].seconds = current + extra;
-            }
             this.modalActualActiveRow = targetIndex;
         } else {
             this.modalActualActiveRow = -1;
         }
         this.modalActualDirty = true;
-        if (this.modalActualHasPlanUnits) {
-            this.normalizeActualActivitiesToStep();
-        } else {
-            this.normalizeActualActivitiesToTotal();
-        }
+        this.normalizeActualActivitiesToStep();
+        this.clampActualGridToAssigned();
         this.renderActualActivitiesList();
     }
 
@@ -11222,6 +11335,7 @@ class TimeTracker {
         }
         this.modalActualActiveRow = index;
         this.modalActualDirty = true;
+        this.clampActualGridToAssigned();
         this.renderActualActivitiesList();
         return true;
     }
@@ -11238,92 +11352,46 @@ class TimeTracker {
         const items = this.modalActualActivities || [];
         const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
         const wasDirty = this.modalActualDirty;
-        const beforeSeconds = this.modalActualHasPlanUnits
-            ? items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0))
-            : null;
-        const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
+        const beforeSeconds = items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0));
         let nextSeconds = this.normalizeActualDurationStep(Number.isFinite(targetSeconds) ? targetSeconds : 0);
 
-        if (total > 0 && !this.modalActualHasPlanUnits) nextSeconds = Math.min(nextSeconds, total);
-        if (this.modalActualHasPlanUnits) {
-            if (total > 0) {
-                const otherSum = items.reduce((sum, item, idx) => {
-                    if (idx === index) return sum;
-                    const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                    return sum + this.normalizeActualDurationStep(seconds);
-                }, 0);
-                const maxAllowed = Math.max(0, total - otherSum);
-                nextSeconds = Math.min(nextSeconds, maxAllowed);
-            }
-            items[index].seconds = nextSeconds;
-            this.clampActualGridToAssigned();
-            this.updateActualSpinnerDisplays();
-            this.updateActualActivitiesSummary();
-            const afterSeconds = items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0));
-            const changed = beforeSeconds
-                ? beforeSeconds.some((value, idx) => value !== afterSeconds[idx])
-                : false;
-            if (!changed) {
-                if (!wasDirty) this.modalActualDirty = false;
-                return;
-            }
-            this.modalActualDirty = true;
-            if (options.updatePlan) {
-                const label = this.normalizeActivityText
-                    ? this.normalizeActivityText(items[index].label || '')
-                    : String(items[index].label || '').trim();
-                const isPlanLabel = label
-                    && ((this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
-                        || items[index].source === 'grid');
-                if (isPlanLabel) {
-                    const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
-                    const finalSeconds = Number.isFinite(items[index].seconds)
-                        ? Math.max(0, Math.floor(items[index].seconds))
-                        : 0;
-                    if (Number.isFinite(baseIndex)) {
-                        this.updatePlanActivitiesAssignment(baseIndex, label, finalSeconds);
-                    }
-                }
-            }
-            return;
+        if (total > 0) {
+            const otherSum = items.reduce((sum, item, idx) => {
+                if (idx === index) return sum;
+                const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return sum + this.normalizeActualDurationStep(seconds);
+            }, 0);
+            const maxAllowed = Math.max(0, total - otherSum);
+            nextSeconds = Math.min(nextSeconds, maxAllowed);
         }
-        if (items.length <= 1) {
-            items[index].seconds = total > 0 ? total : nextSeconds;
-            this.modalActualDirty = true;
-            this.updateActualSpinnerDisplays();
-            this.updateActualActivitiesSummary();
-            return;
-        }
-
-        let delta = nextSeconds - currentSeconds;
-        if (delta > 0) {
-            let remaining = delta;
-            const order = this.getActualBalanceOrder(index, items.length);
-            order.forEach((idx) => {
-                if (remaining <= 0) return;
-                const available = Number.isFinite(items[idx].seconds) ? Math.max(0, Math.floor(items[idx].seconds)) : 0;
-                const reduce = Math.min(available, remaining);
-                items[idx].seconds = available - reduce;
-                remaining -= reduce;
-            });
-            if (remaining > 0) {
-                nextSeconds = Math.max(0, nextSeconds - remaining);
-            }
-        } else if (delta < 0) {
-            const order = this.getActualBalanceOrder(index, items.length);
-            if (order.length > 0) {
-                const targetIndex = order[0];
-                const base = Number.isFinite(items[targetIndex].seconds)
-                    ? Math.max(0, Math.floor(items[targetIndex].seconds))
-                    : 0;
-                items[targetIndex].seconds = base + Math.abs(delta);
-            }
-        }
-
         items[index].seconds = nextSeconds;
-        this.modalActualDirty = true;
+        this.clampActualGridToAssigned();
         this.updateActualSpinnerDisplays();
         this.updateActualActivitiesSummary();
+        const afterSeconds = items.map(item => this.normalizeActualDurationStep(Number.isFinite(item && item.seconds) ? item.seconds : 0));
+        const changed = beforeSeconds.some((value, idx) => value !== afterSeconds[idx]);
+        if (!changed) {
+            if (!wasDirty) this.modalActualDirty = false;
+            return;
+        }
+        this.modalActualDirty = true;
+        if (options.updatePlan) {
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(items[index].label || '')
+                : String(items[index].label || '').trim();
+            const isPlanLabel = label
+                && ((this.modalActualPlanLabelSet instanceof Set && this.modalActualPlanLabelSet.has(label))
+                    || items[index].source === 'grid');
+            if (isPlanLabel) {
+                const baseIndex = Number.isFinite(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+                const finalSeconds = Number.isFinite(items[index].seconds)
+                    ? Math.max(0, Math.floor(items[index].seconds))
+                    : 0;
+                if (Number.isFinite(baseIndex)) {
+                    this.updatePlanActivitiesAssignment(baseIndex, label, finalSeconds);
+                }
+            }
+        }
     }
 
     balanceActualAssignmentsToTotal(changedIndex = null) {
@@ -11431,6 +11499,7 @@ class TimeTracker {
             item.recordedSeconds = nextRecorded;
             this.modalActualDirty = true;
             this.updateActualSpinnerDisplays();
+            this.updateActualActivitiesSummary();
             return;
         }
 
@@ -11457,6 +11526,7 @@ class TimeTracker {
         this.modalActualDirty = true;
         this.clampActualGridToAssigned();
         this.updateActualSpinnerDisplays();
+        this.updateActualActivitiesSummary();
     }
 
     adjustActualActivityDuration(index, direction, options = {}) {
@@ -11476,12 +11546,9 @@ class TimeTracker {
             }, 0);
             maxAllowed = Math.max(0, total - otherSum);
         }
-        let nextSeconds;
-        if (direction < 0 && current === 0) {
-            nextSeconds = Number.isFinite(maxAllowed) ? maxAllowed : 0;
-        } else {
-            nextSeconds = current + (direction * step);
-        }
+        let nextSeconds = current + (direction * step);
+        if (nextSeconds < 0) nextSeconds = 0;
+        if (Number.isFinite(maxAllowed)) nextSeconds = Math.min(nextSeconds, maxAllowed);
         this.applyActualDurationChange(index, nextSeconds, options);
     }
 
@@ -11500,27 +11567,20 @@ class TimeTracker {
             const currentRecorded = Number.isFinite(item.recordedSeconds)
                 ? Math.max(0, Math.floor(item.recordedSeconds))
                 : assigned;
-            let nextRecorded;
-            if (direction < 0 && currentRecorded === 0) {
-                nextRecorded = assigned;
-            } else {
-                nextRecorded = currentRecorded + (direction * step);
-            }
+            let nextRecorded = currentRecorded + (direction * step);
             nextRecorded = Math.max(0, nextRecorded);
             if (assigned > 0) nextRecorded = Math.min(nextRecorded, assigned);
             item.recordedSeconds = this.normalizeActualDurationStep(nextRecorded);
             this.modalActualDirty = true;
             this.updateActualSpinnerDisplays();
+            this.updateActualActivitiesSummary();
             return;
         }
         const current = this.getActualGridSecondsForLabel(label);
         const assigned = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-        let nextSeconds;
-        if (direction < 0 && current === 0) {
-            nextSeconds = assigned;
-        } else {
-            nextSeconds = current + (direction * step);
-        }
+        let nextSeconds = current + (direction * step);
+        nextSeconds = Math.max(0, nextSeconds);
+        if (assigned > 0) nextSeconds = Math.min(nextSeconds, assigned);
         this.applyActualGridDurationChange(index, nextSeconds);
     }
 
@@ -11554,25 +11614,8 @@ class TimeTracker {
     }
 
     finalizeActualActivitiesForSave() {
-        const total = Math.max(0, Number(this.modalActualTotalSeconds) || 0);
         let activities = this.normalizeActualActivitiesList(this.modalActualActivities).map(item => ({ ...item }));
         activities = activities.map((item, idx) => ({ ...item, order: idx }));
-        if (this.modalActualHasPlanUnits) {
-            return activities;
-        }
-        if (total > 0) {
-            if (activities.length === 0) {
-                activities = [{ label: '', seconds: total }];
-            } else {
-                const used = this.getActualActivitiesSeconds(activities);
-                if (used !== total) {
-                    const diff = total - used;
-                    const last = activities.length - 1;
-                    const adjusted = (activities[last].seconds || 0) + diff;
-                    activities[last].seconds = Math.max(0, this.normalizeActualDurationStep(adjusted));
-                }
-            }
-        }
         return activities;
     }
 
@@ -11862,6 +11905,8 @@ class TimeTracker {
                     slot.activityLog.details = (i === start) ? details : '';
                 }
             } else {
+                this.normalizeActualActivitiesToStep();
+                this.clampActualGridToAssigned();
                 const activities = this.finalizeActualActivitiesForSave();
                 const split = this.splitActualActivitiesByPlan(baseIndex, activities);
                 const mergedActivities = activities.map(item => ({ ...item }));
