@@ -37,6 +37,8 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-locked \.split-grid-label/);
     assert.match(interactionsSource, /display:\s*none\s*!important;/);
     assert.match(interactionsSource, /border-bottom-width:\s*3px\s*!important;/);
+    assert.match(interactionsSource, /border-bottom-color:\s*#fff\s*!important;/);
+    assert.match(interactionsSource, /background-clip:\s*padding-box;/);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.activity-log-btn/);
     assert.match(interactionsSource, /pointer-events:\s*none;/);
     assert.match(responsiveSource, /Mobile responsive enhancements/);

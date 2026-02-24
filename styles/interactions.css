@@ -1635,8 +1635,9 @@
   cursor: not-allowed;
   pointer-events: none;
   overflow: hidden;
+  background-clip: padding-box;
   border-bottom-width: 3px !important;
-  border-bottom-color: transparent !important;
+  border-bottom-color: #fff !important;
 }
 
 .split-visualization-actual .split-grid-segment.is-locked .split-grid-label {

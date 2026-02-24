@@ -357,6 +357,33 @@ test('getActualGridLockedUnitsForBase unlocks when assigned time increases', () 
     assert.deepEqual(lockedWhenExpanded, [false, false]);
 });
 
+test('getActualGridLockedUnitsForBase locks from global tail by total assigned sum', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw : [];
+        },
+    };
+
+    const locked = getActualGridLockedUnitsForBase.call(
+        ctx,
+        0,
+        ['A', 'A', 'B', 'B'],
+        [
+            { label: 'A', seconds: 600, source: 'grid' },
+            { label: 'B', seconds: 600, source: 'grid' },
+        ]
+    );
+
+    assert.deepEqual(locked, [false, false, true, true]);
+});
+
 test('getActualGridUnitsForBase keeps explicit all-off grid without rebuilding from activities', () => {
     const ctx = {
         timeSlots: [{

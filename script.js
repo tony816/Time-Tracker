@@ -4168,40 +4168,21 @@ class TimeTracker {
             return new Array(units.length).fill(false);
         }
         const step = this.getActualDurationStepSeconds();
-        const allowedCounts = new Map();
+        let assignedUnitsTotal = 0;
         (Array.isArray(sourceActivities) ? sourceActivities : []).forEach((item) => {
             if (!item) return;
             const label = normalize(item.label || '');
             if (!label) return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const allowed = seconds > 0 ? Math.floor(seconds / step) : 0;
-            allowedCounts.set(label, (allowedCounts.get(label) || 0) + allowed);
+            const unitsCount = seconds > 0 ? Math.floor(seconds / step) : 0;
+            assignedUnitsTotal += unitsCount;
         });
-
-        const currentCounts = new Map();
-        units.forEach((label) => {
-            const normalized = normalize(label || '');
-            if (!normalized) return;
-            currentCounts.set(normalized, (currentCounts.get(normalized) || 0) + 1);
-        });
-
-        const allLabels = new Set();
-        currentCounts.forEach((_value, label) => allLabels.add(label));
-        allowedCounts.forEach((_value, label) => allLabels.add(label));
-
         const lockedUnits = new Array(units.length).fill(false);
-        allLabels.forEach((label) => {
-            const current = currentCounts.get(label) || 0;
-            const allowed = allowedCounts.get(label) || 0;
-            if (current <= allowed) return;
-            let excess = current - allowed;
-            for (let i = units.length - 1; i >= 0 && excess > 0; i--) {
-                const normalized = normalize(units[i] || '');
-                if (!normalized || normalized !== label) continue;
-                lockedUnits[i] = true;
-                excess -= 1;
-            }
-        });
+        const allowedUnitsTotal = Math.max(0, Math.min(units.length, assignedUnitsTotal));
+        const lockedCount = Math.max(0, units.length - allowedUnitsTotal);
+        for (let i = units.length - 1; i >= 0 && (units.length - 1 - i) < lockedCount; i--) {
+            lockedUnits[i] = true;
+        }
 
         return lockedUnits;
     }
