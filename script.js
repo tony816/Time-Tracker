@@ -4312,7 +4312,7 @@ class TimeTracker {
         }
         if (available.length === 0) return { slotsByIndex, slotsByLabel };
 
-        let cursor = 0;
+        let cursor = available.length - 1;
         (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
             if (!item) return;
             const label = this.normalizeActivityText
@@ -4320,9 +4320,9 @@ class TimeTracker {
                 : String(item.label || '').trim();
             if (!label) return;
             let units = this.getExtraActivityUnitCount(item);
-            while (units > 0 && cursor < available.length) {
+            while (units > 0 && cursor >= 0) {
                 const unitIndex = available[cursor];
-                cursor += 1;
+                cursor -= 1;
                 units -= 1;
                 slotsByIndex[unitIndex] = label;
                 if (!slotsByLabel.has(label)) slotsByLabel.set(label, []);

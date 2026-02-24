@@ -445,7 +445,32 @@ test('buildExtraSlotAllocation can place extras into inactive planned-labeled un
     );
 
     assert.deepEqual(result.slotsByIndex, ['', '', '', 'X', 'X', 'X']);
-    assert.deepEqual(result.slotsByLabel.get('X'), [3, 4, 5]);
+    assert.deepEqual(result.slotsByLabel.get('X'), [5, 4, 3]);
+});
+
+test('buildExtraSlotAllocation fills from the tail when all planned units are available', () => {
+    const ctx = {
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getExtraActivityUnitCount(item) {
+            const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return Math.floor(seconds / STEP_SECONDS);
+        },
+    };
+
+    const result = buildExtraSlotAllocation.call(
+        ctx,
+        new Array(18).fill('A'),
+        new Array(18).fill(false),
+        [{ label: 'X', seconds: 1800, source: 'extra', recordedSeconds: 1800 }],
+        Array.from({ length: 18 }, (_v, idx) => idx)
+    );
+
+    assert.equal(result.slotsByIndex[15], 'X');
+    assert.equal(result.slotsByIndex[16], 'X');
+    assert.equal(result.slotsByIndex[17], 'X');
+    assert.deepEqual(result.slotsByLabel.get('X'), [17, 16, 15]);
 });
 
 test('mergeActualActivitiesWithGrid keeps planned assignment when existing list is empty', () => {

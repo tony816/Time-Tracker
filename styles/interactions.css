@@ -1635,7 +1635,7 @@
   cursor: not-allowed;
   pointer-events: none;
   overflow: hidden;
-  border-bottom-width: 0 !important;
+  border-bottom-width: 3px !important;
   border-bottom-color: transparent !important;
 }
 
