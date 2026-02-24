@@ -1635,9 +1635,12 @@
   cursor: not-allowed;
   pointer-events: none;
   overflow: hidden;
-  background-clip: padding-box;
+  background-clip: padding-box !important;
   border-bottom-width: 3px !important;
   border-bottom-color: #fff !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  box-sizing: border-box;
 }
 
 .split-visualization-actual .split-grid-segment.is-locked .split-grid-label {
@@ -1655,7 +1658,7 @@
 }
 
 .split-visualization-actual .split-grid-segment {
-  overflow: visible;
+  overflow: hidden;
 }
 
 .split-visualization-actual .split-grid-segment.is-failed {

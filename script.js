@@ -4270,7 +4270,7 @@ class TimeTracker {
         return Math.max(assignedUnits, recordedUnits);
     }
 
-    buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null) {
+    buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null) {
         const slotsByIndex = Array.isArray(planUnits) ? new Array(planUnits.length).fill('') : [];
         const slotsByLabel = new Map();
         if (!Array.isArray(planUnits) || planUnits.length === 0) {
@@ -4278,16 +4278,19 @@ class TimeTracker {
         }
         const available = [];
         const safeActualUnits = Array.isArray(actualUnits) ? actualUnits : [];
+        const safeLockedUnits = Array.isArray(lockedUnits) ? lockedUnits : [];
         const useOrder = Array.isArray(orderIndices) && orderIndices.length === planUnits.length
             ? orderIndices
             : null;
         if (useOrder) {
             useOrder.forEach((idx) => {
                 if (!Number.isFinite(idx) || idx < 0 || idx >= planUnits.length) return;
+                if (safeLockedUnits[idx]) return;
                 if (!safeActualUnits[idx]) available.push(idx);
             });
         } else {
             for (let i = 0; i < planUnits.length; i++) {
+                if (safeLockedUnits[i]) continue;
                 if (!safeActualUnits[i]) available.push(i);
             }
         }
@@ -4823,7 +4826,8 @@ class TimeTracker {
         if (displayOrder.length !== planUnits.length) {
             displayOrder = planUnits.map((_, idx) => idx);
         }
-        const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder);
+        const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+        const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder, lockedUnits);
         const labelSlots = allocation && allocation.slotsByLabel
             ? allocation.slotsByLabel.get(normalizedLabel)
             : null;
@@ -5210,7 +5214,7 @@ class TimeTracker {
                   if (displayOrder.length !== planUnits.length) {
                       displayOrder = planUnits.map((_, idx) => idx);
                   }
-                  const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder);
+                  const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder, lockedUnits);
                   const extraActiveUnits = this.buildExtraActiveGridUnits(
                       planUnits.length,
                       allocation,
@@ -5248,7 +5252,7 @@ class TimeTracker {
                           label,
                           span: 1,
                           unitIndex,
-                          active: Boolean(actualUnits[unitIndex]),
+                          active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
                           locked: Boolean(lockedUnits[unitIndex]),
                           failed: Boolean(failedUnits[unitIndex]),
                           isExtra: false,
@@ -5301,7 +5305,7 @@ class TimeTracker {
                 label: planUnits[unitIndex],
                 span: 1,
                 unitIndex,
-                active: Boolean(actualUnits[unitIndex]),
+                active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
                 locked: Boolean(lockedUnits[unitIndex]),
                 failed: Boolean(failedUnits[unitIndex]),
             }));
@@ -10688,43 +10692,37 @@ class TimeTracker {
     clampActualGridToAssigned() {
         if (!this.modalActualHasPlanUnits) return;
         const planUnits = Array.isArray(this.modalActualPlanUnits) ? this.modalActualPlanUnits : [];
-        const gridUnits = Array.isArray(this.modalActualGridUnits)
+        if (planUnits.length === 0) return;
+        const rawGridUnits = Array.isArray(this.modalActualGridUnits)
             ? this.modalActualGridUnits.map(value => Boolean(value))
             : [];
-        if (planUnits.length === 0 || gridUnits.length === 0) return;
+        let gridUnits = this.normalizeActualGridBooleanUnits
+            ? this.normalizeActualGridBooleanUnits(rawGridUnits, planUnits.length)
+            : rawGridUnits.slice(0, planUnits.length);
+        if (gridUnits.length < planUnits.length) {
+            gridUnits = gridUnits.concat(new Array(planUnits.length - gridUnits.length).fill(false));
+        }
+        let changed = rawGridUnits.length !== gridUnits.length
+            || rawGridUnits.some((value, idx) => value !== gridUnits[idx]);
 
         const step = this.getActualDurationStepSeconds();
-        const assignedMap = this.getActualAssignedSecondsMap();
-        const allowedCounts = new Map();
-        assignedMap.forEach((seconds, label) => {
-            const allowed = seconds > 0 ? Math.floor(seconds / step) : 0;
-            allowedCounts.set(label, allowed);
+        let assignedUnitsTotal = 0;
+        (this.modalActualActivities || []).forEach((item) => {
+            if (!item) return;
+            const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            if (seconds <= 0) return;
+            assignedUnitsTotal += Math.floor(seconds / step);
         });
-
-        const currentCounts = this.getActualGridUnitCounts(planUnits, gridUnits);
-        let changed = false;
-        const allLabels = new Set();
-        currentCounts.forEach((_value, label) => allLabels.add(label));
-        allowedCounts.forEach((_value, label) => allLabels.add(label));
-        allLabels.forEach((label) => {
-            const allowed = allowedCounts.get(label) || 0;
-            const current = currentCounts.get(label) || 0;
-            if (current <= allowed) return;
-            let excess = current - allowed;
-            for (let i = planUnits.length - 1; i >= 0 && excess > 0; i--) {
-                const normalized = this.normalizeActivityText
-                    ? this.normalizeActivityText(planUnits[i] || '')
-                    : String(planUnits[i] || '').trim();
-                if (!normalized || normalized !== label) continue;
-                if (!gridUnits[i]) continue;
-                gridUnits[i] = false;
-                excess -= 1;
-                changed = true;
-            }
-        });
+        const allowedUnitsTotal = Math.max(0, Math.min(planUnits.length, assignedUnitsTotal));
+        const lockedCount = Math.max(0, planUnits.length - allowedUnitsTotal);
+        for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+            if (!gridUnits[i]) continue;
+            gridUnits[i] = false;
+            changed = true;
+        }
 
         if (changed) {
-            this.modalActualGridUnits = gridUnits;
+            this.modalActualGridUnits = gridUnits.slice();
         }
 
         if (Array.isArray(this.modalActualActivities)) {

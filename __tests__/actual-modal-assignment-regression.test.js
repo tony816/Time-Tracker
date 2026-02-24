@@ -42,8 +42,8 @@ const getActualGridUnitsForBase = buildMethod(
     '(baseIndex, totalUnits, planUnits = null)'
 );
 const buildExtraSlotAllocation = buildMethod(
-    'buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null)',
-    '(planUnits, actualUnits, extraActivities, orderIndices = null)'
+    'buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null)',
+    '(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null)'
 );
 const mergeActualActivitiesWithGrid = buildMethod(
     'mergeActualActivitiesWithGrid(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = \'\')',
@@ -284,7 +284,7 @@ test('buildActualModalActivities does not reseed missing planned labels when exi
     assert.deepEqual(result.map((item) => item.label), ['A']);
 });
 
-test('clampActualGridToAssigned removes active units for missing planned labels', () => {
+test('clampActualGridToAssigned locks tail units by total assigned deficit', () => {
     const ctx = {
         modalActualHasPlanUnits: true,
         modalActualPlanUnits: ['A', 'A', 'B', 'B'],
@@ -299,25 +299,27 @@ test('clampActualGridToAssigned removes active units for missing planned labels'
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
-        getActualAssignedSecondsMap() {
-            const map = new Map();
-            (this.modalActualActivities || []).forEach((item) => {
-                const label = this.normalizeActivityText(item.label || '');
-                if (!label) return;
-                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                map.set(label, (map.get(label) || 0) + seconds);
-            });
-            return map;
+    };
+
+    clampActualGridToAssigned.call(ctx);
+
+    assert.deepEqual(ctx.modalActualGridUnits, [true, true, false, false]);
+});
+
+test('clampActualGridToAssigned uses total assigned sum regardless label identity', () => {
+    const ctx = {
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: ['A', 'A', 'B', 'B'],
+        modalActualGridUnits: [true, true, true, true],
+        modalActualActivities: [
+            { label: 'B', seconds: 1200, source: 'grid' },
+        ],
+        modalActualPlanLabelSet: new Set(['A', 'B']),
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
         },
-        getActualGridUnitCounts(planUnits, actualUnits) {
-            const counts = new Map();
-            for (let i = 0; i < planUnits.length; i++) {
-                if (!actualUnits[i]) continue;
-                const label = this.normalizeActivityText(planUnits[i] || '');
-                if (!label) continue;
-                counts.set(label, (counts.get(label) || 0) + 1);
-            }
-            return counts;
+        normalizeActivityText(value) {
+            return String(value || '').trim();
         },
     };
 
@@ -498,6 +500,30 @@ test('buildExtraSlotAllocation fills from the tail when all planned units are av
     assert.equal(result.slotsByIndex[16], 'X');
     assert.equal(result.slotsByIndex[17], 'X');
     assert.deepEqual(result.slotsByLabel.get('X'), [17, 16, 15]);
+});
+
+test('buildExtraSlotAllocation never places extras into locked units', () => {
+    const ctx = {
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getExtraActivityUnitCount(item) {
+            const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return Math.floor(seconds / STEP_SECONDS);
+        },
+    };
+
+    const result = buildExtraSlotAllocation.call(
+        ctx,
+        ['A', 'A', 'A', 'A', 'A', 'A'],
+        [false, false, false, false, false, false],
+        [{ label: 'X', seconds: 3000, source: 'extra', recordedSeconds: 3000 }],
+        [0, 1, 2, 3, 4, 5],
+        [false, false, false, false, false, true]
+    );
+
+    assert.equal(result.slotsByIndex[5], '');
+    assert.deepEqual(result.slotsByLabel.get('X'), [4, 3, 2, 1, 0]);
 });
 
 test('mergeActualActivitiesWithGrid keeps planned assignment when existing list is empty', () => {
