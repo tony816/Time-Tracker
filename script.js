@@ -11368,6 +11368,10 @@ class TimeTracker {
             const remaining = Math.max(0, total - usedByOthers);
             this.modalActualActivities[newIndex].seconds = this.normalizeActualDurationStep(remaining);
         }
+        this.modalActualActivities.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') return;
+            item.order = idx;
+        });
         this.normalizeActualActivitiesToStep();
         this.clampActualGridToAssigned();
         this.renderActualActivitiesList();
@@ -11385,6 +11389,10 @@ class TimeTracker {
         } else {
             this.modalActualActiveRow = -1;
         }
+        this.modalActualActivities.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') return;
+            item.order = idx;
+        });
         this.modalActualDirty = true;
         this.normalizeActualActivitiesToStep();
         this.clampActualGridToAssigned();
@@ -11399,6 +11407,10 @@ class TimeTracker {
         const temp = items[index];
         items[index] = items[target];
         items[target] = temp;
+        items.forEach((item, idx) => {
+            if (!item || typeof item !== 'object') return;
+            item.order = idx;
+        });
         this.modalActualActiveRow = target;
         this.modalActualDirty = true;
         this.renderActualActivitiesList();

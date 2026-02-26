@@ -17,6 +17,10 @@ const removeActualActivityRow = buildMethod(
     'removeActualActivityRow(index)',
     '(index)'
 );
+const moveActualActivityRow = buildMethod(
+    'moveActualActivityRow(index, direction)',
+    '(index, direction)'
+);
 const applyActualDurationChange = buildMethod(
     'applyActualDurationChange(index, targetSeconds, options = {})',
     '(index, targetSeconds, options = {})'
@@ -184,6 +188,36 @@ test('removeActualActivityRow drops removed time without carrying over to others
         [600, 1800]
     );
     assert.equal(ctx.modalActualActiveRow, 1);
+});
+
+test('moveActualActivityRow reindexes order to match row order', () => {
+    const ctx = {
+        modalActualActivities: [
+            { label: 'A', seconds: 600, order: 0 },
+            { label: 'B', seconds: 1200, order: 1 },
+            { label: 'C', seconds: 1800, order: 2 },
+        ],
+        modalActualActiveRow: 1,
+        modalActualDirty: false,
+        isValidActualRow(index) {
+            return Number.isInteger(index) && index >= 0 && index < this.modalActualActivities.length;
+        },
+        renderActualActivitiesList() {},
+        focusActualRowLabel() {},
+    };
+
+    moveActualActivityRow.call(ctx, 1, -1);
+
+    assert.deepEqual(
+        ctx.modalActualActivities.map((item) => item.label),
+        ['B', 'A', 'C']
+    );
+    assert.deepEqual(
+        ctx.modalActualActivities.map((item) => item.order),
+        [0, 1, 2]
+    );
+    assert.equal(ctx.modalActualActiveRow, 0);
+    assert.equal(ctx.modalActualDirty, true);
 });
 
 test('adjustActualActivityDuration does not wrap down from zero to max', () => {
