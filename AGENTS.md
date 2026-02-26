@@ -73,3 +73,12 @@
 ## Notes for Contributors
 - The app is a static single-page app; avoid introducing build steps unless discussed.
 - State is kept in-memory plus `localStorage`; merged ranges are tracked via keys like `type-start-end`.
+
+## Vibe Coding Protocol v1
+- Follow fixed loop: `request -> impact scan -> small patch -> related tests -> report`.
+- Start each session with `npm test`; recover baseline before new tasks.
+- Keep patches single-intent and small by default.
+- Use `TaskBrief` format for requests: [`docs/templates/task-brief.md`](docs/templates/task-brief.md).
+- Use `DoneReport` format for results: [`docs/templates/done-report.md`](docs/templates/done-report.md).
+- Protocol reference: [`docs/vibe-coding-protocol-v1.md`](docs/vibe-coding-protocol-v1.md).
+- Keep local storage key compatibility for saves: `timesheetData:YYYY-MM-DD`, `timesheetData:last`.

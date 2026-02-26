@@ -1204,15 +1204,45 @@ class TimeTracker {
     }
 
     async saveData() {
-        this.setSaveStatus('info', 'Queued for Supabase sync');
+        this.setSaveStatus('info', 'Saving locally');
         this._hasPendingRemoteSync = true;
+        let mergedFieldsObject = {};
+        if (this.mergedFields instanceof Map) {
+            mergedFieldsObject = Object.fromEntries(this.mergedFields);
+        } else if (this.mergedFields && typeof this.mergedFields === 'object') {
+            mergedFieldsObject = { ...this.mergedFields };
+        }
+
+        let serializedSnapshot = '';
         try {
-            this._lastSavedSignature = JSON.stringify({
+            serializedSnapshot = JSON.stringify({
                 date: this.currentDate,
                 timeSlots: this.timeSlots,
-                mergedFields: Object.fromEntries(this.mergedFields)
+                mergedFields: mergedFieldsObject
             });
+            this._lastSavedSignature = serializedSnapshot;
         } catch (_) {}
+
+        let localSaved = false;
+        if (serializedSnapshot) {
+            try {
+                const storageAdapter = (typeof globalThis !== 'undefined'
+                    && globalThis.TimeTrackerStorage
+                    && typeof globalThis.TimeTrackerStorage.setTimesheetData === 'function')
+                    ? globalThis.TimeTrackerStorage
+                    : null;
+
+                if (storageAdapter) {
+                    localSaved = Boolean(storageAdapter.setTimesheetData(this.currentDate, serializedSnapshot));
+                } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+                    localStorage.setItem(`timesheetData:${this.currentDate}`, serializedSnapshot);
+                    localStorage.setItem('timesheetData:last', serializedSnapshot);
+                    localSaved = true;
+                }
+            } catch (_) {}
+        }
+
+        this.setSaveStatus(localSaved ? 'success' : 'warn', localSaved ? 'Saved locally' : 'Local save unavailable');
         try {
             this.setSyncStatus(
                 navigator.onLine ? 'info' : 'warn',
@@ -1244,9 +1274,82 @@ class TimeTracker {
     }
 
     async loadData() {
-        // Local persistence removed: initialize from defaults and hydrate from Supabase.
         this.generateTimeSlots();
         this.mergedFields.clear();
+
+        try {
+            let serialized = null;
+            const storageAdapter = (typeof globalThis !== 'undefined'
+                && globalThis.TimeTrackerStorage
+                && typeof globalThis.TimeTrackerStorage.getTimesheetData === 'function')
+                ? globalThis.TimeTrackerStorage
+                : null;
+
+            if (storageAdapter) {
+                serialized = storageAdapter.getTimesheetData(this.currentDate);
+            } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+                serialized = localStorage.getItem(`timesheetData:${this.currentDate}`) || localStorage.getItem('timesheetData:last');
+            }
+
+            if (serialized) {
+                const parsed = JSON.parse(serialized);
+                if (Array.isArray(parsed && parsed.timeSlots) && parsed.timeSlots.length > 0) {
+                    const nextSlots = this.createEmptyTimeSlots();
+                    parsed.timeSlots.slice(0, nextSlots.length).forEach((sourceSlot, index) => {
+                        if (!sourceSlot || typeof sourceSlot !== 'object') return;
+                        const targetSlot = nextSlots[index];
+                        targetSlot.planned = String(sourceSlot.planned || '');
+                        targetSlot.actual = String(sourceSlot.actual || '');
+                        targetSlot.planActivities = this.normalizePlanActivitiesArray(sourceSlot.planActivities);
+                        targetSlot.planTitle = this.normalizeActivityText
+                            ? this.normalizeActivityText(sourceSlot.planTitle || '')
+                            : String(sourceSlot.planTitle || '').trim();
+                        targetSlot.planTitleBandOn = Boolean(sourceSlot.planTitleBandOn);
+                        targetSlot.timer = {
+                            running: Boolean(sourceSlot.timer && sourceSlot.timer.running),
+                            elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
+                                ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
+                                : 0,
+                            startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
+                                ? sourceSlot.timer.startTime
+                                : null,
+                            method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
+                                ? 'pomodoro'
+                                : 'manual',
+                        };
+                        targetSlot.activityLog = {
+                            title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
+                            details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),
+                            subActivities: this.normalizeActivitiesArray(sourceSlot.activityLog && sourceSlot.activityLog.subActivities),
+                            titleBandOn: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.titleBandOn),
+                            actualGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualGridUnits)
+                                ? sourceSlot.activityLog.actualGridUnits.map(value => Boolean(value))
+                                : [],
+                            actualExtraGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualExtraGridUnits)
+                                ? sourceSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+                                : [],
+                            actualFailedGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualFailedGridUnits)
+                                ? sourceSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+                                : [],
+                            actualOverride: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.actualOverride),
+                        };
+                        this.normalizeActivityLog(targetSlot);
+                    });
+                    this.timeSlots = nextSlots;
+                }
+
+                const parsedMergedFields = (parsed && parsed.mergedFields && typeof parsed.mergedFields === 'object')
+                    ? parsed.mergedFields
+                    : {};
+                const nextMergedFields = new Map();
+                Object.entries(parsedMergedFields).forEach(([mergeKey, mergeValue]) => {
+                    const safeMergeKey = this.normalizeMergeKey ? this.normalizeMergeKey(mergeKey) : mergeKey;
+                    if (!safeMergeKey) return;
+                    nextMergedFields.set(safeMergeKey, String(mergeValue || ''));
+                });
+                this.mergedFields = nextMergedFields;
+            }
+        } catch (_) {}
 
         const routineApplied = this.applyRoutinesToDate
             ? this.applyRoutinesToDate(this.currentDate, { reason: 'load' })
