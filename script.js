@@ -4399,21 +4399,102 @@ class TimeTracker {
         }
         if (available.length === 0) return { slotsByIndex, slotsByLabel };
 
+        const orderedActivities = Array.isArray(arguments[5]) ? arguments[5] : null;
+        const planLabelSet = arguments[6] instanceof Set ? arguments[6] : null;
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const assignExtraUnit = (label, unitIndex) => {
+            slotsByIndex[unitIndex] = label;
+            if (!slotsByLabel.has(label)) slotsByLabel.set(label, []);
+            slotsByLabel.get(label).push(unitIndex);
+        };
+
+        let usedOrderAwareAllocation = false;
+        if (orderedActivities && planLabelSet) {
+            const remainingUnitsByLabel = new Map();
+            (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
+                if (!item) return;
+                const label = normalize(item.label || '');
+                if (!label) return;
+                const units = this.getExtraActivityUnitCount(item);
+                if (units <= 0) return;
+                remainingUnitsByLabel.set(label, (remainingUnitsByLabel.get(label) || 0) + units);
+            });
+
+            if (remainingUnitsByLabel.size > 0) {
+                let headCursor = 0;
+                let tailCursor = available.length - 1;
+                const hasPlanAfterIndex = (startIndex) => {
+                    for (let i = startIndex + 1; i < orderedActivities.length; i++) {
+                        const next = orderedActivities[i];
+                        if (!next) continue;
+                        const nextLabel = normalize(next.label || '');
+                        if (nextLabel && planLabelSet.has(nextLabel)) return true;
+                    }
+                    return false;
+                };
+
+                orderedActivities.forEach((item, idx) => {
+                    if (!item) return;
+                    const label = normalize(item.label || '');
+                    if (!label) return;
+                    if (planLabelSet.has(label)) return;
+
+                    let remainingForLabel = remainingUnitsByLabel.get(label) || 0;
+                    if (remainingForLabel <= 0) return;
+
+                    let units = this.getExtraActivityUnitCount(item);
+                    if (units <= 0) return;
+
+                    const placeFromHead = hasPlanAfterIndex(idx);
+                    while (units > 0 && remainingForLabel > 0 && headCursor <= tailCursor) {
+                        const unitIndex = placeFromHead
+                            ? available[headCursor++]
+                            : available[tailCursor--];
+                        assignExtraUnit(label, unitIndex);
+                        units -= 1;
+                        remainingForLabel -= 1;
+                        usedOrderAwareAllocation = true;
+                    }
+                    remainingUnitsByLabel.set(label, remainingForLabel);
+                });
+
+                if (headCursor <= tailCursor) {
+                    let cursor = tailCursor;
+                    (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
+                        if (!item) return;
+                        const label = normalize(item.label || '');
+                        if (!label) return;
+                        let units = remainingUnitsByLabel.get(label) || 0;
+                        while (units > 0 && cursor >= headCursor) {
+                            const unitIndex = available[cursor];
+                            cursor -= 1;
+                            units -= 1;
+                            assignExtraUnit(label, unitIndex);
+                            usedOrderAwareAllocation = true;
+                        }
+                        remainingUnitsByLabel.set(label, units);
+                    });
+                }
+            }
+        }
+
+        if (usedOrderAwareAllocation) {
+            return { slotsByIndex, slotsByLabel };
+        }
+
         let cursor = available.length - 1;
         (Array.isArray(extraActivities) ? extraActivities : []).forEach((item) => {
             if (!item) return;
-            const label = this.normalizeActivityText
-                ? this.normalizeActivityText(item.label || '')
-                : String(item.label || '').trim();
+            const label = normalize(item.label || '');
             if (!label) return;
             let units = this.getExtraActivityUnitCount(item);
             while (units > 0 && cursor >= 0) {
                 const unitIndex = available[cursor];
                 cursor -= 1;
                 units -= 1;
-                slotsByIndex[unitIndex] = label;
-                if (!slotsByLabel.has(label)) slotsByLabel.set(label, []);
-                slotsByLabel.get(label).push(unitIndex);
+                assignExtraUnit(label, unitIndex);
             }
         });
 
@@ -4930,7 +5011,15 @@ class TimeTracker {
             displayOrder = planUnits.map((_, idx) => idx);
         }
         const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
-        const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder, lockedUnits);
+        const allocation = this.buildExtraSlotAllocation(
+            planUnits,
+            actualUnits,
+            extras,
+            displayOrder,
+            lockedUnits,
+            orderedActual,
+            planLabelSet
+        );
         const labelSlots = allocation && allocation.slotsByLabel
             ? allocation.slotsByLabel.get(normalizedLabel)
             : null;
@@ -5317,7 +5406,15 @@ class TimeTracker {
                   if (displayOrder.length !== planUnits.length) {
                       displayOrder = planUnits.map((_, idx) => idx);
                   }
-                  const allocation = this.buildExtraSlotAllocation(planUnits, actualUnits, extras, displayOrder, lockedUnits);
+                  const allocation = this.buildExtraSlotAllocation(
+                      planUnits,
+                      actualUnits,
+                      extras,
+                      displayOrder,
+                      lockedUnits,
+                      orderedActual,
+                      planLabelSet
+                  );
                   const extraActiveUnits = this.buildExtraActiveGridUnits(
                       planUnits.length,
                       allocation,

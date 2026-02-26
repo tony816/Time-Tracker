@@ -560,6 +560,54 @@ test('buildExtraSlotAllocation never places extras into locked units', () => {
     assert.deepEqual(result.slotsByLabel.get('X'), [4, 3, 2, 1, 0]);
 });
 
+test('buildExtraSlotAllocation can follow row order relative to planned rows', () => {
+    const ctx = {
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getExtraActivityUnitCount(item) {
+            const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return Math.floor(seconds / STEP_SECONDS);
+        },
+    };
+
+    const planUnits = new Array(6).fill('A');
+    const actualUnits = new Array(6).fill(false);
+    const extraActivities = [{ label: 'X', seconds: 1800, source: 'extra', recordedSeconds: 1800 }];
+    const orderIndices = [0, 1, 2, 3, 4, 5];
+    const planLabelSet = new Set(['A']);
+
+    const extraFirst = buildExtraSlotAllocation.call(
+        ctx,
+        planUnits,
+        actualUnits,
+        extraActivities,
+        orderIndices,
+        null,
+        [
+            { label: 'X', seconds: 1800, source: 'extra' },
+            { label: 'A', seconds: 1800, source: 'grid' },
+        ],
+        planLabelSet
+    );
+    assert.deepEqual(extraFirst.slotsByIndex, ['X', 'X', 'X', '', '', '']);
+
+    const extraLast = buildExtraSlotAllocation.call(
+        ctx,
+        planUnits,
+        actualUnits,
+        extraActivities,
+        orderIndices,
+        null,
+        [
+            { label: 'A', seconds: 1800, source: 'grid' },
+            { label: 'X', seconds: 1800, source: 'extra' },
+        ],
+        planLabelSet
+    );
+    assert.deepEqual(extraLast.slotsByIndex, ['', '', '', 'X', 'X', 'X']);
+});
+
 test('mergeActualActivitiesWithGrid keeps planned assignment when existing list is empty', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
