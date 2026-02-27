@@ -362,6 +362,111 @@ test('clampActualGridToAssigned uses total assigned sum regardless label identit
     assert.deepEqual(ctx.modalActualGridUnits, [true, true, false, false]);
 });
 
+test('clampActualGridToAssigned creates one locked row with remaining seconds', () => {
+    const ctx = {
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: ['A', 'A', 'B', 'B'],
+        modalActualGridUnits: [true, true, true, true],
+        modalActualActivities: [
+            { label: 'A', seconds: 1200, source: 'grid' },
+        ],
+        modalActualPlanLabelSet: new Set(['A', 'B']),
+        modalActualDirty: false,
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualDurationStep(seconds) {
+            return normalizeToStep(seconds);
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+    };
+
+    clampActualGridToAssigned.call(ctx);
+
+    assert.deepEqual(ctx.modalActualGridUnits, [true, true, false, false]);
+    const lockedRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked');
+    assert.equal(lockedRows.length, 1);
+    assert.equal(lockedRows[0].label, '');
+    assert.equal(lockedRows[0].seconds, 1200);
+    assert.equal(lockedRows[0].recordedSeconds, 1200);
+    assert.deepEqual(
+        ctx.modalActualActivities.map((item) => item.order),
+        [0, 1]
+    );
+    assert.equal(ctx.modalActualDirty, true);
+});
+
+test('clampActualGridToAssigned is idempotent for locked row creation', () => {
+    const ctx = {
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: ['A', 'A', 'B', 'B'],
+        modalActualGridUnits: [true, true, true, true],
+        modalActualActivities: [
+            { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+        ],
+        modalActualPlanLabelSet: new Set(['A', 'B']),
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualDurationStep(seconds) {
+            return normalizeToStep(seconds);
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+    };
+
+    clampActualGridToAssigned.call(ctx);
+    const afterFirst = ctx.modalActualActivities.map((item) => ({ ...item }));
+
+    clampActualGridToAssigned.call(ctx);
+    const afterSecond = ctx.modalActualActivities.map((item) => ({ ...item }));
+
+    const lockedRows = afterSecond.filter((item) => item && item.source === 'locked');
+    assert.equal(lockedRows.length, 1);
+    assert.deepEqual(afterSecond, afterFirst);
+});
+
+test('clampActualGridToAssigned updates and removes locked row as deficit changes', () => {
+    const ctx = {
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: ['A', 'A', 'B', 'B'],
+        modalActualGridUnits: [true, true, true, true],
+        modalActualActivities: [
+            { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+        ],
+        modalActualPlanLabelSet: new Set(['A', 'B']),
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualDurationStep(seconds) {
+            return normalizeToStep(seconds);
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+    };
+
+    clampActualGridToAssigned.call(ctx);
+    let lockedRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked');
+    assert.equal(lockedRows[0].seconds, 1200);
+
+    ctx.modalActualActivities[0].seconds = 1800;
+    clampActualGridToAssigned.call(ctx);
+    lockedRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked');
+    assert.equal(lockedRows.length, 1);
+    assert.equal(lockedRows[0].seconds, 600);
+    assert.equal(lockedRows[0].recordedSeconds, 600);
+
+    ctx.modalActualActivities[0].seconds = 2400;
+    clampActualGridToAssigned.call(ctx);
+    lockedRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked');
+    assert.equal(lockedRows.length, 0);
+    assert.deepEqual(ctx.modalActualActivities.map((item) => item.order), [0]);
+});
+
 test('getActualGridLockedUnitsForBase unlocks when assigned time increases', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],

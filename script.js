@@ -10909,12 +10909,21 @@ class TimeTracker {
         let assignedUnitsTotal = 0;
         (this.modalActualActivities || []).forEach((item) => {
             if (!item) return;
+            if (item.source === 'locked') return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
             if (seconds <= 0) return;
             assignedUnitsTotal += Math.floor(seconds / step);
         });
         const allowedUnitsTotal = Math.max(0, Math.min(planUnits.length, assignedUnitsTotal));
         const lockedCount = Math.max(0, planUnits.length - allowedUnitsTotal);
+        const normalizeLockedSeconds = (seconds) => {
+            const raw = Number.isFinite(seconds) ? seconds : 0;
+            if (typeof this.normalizeActualDurationStep === 'function') {
+                return this.normalizeActualDurationStep(raw);
+            }
+            return Math.max(0, Math.floor(raw));
+        };
+        const lockedSeconds = normalizeLockedSeconds(lockedCount * step);
         for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
             if (!gridUnits[i]) continue;
             gridUnits[i] = false;
@@ -10926,6 +10935,70 @@ class TimeTracker {
         }
 
         if (Array.isArray(this.modalActualActivities)) {
+            let lockedIndex = -1;
+            const removeLockedIndices = [];
+            this.modalActualActivities.forEach((item, idx) => {
+                if (!item || item.source !== 'locked') return;
+                if (lockedIndex < 0) {
+                    lockedIndex = idx;
+                    return;
+                }
+                removeLockedIndices.push(idx);
+            });
+
+            let activityRowsChanged = false;
+            if (removeLockedIndices.length > 0) {
+                removeLockedIndices.sort((a, b) => b - a).forEach((idx) => {
+                    this.modalActualActivities.splice(idx, 1);
+                });
+                activityRowsChanged = true;
+                if (lockedIndex >= 0) {
+                    lockedIndex -= removeLockedIndices.filter((idx) => idx < lockedIndex).length;
+                }
+            }
+
+            if (lockedCount > 0) {
+                if (lockedIndex < 0) {
+                    this.modalActualActivities.push({
+                        label: '',
+                        seconds: lockedSeconds,
+                        recordedSeconds: lockedSeconds,
+                        source: 'locked',
+                    });
+                    lockedIndex = this.modalActualActivities.length - 1;
+                    activityRowsChanged = true;
+                } else {
+                    const lockedItem = this.modalActualActivities[lockedIndex];
+                    if (typeof lockedItem.label !== 'string' || lockedItem.label !== '') {
+                        lockedItem.label = '';
+                        activityRowsChanged = true;
+                    }
+                    if (lockedItem.seconds !== lockedSeconds) {
+                        lockedItem.seconds = lockedSeconds;
+                        activityRowsChanged = true;
+                    }
+                    if (lockedItem.recordedSeconds !== lockedSeconds) {
+                        lockedItem.recordedSeconds = lockedSeconds;
+                        activityRowsChanged = true;
+                    }
+                    if (lockedItem.source !== 'locked') {
+                        lockedItem.source = 'locked';
+                        activityRowsChanged = true;
+                    }
+                }
+            } else if (lockedIndex >= 0) {
+                this.modalActualActivities.splice(lockedIndex, 1);
+                activityRowsChanged = true;
+            }
+
+            if (activityRowsChanged) {
+                this.modalActualActivities.forEach((item, idx) => {
+                    if (!item || typeof item !== 'object') return;
+                    item.order = idx;
+                });
+                this.modalActualDirty = true;
+            }
+
             this.modalActualActivities.forEach((item) => {
                 if (!item) return;
                 const label = this.normalizeActivityText
