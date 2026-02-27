@@ -114,9 +114,6 @@ class TimeTracker {
         this.splitColorRegistry = new Map();
         this.splitColorUsed = new Set();
         this.splitColorSeed = 0;
-        this.ACTUAL_GRID_LONG_PRESS_MS = 450;
-        this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD = 10;
-        this.lastActualGridLongPress = null;
         this.saveStatusElement = null;
         this.syncStatusElement = null;
         this.notionStatusElement = null;
@@ -3416,12 +3413,6 @@ class TimeTracker {
                           event.stopPropagation();
                           return;
                       }
-                      const baseIndex = this.getSplitBaseIndex('actual', index);
-                      if (this.shouldSuppressActualGridClick(baseIndex, payload.unitIndex)) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          return;
-                      }
                       event.preventDefault();
                       event.stopPropagation();
                       if (payload.segment && payload.segment.classList && payload.segment.classList.contains('is-failed')) {
@@ -3435,127 +3426,6 @@ class TimeTracker {
                       }
                       this.toggleActualGridUnit(index, payload.unitIndex);
                   };
-
-                  const LONG_PRESS_MS = Number.isFinite(this.ACTUAL_GRID_LONG_PRESS_MS)
-                      ? this.ACTUAL_GRID_LONG_PRESS_MS
-                      : 450;
-                  const MOVE_THRESHOLD = Number.isFinite(this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD)
-                      ? this.ACTUAL_GRID_LONG_PRESS_MOVE_THRESHOLD
-                      : 10;
-
-                  let longPressTimer = null;
-                  let longPressState = null;
-
-                  const clearLongPress = () => {
-                      if (longPressTimer) {
-                          clearTimeout(longPressTimer);
-                          longPressTimer = null;
-                      }
-                      longPressState = null;
-                  };
-
-                  const cancelIfMoved = (clientX, clientY) => {
-                      if (!longPressState || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
-                      const dx = clientX - longPressState.startX;
-                      const dy = clientY - longPressState.startY;
-                      if (Math.hypot(dx, dy) >= MOVE_THRESHOLD) {
-                          clearLongPress();
-                      }
-                  };
-
-                  const beginLongPress = (payload, pointerId, clientX, clientY, pointerType = '') => {
-                      if (!payload || payload.locked) return;
-                      clearLongPress();
-                      longPressState = {
-                          unitIndex: payload.unitIndex,
-                          pointerId,
-                          pointerType,
-                          startX: Number.isFinite(clientX) ? clientX : 0,
-                          startY: Number.isFinite(clientY) ? clientY : 0,
-                          triggered: false,
-                      };
-                      longPressTimer = setTimeout(() => {
-                          if (!longPressState) return;
-                          const baseIndex = this.getSplitBaseIndex('actual', index);
-                          longPressState.triggered = true;
-                          this.markActualGridLongPress(baseIndex, longPressState.unitIndex);
-                          this.toggleActualFailedGridUnit(index, longPressState.unitIndex);
-                      }, LONG_PRESS_MS);
-                  };
-
-                  if (typeof window !== 'undefined' && 'PointerEvent' in window) {
-                      actualGrid.addEventListener('pointerdown', (event) => {
-                          if (event.button !== undefined && event.button !== 0) return;
-                          const payload = resolveSegmentPayload(event.target);
-                          if (!payload) return;
-                          beginLongPress(payload, event.pointerId, event.clientX, event.clientY, event.pointerType || '');
-                      });
-                      actualGrid.addEventListener('pointermove', (event) => {
-                          if (!longPressState) return;
-                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
-                          cancelIfMoved(event.clientX, event.clientY);
-                      });
-                      const endPointerLongPress = (event) => {
-                          if (!longPressState) return;
-                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
-                          const shouldBlockClick = longPressState.triggered;
-                          clearLongPress();
-                          if (shouldBlockClick) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                          }
-                      };
-                      actualGrid.addEventListener('pointerup', endPointerLongPress);
-                      actualGrid.addEventListener('pointercancel', () => clearLongPress());
-                      actualGrid.addEventListener('pointerleave', (event) => {
-                          if (!longPressState || longPressState.pointerType !== 'mouse') return;
-                          if (longPressState.pointerId !== null && event.pointerId !== longPressState.pointerId) return;
-                          clearLongPress();
-                      });
-                  } else {
-                      actualGrid.addEventListener('mousedown', (event) => {
-                          if (event.button !== 0) return;
-                          const payload = resolveSegmentPayload(event.target);
-                          if (!payload) return;
-                          beginLongPress(payload, null, event.clientX, event.clientY, 'mouse');
-                      });
-                      actualGrid.addEventListener('mousemove', (event) => {
-                          cancelIfMoved(event.clientX, event.clientY);
-                      });
-                      actualGrid.addEventListener('mouseup', (event) => {
-                          if (!longPressState) return;
-                          const shouldBlockClick = longPressState.triggered;
-                          clearLongPress();
-                          if (shouldBlockClick) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                          }
-                      });
-                      actualGrid.addEventListener('mouseleave', () => clearLongPress());
-
-                      actualGrid.addEventListener('touchstart', (event) => {
-                          if (!event.touches || event.touches.length !== 1) return;
-                          const payload = resolveSegmentPayload(event.target);
-                          if (!payload) return;
-                          const touch = event.touches[0];
-                          beginLongPress(payload, touch.identifier, touch.clientX, touch.clientY, 'touch');
-                      }, { passive: true });
-                      actualGrid.addEventListener('touchmove', (event) => {
-                          if (!longPressState || !event.touches || event.touches.length !== 1) return;
-                          const touch = event.touches[0];
-                          cancelIfMoved(touch.clientX, touch.clientY);
-                      }, { passive: true });
-                      actualGrid.addEventListener('touchend', (event) => {
-                          if (!longPressState) return;
-                          const shouldBlockClick = longPressState.triggered;
-                          clearLongPress();
-                          if (shouldBlockClick) {
-                              event.preventDefault();
-                              event.stopPropagation();
-                          }
-                      }, { passive: false });
-                      actualGrid.addEventListener('touchcancel', () => clearLongPress(), { passive: true });
-                  }
 
                   actualGrid.addEventListener('click', handleGridClick);
               }
@@ -4373,34 +4243,6 @@ class TimeTracker {
         if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
         if (safe.length < totalUnits) safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
         return safe;
-    }
-
-    markActualGridLongPress(baseIndex, unitIndex) {
-        this.lastActualGridLongPress = {
-            baseIndex: Number.isFinite(baseIndex) ? baseIndex : null,
-            unitIndex: Number.isFinite(unitIndex) ? unitIndex : null,
-            timestamp: Date.now(),
-        };
-    }
-
-    shouldSuppressActualGridClick(baseIndex, unitIndex) {
-        const info = this.lastActualGridLongPress;
-        if (!info || !Number.isFinite(info.timestamp)) return false;
-        if ((Date.now() - info.timestamp) > 1000) {
-            this.lastActualGridLongPress = null;
-            return false;
-        }
-        const sameBase = Number.isFinite(baseIndex) && info.baseIndex === baseIndex;
-        const sameUnit = Number.isFinite(unitIndex) && info.unitIndex === unitIndex;
-        const shouldSuppress = sameBase && sameUnit;
-        if (shouldSuppress) {
-            this.lastActualGridLongPress = null;
-            return true;
-        }
-        if (sameBase) {
-            this.lastActualGridLongPress = null;
-        }
-        return false;
     }
 
     getExtraActivityUnitCount(item) {
