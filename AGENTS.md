@@ -40,6 +40,7 @@
 - Current baseline uses `node:test` under `__tests__/`.
 - Add tests near related coverage and keep naming `*.test.js`.
 - For behavior changes, run related tests first, then run full suite with `npm test`.
+- 기본 체크는 `npm test` 실행 후 `desktop-commander`로 SPA를 띄우고 `playwright-mcp`를 사용해 UI 시나리오를 재현합니다.
 - Manual checks for UI-impact changes:
   - slot rendering
   - selection/merge/split behavior
@@ -82,7 +83,7 @@
 
 ## Vibe Coding Protocol v1
 - Fixed loop: `request -> impact scan -> small patch -> related tests -> report`.
-- Start each session with `npm test`; recover baseline before new feature work.
+- Start each session with `npm test` and a quick `desktop-commander` + `playwright-mcp` UI sanity check; recover baseline before new feature work.
 - Use request template: [`docs/templates/task-brief.md`](docs/templates/task-brief.md).
 - Use result template: [`docs/templates/done-report.md`](docs/templates/done-report.md).
 - Full protocol: [`docs/vibe-coding-protocol-v1.md`](docs/vibe-coding-protocol-v1.md).
