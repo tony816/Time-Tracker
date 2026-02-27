@@ -79,11 +79,6 @@
   - 금지 사항:
   - 테스트:
   - cetera(추가로 너가 더 입력해야 한다고 생각하는 것):
-- Only begin work after the user re-issues the request using the refined prompt.
 
-## Vibe Coding Protocol v1
-- Fixed loop: `request -> impact scan -> small patch -> related tests -> report`.
-- Start each session with `npm test` and a quick `desktop-commander` + `playwright-mcp` UI sanity check; recover baseline before new feature work.
-- Use request template: [`docs/templates/task-brief.md`](docs/templates/task-brief.md).
-- Use result template: [`docs/templates/done-report.md`](docs/templates/done-report.md).
-- Full protocol: [`docs/vibe-coding-protocol-v1.md`](docs/vibe-coding-protocol-v1.md).
+
+
