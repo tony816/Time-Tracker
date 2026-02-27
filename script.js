@@ -3404,13 +3404,97 @@ class TimeTracker {
                       const locked = segment.classList && segment.classList.contains('is-locked');
                       return { segment, unitIndex, extraLabel, locked };
                   };
-
+                  const LONGPRESS_MS = 320;
+                  const MOVE_THRESHOLD = 8;
+                  const pressState = {
+                      timer: null,
+                      pointerId: null,
+                      unitIndex: null,
+                      active: false,
+                      longPressed: false,
+                      suppressClick: false,
+                      x: 0,
+                      y: 0,
+                  };
+                  const clearPressState = () => {
+                      if (pressState.timer) {
+                          clearTimeout(pressState.timer);
+                      }
+                      pressState.timer = null;
+                      pressState.pointerId = null;
+                      pressState.unitIndex = null;
+                      pressState.active = false;
+                      pressState.longPressed = false;
+                  };
+                  const cancelPressState = () => {
+                      if (pressState.timer) {
+                          clearTimeout(pressState.timer);
+                      }
+                      pressState.timer = null;
+                      pressState.active = false;
+                      pressState.longPressed = false;
+                      pressState.pointerId = null;
+                      pressState.unitIndex = null;
+                  };
+                  const beginLongPress = (payload, clientX, clientY) => {
+                      if (!payload || !Number.isFinite(payload.unitIndex)) return;
+                      clearPressState();
+                      pressState.active = true;
+                      pressState.unitIndex = payload.unitIndex;
+                      pressState.x = clientX || 0;
+                      pressState.y = clientY || 0;
+                      pressState.suppressClick = false;
+                      pressState.longPressed = false;
+                      pressState.timer = setTimeout(() => {
+                          if (!pressState.active || pressState.unitIndex == null) return;
+                          pressState.longPressed = true;
+                          pressState.suppressClick = true;
+                          this.toggleActualGridLockedUnit(index, pressState.unitIndex);
+                      }, LONGPRESS_MS);
+                  };
+                  const startPress = (payload, event) => {
+                      if (!event || !payload) return;
+                      if (event.pointerType === 'mouse' && event.button !== 0) return;
+                      beginLongPress(payload, event.clientX, event.clientY);
+                  };
+                  const endPress = (event) => {
+                      if (!pressState.active) return;
+                      if (pressState.timer) {
+                          clearTimeout(pressState.timer);
+                          pressState.timer = null;
+                      }
+                      if (pressState.suppressClick) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          pressState.suppressClick = false;
+                      }
+                      pressState.active = false;
+                      pressState.pointerId = null;
+                      pressState.unitIndex = null;
+                      pressState.longPressed = false;
+                  };
+                  const moveCancelsPress = (clientX, clientY) => {
+                      if (!pressState.active || pressState.unitIndex == null) return;
+                      const dx = Math.abs(clientX - pressState.x);
+                      const dy = Math.abs(clientY - pressState.y);
+                      if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+                          cancelPressState();
+                          return;
+                      }
+                  };
                   const handleGridClick = (event) => {
                       const payload = resolveSegmentPayload(event.target);
                       if (!payload) return;
                       if (payload.locked) {
                           event.preventDefault();
                           event.stopPropagation();
+                          return;
+                      }
+                      if (pressState.suppressClick || pressState.longPressed) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          pressState.suppressClick = false;
+                          pressState.longPressed = false;
                           return;
                       }
                       event.preventDefault();
@@ -3428,6 +3512,53 @@ class TimeTracker {
                   };
 
                   actualGrid.addEventListener('click', handleGridClick);
+                  actualGrid.addEventListener('pointerdown', (event) => {
+                      const payload = resolveSegmentPayload(event.target);
+                      if (!payload) return;
+                      startPress(payload, event);
+                      pressState.pointerId = event.pointerId;
+                  }, { passive: true });
+                  actualGrid.addEventListener('pointermove', (event) => {
+                      if (!pressState.active) return;
+                      if (pressState.pointerId != null && event.pointerId !== pressState.pointerId) return;
+                      moveCancelsPress(event.clientX, event.clientY);
+                  }, { passive: true });
+                  actualGrid.addEventListener('pointerup', (event) => {
+                      if (!pressState.active) return;
+                      if (pressState.pointerId != null && event.pointerId !== pressState.pointerId) return;
+                      endPress(event);
+                  });
+                  actualGrid.addEventListener('pointercancel', cancelPressState);
+                  actualGrid.addEventListener('contextmenu', (event) => {
+                      if (pressState.suppressClick || pressState.longPressed) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          pressState.suppressClick = false;
+                          pressState.longPressed = false;
+                      }
+                  });
+                  actualGrid.addEventListener('touchstart', (event) => {
+                      if (!event.touches || event.touches.length !== 1) return;
+                      if (pressState.active) return;
+                      const touch = event.touches[0];
+                      const payload = resolveSegmentPayload(touch.target);
+                      if (!payload) return;
+                      beginLongPress(payload, touch.clientX, touch.clientY);
+                      pressState.pointerId = null;
+                  }, { passive: true });
+                  actualGrid.addEventListener('touchmove', (event) => {
+                      if (!event.touches || event.touches.length !== 1) {
+                          cancelPressState();
+                          return;
+                      }
+                      const touch = event.touches[0];
+                      moveCancelsPress(touch.clientX, touch.clientY);
+                  }, { passive: true });
+                  actualGrid.addEventListener('touchend', (event) => {
+                      if (!pressState.active) return;
+                      endPress(event);
+                  });
+                  actualGrid.addEventListener('touchcancel', cancelPressState);
               }
         }
     }
@@ -4127,6 +4258,167 @@ class TimeTracker {
         return units;
     }
 
+    isLockedActivityRow(item) {
+        return Boolean(item && item.source === 'locked');
+    }
+
+    isManualLockedActivityRow(item) {
+        if (!this.isLockedActivityRow(item)) return false;
+        if (item.isAutoLocked === false) return true;
+        const hasManualUnits = Array.isArray(item.lockUnits) && item.lockUnits.some((value) => Number.isFinite(value));
+        const hasManualRange = Number.isFinite(item.lockStart) || Number.isFinite(item.lockEnd);
+        return hasManualUnits || hasManualRange;
+    }
+
+    normalizeLockedUnitsFromRow(item, totalUnits = 0) {
+        const total = Math.max(0, Math.floor(totalUnits) || 0);
+        if (!this.isLockedActivityRow(item)) return [];
+        const seen = new Set();
+        const units = [];
+        const normalizeUnit = (value) => {
+            const unit = Number.isFinite(value) ? Math.floor(value) : null;
+            if (unit == null || unit < 0 || unit >= total) return null;
+            if (seen.has(unit)) return null;
+            seen.add(unit);
+            return unit;
+        };
+        const lockUnits = Array.isArray(item.lockUnits) ? item.lockUnits : null;
+        if (lockUnits) {
+            lockUnits.forEach((value) => {
+                const unit = normalizeUnit(Number(value));
+                if (unit == null) return;
+                units.push(unit);
+            });
+            return units.sort((a, b) => a - b);
+        }
+
+        if (Number.isFinite(item.lockStart) || Number.isFinite(item.lockEnd)) {
+            const lockStart = Math.floor(Number(item.lockStart));
+            const lockEnd = Math.floor(Number(item.lockEnd));
+            if (Number.isFinite(lockStart) && Number.isFinite(lockEnd)) {
+                const start = Math.max(0, Math.min(lockStart, lockEnd));
+                const end = Math.min(total - 1, Math.max(lockStart, lockEnd));
+                for (let unit = start; unit <= end; unit++) {
+                    units.push(unit);
+                    seen.add(unit);
+                }
+                return units;
+            }
+        }
+
+        return [];
+    }
+
+    extractLockedRowsFromActivities(activities = [], totalUnits = 0) {
+        const total = Math.max(0, Math.floor(totalUnits) || 0);
+        const manualRows = [];
+        const autoRows = [];
+        const manualRowsByIndex = new Set();
+        const autoRowsByIndex = new Set();
+        const manualMask = new Array(total).fill(false);
+        const autoMask = new Array(total).fill(false);
+        const isManual = (item) => this.isManualLockedActivityRow
+            ? this.isManualLockedActivityRow(item)
+            : (item && item.source === 'locked' && item.isAutoLocked === false);
+
+        const safeRows = Array.isArray(activities) ? activities : [];
+        safeRows.forEach((item, sourceIndex) => {
+            if (!this.isLockedActivityRow(item)) return;
+            const rowUnits = this.normalizeLockedUnitsFromRow(item, total);
+            const targetRows = isManual(item) ? manualRows : autoRows;
+            const targetSet = isManual(item) ? manualRowsByIndex : autoRowsByIndex;
+            const targetMask = isManual(item) ? manualMask : autoMask;
+            const pushRow = {
+                sourceIndex,
+                sourceRow: item,
+                unitList: rowUnits.slice(),
+                lockStart: rowUnits.length > 0 ? rowUnits[0] : null,
+                lockEnd: rowUnits.length > 0 ? rowUnits[rowUnits.length - 1] : null,
+                hasUnits: rowUnits.length > 0,
+            };
+            targetRows.push(pushRow);
+            targetSet.add(sourceIndex);
+            rowUnits.forEach((unit) => {
+                if (unit >= 0 && unit < total) {
+                    targetMask[unit] = true;
+                }
+            });
+        });
+
+        return {
+            manualRows,
+            autoRows,
+            manualRowsByIndex,
+            autoRowsByIndex,
+            manualMask,
+            autoMask,
+            manualCount: manualMask.reduce((sum, value) => sum + (value ? 1 : 0), 0),
+            autoCount: autoMask.reduce((sum, value) => sum + (value ? 1 : 0), 0),
+        };
+    }
+
+    rebuildLockedRowsFromUnitSet(unitMask = [], options = {}) {
+        const units = Array.isArray(unitMask) ? unitMask.map(value => Boolean(value)) : [];
+        const isAutoLocked = options.isAutoLocked === true;
+        const allowSegments = options.allowSegments !== false;
+        const step = Number.isFinite(this.getActualDurationStepSeconds())
+            ? this.getActualDurationStepSeconds()
+            : 600;
+        const normalizeDurationStep = (value) => {
+            const raw = Number.isFinite(value) ? Math.floor(value) : 0;
+            return this.normalizeActualDurationStep(raw);
+        };
+        const rows = [];
+        const activeUnits = [];
+        for (let i = 0; i < units.length; i++) {
+            if (units[i]) {
+                activeUnits.push(i);
+            }
+        }
+        if (activeUnits.length === 0) return rows;
+        if (isAutoLocked && !allowSegments) {
+            const first = activeUnits[0];
+            const last = activeUnits[activeUnits.length - 1];
+            const seconds = normalizeDurationStep(activeUnits.length * step);
+            rows.push({
+                label: '',
+                seconds,
+                recordedSeconds: seconds,
+                source: 'locked',
+                isAutoLocked,
+                lockStart: first,
+                lockEnd: last,
+                lockUnits: activeUnits.slice(),
+            });
+            return rows;
+        }
+        for (let index = 0; index < units.length; index++) {
+            if (!units[index]) continue;
+            let end = index;
+            while (end + 1 < units.length && units[end + 1]) {
+                end += 1;
+            }
+            const length = end - index + 1;
+            const seconds = normalizeDurationStep(length * step);
+            const lockUnits = [];
+            for (let unit = index; unit <= end; unit++) {
+                lockUnits.push(unit);
+            }
+            rows.push({
+                label: '',
+                seconds,
+                recordedSeconds: seconds,
+                source: 'locked',
+                isAutoLocked,
+                lockStart: index,
+                lockEnd: end,
+                lockUnits,
+            });
+            index = end;
+        }
+        return rows;
+    }
+
     getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null) {
         const units = Array.isArray(planUnits) ? planUnits.slice() : [];
         if (units.length === 0) return [];
@@ -4134,15 +4426,34 @@ class TimeTracker {
         const normalize = (value) => this.normalizeActivityText
             ? this.normalizeActivityText(value || '')
             : String(value || '').trim();
+        const normalizeActivities = (raw) => {
+            if (typeof this.normalizeActivitiesArray === 'function') {
+                return this.normalizeActivitiesArray(raw);
+            }
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        };
+        const isManualLocked = (item) => {
+            if (typeof this.isManualLockedActivityRow === 'function') {
+                return this.isManualLockedActivityRow(item);
+            }
+            return item && item.source === 'locked' && item.isAutoLocked === false;
+        };
+
         const sourceActivities = Array.isArray(activities)
             ? activities
-            : this.normalizeActivitiesArray(slot && slot.activityLog && slot.activityLog.subActivities);
+            : normalizeActivities(slot && slot.activityLog && slot.activityLog.subActivities);
         if (!Array.isArray(sourceActivities) || sourceActivities.length === 0) {
             return new Array(units.length).fill(false);
         }
+        const lockData = this.extractLockedRowsFromActivities(sourceActivities, units.length);
+        const manualMask = Array.isArray(lockData.manualMask) ? lockData.manualMask : new Array(units.length).fill(false);
+
+        const nonManualActivities = (Array.isArray(sourceActivities) ? sourceActivities : []).filter(
+            (item) => !isManualLocked(item)
+        );
         const step = this.getActualDurationStepSeconds();
         let assignedUnitsTotal = 0;
-        (Array.isArray(sourceActivities) ? sourceActivities : []).forEach((item) => {
+        (Array.isArray(nonManualActivities) ? nonManualActivities : []).forEach((item) => {
             if (!item) return;
             if (item.source === 'locked') return;
             const label = normalize(item.label || '');
@@ -4151,17 +4462,36 @@ class TimeTracker {
             const unitsCount = seconds > 0 ? Math.floor(seconds / step) : 0;
             assignedUnitsTotal += unitsCount;
         });
-        const lockedUnits = new Array(units.length).fill(false);
+        const lockedUnits = manualMask.slice(0);
         const allowedUnitsTotal = Math.max(0, Math.min(units.length, assignedUnitsTotal));
         const lockedCount = Math.max(0, units.length - allowedUnitsTotal);
         if (lockedCount <= 0) {
             return lockedUnits;
         }
 
-        const lockedRowIndex = sourceActivities.findIndex((item) => item && item.source === 'locked');
-        if (lockedRowIndex < 0) {
-            for (let i = units.length - 1; i >= 0 && (units.length - 1 - i) < lockedCount; i--) {
-                lockedUnits[i] = true;
+        let displayOrder = this.getActualGridDisplayOrderIndices
+            ? this.getActualGridDisplayOrderIndices(units, nonManualActivities, new Set())
+            : units.map((_, idx) => idx);
+        if (!Array.isArray(displayOrder) || displayOrder.length !== units.length) {
+            displayOrder = units.map((_, idx) => idx);
+        }
+        const selectableOrder = displayOrder.filter((unitIndex) => {
+            return Number.isInteger(unitIndex) && unitIndex >= 0 && unitIndex < units.length && !manualMask[unitIndex];
+        });
+
+        const hasLockedRow = nonManualActivities.some((item) => item && item.source === 'locked');
+        const autoSelectOrder = selectableOrder.slice();
+        if (autoSelectOrder.length === 0) {
+            return lockedUnits;
+        }
+
+        if (!hasLockedRow) {
+            const count = Math.min(lockedCount, autoSelectOrder.length);
+            for (let i = 0; i < count; i++) {
+                const visualPos = autoSelectOrder.length - 1 - i;
+                const unitIndex = autoSelectOrder[visualPos];
+                if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
+                lockedUnits[unitIndex] = true;
             }
             return lockedUnits;
         }
@@ -4171,11 +4501,23 @@ class TimeTracker {
             const normalizedLabel = normalize(label || '');
             if (normalizedLabel) planLabelSet.add(normalizedLabel);
         });
-        let displayOrder = this.getActualGridDisplayOrderIndices
-            ? this.getActualGridDisplayOrderIndices(units, sourceActivities, planLabelSet)
+        displayOrder = this.getActualGridDisplayOrderIndices
+            ? this.getActualGridDisplayOrderIndices(units, nonManualActivities, planLabelSet)
             : units.map((_, idx) => idx);
         if (!Array.isArray(displayOrder) || displayOrder.length !== units.length) {
             displayOrder = units.map((_, idx) => idx);
+        }
+
+        const lockedRowIndex = nonManualActivities.findIndex((item) => item && item.source === 'locked');
+        if (lockedRowIndex < 0) {
+            for (let i = autoSelectOrder.length - 1;
+                i >= 0 && (autoSelectOrder.length - 1 - i) < lockedCount;
+                i--) {
+                const unitIndex = autoSelectOrder[i];
+                if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
+                lockedUnits[unitIndex] = true;
+            }
+            return lockedUnits;
         }
 
         const labelsBeforeLocked = new Set();
@@ -4196,15 +4538,26 @@ class TimeTracker {
             }, 0);
         }
         if (startAt >= units.length) {
-            startAt = Math.max(0, units.length - lockedCount);
+            startAt = Math.max(0, autoSelectOrder.length - lockedCount);
         }
 
+        let selectCount = 0;
         for (let offset = 0; offset < lockedCount; offset++) {
             const visualPos = startAt + offset;
-            if (visualPos < 0 || visualPos >= displayOrder.length) break;
-            const unitIndex = displayOrder[visualPos];
+            if (visualPos < 0 || visualPos >= autoSelectOrder.length) break;
+            const unitIndex = autoSelectOrder[visualPos];
             if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
             lockedUnits[unitIndex] = true;
+            selectCount += 1;
+        }
+
+        if (selectCount < lockedCount && lockedUnits.length > 0) {
+            const fallbackCount = lockedCount - selectCount;
+            for (let i = autoSelectOrder.length - 1; i >= 0 && (autoSelectOrder.length - 1 - i) < fallbackCount; i--) {
+                const unitIndex = autoSelectOrder[i];
+                if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
+                lockedUnits[unitIndex] = true;
+            }
         }
 
         return lockedUnits;
@@ -4785,6 +5138,95 @@ class TimeTracker {
             actualUnits[i] = i < start + newCount;
         }
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+    }
+
+    toggleActualGridLockedUnit(index, unitIndex) {
+        const baseIndex = this.getSplitBaseIndex('actual', index);
+        const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
+        if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
+        if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+
+        const slot = this.timeSlots[baseIndex];
+        if (!slot) return;
+        if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+            slot.activityLog = {
+                title: '',
+                details: '',
+                subActivities: [],
+                titleBandOn: false,
+                actualGridUnits: [],
+                actualExtraGridUnits: [],
+                actualFailedGridUnits: [],
+                actualOverride: false,
+            };
+        }
+
+        const rawSub = Array.isArray(slot.activityLog.subActivities) ? slot.activityLog.subActivities : [];
+        const normalizeActivities = (raw) => {
+            if (typeof this.normalizeActivitiesArray === 'function') {
+                return this.normalizeActivitiesArray(raw);
+            }
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        };
+        const isManualLocked = (item) => {
+            if (typeof this.isManualLockedActivityRow === 'function') {
+                return this.isManualLockedActivityRow(item);
+            }
+            return item && item.source === 'locked' && item.isAutoLocked === false;
+        };
+        const normalized = normalizeActivities(rawSub).map((item) => ({ ...item }));
+        if (!Array.isArray(normalized)) return;
+
+        const lockData = this.extractLockedRowsFromActivities(normalized, planContext.units.length);
+        const manualMask = Array.isArray(lockData.manualMask)
+            ? lockData.manualMask.slice(0)
+            : new Array(planContext.units.length).fill(false);
+        manualMask[unitIndex] = !Boolean(manualMask[unitIndex]);
+
+        const nonLockedRows = normalized.filter((item) => !this.isLockedActivityRow(item));
+        const existingAutoRows = normalized.filter((item) => this.isLockedActivityRow(item) && !isManualLocked(item));
+        const hasExistingAuto = existingAutoRows.length > 0;
+        let autoMask = new Array(planContext.units.length).fill(false);
+
+        if (hasExistingAuto) {
+            const existingAutoMask = Array.isArray(lockData.autoMask) ? lockData.autoMask : autoMask;
+            autoMask = existingAutoMask.map((value, idx) => Boolean(value && !manualMask[idx]));
+        } else {
+            const autoCandidates = [...nonLockedRows, ...existingAutoRows];
+            const mergedLockedMask = this.getActualGridLockedUnitsForBase(baseIndex, planContext.units, autoCandidates);
+            const safeMerged = Array.isArray(mergedLockedMask) ? mergedLockedMask.map(value => Boolean(value)) : [];
+            autoMask = safeMerged.map((value, idx) => Boolean(value && !manualMask[idx]));
+        }
+
+        const manualRows = this.rebuildLockedRowsFromUnitSet(manualMask, { isAutoLocked: false });
+        const autoRowsFromMask = this.rebuildLockedRowsFromUnitSet(autoMask, {
+            isAutoLocked: true,
+            allowSegments: false,
+        });
+
+        const nextActivities = nonLockedRows.concat(manualRows).concat(autoRowsFromMask);
+        nextActivities.forEach((item, idx) => {
+            if (item && item.source === 'locked') {
+                if (Number.isFinite(item.seconds)) {
+                    item.seconds = this.normalizeActualDurationStep(item.seconds);
+                }
+                if (Number.isFinite(item.recordedSeconds)) {
+                    item.recordedSeconds = this.normalizeActualDurationStep(item.recordedSeconds);
+                }
+            }
+        });
+        slot.activityLog.subActivities = nextActivities.map((item) => ({ ...item }));
+
+        if (this.modalActualBaseIndex === baseIndex && this.modalActualHasPlanUnits) {
+            this.modalActualActivities = slot.activityLog.subActivities.map((item) => ({ ...item }));
+            this.modalActualDirty = true;
+            this.clampActualGridToAssigned();
+            this.renderActualActivitiesList();
+        }
+
         this.renderTimeEntries(true);
         this.calculateTotals();
         this.autoSave();
@@ -10578,9 +11020,31 @@ class TimeTracker {
                 if (order != null) {
                     normalized.order = order;
                 }
+                if (item.isAutoLocked === false) {
+                    normalized.isAutoLocked = false;
+                } else if (item.isAutoLocked === true) {
+                    normalized.isAutoLocked = true;
+                }
+                const normalizedLockStart = Number.isFinite(item.lockStart)
+                    ? Math.floor(item.lockStart)
+                    : null;
+                const normalizedLockEnd = Number.isFinite(item.lockEnd)
+                    ? Math.floor(item.lockEnd)
+                    : null;
+                if (normalizedLockStart != null) {
+                    normalized.lockStart = normalizedLockStart;
+                }
+                if (normalizedLockEnd != null) {
+                    normalized.lockEnd = normalizedLockEnd;
+                }
+                if (Array.isArray(item.lockUnits)) {
+                    normalized.lockUnits = item.lockUnits
+                        .filter((value) => Number.isFinite(value))
+                        .map((value) => Math.floor(value));
+                }
                 return normalized;
             })
-            .filter(item => item.label || item.seconds > 0);
+            .filter(item => item.label || item.seconds > 0 || item.source === 'locked');
     }
 
     sortActivitiesByOrder(list) {
@@ -10785,6 +11249,19 @@ class TimeTracker {
         if (!this.modalActualHasPlanUnits) return;
         const planUnits = Array.isArray(this.modalActualPlanUnits) ? this.modalActualPlanUnits : [];
         if (planUnits.length === 0) return;
+        const isLockedRow = (item) => item && item.source === 'locked';
+        const isManualLocked = (item) => {
+            if (typeof this.isManualLockedActivityRow === 'function') {
+                return this.isManualLockedActivityRow(item);
+            }
+            return isLockedRow(item) && item.isAutoLocked === false;
+        };
+        const normalizeActivities = (raw) => {
+            if (typeof this.normalizeActivitiesArray === 'function') {
+                return this.normalizeActivitiesArray(raw);
+            }
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        };
         const rawGridUnits = Array.isArray(this.modalActualGridUnits)
             ? this.modalActualGridUnits.map(value => Boolean(value))
             : [];
@@ -10798,30 +11275,87 @@ class TimeTracker {
             || rawGridUnits.some((value, idx) => value !== gridUnits[idx]);
 
         const step = this.getActualDurationStepSeconds();
+        const normalizedActivities = normalizeActivities(this.modalActualActivities);
+        const normalizeDurationStep = (raw) => {
+            const value = Number.isFinite(raw) ? Math.floor(raw) : 0;
+            if (typeof this.normalizeActualDurationStep === 'function') {
+                return this.normalizeActualDurationStep(value);
+            }
+            return Math.max(0, value);
+        };
+        const buildAutoLockRowsFromMask = (mask, options = {}) => {
+            const safeMask = Array.isArray(mask) ? mask.map(value => Boolean(value)) : [];
+            if (typeof this.rebuildLockedRowsFromUnitSet === 'function') {
+                return this.rebuildLockedRowsFromUnitSet(safeMask, options);
+            }
+            const rows = [];
+            const activeUnits = [];
+            for (let i = 0; i < safeMask.length; i++) {
+                if (safeMask[i]) {
+                    activeUnits.push(i);
+                }
+            }
+            if (activeUnits.length <= 0) return rows;
+            const first = activeUnits[0];
+            const last = activeUnits[activeUnits.length - 1];
+            const seconds = normalizeDurationStep(activeUnits.length * step);
+            if (options.isAutoLocked) {
+                rows.push({
+                    label: '',
+                    seconds,
+                    recordedSeconds: seconds,
+                    source: 'locked',
+                    isAutoLocked: true,
+                    lockStart: first,
+                    lockEnd: last,
+                    lockUnits: activeUnits.slice(),
+                });
+            } else {
+                let index = 0;
+                while (index < safeMask.length) {
+                    if (!safeMask[index]) {
+                        index += 1;
+                        continue;
+                    }
+                    let end = index;
+                    while (end + 1 < safeMask.length && safeMask[end + 1]) {
+                        end += 1;
+                    }
+                    const lockUnits = [];
+                    for (let i = index; i <= end; i++) {
+                        lockUnits.push(i);
+                    }
+                    rows.push({
+                        label: '',
+                        seconds: normalizeDurationStep(lockUnits.length * step),
+                        recordedSeconds: normalizeDurationStep(lockUnits.length * step),
+                        source: 'locked',
+                        isAutoLocked: false,
+                        lockStart: index,
+                        lockEnd: end,
+                        lockUnits,
+                    });
+                    index = end + 1;
+                }
+            }
+            return rows;
+        };
         let assignedUnitsTotal = 0;
-        (this.modalActualActivities || []).forEach((item) => {
-            if (!item) return;
-            if (item.source === 'locked') return;
+        (Array.isArray(normalizedActivities) ? normalizedActivities : []).forEach((item) => {
+            if (!item || isLockedRow(item)) return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
             if (seconds <= 0) return;
             assignedUnitsTotal += Math.floor(seconds / step);
         });
+
         const allowedUnitsTotal = Math.max(0, Math.min(planUnits.length, assignedUnitsTotal));
         const lockedCount = Math.max(0, planUnits.length - allowedUnitsTotal);
-        const normalizeLockedSeconds = (seconds) => {
-            const raw = Number.isFinite(seconds) ? seconds : 0;
-            if (typeof this.normalizeActualDurationStep === 'function') {
-                return this.normalizeActualDurationStep(raw);
-            }
-            return Math.max(0, Math.floor(raw));
-        };
-        const lockedSeconds = normalizeLockedSeconds(lockedCount * step);
         let lockedMask = new Array(planUnits.length).fill(false);
         if (typeof this.getActualGridLockedUnitsForBase === 'function') {
             lockedMask = this.getActualGridLockedUnitsForBase(
                 this.modalActualBaseIndex,
                 planUnits,
-                this.modalActualActivities
+                normalizedActivities
             );
         } else if (lockedCount > 0) {
             for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
@@ -10834,6 +11368,11 @@ class TimeTracker {
                 lockedMask[i] = true;
             }
         }
+
+        const manualMask = Array.isArray(this.extractLockedRowsFromActivities)
+            ? this.extractLockedRowsFromActivities(normalizedActivities, planUnits.length).manualMask
+            : new Array(planUnits.length).fill(false);
+        const autoMask = lockedMask.map((isLocked, idx) => Boolean(isLocked && !manualMask[idx]));
 
         lockedMask.forEach((isLocked, idx) => {
             if (!isLocked || !gridUnits[idx]) return;
@@ -10853,63 +11392,39 @@ class TimeTracker {
         }
 
         if (Array.isArray(this.modalActualActivities)) {
-            let lockedIndex = -1;
-            const removeLockedIndices = [];
-            this.modalActualActivities.forEach((item, idx) => {
-                if (!item || item.source !== 'locked') return;
-                if (lockedIndex < 0) {
-                    lockedIndex = idx;
-                    return;
+            const nonLockedRows = (Array.isArray(normalizedActivities) ? normalizedActivities : []).filter((item) => !isLockedRow(item));
+            const manualRows = (Array.isArray(normalizedActivities) ? normalizedActivities : []).filter((item) => isManualLocked(item));
+            const autoRows = buildAutoLockRowsFromMask(autoMask, { isAutoLocked: true, allowSegments: false });
+            const nextActivities = nonLockedRows.concat(manualRows).concat(autoRows);
+
+            const before = (Array.isArray(this.modalActualActivities) ? this.modalActualActivities : []).length;
+            const after = nextActivities.length;
+            let activityRowsChanged = before !== after;
+            if (!activityRowsChanged) {
+                for (let i = 0; i < after; i++) {
+                    const prev = this.modalActualActivities[i];
+                    const next = nextActivities[i];
+                    if (!prev || !next) {
+                        activityRowsChanged = true;
+                        break;
+                    }
+                    if (prev.source !== next.source) {
+                        activityRowsChanged = true;
+                        break;
+                    }
+                    if (prev.order !== i) {
+                        activityRowsChanged = true;
+                        break;
+                    }
                 }
-                removeLockedIndices.push(idx);
+            }
+
+            const hasMissingOrder = nextActivities.some((item, idx) => {
+                return !item || item.order !== idx;
             });
 
-            let activityRowsChanged = false;
-            if (removeLockedIndices.length > 0) {
-                removeLockedIndices.sort((a, b) => b - a).forEach((idx) => {
-                    this.modalActualActivities.splice(idx, 1);
-                });
-                activityRowsChanged = true;
-                if (lockedIndex >= 0) {
-                    lockedIndex -= removeLockedIndices.filter((idx) => idx < lockedIndex).length;
-                }
-            }
-
-            if (lockedCount > 0) {
-                if (lockedIndex < 0) {
-                    this.modalActualActivities.push({
-                        label: '',
-                        seconds: lockedSeconds,
-                        recordedSeconds: lockedSeconds,
-                        source: 'locked',
-                    });
-                    lockedIndex = this.modalActualActivities.length - 1;
-                    activityRowsChanged = true;
-                } else {
-                    const lockedItem = this.modalActualActivities[lockedIndex];
-                    if (typeof lockedItem.label !== 'string' || lockedItem.label !== '') {
-                        lockedItem.label = '';
-                        activityRowsChanged = true;
-                    }
-                    if (lockedItem.seconds !== lockedSeconds) {
-                        lockedItem.seconds = lockedSeconds;
-                        activityRowsChanged = true;
-                    }
-                    if (lockedItem.recordedSeconds !== lockedSeconds) {
-                        lockedItem.recordedSeconds = lockedSeconds;
-                        activityRowsChanged = true;
-                    }
-                    if (lockedItem.source !== 'locked') {
-                        lockedItem.source = 'locked';
-                        activityRowsChanged = true;
-                    }
-                }
-            } else if (lockedIndex >= 0) {
-                this.modalActualActivities.splice(lockedIndex, 1);
-                activityRowsChanged = true;
-            }
-
-            if (activityRowsChanged) {
+            this.modalActualActivities = nextActivities.map((item) => (item && typeof item === 'object' ? { ...item } : item));
+            if (activityRowsChanged || hasMissingOrder) {
                 this.modalActualActivities.forEach((item, idx) => {
                     if (!item || typeof item !== 'object') return;
                     item.order = idx;
@@ -11346,8 +11861,10 @@ class TimeTracker {
         (this.modalActualActivities || []).forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'sub-activity-row actual-row';
+            const isLockedRow = item && item.source === 'locked';
             row.dataset.index = String(idx);
             if (idx === this.modalActualActiveRow) row.classList.add('active');
+            if (isLockedRow) row.classList.add('actual-row-locked');
 
             const labelButton = document.createElement('button');
             labelButton.type = 'button';
@@ -11372,7 +11889,7 @@ class TimeTracker {
             const gridSeconds = isPlanLabel
                 ? (gridSecondsMap.get(normalizedLabel) || 0)
                 : recordedSeconds;
-            const gridDisabled = !this.modalActualHasPlanUnits
+            const gridDisabled = isLockedRow || !this.modalActualHasPlanUnits
                 || !normalizedLabel
                 || (!isPlanLabel && !isExtraLabel);
             const gridControl = this.createActualTimeControl({
@@ -11388,7 +11905,8 @@ class TimeTracker {
                 kind: 'assign',
                 index: idx,
                 seconds: safeSeconds,
-                label: normalizedLabel
+                label: normalizedLabel,
+                disabled: isLockedRow
             });
 
             const actions = document.createElement('div');
@@ -11399,20 +11917,20 @@ class TimeTracker {
             upBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
             upBtn.dataset.direction = 'up';
             upBtn.textContent = '위';
-            upBtn.disabled = idx === 0;
+            upBtn.disabled = isLockedRow || idx === 0;
 
             const downBtn = document.createElement('button');
             downBtn.type = 'button';
             downBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
             downBtn.dataset.direction = 'down';
             downBtn.textContent = '아래';
-            downBtn.disabled = idx >= (this.modalActualActivities.length - 1);
+            downBtn.disabled = isLockedRow || idx >= (this.modalActualActivities.length - 1);
 
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'actual-remove-btn';
             removeBtn.textContent = '삭제';
-            removeBtn.disabled = (this.modalActualActivities.length <= 1);
+            removeBtn.disabled = isLockedRow || (this.modalActualActivities.length <= 1);
 
             actions.appendChild(upBtn);
             actions.appendChild(downBtn);
@@ -12214,6 +12732,9 @@ class TimeTracker {
                     const direction = timeBtn.dataset.direction === 'up' ? 1 : -1;
                     const idx = parseInt(timeBtn.dataset.index, 10);
                     const kind = timeBtn.dataset.kind;
+                    const row = timeBtn.closest('.sub-activity-row');
+                    const locked = row && row.classList.contains('actual-row-locked');
+                    if (locked) return;
                     if (Number.isFinite(idx)) {
                         this.setActualActiveRow(idx);
                         if (kind === 'grid') {
@@ -12228,6 +12749,7 @@ class TimeTracker {
                 const moveBtn = event.target.closest('.actual-move-btn');
                 if (moveBtn) {
                     const row = moveBtn.closest('.sub-activity-row');
+                    if (!row || row.classList.contains('actual-row-locked')) return;
                     const idx = row ? parseInt(row.dataset.index, 10) : NaN;
                     const direction = moveBtn.dataset.direction === 'up' ? -1 : 1;
                     if (Number.isFinite(idx)) {
@@ -12239,6 +12761,7 @@ class TimeTracker {
                 const removeBtn = event.target.closest('.actual-remove-btn');
                 if (removeBtn) {
                     const row = removeBtn.closest('.sub-activity-row');
+                    if (!row || row.classList.contains('actual-row-locked')) return;
                     const idx = row ? parseInt(row.dataset.index, 10) : NaN;
                     if (Number.isFinite(idx)) {
                         this.removeActualActivityRow(idx);
@@ -12249,6 +12772,7 @@ class TimeTracker {
                 const labelBtn = event.target.closest('.actual-activity-label');
                 if (labelBtn) {
                     const row = labelBtn.closest('.sub-activity-row');
+                    if (!row || row.classList.contains('actual-row-locked')) return;
                     const idx = row ? parseInt(row.dataset.index, 10) : NaN;
                     if (Number.isFinite(idx)) {
                         this.setActualActiveRow(idx);
@@ -12259,6 +12783,7 @@ class TimeTracker {
 
                 const row = event.target.closest('.sub-activity-row');
                 if (row && actualList.contains(row)) {
+                    if (row.classList.contains('actual-row-locked')) return;
                     const idx = parseInt(row.dataset.index, 10);
                     if (Number.isFinite(idx)) this.setActualActiveRow(idx);
                 }
@@ -12266,6 +12791,8 @@ class TimeTracker {
 
             actualList.addEventListener('change', (event) => {
                 if (event.target.classList.contains('actual-assign-input')) {
+                    const row = event.target.closest('.sub-activity-row');
+                    if (!row || row.classList.contains('actual-row-locked')) return;
                     if (event.target.readOnly) {
                         this.updateActualSpinnerDisplays();
                         return;
@@ -12283,6 +12810,8 @@ class TimeTracker {
                 }
 
                 if (event.target.classList.contains('actual-grid-input')) {
+                    const row = event.target.closest('.sub-activity-row');
+                    if (!row || row.classList.contains('actual-row-locked')) return;
                     if (event.target.readOnly) {
                         this.updateActualSpinnerDisplays();
                         return;

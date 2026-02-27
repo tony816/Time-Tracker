@@ -1226,6 +1226,27 @@
     align-items: center;
 }
 
+.sub-activity-row.actual-row-locked {
+    background: #f6f8fa;
+    border: 1px solid #d6dde5;
+    color: #7b8794;
+}
+
+.sub-activity-row.actual-row-locked .actual-activity-label,
+.sub-activity-row.actual-row-locked .actual-time-control,
+.sub-activity-row.actual-row-locked .actual-row-actions button {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sub-activity-row.actual-row-locked .actual-time-control {
+    filter: grayscale(1);
+}
+
+.sub-activity-row.actual-row-locked .actual-row-actions {
+    opacity: 0.7;
+}
+
 .sub-activity-row.actual-row .actual-activity-label {
     margin-top: var(--actual-label-shift);
 }
@@ -1633,7 +1654,7 @@
   filter: grayscale(1) saturate(0) brightness(1.02) !important;
   opacity: 0.95;
   cursor: not-allowed;
-  pointer-events: none;
+  pointer-events: auto;
   overflow: hidden;
   background-clip: padding-box !important;
   border-bottom-width: 3px !important;

@@ -1,4 +1,4 @@
-const test = require('node:test');
+﻿const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { buildMethod } = require('./helpers/script-method-builder');
@@ -61,6 +61,99 @@ const finalizeActualActivitiesForSave = buildMethod(
 function normalizeToStep(raw) {
     const value = Number.isFinite(raw) ? raw : 0;
     return Math.max(0, Math.round(value / STEP_SECONDS) * STEP_SECONDS);
+}
+
+function extractLockedRowsFromActivities(activities = [], totalUnits = 0) {
+    const total = Math.max(0, Math.floor(Number(totalUnits) || 0));
+    const manualRows = [];
+    const autoRows = [];
+    const manualRowsByIndex = new Set();
+    const autoRowsByIndex = new Set();
+    const manualMask = new Array(total).fill(false);
+    const autoMask = new Array(total).fill(false);
+
+    const isLockedRow = (item) => item && item.source === 'locked';
+    const hasExplicit = (item) => Array.isArray(item.lockUnits) && item.lockUnits.some((value) => Number.isFinite(value));
+    const parseRowUnits = (item) => {
+        if (!isLockedRow(item)) return [];
+        if (Array.isArray(item.lockUnits)) {
+            const out = [];
+            const seen = new Set();
+            item.lockUnits.forEach((value) => {
+                const unit = Number.isFinite(value) ? Math.floor(value) : null;
+                if (!Number.isFinite(unit) || unit < 0 || unit >= total) return;
+                if (seen.has(unit)) return;
+                seen.add(unit);
+                out.push(unit);
+            });
+            return out;
+        }
+        const lockStart = Number.isFinite(item.lockStart) ? Math.floor(item.lockStart) : null;
+        const lockEnd = Number.isFinite(item.lockEnd) ? Math.floor(item.lockEnd) : null;
+        if (lockStart == null || lockEnd == null) return [];
+        const from = Math.min(lockStart, lockEnd);
+        const to = Math.max(lockStart, lockEnd);
+        const out = [];
+        for (let unit = from; unit <= to; unit += 1) {
+            if (unit >= 0 && unit < total) out.push(unit);
+        }
+        return out;
+    };
+
+    const addRow = (item, sourceIndex, rows, mask, rowSet, isAuto) => {
+        const rowUnits = parseRowUnits(item);
+        if (rowUnits.length === 0) {
+            rows.push({
+                sourceIndex,
+                sourceRow: item,
+                unitList: [],
+                lockStart: null,
+                lockEnd: null,
+                isLegacyAuto: !isAuto
+            });
+            return;
+        }
+        let first = null;
+        let last = null;
+        rowUnits.forEach((unit) => {
+            mask[unit] = true;
+            if (first == null || unit < first) first = unit;
+            if (last == null || unit > last) last = unit;
+        });
+        rows.push({
+            sourceIndex,
+            sourceRow: item,
+            unitList: rowUnits,
+            lockStart: first,
+            lockEnd: last,
+            isLegacyAuto: !isAuto && !hasExplicit(item) && !Number.isFinite(item.lockStart) && !Number.isFinite(item.lockEnd),
+        });
+        rowSet.add(sourceIndex);
+    };
+
+    if (!Array.isArray(activities)) return { manualRows, autoRows, manualRowsByIndex, autoRowsByIndex, manualMask, autoMask, manualCount: 0 };
+
+    activities.forEach((item, sourceIndex) => {
+        if (!isLockedRow(item)) return;
+        const explicit = hasExplicit(item);
+        const hasMeta = Number.isFinite(item.lockStart) || Number.isFinite(item.lockEnd);
+        const isManual = item.isAutoLocked === false || explicit || hasMeta;
+        if (isManual) {
+            addRow(item, sourceIndex, manualRows, manualMask, manualRowsByIndex, false);
+        } else {
+            addRow(item, sourceIndex, autoRows, autoMask, autoRowsByIndex, true);
+        }
+    });
+
+    return {
+        manualRows,
+        autoRows,
+        manualRowsByIndex,
+        autoRowsByIndex,
+        manualMask,
+        autoMask,
+        manualCount: manualMask.reduce((sum, value) => sum + (value ? 1 : 0), 0),
+    };
 }
 
 test('applyActualDurationChange keeps other rows unchanged and allows unassigned gap', () => {
@@ -470,6 +563,7 @@ test('clampActualGridToAssigned updates and removes locked row as deficit change
 test('getActualGridLockedUnitsForBase unlocks when assigned time increases', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
         getActualDurationStepSeconds() {
             return STEP_SECONDS;
         },
@@ -501,6 +595,7 @@ test('getActualGridLockedUnitsForBase unlocks when assigned time increases', () 
 test('getActualGridLockedUnitsForBase locks from global tail by total assigned sum', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
         getActualDurationStepSeconds() {
             return STEP_SECONDS;
         },
@@ -528,6 +623,7 @@ test('getActualGridLockedUnitsForBase locks from global tail by total assigned s
 test('getActualGridLockedUnitsForBase places locked units by locked row order (head)', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
         getActualDurationStepSeconds() {
             return STEP_SECONDS;
         },
@@ -555,6 +651,7 @@ test('getActualGridLockedUnitsForBase places locked units by locked row order (h
 test('getActualGridLockedUnitsForBase moves locked units when locked row order changes', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
         getActualDurationStepSeconds() {
             return STEP_SECONDS;
         },
@@ -770,6 +867,7 @@ test('buildExtraSlotAllocation can follow row order relative to planned rows', (
 test('mergeActualActivitiesWithGrid keeps planned assignment when existing list is empty', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
