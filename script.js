@@ -4274,6 +4274,7 @@ class TimeTracker {
         let assignedUnitsTotal = 0;
         (Array.isArray(sourceActivities) ? sourceActivities : []).forEach((item) => {
             if (!item) return;
+            if (item.source === 'locked') return;
             const label = normalize(item.label || '');
             if (!label) return;
             const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
@@ -4283,8 +4284,57 @@ class TimeTracker {
         const lockedUnits = new Array(units.length).fill(false);
         const allowedUnitsTotal = Math.max(0, Math.min(units.length, assignedUnitsTotal));
         const lockedCount = Math.max(0, units.length - allowedUnitsTotal);
-        for (let i = units.length - 1; i >= 0 && (units.length - 1 - i) < lockedCount; i--) {
-            lockedUnits[i] = true;
+        if (lockedCount <= 0) {
+            return lockedUnits;
+        }
+
+        const lockedRowIndex = sourceActivities.findIndex((item) => item && item.source === 'locked');
+        if (lockedRowIndex < 0) {
+            for (let i = units.length - 1; i >= 0 && (units.length - 1 - i) < lockedCount; i--) {
+                lockedUnits[i] = true;
+            }
+            return lockedUnits;
+        }
+
+        const planLabelSet = new Set();
+        units.forEach((label) => {
+            const normalizedLabel = normalize(label || '');
+            if (normalizedLabel) planLabelSet.add(normalizedLabel);
+        });
+        let displayOrder = this.getActualGridDisplayOrderIndices
+            ? this.getActualGridDisplayOrderIndices(units, sourceActivities, planLabelSet)
+            : units.map((_, idx) => idx);
+        if (!Array.isArray(displayOrder) || displayOrder.length !== units.length) {
+            displayOrder = units.map((_, idx) => idx);
+        }
+
+        const labelsBeforeLocked = new Set();
+        for (let i = 0; i < lockedRowIndex; i++) {
+            const item = sourceActivities[i];
+            if (!item || item.source === 'locked') continue;
+            const label = normalize(item.label || '');
+            if (!label || !planLabelSet.has(label)) continue;
+            labelsBeforeLocked.add(label);
+        }
+
+        let startAt = 0;
+        if (labelsBeforeLocked.size > 0) {
+            startAt = displayOrder.reduce((sum, unitIndex) => {
+                const label = normalize(units[unitIndex] || '');
+                if (label && labelsBeforeLocked.has(label)) return sum + 1;
+                return sum;
+            }, 0);
+        }
+        if (startAt >= units.length) {
+            startAt = Math.max(0, units.length - lockedCount);
+        }
+
+        for (let offset = 0; offset < lockedCount; offset++) {
+            const visualPos = startAt + offset;
+            if (visualPos < 0 || visualPos >= displayOrder.length) break;
+            const unitIndex = displayOrder[visualPos];
+            if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
+            lockedUnits[unitIndex] = true;
         }
 
         return lockedUnits;
@@ -10924,10 +10974,36 @@ class TimeTracker {
             return Math.max(0, Math.floor(raw));
         };
         const lockedSeconds = normalizeLockedSeconds(lockedCount * step);
-        for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
-            if (!gridUnits[i]) continue;
-            gridUnits[i] = false;
+        let lockedMask = new Array(planUnits.length).fill(false);
+        if (typeof this.getActualGridLockedUnitsForBase === 'function') {
+            lockedMask = this.getActualGridLockedUnitsForBase(
+                this.modalActualBaseIndex,
+                planUnits,
+                this.modalActualActivities
+            );
+        } else if (lockedCount > 0) {
+            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+                lockedMask[i] = true;
+            }
+        }
+        if (!Array.isArray(lockedMask) || lockedMask.length !== planUnits.length) {
+            lockedMask = new Array(planUnits.length).fill(false);
+            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+                lockedMask[i] = true;
+            }
+        }
+
+        lockedMask.forEach((isLocked, idx) => {
+            if (!isLocked || !gridUnits[idx]) return;
+            gridUnits[idx] = false;
             changed = true;
+        });
+        if (lockedCount > 0 && !lockedMask.some(Boolean)) {
+            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+                if (!gridUnits[i]) continue;
+                gridUnits[i] = false;
+                changed = true;
+            }
         }
 
         if (changed) {

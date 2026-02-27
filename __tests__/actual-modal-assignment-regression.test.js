@@ -525,6 +525,60 @@ test('getActualGridLockedUnitsForBase locks from global tail by total assigned s
     assert.deepEqual(locked, [false, false, true, true]);
 });
 
+test('getActualGridLockedUnitsForBase places locked units by locked row order (head)', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getActualGridDisplayOrderIndices(units) {
+            return units.map((_, idx) => idx);
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw : [];
+        },
+    };
+
+    const planUnits = ['A', 'A', 'B', 'B'];
+    const activities = [
+        { label: '', seconds: 1200, recordedSeconds: 1200, source: 'locked', order: 0 },
+        { label: 'A', seconds: 1200, source: 'grid', order: 1 },
+    ];
+
+    const locked = getActualGridLockedUnitsForBase.call(ctx, 0, planUnits, activities);
+    assert.deepEqual(locked, [true, true, false, false]);
+});
+
+test('getActualGridLockedUnitsForBase moves locked units when locked row order changes', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getActualGridDisplayOrderIndices(units) {
+            return units.map((_, idx) => idx);
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw : [];
+        },
+    };
+
+    const planUnits = ['A', 'A', 'B', 'B'];
+    const activities = [
+        { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+        { label: '', seconds: 1200, recordedSeconds: 1200, source: 'locked', order: 1 },
+    ];
+
+    const locked = getActualGridLockedUnitsForBase.call(ctx, 0, planUnits, activities);
+    assert.deepEqual(locked, [false, false, true, true]);
+});
+
 test('getActualGridUnitsForBase keeps explicit all-off grid without rebuilding from activities', () => {
     const ctx = {
         timeSlots: [{
