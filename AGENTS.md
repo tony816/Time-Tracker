@@ -67,6 +67,19 @@
 - Keep patches small and single-intent when possible.
 - State is in-memory plus `localStorage`; merged ranges use keys like `type-start-end`.
 
+## Collaboration Prompt Protocol
+- For every new coding request, do not start work immediately.
+- First respond with a refined prompt using this exact frame:
+  - 무엇:
+  - 어떤 형식:
+  - 대상(사용자):
+  - 왜:
+  - 소스:
+  - 금지 사항:
+  - 테스트:
+  - cetera(추가로 너가 더 입력해야 한다고 생각하는 것):
+- Only begin work after the user re-issues the request using the refined prompt.
+
 ## Vibe Coding Protocol v1
 - Fixed loop: `request -> impact scan -> small patch -> related tests -> report`.
 - Start each session with `npm test`; recover baseline before new feature work.
