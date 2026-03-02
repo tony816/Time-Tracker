@@ -9,6 +9,10 @@ const buildActualModalActivities = buildMethod(
     'buildActualModalActivities(baseIndex, planUnits, gridUnits, existingActivities = null, planLabel = \'\')',
     '(baseIndex, planUnits, gridUnits, existingActivities = null, planLabel = \'\')'
 );
+const insertLockedRowsAfterRelatedActivities = buildMethod(
+    'insertLockedRowsAfterRelatedActivities(baseRows = [], lockedRows = [], planUnits = null)',
+    '(baseRows = [], lockedRows = [], planUnits = null)'
+);
 const addActualActivityRow = buildMethod(
     'addActualActivityRow(defaults = {})',
     '(defaults = {})'
@@ -411,6 +415,95 @@ test('buildActualModalActivities does not reseed missing planned labels when exi
     assert.deepEqual(result.map((item) => item.label), ['A']);
 });
 
+test('insertLockedRowsAfterRelatedActivities places locked row after matching activity label row', () => {
+    const ctx = {
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+        sortActivitiesByOrder(list) {
+            return Array.isArray(list) ? list.slice() : [];
+        },
+    };
+
+    const result = insertLockedRowsAfterRelatedActivities.call(
+        ctx,
+        [
+            { label: 'A', seconds: 1200, source: 'grid' },
+            { label: 'B', seconds: 1200, source: 'grid' },
+        ],
+        [
+            { label: '', seconds: 600, source: 'locked', isAutoLocked: false, lockUnits: [1], lockStart: 1, lockEnd: 1 },
+        ],
+        ['A', 'A', 'B', 'B']
+    );
+
+    assert.deepEqual(
+        result.map((item) => (item && item.source === 'locked' ? 'locked' : item.label)),
+        ['A', 'locked', 'B']
+    );
+});
+
+test('buildActualModalActivities keeps existing rows visible when existing list has only locked row', () => {
+    const ctx = {
+        modalActualTotalSeconds: 3600,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeActualDurationStep: normalizeToStep,
+        getBlockLength() {
+            return 1;
+        },
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+        insertLockedRowsAfterRelatedActivities(baseRows, lockedRows, planUnits) {
+            return insertLockedRowsAfterRelatedActivities.call(this, baseRows, lockedRows, planUnits);
+        },
+        getPlanActivitiesForIndex() {
+            return [
+                { label: 'A', seconds: 1200 },
+                { label: 'B', seconds: 1200 },
+            ];
+        },
+        getActualGridSecondsMap() {
+            return new Map([
+                ['A', 1200],
+                ['B', 1200],
+            ]);
+        },
+        getPlanLabelOrderForActual() {
+            return ['A', 'B'];
+        },
+        normalizeActualActivitiesList(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        buildActualActivitiesSeed() {
+            return [];
+        },
+    };
+
+    const result = buildActualModalActivities.call(
+        ctx,
+        0,
+        ['A', 'A', 'B', 'B'],
+        [true, true, true, true],
+        [{ label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockUnits: [1], lockStart: 1, lockEnd: 1 }],
+        ''
+    );
+
+    assert.deepEqual(
+        result.map((item) => item.source),
+        ['grid', 'locked', 'grid']
+    );
+    assert.deepEqual(
+        result.map((item) => item.label),
+        ['A', '', 'B']
+    );
+});
+
 test('clampActualGridToAssigned locks tail units by total assigned deficit', () => {
     const ctx = {
         modalActualHasPlanUnits: true,
@@ -489,6 +582,48 @@ test('clampActualGridToAssigned creates one locked row with remaining seconds', 
         [0, 1]
     );
     assert.equal(ctx.modalActualDirty, true);
+});
+
+test('clampActualGridToAssigned keeps non-locked rows and places manual locked row after matching row', () => {
+    const ctx = {
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: ['A', 'A', 'B', 'B'],
+        modalActualGridUnits: [true, true, true, true],
+        modalActualActivities: [
+            { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+            { label: 'B', seconds: 1200, source: 'grid', order: 1 },
+            { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockUnits: [1], lockStart: 1, lockEnd: 1, order: 2 },
+        ],
+        modalActualPlanLabelSet: new Set(['A', 'B']),
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualDurationStep(seconds) {
+            return normalizeToStep(seconds);
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+        isManualLockedActivityRow(item) {
+            return item && item.source === 'locked' && item.isAutoLocked === false;
+        },
+        extractLockedRowsFromActivities(rows, totalUnits) {
+            return extractLockedRowsFromActivities(rows, totalUnits);
+        },
+        insertLockedRowsAfterRelatedActivities(baseRows, lockedRows, planUnits) {
+            return insertLockedRowsAfterRelatedActivities.call(this, baseRows, lockedRows, planUnits);
+        },
+    };
+
+    clampActualGridToAssigned.call(ctx);
+
+    assert.deepEqual(
+        ctx.modalActualActivities.map((item) => (item && item.source === 'locked' ? 'locked' : item.label)),
+        ['A', 'locked', 'B']
+    );
 });
 
 test('clampActualGridToAssigned is idempotent for locked row creation', () => {

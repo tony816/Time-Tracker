@@ -4362,6 +4362,96 @@ class TimeTracker {
         };
     }
 
+    insertLockedRowsAfterRelatedActivities(baseRows = [], lockedRows = [], planUnits = null) {
+        const isLocked = (item) => {
+            if (typeof this.isLockedActivityRow === 'function') {
+                return this.isLockedActivityRow(item);
+            }
+            return Boolean(item && item.source === 'locked');
+        };
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const safeBase = Array.isArray(baseRows)
+            ? baseRows
+                .filter((item) => item && typeof item === 'object')
+                .map((item) => ({ ...item }))
+            : [];
+        const safeLockedSource = Array.isArray(lockedRows)
+            ? lockedRows.filter((item) => item && typeof item === 'object')
+            : [];
+        if (safeLockedSource.length === 0) return safeBase;
+
+        const sortedLocked = (typeof this.sortActivitiesByOrder === 'function')
+            ? this.sortActivitiesByOrder(safeLockedSource)
+            : safeLockedSource;
+        const resolveAnchorLabel = (lockedRow) => {
+            if (!lockedRow || !Array.isArray(planUnits) || planUnits.length === 0) return '';
+            const readPlanLabel = (rawUnit) => {
+                const unit = Number.isFinite(rawUnit) ? Math.floor(rawUnit) : null;
+                if (unit == null || unit < 0 || unit >= planUnits.length) return '';
+                return normalize(planUnits[unit] || '');
+            };
+            if (Array.isArray(lockedRow.lockUnits)) {
+                for (let i = 0; i < lockedRow.lockUnits.length; i++) {
+                    const label = readPlanLabel(Number(lockedRow.lockUnits[i]));
+                    if (label) return label;
+                }
+            }
+            const lockStart = Number.isFinite(lockedRow.lockStart) ? Math.floor(lockedRow.lockStart) : null;
+            const lockEnd = Number.isFinite(lockedRow.lockEnd) ? Math.floor(lockedRow.lockEnd) : null;
+            if (lockStart == null && lockEnd == null) return '';
+            const from = Math.max(0, Math.min(
+                (lockStart != null ? lockStart : lockEnd),
+                (lockEnd != null ? lockEnd : lockStart)
+            ));
+            const to = Math.min(planUnits.length - 1, Math.max(
+                (lockStart != null ? lockStart : lockEnd),
+                (lockEnd != null ? lockEnd : lockStart)
+            ));
+            for (let unit = from; unit <= to; unit++) {
+                const label = normalize(planUnits[unit] || '');
+                if (label) return label;
+            }
+            return '';
+        };
+
+        const result = safeBase.slice();
+        sortedLocked.forEach((lockedRow) => {
+            const nextLockedRow = { ...lockedRow };
+            const anchorLabel = resolveAnchorLabel(nextLockedRow);
+            let anchorIndex = -1;
+
+            if (anchorLabel) {
+                for (let i = result.length - 1; i >= 0; i--) {
+                    const row = result[i];
+                    if (!row || isLocked(row)) continue;
+                    const rowLabel = normalize(row.label || '');
+                    if (rowLabel === anchorLabel) {
+                        anchorIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (anchorIndex < 0 && result.length > 0) {
+                for (let i = result.length - 1; i >= 0; i--) {
+                    if (!isLocked(result[i])) {
+                        anchorIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            let insertIndex = Math.max(0, anchorIndex + 1);
+            while (insertIndex < result.length && isLocked(result[insertIndex])) {
+                insertIndex += 1;
+            }
+            result.splice(insertIndex, 0, nextLockedRow);
+        });
+        return result;
+    }
+
     rebuildLockedRowsFromUnitSet(unitMask = [], options = {}) {
         const units = Array.isArray(unitMask) ? unitMask.map(value => Boolean(value)) : [];
         const isAutoLocked = options.isAutoLocked === true;
@@ -5225,7 +5315,10 @@ class TimeTracker {
             allowSegments: false,
         });
 
-        const nextActivities = nonLockedRows.concat(manualRows).concat(autoRowsFromMask);
+        const withManualRows = (typeof this.insertLockedRowsAfterRelatedActivities === 'function')
+            ? this.insertLockedRowsAfterRelatedActivities(nonLockedRows, manualRows, planContext.units)
+            : nonLockedRows.concat(manualRows);
+        const nextActivities = withManualRows.concat(autoRowsFromMask);
         nextActivities.forEach((item, idx) => {
             if (item && item.source === 'locked') {
                 if (Number.isFinite(item.seconds)) {
@@ -11405,7 +11498,7 @@ class TimeTracker {
             }
         }
 
-        const manualMask = Array.isArray(this.extractLockedRowsFromActivities)
+        const manualMask = (typeof this.extractLockedRowsFromActivities === 'function')
             ? this.extractLockedRowsFromActivities(normalizedActivities, planUnits.length).manualMask
             : new Array(planUnits.length).fill(false);
         const autoMask = lockedMask.map((isLocked, idx) => Boolean(isLocked && !manualMask[idx]));
@@ -11431,7 +11524,10 @@ class TimeTracker {
             const nonLockedRows = (Array.isArray(normalizedActivities) ? normalizedActivities : []).filter((item) => !isLockedRow(item));
             const manualRows = (Array.isArray(normalizedActivities) ? normalizedActivities : []).filter((item) => isManualLocked(item));
             const autoRows = buildAutoLockRowsFromMask(autoMask, { isAutoLocked: true, allowSegments: false });
-            const nextActivities = nonLockedRows.concat(manualRows).concat(autoRows);
+            const withManualRows = (typeof this.insertLockedRowsAfterRelatedActivities === 'function')
+                ? this.insertLockedRowsAfterRelatedActivities(nonLockedRows, manualRows, planUnits)
+                : nonLockedRows.concat(manualRows);
+            const nextActivities = withManualRows.concat(autoRows);
 
             const before = (Array.isArray(this.modalActualActivities) ? this.modalActualActivities : []).length;
             const after = nextActivities.length;
@@ -11523,6 +11619,12 @@ class TimeTracker {
         const normalize = (value) => this.normalizeActivityText
             ? this.normalizeActivityText(value || '')
             : String(value || '').trim();
+        const isLockedRow = (item) => {
+            if (typeof this.isLockedActivityRow === 'function') {
+                return this.isLockedActivityRow(item);
+            }
+            return Boolean(item && item.source === 'locked');
+        };
         const planLabelSet = new Set();
         if (Array.isArray(planUnits)) {
             planUnits.forEach((label) => {
@@ -11558,9 +11660,11 @@ class TimeTracker {
         const hasGrid = Array.from(gridSecondsMap.values()).some(seconds => seconds > 0);
         const planOrder = this.getPlanLabelOrderForActual(baseIndex, planUnits, planLabel);
         const existing = this.normalizeActualActivitiesList(existingActivities);
-        const hadExistingActivities = existing.length > 0;
+        const existingLockedRows = existing.filter((item) => isLockedRow(item));
+        const existingNonLockedRows = existing.filter((item) => !isLockedRow(item));
+        const hadExistingActivities = existingNonLockedRows.length > 0;
 
-        let baseList = existing;
+        let baseList = existingNonLockedRows;
         if (baseList.length === 0) {
             if (hasGrid && planOrder.length > 0) {
                 baseList = planOrder.map(label => ({
@@ -11614,7 +11718,10 @@ class TimeTracker {
             });
         }
 
-        return merged;
+        const mergedWithLocked = (typeof this.insertLockedRowsAfterRelatedActivities === 'function')
+            ? this.insertLockedRowsAfterRelatedActivities(merged, existingLockedRows, planUnits)
+            : merged.concat(existingLockedRows.map((item) => ({ ...item })));
+        return mergedWithLocked;
     }
 
     getModalActualGridUnitsForSave(totalUnits) {
