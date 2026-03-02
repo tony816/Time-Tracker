@@ -94,6 +94,24 @@
                 if (order != null) {
                     normalized.order = order;
                 }
+                if (item.isAutoLocked === false) {
+                    normalized.isAutoLocked = false;
+                } else if (item.isAutoLocked === true) {
+                    normalized.isAutoLocked = true;
+                }
+                if (Array.isArray(item.lockUnits)) {
+                    normalized.lockUnits = item.lockUnits
+                        .filter((value) => Number.isFinite(value))
+                        .map((value) => Math.floor(value));
+                }
+                const lockStart = Number.isFinite(item.lockStart) ? Math.floor(item.lockStart) : null;
+                const lockEnd = Number.isFinite(item.lockEnd) ? Math.floor(item.lockEnd) : null;
+                if (lockStart != null) {
+                    normalized.lockStart = lockStart;
+                }
+                if (lockEnd != null) {
+                    normalized.lockEnd = lockEnd;
+                }
                 return normalized;
             })
             .filter((item) => item.label || item.seconds > 0);

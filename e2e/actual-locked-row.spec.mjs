@@ -38,7 +38,12 @@ async function longPressByTouch(page, locator) {
 
 async function openActivityModalForFirstRow(page) {
   const entry = page.locator('.time-entry').first();
-  await entry.locator('.activity-log-btn').click();
+  const floatingBtn = page.locator('.activity-log-btn.activity-log-btn-floating').first();
+  if (await floatingBtn.count()) {
+    await floatingBtn.click({ force: true });
+  } else {
+    await entry.locator('.activity-log-btn').click({ force: true });
+  }
   const modal = page.locator('#activityLogModal');
   await expect(modal).toBeVisible();
   return modal;
@@ -50,6 +55,29 @@ async function waitLockedCount(page, expected) {
   await page.locator('#closeActivityModal').click();
 }
 
+async function seedActualGridForLongPress(page) {
+  await page.evaluate(() => {
+    const tracker = window.tracker;
+    if (!tracker || !Array.isArray(tracker.timeSlots) || !tracker.timeSlots[0]) {
+      throw new Error('tracker not ready');
+    }
+
+    const firstSlot = tracker.timeSlots[0];
+    firstSlot.planned = 'A';
+    firstSlot.planTitle = 'A';
+    firstSlot.planTitleBandOn = false;
+    firstSlot.planActivities = [{ label: 'A', seconds: 7200 }];
+
+    if (tracker.mergedFields && typeof tracker.mergedFields.set === 'function') {
+      tracker.mergedFields.set('actual-0-1', '');
+    }
+
+    tracker.renderTimeEntries(true);
+    tracker.calculateTotals();
+    tracker.autoSave();
+  });
+}
+
 test.describe('actual grid long-press lock', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:8000/');
@@ -58,6 +86,8 @@ test.describe('actual grid long-press lock', () => {
         localStorage.clear();
       } catch (_) {}
     });
+    await page.reload();
+    await seedActualGridForLongPress(page);
   });
 
   test('adds manual locked units by long-press and keeps row readonly in modal', async ({ page }) => {
@@ -83,13 +113,15 @@ test.describe('actual grid long-press lock', () => {
     await expect(lockedCountAfterTwo).toBeGreaterThanOrEqual(2);
 
     const firstLockedRow = lockedRows.nth(0);
-    await expect(firstLockedRow.locator('.actual-time-input')).toBeDisabled();
-    await expect(firstLockedRow.locator('.actual-move-btn')).toBeDisabled();
+    await expect(firstLockedRow.locator('.actual-grid-input')).toBeDisabled();
+    await expect(firstLockedRow.locator('.actual-assign-input')).toBeDisabled();
+    await expect(firstLockedRow.locator('.actual-move-btn').nth(0)).toBeDisabled();
+    await expect(firstLockedRow.locator('.actual-move-btn').nth(1)).toBeDisabled();
     await expect(firstLockedRow.locator('.actual-remove-btn')).toBeDisabled();
+    await page.locator('#closeActivityModal').click();
 
     await longPressByMouse(page, thirdSegment);
     await expect(thirdSegment).toHaveClass(/is-locked/);
-    await page.locator('#closeActivityModal').click();
 
     await waitLockedCount(page, 3);
   });

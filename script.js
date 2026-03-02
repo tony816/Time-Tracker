@@ -3485,7 +3485,12 @@ class TimeTracker {
                   const handleGridClick = (event) => {
                       const payload = resolveSegmentPayload(event.target);
                       if (!payload) return;
-                      if (payload.locked) {
+                      const baseIndexForLockCheck = this.getSplitBaseIndex('actual', index);
+                      const isActuallyLocked = this.isActualGridUnitLocked(
+                          baseIndexForLockCheck,
+                          payload.unitIndex
+                      );
+                      if (payload.locked || isActuallyLocked) {
                           event.preventDefault();
                           event.stopPropagation();
                           return;
@@ -4561,6 +4566,28 @@ class TimeTracker {
         }
 
         return lockedUnits;
+    }
+
+    getActualGridManualLockedUnitsForBase(baseIndex, planUnits = null, activities = null) {
+        const units = Array.isArray(planUnits) ? planUnits.slice() : [];
+        if (units.length === 0) return [];
+        const slot = this.timeSlots[baseIndex];
+        const normalizeActivities = (raw) => {
+            if (typeof this.normalizeActivitiesArray === 'function') {
+                return this.normalizeActivitiesArray(raw);
+            }
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        };
+        const sourceActivities = Array.isArray(activities)
+            ? activities
+            : normalizeActivities(slot && slot.activityLog && slot.activityLog.subActivities);
+        if (!Array.isArray(sourceActivities) || sourceActivities.length === 0) {
+            return new Array(units.length).fill(false);
+        }
+        const lockData = this.extractLockedRowsFromActivities(sourceActivities, units.length);
+        return Array.isArray(lockData.manualMask)
+            ? lockData.manualMask.map((value) => Boolean(value))
+            : new Array(units.length).fill(false);
     }
 
     isActualGridUnitLocked(baseIndex, unitIndex, planUnits = null, activities = null) {
@@ -5720,7 +5747,7 @@ class TimeTracker {
                       : [];
                   const normalizedSub = this.normalizeActivitiesArray(rawSub).map(item => ({ ...item }));
                   const orderedActual = this.sortActivitiesByOrder(normalizedSub);
-                  const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+                  const lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
                   const extras = orderedActual.filter((item) => {
                       const label = this.normalizeActivityText
                           ? this.normalizeActivityText(item.label || '')
@@ -5821,7 +5848,7 @@ class TimeTracker {
                 if (normalized) planLabelSet.add(normalized);
             });
             const orderedActual = this.sortActivitiesByOrder(actualActivities);
-            const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            const lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
             let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
@@ -6385,6 +6412,24 @@ class TimeTracker {
                 }
                 if (order != null) {
                     normalized.order = order;
+                }
+                if (item.isAutoLocked === false) {
+                    normalized.isAutoLocked = false;
+                } else if (item.isAutoLocked === true) {
+                    normalized.isAutoLocked = true;
+                }
+                if (Array.isArray(item.lockUnits)) {
+                    normalized.lockUnits = item.lockUnits
+                        .filter((value) => Number.isFinite(value))
+                        .map((value) => Math.floor(value));
+                }
+                const lockStart = Number.isFinite(item.lockStart) ? Math.floor(item.lockStart) : null;
+                const lockEnd = Number.isFinite(item.lockEnd) ? Math.floor(item.lockEnd) : null;
+                if (lockStart != null) {
+                    normalized.lockStart = lockStart;
+                }
+                if (lockEnd != null) {
+                    normalized.lockEnd = lockEnd;
                 }
                 return normalized;
             })

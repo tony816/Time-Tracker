@@ -29,6 +29,35 @@ test('activity-core normalizeActivitiesArray keeps source/order/recorded fields'
     ]);
 });
 
+test('activity-core normalizeActivitiesArray preserves locked metadata fields', () => {
+    const normalized = activityCore.normalizeActivitiesArray([
+        {
+            label: '',
+            seconds: 1200.9,
+            source: 'locked',
+            isAutoLocked: false,
+            lockUnits: [3.7, 1, 'x', NaN],
+            lockStart: 1.9,
+            lockEnd: 3.2,
+        },
+    ], {
+        normalizeActivityText: (value) => String(value || '').trim(),
+        normalizeDurationStep: (seconds) => Math.max(0, Math.floor(seconds)),
+    });
+
+    assert.deepEqual(normalized, [
+        {
+            label: '',
+            seconds: 1200,
+            source: 'locked',
+            isAutoLocked: false,
+            lockUnits: [3, 1],
+            lockStart: 1,
+            lockEnd: 3,
+        },
+    ]);
+});
+
 test('activity-core normalizePlanActivitiesArray keeps label/seconds only', () => {
     const normalized = activityCore.normalizePlanActivitiesArray([
         { label: ' 운동 ', seconds: 600.9, source: 'ignored', recordedSeconds: 300 },

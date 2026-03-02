@@ -6,6 +6,10 @@ const getActualGridLockedUnitsForBase = buildMethod(
     'getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
 );
+const getActualGridManualLockedUnitsForBase = buildMethod(
+    'getActualGridManualLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
+    '(baseIndex, planUnits = null, activities = null)'
+);
 const toggleActualGridLockedUnit = buildMethod(
     'toggleActualGridLockedUnit(index, unitIndex)',
     '(index, unitIndex)'
@@ -266,6 +270,20 @@ test('getActualGridLockedUnitsForBase merges manual+auto locked masks', () => {
     ]);
 
     assert.deepEqual(locked, [false, true, true, true]);
+});
+
+test('getActualGridManualLockedUnitsForBase returns only manual lock mask', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
+    };
+
+    const locked = getActualGridManualLockedUnitsForBase.call(ctx, 0, ['A', 'A', 'B', 'B'], [
+        { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 1, lockEnd: 1, lockUnits: [1] },
+        { label: '', seconds: 1200, recordedSeconds: 1200, source: 'locked', isAutoLocked: true, lockStart: 2, lockEnd: 3, lockUnits: [2, 3] }
+    ]);
+
+    assert.deepEqual(locked, [false, true, false, false]);
 });
 
 test('toggleActualGridLockedUnit preserves existing manual lock units when adding another unit', () => {
