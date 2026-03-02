@@ -1058,6 +1058,54 @@ test('mergeActualActivitiesWithGrid preserves existing planned assignment on gri
     assert.deepEqual(result, [{ label: 'A', seconds: 1800, source: 'grid' }]);
 });
 
+test('mergeActualActivitiesWithGrid preserves manual locked metadata and position when other label grid changes', () => {
+    const ctx = {
+        timeSlots: [{ activityLog: { subActivities: [] } }],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActualActivitiesList(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        getPlanLabelOrderForActual() {
+            return ['A', 'B'];
+        },
+    };
+
+    const existing = [
+        { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+        { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockUnits: [0], lockStart: 0, lockEnd: 0, order: 1 },
+        { label: 'B', seconds: 1200, source: 'grid', order: 2 },
+    ];
+
+    const result = mergeActualActivitiesWithGrid.call(
+        ctx,
+        0,
+        ['A', 'A', 'B', 'B'],
+        [
+            { label: 'A', seconds: 1200, source: 'grid' },
+            { label: 'B', seconds: 1800, source: 'grid' },
+        ],
+        existing,
+        ''
+    );
+
+    assert.deepEqual(result.map((item) => item.source), ['grid', 'locked', 'grid']);
+    assert.deepEqual(result.map((item) => item.label), ['A', '', 'B']);
+    const locked = result[1];
+    assert.equal(locked.isAutoLocked, false);
+    assert.deepEqual(locked.lockUnits, [0]);
+    assert.equal(locked.lockStart, 0);
+    assert.equal(locked.lockEnd, 0);
+    assert.equal(locked.order, 1);
+});
+
 test('finalizeActualActivitiesForSave does not force-fill total allocation', () => {
     const ctx = {
         modalActualActivities: [

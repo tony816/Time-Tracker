@@ -6,6 +6,10 @@ const getActualGridLockedUnitsForBase = buildMethod(
     'getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
 );
+const insertLockedRowsAfterRelatedActivities = buildMethod(
+    'insertLockedRowsAfterRelatedActivities(baseRows = [], lockedRows = [], planUnits = null)',
+    '(baseRows = [], lockedRows = [], planUnits = null)'
+);
 const getActualGridManualLockedUnitsForBase = buildMethod(
     'getActualGridManualLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
@@ -197,6 +201,9 @@ function makeCtx(overrides = {}) {
             if (!this.isLockedActivityRow(item)) return false;
             return item.isAutoLocked === false;
         },
+        insertLockedRowsAfterRelatedActivities(baseRows = [], lockedRows = [], planUnits = null) {
+            return insertLockedRowsAfterRelatedActivities.call(this, baseRows, lockedRows, planUnits);
+        },
         rebuildLockedRowsFromUnitSet(unitMask = [], options = {}) {
             const units = Array.isArray(unitMask) ? unitMask.map((value) => Boolean(value)) : [];
             const isAutoLocked = options.isAutoLocked === true;
@@ -328,6 +335,34 @@ test('toggleActualGridLockedUnit long-press locks only target unit when no auto 
     assert.equal(manualRows.length, 1);
     assert.deepEqual(manualRows[0].lockUnits, [1]);
     assert.equal(autoRows.length, 0);
+});
+
+test('toggleActualGridLockedUnit seeds planned rows so manual lock stays tied to its activity label', () => {
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: []
+            }
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A', 'A', 'B', 'B', 'B'], planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, false, false, false, false, false],
+        buildActualActivitiesFromGrid: () => [],
+        mergeActualActivitiesWithGrid: () => ([
+            { label: 'A', seconds: 1800, source: 'grid' },
+            { label: 'B', seconds: 1800, source: 'grid' },
+        ]),
+    });
+
+    toggleActualGridLockedUnit.call(ctx, 0, 0);
+
+    const rows = (ctx.timeSlots[0].activityLog.subActivities || []);
+    assert.deepEqual(
+        rows.map((item) => (item && item.source === 'locked' ? 'locked' : item.label)),
+        ['A', 'locked', 'B']
+    );
+    const manualLocked = rows.find((item) => item && item.source === 'locked' && item.isAutoLocked === false);
+    assert.ok(manualLocked);
+    assert.deepEqual(manualLocked.lockUnits, [0]);
 });
 
 test('toggleActualGridLockedUnit removes manual lock target while keeping non-target manual locks', () => {

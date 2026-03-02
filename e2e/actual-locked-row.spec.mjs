@@ -78,6 +78,32 @@ async function seedActualGridForLongPress(page) {
   });
 }
 
+async function seedActualGridWithTwoActivities(page) {
+  await page.evaluate(() => {
+    const tracker = window.tracker;
+    if (!tracker || !Array.isArray(tracker.timeSlots) || !tracker.timeSlots[0]) {
+      throw new Error('tracker not ready');
+    }
+
+    const firstSlot = tracker.timeSlots[0];
+    firstSlot.planned = 'A';
+    firstSlot.planTitle = 'A';
+    firstSlot.planTitleBandOn = false;
+    firstSlot.planActivities = [
+      { label: 'A', seconds: 1800 },
+      { label: 'B', seconds: 1800 },
+    ];
+
+    if (tracker.mergedFields && typeof tracker.mergedFields.delete === 'function') {
+      tracker.mergedFields.delete('actual-0-1');
+    }
+
+    tracker.renderTimeEntries(true);
+    tracker.calculateTotals();
+    tracker.autoSave();
+  });
+}
+
 test.describe('actual grid long-press lock', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:8000/');
@@ -87,10 +113,10 @@ test.describe('actual grid long-press lock', () => {
       } catch (_) {}
     });
     await page.reload();
-    await seedActualGridForLongPress(page);
   });
 
   test('adds manual locked units by long-press and keeps row readonly in modal', async ({ page }) => {
+    await seedActualGridForLongPress(page);
     const entry = page.locator('.time-entry').first();
     const grid = entry.locator('.split-visualization-actual .split-grid');
     await expect(grid).toBeVisible();
@@ -127,6 +153,7 @@ test.describe('actual grid long-press lock', () => {
   });
 
   test('supports touch long-press and ignores long-press cancellation on move', async ({ page }) => {
+    await seedActualGridForLongPress(page);
     const entry = page.locator('.time-entry').first();
     const segment = entry.locator('.split-visualization-actual .split-grid .split-grid-segment').nth(3);
     const moveTarget = entry.locator('.split-visualization-actual .split-grid .split-grid-segment').nth(6);
@@ -160,11 +187,46 @@ test.describe('actual grid long-press lock', () => {
   });
 
   test('context menu does not open after long press', async ({ page }) => {
+    await seedActualGridForLongPress(page);
     const entry = page.locator('.time-entry').first();
     const segment = entry.locator('.split-visualization-actual .split-grid .split-grid-segment').nth(1);
 
     await longPressByMouse(page, segment);
     await page.waitForTimeout(LONG_PRESS_TIMEOUT + 80);
     await expect(page.locator('#activityLogModal')).not.toBeVisible();
+  });
+
+  test('manual lock stays on activity 1 when clicking activity 2 grid and keeps row order', async ({ page }) => {
+    await seedActualGridWithTwoActivities(page);
+    const entry = page.locator('.time-entry').first();
+    const grid = entry.locator('.split-visualization-actual .split-grid');
+    await expect(grid).toBeVisible();
+
+    const activity1Unit = grid.locator('.split-grid-segment[data-unit-index="0"]');
+    const activity2Unit = grid.locator('.split-grid-segment[data-unit-index="3"]');
+
+    await longPressByMouse(page, activity1Unit);
+    await expect(activity1Unit).toHaveClass(/is-locked/);
+
+    await activity2Unit.click();
+    await expect(activity1Unit).toHaveClass(/is-locked/);
+
+    const modal = await openActivityModalForFirstRow(page);
+    const rows = modal.locator('.sub-activity-row');
+    const rowInfo = await rows.evaluateAll((nodes) => {
+      return nodes.map((row) => ({
+        locked: row.classList.contains('actual-row-locked'),
+        label: (row.querySelector('.actual-activity-label')?.textContent || '').trim(),
+      }));
+    });
+    const aIndex = rowInfo.findIndex((row) => row.label === 'A');
+    const bIndex = rowInfo.findIndex((row) => row.label === 'B');
+    const lockedIndex = rowInfo.findIndex((row) => row.locked);
+    expect(aIndex).toBeGreaterThanOrEqual(0);
+    expect(bIndex).toBeGreaterThanOrEqual(0);
+    expect(lockedIndex).toBeGreaterThanOrEqual(0);
+    expect(aIndex).toBeLessThan(lockedIndex);
+    expect(lockedIndex).toBeLessThan(bIndex);
+    await page.locator('#closeActivityModal').click();
   });
 });

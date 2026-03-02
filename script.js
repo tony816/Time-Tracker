@@ -5303,7 +5303,29 @@ class TimeTracker {
             : new Array(planContext.units.length).fill(false);
         manualMask[unitIndex] = !Boolean(manualMask[unitIndex]);
 
-        const nonLockedRows = normalized.filter((item) => !this.isLockedActivityRow(item));
+        let nonLockedRows = normalized.filter((item) => !this.isLockedActivityRow(item));
+        if (nonLockedRows.length === 0
+            && typeof this.getActualGridUnitsForBase === 'function'
+            && typeof this.buildActualActivitiesFromGrid === 'function'
+            && typeof this.mergeActualActivitiesWithGrid === 'function') {
+            const currentUnits = this.getActualGridUnitsForBase(
+                baseIndex,
+                planContext.units.length,
+                planContext.units
+            );
+            const currentGridActivities = this.buildActualActivitiesFromGrid(
+                planContext.units,
+                Array.isArray(currentUnits) ? currentUnits : []
+            );
+            const seededRows = this.mergeActualActivitiesWithGrid(
+                baseIndex,
+                planContext.units,
+                currentGridActivities,
+                [],
+                planContext.planLabel || ''
+            );
+            nonLockedRows = (Array.isArray(seededRows) ? seededRows : []).filter((item) => !this.isLockedActivityRow(item));
+        }
         const existingAutoMask = Array.isArray(lockData.autoMask)
             ? lockData.autoMask
             : new Array(planContext.units.length).fill(false);
@@ -11738,6 +11760,12 @@ class TimeTracker {
     }
 
     mergeActualActivitiesWithGrid(baseIndex, planUnits, gridActivities, existingActivities = null, planLabel = '') {
+        const isLockedRow = (item) => {
+            if (typeof this.isLockedActivityRow === 'function') {
+                return this.isLockedActivityRow(item);
+            }
+            return Boolean(item && item.source === 'locked');
+        };
         const labelSet = new Set();
         if (Array.isArray(planUnits)) {
             planUnits.forEach((label) => {
@@ -11787,18 +11815,49 @@ class TimeTracker {
                 const recordedSeconds = Number.isFinite(item.recordedSeconds)
                     ? Math.max(0, Math.floor(item.recordedSeconds))
                     : null;
-                if (!label && seconds <= 0) return;
+                const normalizedOrder = Number.isFinite(item.order) ? Math.max(0, Math.floor(item.order)) : null;
+                if (!label && seconds <= 0 && !isLockedRow(item)) return;
+                if (isLockedRow(item)) {
+                    const lockedEntry = { label, seconds, source: 'locked' };
+                    if (recordedSeconds != null) {
+                        lockedEntry.recordedSeconds = recordedSeconds;
+                    }
+                    if (normalizedOrder != null) {
+                        lockedEntry.order = normalizedOrder;
+                    }
+                    if (item.isAutoLocked === false) {
+                        lockedEntry.isAutoLocked = false;
+                    } else if (item.isAutoLocked === true) {
+                        lockedEntry.isAutoLocked = true;
+                    }
+                    if (Array.isArray(item.lockUnits)) {
+                        lockedEntry.lockUnits = item.lockUnits
+                            .filter((value) => Number.isFinite(value))
+                            .map((value) => Math.floor(value));
+                    }
+                    const lockStart = Number.isFinite(item.lockStart) ? Math.floor(item.lockStart) : null;
+                    const lockEnd = Number.isFinite(item.lockEnd) ? Math.floor(item.lockEnd) : null;
+                    if (lockStart != null) lockedEntry.lockStart = lockStart;
+                    if (lockEnd != null) lockedEntry.lockEnd = lockEnd;
+                    merged.push(lockedEntry);
+                    return;
+                }
                 if (label && labelSet.has(label)) {
                     // Keep assigned seconds for planned labels; grid click should only change recorded units.
                     const assignedSeconds = Number.isFinite(seconds)
                         ? seconds
                         : (planAssignedMap.get(label) || 0);
-                    merged.push({ label, seconds: assignedSeconds, source: 'grid' });
+                    const entry = { label, seconds: assignedSeconds, source: 'grid' };
+                    if (normalizedOrder != null) {
+                        entry.order = normalizedOrder;
+                    }
+                    merged.push(entry);
                     seenGrid.add(label);
                 } else {
                     const source = (item.source && item.source !== 'grid') ? item.source : 'extra';
                     const entry = { label, seconds, source };
                     if (recordedSeconds != null) entry.recordedSeconds = recordedSeconds;
+                    if (normalizedOrder != null) entry.order = normalizedOrder;
                     merged.push(entry);
                 }
             });
