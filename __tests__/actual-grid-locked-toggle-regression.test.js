@@ -290,6 +290,28 @@ test('toggleActualGridLockedUnit preserves existing manual lock units when addin
     assert.deepEqual(manualUnitsFromRows(manualRows), [[0], [3]]);
 });
 
+test('toggleActualGridLockedUnit long-press locks only target unit when no auto lock row exists', () => {
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 600, source: 'grid' }
+                ]
+            }
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(4) }),
+    });
+
+    toggleActualGridLockedUnit.call(ctx, 0, 1);
+
+    const rows = (ctx.timeSlots[0].activityLog.subActivities || []);
+    const manualRows = rows.filter((item) => item && item.source === 'locked' && item.isAutoLocked === false);
+    const autoRows = rows.filter((item) => item && item.source === 'locked' && item.isAutoLocked === true);
+    assert.equal(manualRows.length, 1);
+    assert.deepEqual(manualRows[0].lockUnits, [1]);
+    assert.equal(autoRows.length, 0);
+});
+
 test('toggleActualGridLockedUnit removes manual lock target while keeping non-target manual locks', () => {
     const ctx = makeCtx({
         timeSlots: [{

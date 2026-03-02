@@ -5187,19 +5187,10 @@ class TimeTracker {
         manualMask[unitIndex] = !Boolean(manualMask[unitIndex]);
 
         const nonLockedRows = normalized.filter((item) => !this.isLockedActivityRow(item));
-        const existingAutoRows = normalized.filter((item) => this.isLockedActivityRow(item) && !isManualLocked(item));
-        const hasExistingAuto = existingAutoRows.length > 0;
-        let autoMask = new Array(planContext.units.length).fill(false);
-
-        if (hasExistingAuto) {
-            const existingAutoMask = Array.isArray(lockData.autoMask) ? lockData.autoMask : autoMask;
-            autoMask = existingAutoMask.map((value, idx) => Boolean(value && !manualMask[idx]));
-        } else {
-            const autoCandidates = [...nonLockedRows, ...existingAutoRows];
-            const mergedLockedMask = this.getActualGridLockedUnitsForBase(baseIndex, planContext.units, autoCandidates);
-            const safeMerged = Array.isArray(mergedLockedMask) ? mergedLockedMask.map(value => Boolean(value)) : [];
-            autoMask = safeMerged.map((value, idx) => Boolean(value && !manualMask[idx]));
-        }
+        const existingAutoMask = Array.isArray(lockData.autoMask)
+            ? lockData.autoMask
+            : new Array(planContext.units.length).fill(false);
+        const autoMask = existingAutoMask.map((value, idx) => Boolean(value && !manualMask[idx]));
 
         const manualRows = this.rebuildLockedRowsFromUnitSet(manualMask, { isAutoLocked: false });
         const autoRowsFromMask = this.rebuildLockedRowsFromUnitSet(autoMask, {
