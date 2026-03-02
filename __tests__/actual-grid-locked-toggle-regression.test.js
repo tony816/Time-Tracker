@@ -365,6 +365,28 @@ test('toggleActualGridLockedUnit seeds planned rows so manual lock stays tied to
     assert.deepEqual(manualLocked.lockUnits, [0]);
 });
 
+test('toggleActualGridLockedUnit preserves existing actualGridUnits while toggling lock', () => {
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [],
+                actualGridUnits: [false, true, false, false],
+            }
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: ['A', 'A', 'B', 'B'], planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, true, false, false],
+        buildActualActivitiesFromGrid: () => [],
+        mergeActualActivitiesWithGrid: () => ([
+            { label: 'A', seconds: 1200, source: 'grid' },
+            { label: 'B', seconds: 1200, source: 'grid' },
+        ]),
+    });
+
+    toggleActualGridLockedUnit.call(ctx, 0, 0);
+
+    assert.deepEqual(ctx.timeSlots[0].activityLog.actualGridUnits, [false, true, false, false]);
+});
+
 test('toggleActualGridLockedUnit removes manual lock target while keeping non-target manual locks', () => {
     const ctx = makeCtx({
         timeSlots: [{

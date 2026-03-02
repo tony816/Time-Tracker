@@ -5265,6 +5265,9 @@ class TimeTracker {
         const planContext = this.buildPlanUnitsForActualGrid(baseIndex);
         if (!planContext || !Array.isArray(planContext.units) || planContext.units.length === 0) return;
         if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= planContext.units.length) return;
+        const preservedGridUnits = (typeof this.getActualGridUnitsForBase === 'function')
+            ? this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units)
+            : null;
 
         const slot = this.timeSlots[baseIndex];
         if (!slot) return;
@@ -5352,9 +5355,15 @@ class TimeTracker {
             }
         });
         slot.activityLog.subActivities = nextActivities.map((item) => ({ ...item }));
+        if (Array.isArray(preservedGridUnits)) {
+            slot.activityLog.actualGridUnits = preservedGridUnits.map((value) => Boolean(value));
+        }
 
         if (this.modalActualBaseIndex === baseIndex && this.modalActualHasPlanUnits) {
             this.modalActualActivities = slot.activityLog.subActivities.map((item) => ({ ...item }));
+            if (Array.isArray(preservedGridUnits)) {
+                this.modalActualGridUnits = preservedGridUnits.map((value) => Boolean(value));
+            }
             this.modalActualDirty = true;
             this.clampActualGridToAssigned();
             this.renderActualActivitiesList();
