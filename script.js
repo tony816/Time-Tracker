@@ -150,6 +150,7 @@ class TimeTracker {
         this.renderTimeEntries();
         this.attachEventListeners();
         this.setCurrentDate();
+        this.clearLegacyLocalStorageData();
         this.loadData();
         this.attachModalEventListeners();
         this.loadPlannedActivities();
@@ -1201,7 +1202,7 @@ class TimeTracker {
     }
 
     async saveData() {
-        this.setSaveStatus('info', 'Saving locally');
+        this.setSaveStatus('info', 'Saving');
         this._hasPendingRemoteSync = true;
         let mergedFieldsObject = {};
         if (this.mergedFields instanceof Map) {
@@ -1220,26 +1221,7 @@ class TimeTracker {
             this._lastSavedSignature = serializedSnapshot;
         } catch (_) {}
 
-        let localSaved = false;
-        if (serializedSnapshot) {
-            try {
-                const storageAdapter = (typeof globalThis !== 'undefined'
-                    && globalThis.TimeTrackerStorage
-                    && typeof globalThis.TimeTrackerStorage.setTimesheetData === 'function')
-                    ? globalThis.TimeTrackerStorage
-                    : null;
-
-                if (storageAdapter) {
-                    localSaved = Boolean(storageAdapter.setTimesheetData(this.currentDate, serializedSnapshot));
-                } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
-                    localStorage.setItem(`timesheetData:${this.currentDate}`, serializedSnapshot);
-                    localStorage.setItem('timesheetData:last', serializedSnapshot);
-                    localSaved = true;
-                }
-            } catch (_) {}
-        }
-
-        this.setSaveStatus(localSaved ? 'success' : 'warn', localSaved ? 'Saved locally' : 'Local save unavailable');
+        this.setSaveStatus('success', 'Saved');
         try {
             this.setSyncStatus(
                 navigator.onLine ? 'info' : 'warn',
@@ -1275,19 +1257,7 @@ class TimeTracker {
         this.mergedFields.clear();
 
         try {
-            let serialized = null;
-            const storageAdapter = (typeof globalThis !== 'undefined'
-                && globalThis.TimeTrackerStorage
-                && typeof globalThis.TimeTrackerStorage.getTimesheetData === 'function')
-                ? globalThis.TimeTrackerStorage
-                : null;
-
-            if (storageAdapter) {
-                serialized = storageAdapter.getTimesheetData(this.currentDate);
-            } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
-                serialized = localStorage.getItem(`timesheetData:${this.currentDate}`) || localStorage.getItem('timesheetData:last');
-            }
-
+            const serialized = null;
             if (serialized) {
                 const parsed = JSON.parse(serialized);
                 if (Array.isArray(parsed && parsed.timeSlots) && parsed.timeSlots.length > 0) {
@@ -1359,6 +1329,31 @@ class TimeTracker {
         }
         // Fetch latest data from Supabase (optional).
         try { this.fetchFromSupabaseForDate && this.fetchFromSupabaseForDate(this.currentDate); } catch(_) {}
+    }
+
+    clearLegacyLocalStorageData() {
+        try {
+            if (typeof localStorage === 'undefined' || !localStorage) return;
+            if (typeof localStorage.removeItem !== 'function' || typeof localStorage.key !== 'function') return;
+
+            const keysToDelete = [
+                `timesheetData:${String(this.currentDate || '').trim()}`,
+                'timesheetData:last',
+                'tt.dayStartHour',
+            ];
+            keysToDelete.forEach((key) => {
+                if (typeof key === 'string' && key) {
+                    try { localStorage.removeItem(key); } catch (_) {}
+                }
+            });
+
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (typeof key === 'string' && key.startsWith('timesheetData:')) {
+                    try { localStorage.removeItem(key); } catch (_) {}
+                }
+            }
+        } catch (_) {}
     }
     startChangeWatcher() {
         if (this._watcher) clearInterval(this._watcher);
