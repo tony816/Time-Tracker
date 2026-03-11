@@ -44,6 +44,7 @@ class TimeTracker {
         this.plannedActivities = [];
         this.modalSelectedActivities = [];
         this.currentPlanSource = 'local';
+        this.showNotionUI = false;
         this.planTabsContainer = null;
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
@@ -278,6 +279,12 @@ class TimeTracker {
     setSaveStatus(kind, message) { this.setStatusChip(this.saveStatusElement, kind, message); }
     setSyncStatus(kind, message) { this.setStatusChip(this.syncStatusElement, kind, message); }
     setNotionStatus(kind, message) { this.setStatusChip(this.notionStatusElement, kind, message); }
+    isNotionUIVisible() {
+        return this.showNotionUI === true;
+    }
+    getActivePlanSource() {
+        return this.isNotionUIVisible() && this.currentPlanSource === 'notion' ? 'notion' : 'local';
+    }
 
     attachConnectivityListeners() {
         const setNetworkState = () => {
@@ -7381,7 +7388,7 @@ class TimeTracker {
         };
 
         menu.appendChild(buildSection('직접 추가', grouped.local || []));
-        menu.appendChild(buildSection('노션', grouped.notion || []));
+        if (this.isNotionUIVisible()) menu.appendChild(buildSection('노션', grouped.notion || []));
 
         document.body.appendChild(menu);
         this.planActivityMenu = menu;
@@ -7534,7 +7541,7 @@ class TimeTracker {
         };
 
         menu.appendChild(buildSection('직접 추가', grouped.local || []));
-        menu.appendChild(buildSection('노션', grouped.notion || []));
+        if (this.isNotionUIVisible()) menu.appendChild(buildSection('노션', grouped.notion || []));
 
         document.body.appendChild(menu);
         this.planTitleMenu = menu;
@@ -7981,7 +7988,7 @@ class TimeTracker {
         const search = this.normalizeActivityText
             ? this.normalizeActivityText(rawSearch)
             : rawSearch.trim();
-        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        const activeSource = this.getActivePlanSource();
 
         const suggestions = [];
         const seen = new Set();
@@ -7990,6 +7997,7 @@ class TimeTracker {
             const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
             if (!label || seen.has(label)) return;
             const source = item.source === 'notion' ? 'notion' : 'local';
+            if (!this.isNotionUIVisible() && source === 'notion') return;
             if (source !== activeSource) return;
             if (search && !label.toLowerCase().includes(search.toLowerCase())) return;
             seen.add(label);
@@ -9570,13 +9578,15 @@ class TimeTracker {
     buildPlannedActivityOptions(extraLabels = []) {
         const grouped = { local: [], notion: [] };
         const seen = new Set();
+        const notionUIVisible = this.isNotionUIVisible();
 
         (this.plannedActivities || []).forEach((item) => {
             if (!item) return;
             const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : String(item.label || '').trim();
             if (!label || seen.has(label)) return;
-            seen.add(label);
             const source = item.source === 'notion' ? 'notion' : 'local';
+            if (!notionUIVisible && source === 'notion') return;
+            seen.add(label);
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
             grouped[source].push({ label, source, priorityRank, recommendedSeconds });
@@ -9783,7 +9793,7 @@ class TimeTracker {
     updatePlanSourceTabs(counts = {}, containerOverride = null) {
         const container = containerOverride || this.planTabsContainer || document.getElementById('planTabs');
         if (!container) return;
-        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        const activeSource = this.getActivePlanSource();
         container.querySelectorAll('.plan-tab').forEach((button) => {
             const source = button.dataset.source === 'notion' ? 'notion' : 'local';
             const isActive = source === activeSource;
@@ -9934,7 +9944,7 @@ class TimeTracker {
         const counts = { local: (grouped.local || []).length, notion: (grouped.notion || []).length };
         this.updatePlanSourceTabs(counts, tabs);
 
-        const activeSource = this.currentPlanSource === 'notion' ? 'notion' : 'local';
+        const activeSource = this.getActivePlanSource();
         const visibleItems = grouped[activeSource] || [];
         const normalizedCurrent = this.normalizeActivityText ? this.normalizeActivityText(currentValue) : String(currentValue || '').trim();
 
@@ -10269,6 +10279,7 @@ class TimeTracker {
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
         this.closeInlinePlanDropdown();
+        this.currentPlanSource = this.getActivePlanSource();
 
         this.inlinePlanTarget = { ...range, anchor };
         const dropdown = document.createElement('div');
@@ -10276,7 +10287,7 @@ class TimeTracker {
         dropdown.innerHTML = `
             <div class="inline-plan-tabs plan-tabs">
                 <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">직접 추가</button>
-                <button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>
+                ${this.isNotionUIVisible() ? '<button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>' : ''}
             </div>
             <div class="inline-plan-input-row">
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
@@ -10340,11 +10351,11 @@ class TimeTracker {
             tabs.addEventListener('click', (event) => {
                 const btn = event.target.closest('.plan-tab');
                 if (!btn || !tabs.contains(btn)) return;
-                const source = btn.dataset.source === 'notion' ? 'notion' : 'local';
+                const source = this.isNotionUIVisible() && btn.dataset.source === 'notion' ? 'notion' : 'local';
                 if (this.currentPlanSource === source) return;
                 this.currentPlanSource = source;
                 this.renderInlinePlanDropdownOptions();
-                if (source === 'notion') runInlineNotionSync();
+                if (source === 'notion' && this.isNotionUIVisible()) runInlineNotionSync();
             });
         }
 
@@ -10655,7 +10666,7 @@ class TimeTracker {
         window.addEventListener('resize', this.inlinePlanScrollHandler);
         window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
 
-        if (this.prefetchNotionActivitiesIfConfigured) {
+        if (this.isNotionUIVisible() && this.prefetchNotionActivitiesIfConfigured) {
             this.prefetchNotionActivitiesIfConfigured()
                 .then((added) => {
                     if (added && this.inlinePlanDropdown) {
@@ -12601,7 +12612,7 @@ class TimeTracker {
         };
 
         menu.appendChild(buildSection('직접 추가', grouped.local || []));
-        menu.appendChild(buildSection('노션', grouped.notion || []));
+        if (this.isNotionUIVisible()) menu.appendChild(buildSection('노션', grouped.notion || []));
 
         document.body.appendChild(menu);
         this.actualActivityMenu = menu;
