@@ -404,7 +404,7 @@ class TimeTracker {
 
         let actualContent = actualMergeKey
             ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
-            : this.createTimerField(index, slot);
+            : this.createActualSlotField(index, slot);
         actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
 
         const timeMergeKey = this.findMergeKey('time', index);
@@ -663,7 +663,7 @@ class TimeTracker {
         
         // 타이머 결과 입력 필드 이벤트 리스너 (우측 칸과 모달을 연결: 병합 포함 갱신)
         document.getElementById('timeEntries').addEventListener('input', (e) => {
-            if (e.target.classList.contains('timer-result-input')) {
+            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
                 try {
                     const index = parseInt(e.target.dataset.index);
                     const value = e.target.value;
@@ -697,7 +697,7 @@ class TimeTracker {
 
         // 한글 IME 등 입력 조합 종료 시 저장 보조(일부 환경에서 input 이벤트 지연/누락 대비)
         document.getElementById('timeEntries').addEventListener('compositionend', (e) => {
-            if (e.target.classList.contains('timer-result-input')) {
+            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
                 const value = e.target.value;
                 const actualMergeKey = this.findMergeKey('actual', index);
@@ -722,7 +722,7 @@ class TimeTracker {
 
         // 포커스가 빠질 때도 보조 저장 트리거 (blur는 버블링 안 됨 → focusout 사용)
         document.getElementById('timeEntries').addEventListener('focusout', (e) => {
-            if (e.target.classList && e.target.classList.contains('timer-result-input')) {
+            if (e.target.classList && e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
                 const index = parseInt(e.target.dataset.index);
                 const value = e.target.value;
                 const actualMergeKey = this.findMergeKey('actual', index);
@@ -747,7 +747,7 @@ class TimeTracker {
 
         // change 이벤트 보조 훅: 일부 환경에서 input 이벤트가 누락될 수 있음
         document.getElementById('timeEntries').addEventListener('change', (e) => {
-            if (e.target.classList.contains('timer-result-input')) {
+            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
                 try {
                     const index = parseInt(e.target.dataset.index);
                     const value = e.target.value;
@@ -777,7 +777,7 @@ class TimeTracker {
 
         // keyup 보조 훅: 특정 환경에서 input/change가 지연될 경우 대비
         document.getElementById('timeEntries').addEventListener('keyup', (e) => {
-            if (e.target.classList.contains('timer-result-input')) {
+            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
                 try {
                     const index = parseInt(e.target.dataset.index);
                     const value = e.target.value;
@@ -1031,22 +1031,8 @@ class TimeTracker {
                         const [, startStr] = mk.split('-');
                         const startIdx = parseInt(startStr, 10);
                         const mainContainer = target.closest && target.closest('.actual-field-container.merged-actual-main');
-                        const clickedInput = target.closest && target.closest('.timer-result-input');
 
                         if (mainContainer && index === startIdx && !this.isSelectingPlanned && !this.isSelectingActual) {
-                            if (clickedInput) {
-                                return;
-                            }
-                            if (e.type === 'click') {
-                                const inputEl = mainContainer.querySelector('.timer-result-input');
-                                if (inputEl) {
-                                    inputEl.focus();
-                                    try {
-                                        const len = inputEl.value.length;
-                                        inputEl.setSelectionRange(len, len);
-                                    } catch (_) {}
-                                }
-                            }
                             return;
                         }
 
@@ -1373,7 +1359,7 @@ class TimeTracker {
                         const row = document.querySelector(`[data-index="${i}"]`);
                         if (!row) continue;
                         const inp = row.querySelector('.timer-result-input');
-                        if (!inp) continue;
+                        if (!inp || inp.tagName !== 'INPUT') continue;
                         const v = String(inp.value || '');
                         if (this.timeSlots[i].actual !== v) {
                             this.timeSlots[i].actual = v;
@@ -2203,31 +2189,67 @@ class TimeTracker {
         const slots = row.slots || {};
         return this.applyPlannedCatalogJson(slots);
     }
-    getLocalPlannedLabels() {
-        const labels = [];
+    normalizePriorityRankValue(value) {
+        if (value === '' || value == null) return null;
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return null;
+        return Math.max(1, Math.floor(parsed));
+    }
+    normalizeLocalPlannedCatalogEntries(entries) {
+        if (!Array.isArray(entries)) return [];
+        const normalized = [];
+        entries.forEach((entry) => {
+            if (typeof entry === 'string') {
+                const label = this.normalizeActivityText(entry);
+                if (label) {
+                    normalized.push({ label, priorityRank: null });
+                }
+                return;
+            }
+            if (!entry || typeof entry !== 'object') return;
+            const label = this.normalizeActivityText(entry.label || entry.title || '');
+            if (!label) return;
+            normalized.push({
+                label,
+                priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
+            });
+        });
+        return normalized;
+    }
+    getLocalPlannedEntries() {
+        const entries = [];
         (this.plannedActivities || []).forEach((item) => {
             if (!item || item.source === 'notion') return;
             const label = this.normalizeActivityText(item.label || '');
             if (!label) return;
-            if (!labels.includes(label)) labels.push(label);
+            if (entries.some((entry) => entry.label === label)) return;
+            entries.push({
+                label,
+                priorityRank: this.normalizePriorityRankValue(item.priorityRank),
+            });
         });
-        return labels;
+        return entries;
     }
-    computePlannedSignature(labels) {
-        if (!Array.isArray(labels)) return '';
-        const normalized = labels
-            .map(label => this.normalizeActivityText(label))
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b));
+    computePlannedSignature(entries) {
+        if (!Array.isArray(entries)) return '';
+        const normalized = this.normalizeLocalPlannedCatalogEntries(entries)
+            .map((entry) => ({
+                label: entry.label,
+                priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
+            }))
+            .sort((a, b) => {
+                if (a.label !== b.label) return a.label.localeCompare(b.label);
+                const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
+                const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
+                return ra - rb;
+            });
         return JSON.stringify(normalized);
     }
     applyPlannedCatalogJson(slotsJson) {
         if (!slotsJson || typeof slotsJson !== 'object') return false;
         const catalog = (slotsJson && typeof slotsJson.catalog === 'object') ? slotsJson.catalog : null;
         const locals = Array.isArray(catalog && catalog.locals) ? catalog.locals : [];
-        const normalizedLocals = locals
-            .map(label => this.normalizeActivityText(label))
-            .filter(Boolean);
+        const normalizedLocals = this.normalizeLocalPlannedCatalogEntries(locals);
         const remoteSignature = this.computePlannedSignature(normalizedLocals);
         if (remoteSignature && remoteSignature === this._lastSupabasePlannedSignature) {
             return false;
@@ -2237,10 +2259,10 @@ class TimeTracker {
         const merged = [];
         const seen = new Set();
 
-        normalizedLocals.forEach((label) => {
+        normalizedLocals.forEach(({ label, priorityRank }) => {
             if (seen.has(label)) return;
             seen.add(label);
-            merged.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
+            merged.push({ label, source: 'local', priorityRank, recommendedSeconds: null });
         });
 
         (this.plannedActivities || []).forEach((item) => {
@@ -2289,8 +2311,8 @@ class TimeTracker {
                 return true;
             }
             // 센티널 행이 없는데 로컬 데이터가 있으면 서버로 업로드 스케줄링
-            const localLabels = this.getLocalPlannedLabels();
-            if (localLabels.length > 0) {
+            const localEntries = this.getLocalPlannedEntries();
+            if (localEntries.length > 0) {
                 this.scheduleSupabasePlannedSave(true);
             }
             return true;
@@ -2323,7 +2345,7 @@ class TimeTracker {
         if (!this.supabaseConfigured || !this.supabase) return false;
         const identity = this.getSupabaseIdentity();
         if (!identity) return false;
-        const locals = this.getLocalPlannedLabels();
+        const locals = this.getLocalPlannedEntries();
         const signature = this.computePlannedSignature(locals);
         if (!force && signature && signature === this._lastSupabasePlannedSignature) {
             return true;
@@ -3995,8 +4017,8 @@ class TimeTracker {
                 
                 // 우측 실제 활동 열 병합 (기존 값이 있다면 유지, 없으면 빈 값)
                 const actualMergeKey = `actual-${startIndex}-${endIndex}`;
-                const firstActualField = document.querySelector(`[data-index="${startIndex}"] .timer-result-input`);
-                const actualMergedValue = firstActualField ? firstActualField.value : '';
+                const baseSlot = this.timeSlots[startIndex] || {};
+                const actualMergedValue = String(baseSlot.actual || '').trim();
                 this.mergedFields.set(actualMergeKey, actualMergedValue);
                 
                 // 데이터 업데이트
@@ -6267,12 +6289,34 @@ class TimeTracker {
     }
 
     createTimerField(index, slot) {
+        if (typeof this.createActualSlotField === 'function') {
+            return this.createActualSlotField(index, slot);
+        }
+        const safeValue = this.escapeHtml(slot && slot.actual);
+        const safeAttr = this.escapeAttribute(slot && slot.actual);
         return `<div class="actual-field-container">
-                    <input type="text" class="input-field actual-input timer-result-input" 
-                           data-index="${index}" 
-                           data-type="actual" 
-                           value="${this.escapeAttribute(slot.actual)}"
-                           placeholder="활동 기록">
+                    <div class="input-field actual-input timer-result-input" 
+                         data-index="${index}" 
+                         data-type="actual" 
+                         data-value="${safeAttr}"
+                         title="${safeAttr}">${safeValue}</div>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="?쒕룞 ?곸꽭 湲곕줉 ?닿린" title="?곸꽭 湲곕줉 ?닿린">?뱷</button>
+                </div>`;
+    }
+
+    createActualSlotField(index, slot) {
+        return this._buildActualSlotFieldMarkup(index, slot);
+    }
+
+    _buildActualSlotFieldMarkup(index, slot) {
+        const safeValue = this.escapeHtml(slot && slot.actual);
+        const safeAttr = this.escapeAttribute(slot && slot.actual);
+        return `<div class="actual-field-container">
+                    <div class="input-field actual-input timer-result-input" 
+                         data-index="${index}" 
+                         data-type="actual" 
+                         data-value="${safeAttr}"
+                         title="${safeAttr}">${safeValue}</div>
                     <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
                 </div>`;
     }
@@ -6707,13 +6751,16 @@ class TimeTracker {
                 if (slot.actual === clamped) return;
                 slot.actual = clamped;
             }
-            try {
-                const row = document.querySelector(`[data-index="${baseIndex}"]`);
-                if (row) {
-                    const input = row.querySelector('.timer-result-input');
-                    if (input) input.value = clamped;
-                }
-            } catch (_) {}
+                try {
+                    const row = document.querySelector(`[data-index="${baseIndex}"]`);
+                    if (row) {
+                        const input = row.querySelector('.timer-result-input');
+                        if (input) {
+                            input.textContent = clamped;
+                            input.setAttribute('data-value', clamped);
+                        }
+                    }
+                } catch (_) {}
             this.showNotification('기록 시간은 한 칸당 최대 60분까지 입력할 수 있습니다.');
         }
     }
@@ -8299,7 +8346,7 @@ class TimeTracker {
         const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
         if (!safeMergeKey) {
             if (type === 'actual') {
-                return this.createTimerField(index, { ...this.timeSlots[index], actual: value || '' });
+                return this.createActualSlotField(index, { ...this.timeSlots[index], actual: value || '' });
             }
             return `<input type="text" class="input-field ${type}-input" 
                            data-index="${index}" 
@@ -8321,12 +8368,12 @@ class TimeTracker {
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <div class="actual-merged-overlay">
-                                <input type="text" class="input-field actual-input timer-result-input merged-field" 
+                                <div class="input-field actual-input timer-result-input merged-field" 
                                        data-index="${index}" 
                                        data-type="actual" 
                                        data-merge-key="${safeMergeKey}"
-                                       value="${safeMergeValue}"
-                                       placeholder="활동 기록">
+                                       data-value="${safeMergeValue}"
+                                       title="${safeMergeValue}">${safeMergeValue}</div>
                                 <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
                             </div>
                         </div>`;
@@ -8336,15 +8383,12 @@ class TimeTracker {
                                data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
-                            <input type="text" class="input-field actual-input merged-secondary" 
+                            <div class="input-field actual-input merged-secondary" 
                                    data-index="${index}" 
                                    data-type="actual" 
                                    data-merge-key="${safeMergeKey}"
-                                   value="${safeMergeValue}"
-                                   readonly
-                                   tabindex="-1"
-                                   style="cursor: pointer; opacity: 0;"
-                                   placeholder="">
+                                   data-value="${safeMergeValue}"
+                                   title="${safeMergeValue}">${safeMergeValue}
                         </div>`;
             }
         } else {
@@ -9253,7 +9297,7 @@ class TimeTracker {
 
                 let actualContent = actualMergeKey
                     ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
-                    : this.createTimerField(index, slot);
+                : this.createActualSlotField(index, slot);
 
                 actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
 
@@ -9350,7 +9394,13 @@ class TimeTracker {
         if (!label) return;
         const idx = this.findPlannedActivityIndex(label);
         if (idx >= 0) {
-            this.plannedActivities[idx] = { label, source: 'local', priorityRank: null, recommendedSeconds: null };
+            const existing = this.plannedActivities[idx] || {};
+            this.plannedActivities[idx] = {
+                label,
+                source: 'local',
+                priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null
+            };
         } else {
             this.plannedActivities.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
         }
@@ -9456,7 +9506,13 @@ class TimeTracker {
         const i = this.findPlannedActivityIndex(oldLabel);
         if (i >= 0) {
             // rename in list (편집 시에는 항상 로컬 항목으로 취급)
-            this.plannedActivities[i] = { label: newLabel, source: 'local', priorityRank: null, recommendedSeconds: null };
+            const existing = this.plannedActivities[i] || {};
+            this.plannedActivities[i] = {
+                label: newLabel,
+                source: 'local',
+                priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null
+            };
             // update selection
             const si = this.modalSelectedActivities.indexOf(oldLabel);
             if (si >= 0) this.modalSelectedActivities[si] = newLabel;
@@ -9469,6 +9525,30 @@ class TimeTracker {
     findPlannedActivityIndex(label) {
         if (!Array.isArray(this.plannedActivities)) return -1;
         return this.plannedActivities.findIndex(item => item && item.label === label);
+    }
+    updatePlannedActivityPriority(label, value) {
+        const normalizedLabel = this.normalizeActivityText(label || '');
+        if (!normalizedLabel) return false;
+        const idx = this.findPlannedActivityIndex(normalizedLabel);
+        if (idx < 0) return false;
+        const item = this.plannedActivities[idx];
+        if (!item || item.source === 'notion') return false;
+        const nextPriorityRank = this.normalizePriorityRankValue(value);
+        const currentPriorityRank = this.normalizePriorityRankValue(item.priorityRank);
+        if ((currentPriorityRank ?? null) === (nextPriorityRank ?? null)) {
+            return false;
+        }
+        this.plannedActivities[idx] = {
+            ...item,
+            label: normalizedLabel,
+            source: 'local',
+            priorityRank: nextPriorityRank,
+        };
+        this.dedupeAndSortPlannedActivities();
+        this.savePlannedActivities();
+        this.renderPlannedActivityDropdown();
+        this.refreshSubActivityOptions();
+        return true;
     }
     dedupeAndSortPlannedActivities() {
         const byLabel = new Map();
@@ -9539,7 +9619,7 @@ class TimeTracker {
             if (!it) return;
             const label = this.normalizeActivityText(it.title || '');
             if (!label) return;
-            const priorityRank = Number.isFinite(it.priorityRank) ? Number(it.priorityRank) : null;
+            const priorityRank = this.normalizePriorityRankValue(it.priorityRank);
             const recommendedSeconds = this.resolveRecommendedPlanSeconds ? this.resolveRecommendedPlanSeconds(it) : 0;
             normalized.push({
                 id: it.id,
@@ -9572,7 +9652,7 @@ class TimeTracker {
             if (!item) return false;
             return this.normalizeActivityText(item.label || '') === normalized;
         });
-        const rank = match && Number.isFinite(match.priorityRank) ? Number(match.priorityRank) : null;
+        const rank = match ? this.normalizePriorityRankValue(match.priorityRank) : null;
         return Number.isFinite(rank) ? rank : null;
     }
     buildPlannedActivityOptions(extraLabels = []) {
@@ -9587,7 +9667,7 @@ class TimeTracker {
             const source = item.source === 'notion' ? 'notion' : 'local';
             if (!notionUIVisible && source === 'notion') return;
             seen.add(label);
-            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const priorityRank = this.normalizePriorityRankValue(item.priorityRank);
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
             grouped[source].push({ label, source, priorityRank, recommendedSeconds });
         });
@@ -9961,24 +10041,57 @@ class TimeTracker {
 
         visibleItems.forEach((item) => {
             const { label, source } = item;
-            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
+            const priorityRank = this.normalizePriorityRankValue(item.priorityRank);
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Math.floor(item.recommendedSeconds)) : null;
             const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
             const li = document.createElement('li');
-            li.className = 'inline-plan-option';
+            li.className = 'inline-plan-option inline-plan-option-row';
             li.dataset.source = source;
             if (normalizedCurrent && normalizedLabel === normalizedCurrent) {
                 li.classList.add('selected');
             }
 
             const left = document.createElement('div');
-            left.className = 'inline-plan-option-left';
-            const badge = this.makePriorityBadge(priorityRank);
-            if (badge) left.appendChild(badge);
+            left.className = 'inline-plan-priority-cell';
+            const priorityButton = document.createElement('button');
+            priorityButton.type = 'button';
+            priorityButton.className = 'inline-plan-priority-chip';
+            if (Number.isFinite(priorityRank)) {
+                priorityButton.dataset.pr = String(priorityRank);
+                priorityButton.textContent = `Pr.${priorityRank}`;
+            } else {
+                priorityButton.dataset.empty = 'true';
+                priorityButton.textContent = 'Pr.-';
+            }
+            if (source === 'notion') {
+                priorityButton.disabled = true;
+                priorityButton.title = 'Notion priority';
+            } else {
+                priorityButton.title = 'Click to edit priority';
+                priorityButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    const current = Number.isFinite(priorityRank) ? String(priorityRank) : '';
+                    const nextRaw = prompt('우선순위를 입력하세요. 비우려면 빈 값으로 저장하세요.', current);
+                    if (nextRaw === null) return;
+                    const nextValue = String(nextRaw).trim();
+                    if (nextValue && this.normalizePriorityRankValue(nextValue) == null) {
+                        this.showNotification('우선순위는 1 이상의 숫자만 가능합니다.', 'warn');
+                        return;
+                    }
+                    this.updatePlannedActivityPriority(label, nextValue);
+                    this.renderInlinePlanDropdownOptions();
+                });
+            }
+            left.appendChild(priorityButton);
+
+            const content = document.createElement('div');
+            content.className = 'inline-plan-task-cell';
+            const titleWrap = document.createElement('div');
+            titleWrap.className = 'inline-plan-task-main';
             const text = document.createElement('span');
             text.className = 'inline-plan-option-label';
             text.textContent = label;
-            left.appendChild(text);
+            titleWrap.appendChild(text);
 
             const right = document.createElement('div');
             right.className = 'inline-plan-option-meta';
@@ -10032,9 +10145,11 @@ class TimeTracker {
                 right.appendChild(time);
             }
 
+            content.appendChild(titleWrap);
+            content.appendChild(right);
             li.appendChild(left);
-            li.appendChild(right);
-            li.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
+            li.appendChild(content);
+            content.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
             list.appendChild(li);
         });
     }
@@ -10295,6 +10410,10 @@ class TimeTracker {
                 <button type="button" class="inline-plan-sync-btn">지우기</button>
             </div>
             <div class="inline-plan-options dropdown">
+                <div class="inline-plan-options-head" aria-hidden="true">
+                    <span class="inline-plan-options-head-pr">Pr</span>
+                    <span class="inline-plan-options-head-task">Task Title</span>
+                </div>
                 <ul class="inline-plan-options-list"></ul>
             </div>
             <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해">세부 활동 분해</button>
@@ -10856,8 +10975,9 @@ class TimeTracker {
                 return;
             }
 
+            const localPriorityRank = this.normalizePriorityRankValue(item.priorityRank);
             const localRecommended = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-            next.push({ label, source: 'local', priorityRank: null, recommendedSeconds: localRecommended });
+            next.push({ label, source: 'local', priorityRank: localPriorityRank, recommendedSeconds: localRecommended });
             if (notionMap.has(label)) notionMap.delete(label);
         });
 
