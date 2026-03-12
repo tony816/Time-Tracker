@@ -71,8 +71,21 @@ npm start
 
 1. VS Code에서 `Time-Tracker` 폴더 열기
 2. **Dev Containers: Reopen in Container** 실행
-3. 컨테이너 생성 후 `npm ci` 자동 실행
+3. 컨테이너 생성 후 bootstrap 스크립트가 실행되어 `npm ci` 및 `.env` 준비
 4. `npm start` 후 `http://localhost:3000` 접속
+
+### GitHub Codespaces 사용(권장)
+
+1. GitHub 저장소에서 **Code → Codespaces → Create codespace on main**
+2. Codespaces Secrets에 아래 키를 등록
+   - `NOTION_API_KEY`
+   - `NOTION_DATABASE_ID`
+   - `NOTION_VERSION` (선택, 기본값 `2025-09-03`)
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `PORT` (선택, 기본값 `3000`)
+3. 컨테이너 생성 시 `.devcontainer/post-create.sh`가 자동 실행되어 `.env`를 구성
+4. 포트 `3000`을 열어 앱 확인
 
 ## 서버 역할(선택)
 
