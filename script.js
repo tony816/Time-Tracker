@@ -157,7 +157,6 @@ class TimeTracker {
         this.renderTimeEntries();
         this.attachEventListeners();
         this.setCurrentDate();
-        this.clearLegacyLocalStorageData();
         this.loadData();
         this.attachModalEventListeners();
         this.loadPlannedActivities();
@@ -182,10 +181,17 @@ class TimeTracker {
         // Studio 탭 전환 등으로 hidden일 때 타이머 스로틀링을 피하고 불필요한 트리거를 줄임
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                this.persistLocalSnapshotNow();
                 if (this._watcher) clearInterval(this._watcher);
             } else {
                 this.startChangeWatcher();
             }
+        });
+        window.addEventListener('pagehide', () => {
+            this.persistLocalSnapshotNow();
+        });
+        window.addEventListener('beforeunload', () => {
+            this.persistLocalSnapshotNow();
         });
     }
 
@@ -412,6 +418,18 @@ class TimeTracker {
     }
 
     loadDayStartHour() {
+        try {
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.getDayStartHour === 'function') {
+                return storage.getDayStartHour(4);
+            }
+            if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+                const stored = parseInt(String(localStorage.getItem('tt.dayStartHour')), 10);
+                return stored === 0 ? 0 : 4;
+            }
+        } catch (_) {}
         return 4;
     }
 
@@ -421,7 +439,12 @@ class TimeTracker {
         select.value = String(this.dayStartHour === 0 ? 0 : 4);
         select.addEventListener('change', () => {
             const parsed = parseInt(select.value, 10);
-            this.dayStartHour = parsed === 0 ? 0 : 4;
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            this.dayStartHour = (storage && typeof storage.setDayStartHour === 'function')
+                ? storage.setDayStartHour(parsed)
+                : (parsed === 0 ? 0 : 4);
             this.renderTimeEntries(true);
             this.updateDayStartUI();
         });
@@ -1372,6 +1395,39 @@ class TimeTracker {
     async saveData() {
         this.setSaveStatus('info', 'Saving');
         this._hasPendingRemoteSync = true;
+        if (typeof this.persistLocalSnapshotNow === 'function') {
+            this.persistLocalSnapshotNow();
+        } else {
+            let mergedFieldsObject = {};
+            if (this.mergedFields instanceof Map) {
+                mergedFieldsObject = Object.fromEntries(this.mergedFields);
+            } else if (this.mergedFields && typeof this.mergedFields === 'object') {
+                mergedFieldsObject = { ...this.mergedFields };
+            }
+            try {
+                const serializedSnapshot = JSON.stringify({
+                    date: this.currentDate,
+                    timeSlots: this.timeSlots,
+                    mergedFields: mergedFieldsObject
+                });
+                if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+                    localStorage.setItem(`timesheetData:${String(this.currentDate || '').trim()}`, serializedSnapshot);
+                    localStorage.setItem('timesheetData:last', serializedSnapshot);
+                }
+                this._lastSavedSignature = serializedSnapshot;
+            } catch (_) {}
+        }
+
+        this.setSaveStatus('success', 'Saved');
+        try {
+            this.setSyncStatus(
+                navigator.onLine ? 'info' : 'warn',
+                navigator.onLine ? 'Remote sync scheduled' : 'Offline (will sync when online)'
+            );
+            this.scheduleSupabaseSave && this.scheduleSupabaseSave();
+        } catch(_) {}
+    }
+    persistLocalSnapshotNow() {
         let mergedFieldsObject = {};
         if (this.mergedFields instanceof Map) {
             mergedFieldsObject = Object.fromEntries(this.mergedFields);
@@ -1386,17 +1442,18 @@ class TimeTracker {
                 timeSlots: this.timeSlots,
                 mergedFields: mergedFieldsObject
             });
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.setTimesheetData === 'function') {
+                storage.setTimesheetData(this.currentDate, serializedSnapshot);
+            } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+                localStorage.setItem(`timesheetData:${String(this.currentDate || '').trim()}`, serializedSnapshot);
+                localStorage.setItem('timesheetData:last', serializedSnapshot);
+            }
             this._lastSavedSignature = serializedSnapshot;
         } catch (_) {}
-
-        this.setSaveStatus('success', 'Saved');
-        try {
-            this.setSyncStatus(
-                navigator.onLine ? 'info' : 'warn',
-                navigator.onLine ? 'Remote sync scheduled' : 'Offline (will sync when online)'
-            );
-            this.scheduleSupabaseSave && this.scheduleSupabaseSave();
-        } catch(_) {}
+        return serializedSnapshot;
     }
     createStateSnapshot(timeSlots = this.timeSlots, mergedFields = this.mergedFields) {
         const safeSlots = Array.isArray(timeSlots) ? timeSlots : [];
@@ -1425,7 +1482,16 @@ class TimeTracker {
         this.mergedFields.clear();
 
         try {
-            const serialized = null;
+            let serialized = null;
+            const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
+                ? globalThis.TimeTrackerStorage
+                : null;
+            if (storage && typeof storage.getTimesheetData === 'function') {
+                serialized = storage.getTimesheetData(this.currentDate);
+            } else if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+                serialized = localStorage.getItem(`timesheetData:${String(this.currentDate || '').trim()}`)
+                    || localStorage.getItem('timesheetData:last');
+            }
             if (serialized) {
                 const parsed = JSON.parse(serialized);
                 if (Array.isArray(parsed && parsed.timeSlots) && parsed.timeSlots.length > 0) {
@@ -1564,6 +1630,7 @@ class TimeTracker {
 
     autoSave() {
         clearTimeout(this.autoSaveTimeout);
+        this.persistLocalSnapshotNow();
         this.autoSaveTimeout = setTimeout(() => {
             this.saveData();
         }, 1500);

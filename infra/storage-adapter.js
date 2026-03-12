@@ -15,6 +15,15 @@
     const DAY_START_KEY = 'tt.dayStartHour';
     const LAST_TIMESHEET_KEY = 'timesheetData:last';
 
+    function getStorage() {
+        try {
+            if (root && root.localStorage && typeof root.localStorage.getItem === 'function' && typeof root.localStorage.setItem === 'function') {
+                return root.localStorage;
+            }
+        } catch (_) {}
+        return null;
+    }
+
     function normalizeDayStartHour(value, fallback = 4) {
         const defaultHour = parseInt(String(fallback), 10) === 0 ? 0 : 4;
         const parsed = parseInt(String(value), 10);
@@ -27,23 +36,62 @@
     }
 
     function getDayStartHour(fallback = 4) {
-        return normalizeDayStartHour(4, fallback);
+        const storage = getStorage();
+        if (!storage) return normalizeDayStartHour(fallback, fallback);
+        try {
+            return normalizeDayStartHour(storage.getItem(DAY_START_KEY), fallback);
+        } catch (_) {
+            return normalizeDayStartHour(fallback, fallback);
+        }
     }
 
     function setDayStartHour(value) {
-        return normalizeDayStartHour(value, 4);
+        const normalized = normalizeDayStartHour(value, 4);
+        const storage = getStorage();
+        if (!storage) return normalized;
+        try {
+            storage.setItem(DAY_START_KEY, String(normalized));
+        } catch (_) {}
+        return normalized;
     }
 
-    function getTimesheetData(_date) {
-        return null;
+    function getTimesheetData(date) {
+        const storage = getStorage();
+        if (!storage) return null;
+        const dateKey = getTimesheetStorageKey(date);
+        try {
+            const exact = storage.getItem(dateKey);
+            if (typeof exact === 'string' && exact) return exact;
+            const last = storage.getItem(LAST_TIMESHEET_KEY);
+            return (typeof last === 'string' && last) ? last : null;
+        } catch (_) {
+            return null;
+        }
     }
 
-    function setTimesheetData(_date, _serializedData) {
-        return false;
+    function setTimesheetData(date, serializedData) {
+        const storage = getStorage();
+        if (!storage) return false;
+        const payload = String(serializedData == null ? '' : serializedData);
+        const dateKey = getTimesheetStorageKey(date);
+        try {
+            storage.setItem(dateKey, payload);
+            storage.setItem(LAST_TIMESHEET_KEY, payload);
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
 
-    function removeTimesheetData(_date) {
-        return false;
+    function removeTimesheetData(date) {
+        const storage = getStorage();
+        if (!storage || typeof storage.removeItem !== 'function') return false;
+        try {
+            storage.removeItem(getTimesheetStorageKey(date));
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
 
     return Object.freeze({
