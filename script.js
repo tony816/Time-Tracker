@@ -467,7 +467,7 @@ class TimeTracker {
         if (select) select.value = String(this.dayStartHour === 0 ? 0 : 4);
     }
 
-    
+
 
     createEmptyTimeSlots() {
         const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerCore)
@@ -524,9 +524,9 @@ class TimeTracker {
 
         let plannedContent = plannedMergeKey
             ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
-            : `<input type="text" class="input-field planned-input" 
-                        data-index="${index}" 
-                        data-type="planned" 
+            : `<input type="text" class="input-field planned-input"
+                        data-index="${index}"
+                        data-type="planned"
                         value="${this.escapeAttribute(slot.planned)}"
                         placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
@@ -795,14 +795,14 @@ class TimeTracker {
 
         // 가져오기/내보내기 기능 제거됨: 관련 UI 및 리스너 없음
 
-        
+
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 this.clearAllSelections();
             }
         });
-        
+
         // 타이머 결과 입력 필드 이벤트 리스너 (우측 칸과 모달을 연결: 병합 포함 갱신)
         document.getElementById('timeEntries').addEventListener('input', (e) => {
             if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
@@ -1626,7 +1626,7 @@ class TimeTracker {
         }, 5000);
     }
 
-    
+
 
     autoSave() {
         clearTimeout(this.autoSaveTimeout);
@@ -3407,7 +3407,7 @@ class TimeTracker {
     attachFieldSelectionListeners(entryDiv, index) {
         const plannedField = entryDiv.querySelector('.planned-input');
         const actualField = entryDiv.querySelector('.actual-input');
-        
+
         if (plannedField) {
             plannedField.addEventListener('click', (e) => {
                 const mergeKey = this.findMergeKey('planned', index);
@@ -3649,7 +3649,7 @@ class TimeTracker {
                 }
             }
         }
-        
+
         // No drag-selection listeners for actualField in the actual column
         if (actualField) {
             const actualContainer = entryDiv.querySelector('.actual-field-container');
@@ -3855,7 +3855,7 @@ class TimeTracker {
         if (type !== 'planned') return; // 우측 열에서 시작 조작 금지
         this.currentColumnType = type;
         this.dragStartIndex = index;
-        
+
         if (type === 'planned') {
             this.isSelectingPlanned = true;
             if (!e.ctrlKey && !e.metaKey) {
@@ -3868,7 +3868,7 @@ class TimeTracker {
     toggleFieldSelection(type, index) {
         const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        
+
         if (selectedSet.has(index)) {
             selectedSet.delete(index);
             if (field) field.classList.remove('field-selected');
@@ -3881,7 +3881,7 @@ class TimeTracker {
     selectFieldRange(type, startIndex, endIndex) {
         if (type !== 'planned') return; // 우측 열 멀티 선택 금지
         this.clearSelection(type);
-        
+
         let start = Math.min(startIndex, endIndex);
         let end = Math.max(startIndex, endIndex);
 
@@ -3908,22 +3908,22 @@ class TimeTracker {
         start = Math.max(0, start);
         end = Math.min(maxIndex, end);
         if (start > end) return;
-        
+
         for (let i = start; i <= end; i++) {
             const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
             selectedSet.add(i);
             // 필드 클래스 하이라이트는 사용하지 않음 (투명 오버레이만)
         }
-        
+
         this.updateSelectionOverlay(type);
-        
+
         const selectedSet = this.selectedPlannedFields;
         if (selectedSet.size > 1) {
             this.showMergeButton('planned');
         }
         this.showScheduleButtonForSelection(type);
     }
-    
+
     clearSelection(type) {
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         selectedSet.forEach(index => {
@@ -3937,38 +3937,38 @@ class TimeTracker {
             }
         });
         selectedSet.clear();
-        
+
         this.hideMergeButton();
         this.hideUndoButton();
         this.removeSelectionOverlay(type);
         this.hideScheduleButton();
     }
-    
+
     clearAllSelections() {
         this.clearSelection('planned');
         this.clearSelection('actual');
     }
-    
+
     showMergeButton(type) {
         if (type !== 'planned') return; // 우측 열 병합 버튼 금지
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        
+
         if (selectedSet.size > 1) {
             const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
             const startIndex = selectedIndices[0];
             const endIndex = selectedIndices[selectedIndices.length - 1];
-            
+
             const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const endField = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
-            
+
             if (startField && endField) {
                 const startRect = startField.getBoundingClientRect();
                 const endRect = endField.getBoundingClientRect();
-                
+
                 let centerX, centerY;
-                
+
                 const selectedCount = selectedIndices.length;
-                
+
                 if (selectedCount % 2 === 1) {
                     const middleIndex = selectedIndices[Math.floor(selectedCount / 2)];
                     const middleField = document.querySelector(`[data-index="${middleIndex}"] .${type}-input`);
@@ -3982,27 +3982,27 @@ class TimeTracker {
                     const field2 = document.querySelector(`[data-index="${selectedIndices[midIndex2]}"] .${type}-input`);
                     const rect1 = field1.getBoundingClientRect();
                     const rect2 = field2.getBoundingClientRect();
-                    
+
                     centerX = (rect1.left + rect1.width / 2 + rect2.left + rect2.width / 2) / 2;
                     centerY = (rect1.bottom + rect2.top) / 2;
                 }
-                
+
                 this.hideMergeButton();
-                
+
                 const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
                 const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-                
+
                 this.mergeButton = document.createElement('button');
                 this.mergeButton.className = 'merge-button';
                 this.mergeButton.textContent = '병합';
                 // 기본 배치(선택 중앙) 후, 스케줄 버튼이 있으면 우측으로 재배치
                 this.mergeButton.style.left = `${centerX + scrollX - 25}px`;
                 this.mergeButton.style.top = `${centerY + scrollY - 15}px`;
-                
+
                 this.mergeButton.addEventListener('click', () => {
                     this.mergeSelectedFields(type);
                 });
-                
+
                 document.body.appendChild(this.mergeButton);
                 // 병합 버튼과 스케줄 버튼은 동시 표기하지 않음
                 this.hideScheduleButton();
@@ -4010,30 +4010,30 @@ class TimeTracker {
             }
         }
     }
-    
+
     hideMergeButton() {
         if (this.mergeButton && this.mergeButton.parentNode) {
             this.mergeButton.parentNode.removeChild(this.mergeButton);
             this.mergeButton = null;
         }
     }
-    
+
     showUndoButton(type, mergeKey) {
         // 우측(실제) 열은 병합 해제 기능 제거
         if (type !== 'planned') return;
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
-        
+
         const startField = document.querySelector(`[data-index="${start}"] .${type}-input`);
         const endField = document.querySelector(`[data-index="${end}"] .${type}-input`);
-        
+
         if (startField && endField) {
             const startRect = startField.getBoundingClientRect();
             const endRect = endField.getBoundingClientRect();
-            
+
             this.hideUndoButton();
-            
+
             const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
             const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
 
@@ -4055,23 +4055,23 @@ class TimeTracker {
             // 기본 배치: 스케줄 버튼이 있으면 바로 우측, 없으면 중앙
             this.undoButton.style.left = `${Math.round(defaultLeft)}px`;
             this.undoButton.style.top = `${Math.round(defaultTop)}px`;
-            
+
             this.undoButton.addEventListener('click', () => {
                 this.undoMerge(type, mergeKey);
             });
-            
+
             document.body.appendChild(this.undoButton);
             this.repositionButtonsNextToSchedule();
         }
     }
-    
+
     hideUndoButton() {
         if (this.undoButton && this.undoButton.parentNode) {
             this.undoButton.parentNode.removeChild(this.undoButton);
             this.undoButton = null;
         }
     }
-    
+
     undoMerge(type, mergeKey) {
         // 우측(실제) 열은 병합 해제 불가
         if (type !== 'planned') {
@@ -4209,7 +4209,7 @@ class TimeTracker {
 
     mergeSelectedFields(type) {
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        
+
         if (selectedSet.size > 1) {
             const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
             let startIndex = selectedIndices[0];
@@ -4264,7 +4264,7 @@ class TimeTracker {
 
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
             this.mergedFields.set(mergeKey, mergedValue);
-            
+
             // 좌측 계획 열이 병합될 때 모든 열을 동기화 병합
             if (type === 'planned') {
                 // 중앙 시간 열 병합 (시간 범위 표시)
@@ -4273,13 +4273,13 @@ class TimeTracker {
                 const endTime = this.timeSlots[endIndex].time;
                 const timeRangeValue = `${startTime}-${endTime}`;
                 this.mergedFields.set(timeRangeKey, timeRangeValue);
-                
+
                 // 우측 실제 활동 열 병합 (기존 값이 있다면 유지, 없으면 빈 값)
                 const actualMergeKey = `actual-${startIndex}-${endIndex}`;
                 const baseSlot = this.timeSlots[startIndex] || {};
                 const actualMergedValue = String(baseSlot.actual || '').trim();
                 this.mergedFields.set(actualMergeKey, actualMergedValue);
-                
+
                 // 데이터 업데이트
                 const basePlanTitle = (this.timeSlots[startIndex] && typeof this.timeSlots[startIndex].planTitle === 'string')
                     ? this.timeSlots[startIndex].planTitle
@@ -4346,7 +4346,7 @@ class TimeTracker {
                     }
                 }
             }
-            
+
             this.renderTimeEntries();
             this.clearAllSelections();
             if (type === 'planned') {
@@ -4356,7 +4356,7 @@ class TimeTracker {
             this.autoSave();
         }
     }
-    
+
     findMergeKey(type, index) {
         for (let [key, value] of this.mergedFields) {
             if (key.startsWith(`${type}-`)) {
@@ -6554,9 +6554,9 @@ class TimeTracker {
         const safeValue = this.escapeHtml(slot && slot.actual);
         const safeAttr = this.escapeAttribute(slot && slot.actual);
         return `<div class="actual-field-container">
-                    <div class="input-field actual-input timer-result-input" 
-                         data-index="${index}" 
-                         data-type="actual" 
+                    <div class="input-field actual-input timer-result-input"
+                         data-index="${index}"
+                         data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
                     <button class="activity-log-btn" data-index="${index}" aria-label="?쒕룞 ?곸꽭 湲곕줉 ?닿린" title="?곸꽭 湲곕줉 ?닿린">?뱷</button>
@@ -6571,9 +6571,9 @@ class TimeTracker {
         const safeValue = this.escapeHtml(slot && slot.actual);
         const safeAttr = this.escapeAttribute(slot && slot.actual);
         return `<div class="actual-field-container">
-                    <div class="input-field actual-input timer-result-input" 
-                         data-index="${index}" 
-                         data-type="actual" 
+                    <div class="input-field actual-input timer-result-input"
+                         data-index="${index}"
+                         data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
                     <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
@@ -6597,13 +6597,13 @@ class TimeTracker {
         if (index === start) {
             // 병합된 시간 필드의 주 셀 - 시간 범위 표시 및 단일 타이머 컨트롤
             const timerControls = this.createTimerControls(index, slot);
-            
+
             // 시간 범위 생성 (예: 12 ~ 13 형태)
             const startTime = this.formatSlotTimeLabel(this.timeSlots[start].time);
             const endTime = this.formatSlotTimeLabel(this.timeSlots[end].time);
             const timeRangeDisplay = `${startTime} ~ ${endTime}`;
-            
-            return `<div class="time-slot-container merged-time-main" 
+
+            return `<div class="time-slot-container merged-time-main"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
@@ -6614,7 +6614,7 @@ class TimeTracker {
                     </div>`;
         } else if (index === end) {
             // 병합된 시간 필드의 마지막 보조 셀 - 하단 경계선 유지
-            return `<div class="time-slot-container merged-time-secondary merged-time-last" 
+            return `<div class="time-slot-container merged-time-secondary merged-time-last"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
@@ -6622,7 +6622,7 @@ class TimeTracker {
                     </div>`;
         } else {
             // 병합된 시간 필드의 중간 보조 셀 - 완전히 경계선 제거
-            return `<div class="time-slot-container merged-time-secondary" 
+            return `<div class="time-slot-container merged-time-secondary"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}">
@@ -6692,13 +6692,13 @@ class TimeTracker {
         return `
             <div class="timer-controls-container ${isRunning ? 'timer-running' : ''}" data-index="${index}">
                 <div class="timer-controls">
-                    <button class="timer-btn timer-start-pause" 
-                            data-index="${index}" 
+                    <button class="timer-btn timer-start-pause"
+                            data-index="${index}"
                             data-action="${buttonAction}" aria-label="타이머 ${buttonIcon}"${startButtonAttrString}>
                         ${buttonIcon}
                     </button>
-                    <button class="timer-btn timer-stop" 
-                            data-index="${index}" 
+                    <button class="timer-btn timer-stop"
+                            data-index="${index}"
                             data-action="stop" aria-label="타이머 정지"
                             style="${stopButtonStyle}">
                         정지
@@ -6708,7 +6708,7 @@ class TimeTracker {
             </div>
         `;
     }
-    
+
     formatTime(seconds) {
         const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
             ? globalThis.TimeTrackerDurationCore
@@ -8654,14 +8654,14 @@ class TimeTracker {
             }
         } catch (_) {}
     }
-    
+
     getCurrentTimeIndex() {
         if (!this.isCurrentDateToday()) {
             return -1;
         }
         const now = new Date();
         const currentHour = now.getHours();
-        
+
         // 4시-23시는 순서대로
         if (currentHour >= 4 && currentHour <= 23) {
             return currentHour - 4;
@@ -8772,16 +8772,16 @@ class TimeTracker {
         }
         return null;
     }
-    
+
     createMergedField(mergeKey, type, index, value) {
         const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
         if (!safeMergeKey) {
             if (type === 'actual') {
                 return this.createActualSlotField(index, { ...this.timeSlots[index], actual: value || '' });
             }
-            return `<input type="text" class="input-field ${type}-input" 
-                           data-index="${index}" 
-                           data-type="${type}" 
+            return `<input type="text" class="input-field ${type}-input"
+                           data-index="${index}"
+                           data-type="${type}"
                            value="${this.escapeAttribute(value || '')}"
                            placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         }
@@ -8790,18 +8790,18 @@ class TimeTracker {
         const start = parseInt(startStr, 10);
         const end = parseInt(endStr, 10);
         const safeMergeValue = this.escapeAttribute(this.mergedFields.get(safeMergeKey) || '');
-        
+
         if (type === 'actual') {
             // 우측 실제 활동 열의 경우 입력 필드와 버튼을 포함하는 컨테이너로 처리
             if (index === start) {
-                return `<div class="actual-field-container merged-actual-main" 
+                return `<div class="actual-field-container merged-actual-main"
                                data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <div class="actual-merged-overlay">
-                                <div class="input-field actual-input timer-result-input merged-field" 
-                                       data-index="${index}" 
-                                       data-type="actual" 
+                                <div class="input-field actual-input timer-result-input merged-field"
+                                       data-index="${index}"
+                                       data-type="actual"
                                        data-merge-key="${safeMergeKey}"
                                        data-value="${safeMergeValue}"
                                        title="${safeMergeValue}">${safeMergeValue}</div>
@@ -8810,13 +8810,13 @@ class TimeTracker {
                         </div>`;
             } else {
                 const isLast = index === end;
-                return `<div class="actual-field-container merged-actual-secondary ${isLast ? 'merged-actual-last' : ''}" 
+                return `<div class="actual-field-container merged-actual-secondary ${isLast ? 'merged-actual-last' : ''}"
                                data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
-                            <div class="input-field actual-input merged-secondary" 
-                                   data-index="${index}" 
-                                   data-type="actual" 
+                            <div class="input-field actual-input merged-secondary"
+                                   data-index="${index}"
+                                   data-type="actual"
                                    data-merge-key="${safeMergeKey}"
                                    data-value="${safeMergeValue}"
                                    title="${safeMergeValue}">${safeMergeValue}
@@ -8825,14 +8825,14 @@ class TimeTracker {
         } else {
             // 좌측 계획 열도 절대배치 오버레이로 시각적 병합, 레이아웃 유지
             if (index === start) {
-                return `<div class="planned-merged-main-container" 
+                return `<div class="planned-merged-main-container"
                                data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}">
                             <div class="planned-merged-overlay">
-                                <input type="text" class="input-field ${type}-input merged-field merged-main" 
-                                       data-index="${index}" 
-                                       data-type="${type}" 
+                                <input type="text" class="input-field ${type}-input merged-field merged-main"
+                                       data-index="${index}"
+                                       data-type="${type}"
                                        data-merge-key="${safeMergeKey}"
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
@@ -8842,9 +8842,9 @@ class TimeTracker {
                         </div>`;
             } else {
                 const isLast = index === end;
-                return `<input type="text" class="input-field ${type}-input merged-secondary planned-merged-secondary ${isLast ? 'merged-planned-last' : ''}" 
-                               data-index="${index}" 
-                               data-type="${type}" 
+                return `<input type="text" class="input-field ${type}-input merged-secondary planned-merged-secondary ${isLast ? 'merged-planned-last' : ''}"
+                               data-index="${index}"
+                               data-type="${type}"
                                data-merge-key="${safeMergeKey}"
                                data-merge-start="${start}"
                                data-merge-end="${end}"
@@ -9337,13 +9337,13 @@ class TimeTracker {
     showScheduleButtonForSelection(type) {
         this.hideScheduleButton();
         return;
-        
+
         // 스케줄 입력 버튼은 계획(planned) 컬럼에서만 표시
         if (type !== 'planned') return;
-    
+
         const overlay = this.selectionOverlay[type];
         if (!overlay) return;
-        
+
         const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
         if (selectedSet.size === 0) return;
 
@@ -9359,16 +9359,16 @@ class TimeTracker {
                 return;
             }
         }
-    
+
         const rect = overlay.getBoundingClientRect();
-        
+
         this.scheduleButton = document.createElement('button');
         this.scheduleButton.className = 'schedule-button';
         this.scheduleButton.textContent = '📅';
         this.scheduleButton.title = '스케줄 입력';
         this.scheduleButton.setAttribute('aria-label', '스케줄 입력');
         // 위치는 CSS로 오버레이 정중앙에 표시 (hover 시 노출)
-        
+
             this.scheduleButton.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
@@ -9377,7 +9377,7 @@ class TimeTracker {
                 const anchor = document.querySelector(`[data-index="${firstIndex}"] .planned-input`) || document.querySelector(`[data-index="${firstIndex}"]`);
                 this.openInlinePlanDropdown(firstIndex, anchor, lastIndex);
             });
-        
+
         // 스케줄 버튼은 오버레이 내부에 배치
         overlay.appendChild(this.scheduleButton);
         // 되돌리기 버튼(병합된 범위 선택 시)이 있으면 스케줄 버튼 우측으로 정렬
@@ -9489,8 +9489,8 @@ class TimeTracker {
         const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         const btnW = 30;
         const btnH = 30;
-        const centerX = targetRect.left + scrollX + (targetRect.width * 0.9);
-        const centerY = targetRect.top + scrollY + (targetRect.height / 2);
+        const centerX = targetRect.left + scrollX + (targetRect.width * 0.5);
+        const centerY = targetRect.top + scrollY + (targetRect.height / 2)-5;
 
         this.hideHoverActivityLogButton();
 
@@ -9754,9 +9754,9 @@ class TimeTracker {
 
                 let plannedContent = plannedMergeKey
                     ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
-                    : `<input type="text" class="input-field planned-input" 
-                            data-index="${index}" 
-                            data-type="planned" 
+                    : `<input type="text" class="input-field planned-input"
+                            data-index="${index}"
+                            data-type="planned"
                             value="${this.escapeAttribute(slot.planned)}"
                             placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
 
@@ -9816,7 +9816,7 @@ class TimeTracker {
             this.mergedFields = originalMerged;
         }
     }
-    
+
     openScheduleModal(type, startIndex, endIndex = null) {
         // Modal 제거됨: 인라인 드롭다운으로 대체
         if (type !== 'planned') return;
@@ -9824,17 +9824,17 @@ class TimeTracker {
         const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`) || document.querySelector(`[data-index="${startIndex}"]`);
         this.openInlinePlanDropdown(startIndex, anchor, end);
     }
-    
+
     closeScheduleModal() {
         // Legacy no-op: schedule modal was replaced by inline plan dropdown.
         return false;
     }
-    
+
     saveScheduleFromModal() {
         // Legacy no-op: schedule modal save flow was replaced by inline plan dropdown.
         return false;
     }
-    
+
     attachModalEventListeners() {
         // Legacy no-op: schedule modal listeners were removed with inline plan editor migration.
         return false;
@@ -11555,13 +11555,13 @@ class TimeTracker {
     // 타이머 관련 메서드들 추가
     attachTimerListeners(entryDiv, index) {
         const timerBtns = entryDiv.querySelectorAll('.timer-btn');
-        
+
         timerBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const action = btn.dataset.action;
                 const btnIndex = parseInt(btn.dataset.index);
-                
+
                 switch(action) {
                     case 'start':
                         this.startTimer(btnIndex);
@@ -11590,15 +11590,15 @@ class TimeTracker {
             }
             return;
         }
-        
+
         // 다른 모든 타이머 정지
         this.stopAllTimers();
-        
+
         const slot = this.timeSlots[index];
         slot.timer.running = true;
         slot.timer.startTime = Date.now();
         slot.timer.method = 'timer';
-        
+
         this.startTimerInterval();
         this.renderTimeEntries();
         this.autoSave();
@@ -11609,7 +11609,7 @@ class TimeTracker {
         slot.timer.running = false;
         slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
         slot.timer.startTime = null;
-        
+
         this.stopTimerInterval();
         this.renderTimeEntries();
         this.autoSave();
@@ -11625,14 +11625,14 @@ class TimeTracker {
             }
             return;
         }
-        
+
         // 다른 모든 타이머 정지
         this.stopAllTimers();
-        
+
         const slot = this.timeSlots[index];
         slot.timer.running = true;
         slot.timer.startTime = Date.now();
-        
+
         this.startTimerInterval();
         this.renderTimeEntries();
         this.autoSave();
@@ -11641,12 +11641,12 @@ class TimeTracker {
     stopTimer(index) {
         const slot = this.timeSlots[index];
         let additionalSeconds = 0;
-        
+
         if (slot.timer.running) {
             additionalSeconds = Math.max(0, Math.floor((Date.now() - slot.timer.startTime) / 1000));
             slot.timer.elapsed += additionalSeconds;
         }
-        
+
         slot.timer.running = false;
         slot.timer.startTime = null;
 
@@ -11699,7 +11699,7 @@ class TimeTracker {
                 slot.actual = resultText;
             }
         }
-        
+
         this.stopTimerInterval();
         this.renderTimeEntries();
         this.calculateTotals();
@@ -11734,7 +11734,7 @@ class TimeTracker {
 
     startTimerInterval() {
         if (this.timerInterval) return;
-        
+
         this.timerInterval = setInterval(() => {
             this.updateRunningTimers();
         }, 1000);
@@ -13414,7 +13414,7 @@ class TimeTracker {
             if (!discard) return;
         }
         modal.style.display = 'none';
-        
+
         document.getElementById('activityDetails').value = '';
 
         this.closeActualActivityMenu();
@@ -13432,7 +13432,7 @@ class TimeTracker {
         if (totalEl) totalEl.textContent = '0시간';
         if (usedEl) usedEl.textContent = '0시간';
         if (noticeEl) noticeEl.textContent = '';
-        
+
         delete modal.dataset.index;
         delete modal.dataset.baseIndex;
         if (this.lastFocusedElementBeforeModal && typeof this.lastFocusedElementBeforeModal.focus === 'function') {
@@ -13528,17 +13528,17 @@ class TimeTracker {
         saveBtn.addEventListener('click', () => {
             this.saveActivityLogFromModal();
         });
-        
+
         cancelBtn.addEventListener('click', () => {
             this.closeActivityLogModal();
         });
-        
+
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 this.closeActivityLogModal();
             }
         });
-        
+
         document.addEventListener('keydown', (e) => {
             if (modal.style.display !== 'flex') return;
             if (e.key === 'Escape') {
