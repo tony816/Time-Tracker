@@ -53,6 +53,7 @@ class TimeTracker {
         this.inlinePlanScrollHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanContext = null;
+        this.suppressInlinePlanClickOnce = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
             try { return window.NOTION_ACTIVITIES_ENDPOINT || null; } catch(e){ return null; }
@@ -933,6 +934,62 @@ class TimeTracker {
     // 병합 셀 내부 어디를 클릭해도 전체 병합 범위를 선택하도록 캡처 처리
     handleMergedClickCapture(e) {
         const target = e.target;
+        if (e.type === 'click') {
+            const plannedInput = target.closest && target.closest('.planned-input');
+            if (plannedInput) {
+                const plannedIndex = parseInt(plannedInput.dataset.index, 10);
+                if (Number.isInteger(plannedIndex)) {
+                    if (this.suppressInlinePlanClickOnce === plannedIndex) {
+                        this.suppressInlinePlanClickOnce = null;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+                    const plannedRange = this.getPlannedRangeInfo(plannedIndex);
+                    if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(plannedRange)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.clearSelection('planned');
+                        this.closeInlinePlanDropdown();
+                        return;
+                    }
+                }
+            }
+            if (this.inlinePlanDropdown && this.inlinePlanTarget) {
+                const currentRow = target.closest && target.closest('.time-entry[data-index]');
+                if (currentRow) {
+                    const currentIndex = parseInt(currentRow.getAttribute('data-index'), 10);
+                    if (Number.isInteger(currentIndex) && Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+                        const targetStart = Number.isInteger(this.inlinePlanTarget.startIndex)
+                            ? this.inlinePlanTarget.startIndex
+                            : currentIndex;
+                        const targetEnd = Number.isInteger(this.inlinePlanTarget.endIndex)
+                            ? this.inlinePlanTarget.endIndex
+                            : targetStart;
+                        const safeStart = Math.min(targetStart, targetEnd);
+                        const safeEnd = Math.max(targetStart, targetEnd);
+                        if (currentIndex >= safeStart && currentIndex <= safeEnd) {
+                            const plannedCell = currentRow.querySelector('.planned-input');
+                            if (plannedCell) {
+                                const plannedRect = plannedCell.getBoundingClientRect();
+                                const rowRect = currentRow.getBoundingClientRect();
+                                const inPlannedColumn = e.clientX >= plannedRect.left
+                                    && e.clientX <= plannedRect.right
+                                    && e.clientY >= rowRect.top
+                                    && e.clientY <= rowRect.bottom;
+                                if (inPlannedColumn) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    this.clearSelection('planned');
+                                    this.closeInlinePlanDropdown();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // 예외: 실제 활동 상세 기록 버튼은 통과
         if (target.closest && target.closest('.activity-log-btn')) return;
         if (target.closest && target.closest('.split-visualization-actual')) return;
@@ -3181,6 +3238,12 @@ class TimeTracker {
         let plannedMouseBaseRange = null; // { start, end }
         if (plannedField) {
             plannedField.addEventListener('mousedown', (e) => {
+                const mouseRange = this.getPlannedRangeInfo(index);
+                const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(mouseRange);
+                if (sameInlineTarget) {
+                    this.suppressInlinePlanClickOnce = index;
+                    this.clearSelection('planned');
+                }
                 this.closeInlinePlanDropdown();
                 if (e.target === plannedField && !plannedField.matches(':focus')) {
                     e.preventDefault();
@@ -3219,17 +3282,22 @@ class TimeTracker {
                     const base = plannedMouseBaseRange || { start: index, end: index };
                     const nextStart = Math.min(base.start, index);
                     const nextEnd = Math.max(base.end, index);
+                    const suppressReopen = this.suppressInlinePlanClickOnce === index;
 
                     if (!plannedMouseMoved) {
-                        if (this.selectedPlannedFields.has(index) && this.selectedPlannedFields.size === 1) {
+                        if (suppressReopen) {
                             this.clearSelection('planned');
                         } else {
-                            this.clearAllSelections();
-                            this.selectFieldRange('planned', nextStart, nextEnd);
-                        }
-                        if (!e.ctrlKey && !e.metaKey) {
-                            const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                            this.openInlinePlanDropdown(base.start, anchor);
+                            if (this.selectedPlannedFields.has(index) && this.selectedPlannedFields.size === 1) {
+                                this.clearSelection('planned');
+                            } else {
+                                this.clearAllSelections();
+                                this.selectFieldRange('planned', nextStart, nextEnd);
+                            }
+                            if (!e.ctrlKey && !e.metaKey) {
+                                const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
+                                this.openInlinePlanDropdown(base.start, anchor);
+                            }
                         }
                     } else {
                         if (!e.ctrlKey && !e.metaKey) {
@@ -8637,6 +8705,12 @@ class TimeTracker {
                     ev.stopPropagation();
                     // 드래그 없이 클릭만 했다면 기존 동작(선택 해제) 유지
                     if (!overlayDrag.moved) {
+                        if (type === 'planned' && this.inlinePlanDropdown && Number.isInteger(overlayDrag.startIndex)) {
+                            const clickedRange = this.getPlannedRangeInfo(overlayDrag.startIndex);
+                            if (this.isSameInlinePlanTarget(clickedRange)) {
+                                this.closeInlinePlanDropdown();
+                            }
+                        }
                         this.clearSelection(type);
                     }
                     overlayDrag = { active: false, moved: false, startIndex: -1 };
@@ -8853,9 +8927,39 @@ class TimeTracker {
     }
 
     attachCellClickListeners(entryDiv, index) {
-        // This function is now intentionally left empty 
-        // to avoid conflicts with the unified mouseup/click handling logic
-        // in attachFieldSelectionListeners.
+        const plannedField = entryDiv.querySelector('.planned-input');
+        if (plannedField && !plannedField.dataset.mergeKey) {
+            plannedField.addEventListener('mousedown', (e) => {
+                const range = this.getPlannedRangeInfo(index);
+                if (!this.inlinePlanDropdown || !this.isSameInlinePlanTarget(range)) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+                this.suppressInlinePlanClickOnce = index;
+                this.clearSelection('planned');
+                this.closeInlinePlanDropdown();
+            });
+            plannedField.addEventListener('click', (e) => {
+                if (this.suppressInlinePlanClickOnce === index) {
+                    this.suppressInlinePlanClickOnce = null;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+
+                const range = this.getPlannedRangeInfo(index);
+                if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range)) {
+                    this.clearSelection('planned');
+                    this.closeInlinePlanDropdown();
+                    return;
+                }
+
+                const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
+                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex);
+            });
+        }
     }
 
     hideScheduleButton() {
@@ -10385,6 +10489,39 @@ class TimeTracker {
             return;
         }
     }
+    isSameInlinePlanTarget(range, anchorEl = null) {
+        const current = this.inlinePlanTarget;
+        if (!current || !range) return false;
+
+        const currentStart = Number.isInteger(current.startIndex) ? current.startIndex : null;
+        const currentEnd = Number.isInteger(current.endIndex) ? current.endIndex : currentStart;
+        const nextStart = Number.isInteger(range.startIndex) ? range.startIndex : null;
+        const nextEnd = Number.isInteger(range.endIndex) ? range.endIndex : nextStart;
+
+        if (currentStart !== nextStart || currentEnd !== nextEnd) {
+            return false;
+        }
+        return true;
+    }
+
+    isEventWithinCurrentInlinePlanRange(targetEl) {
+        const current = this.inlinePlanTarget;
+        if (!current || !targetEl || !targetEl.closest) return false;
+
+        const row = targetEl.closest('.time-entry[data-index]');
+        if (!row) return false;
+
+        const rowIndex = parseInt(row.getAttribute('data-index'), 10);
+        if (!Number.isInteger(rowIndex)) return false;
+
+        const startIndex = Number.isInteger(current.startIndex) ? current.startIndex : rowIndex;
+        const endIndex = Number.isInteger(current.endIndex) ? current.endIndex : startIndex;
+        const safeStart = Math.min(startIndex, endIndex);
+        const safeEnd = Math.max(startIndex, endIndex);
+
+        return rowIndex >= safeStart && rowIndex <= safeEnd;
+    }
+
     openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         const range = this.getPlannedRangeInfo(index);
         if (Number.isInteger(endIndex)) {
@@ -10393,6 +10530,11 @@ class TimeTracker {
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
+        if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
+            this.clearSelection('planned');
+            this.closeInlinePlanDropdown();
+            return;
+        }
         this.closeInlinePlanDropdown();
         this.currentPlanSource = this.getActivePlanSource();
 
@@ -10498,7 +10640,8 @@ class TimeTracker {
                 }
             }
             if (canAutoApply) {
-                this.applyInlinePlanSelection(val, options);
+                const applyOptions = { ...options, keepOpen: false };
+                this.applyInlinePlanSelection(val, applyOptions);
             }
         };
         const clearHandler = () => {
@@ -10764,9 +10907,10 @@ class TimeTracker {
             if (this.planTitleMenu && this.planTitleMenu.contains(event.target)) return;
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor && currentAnchor.contains(event.target)) return;
+            if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
             this.closeInlinePlanDropdown();
         };
-        document.addEventListener('mousedown', this.inlinePlanOutsideHandler, true);
+        document.addEventListener('click', this.inlinePlanOutsideHandler, true);
 
         this.inlinePlanEscHandler = (event) => {
             if (event.key === 'Escape') this.closeInlinePlanDropdown();
@@ -10800,7 +10944,7 @@ class TimeTracker {
         this.closePlanActivityMenu();
         this.closePlanTitleMenu();
         if (this.inlinePlanOutsideHandler) {
-            document.removeEventListener('mousedown', this.inlinePlanOutsideHandler, true);
+            document.removeEventListener('click', this.inlinePlanOutsideHandler, true);
             this.inlinePlanOutsideHandler = null;
         }
         if (this.inlinePlanEscHandler) {

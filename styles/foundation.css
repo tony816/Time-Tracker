@@ -722,6 +722,7 @@ h1 {
 
 .selection-overlay[data-type="planned"][data-fill="outline"] {
     background-color: transparent;
+    pointer-events: none;
 }
 
 .hover-selection-overlay {

@@ -1,0 +1,242 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - generic [ref=e7]: "날짜:"
+          - generic [ref=e8]:
+            - button "◀" [ref=e9] [cursor=pointer]
+            - button "오늘" [ref=e10] [cursor=pointer]
+            - button "▶" [ref=e11] [cursor=pointer]
+          - textbox "날짜:" [ref=e12]: 2026-03-11
+        - generic [ref=e13]:
+          - generic [ref=e14]: 로그인 필요
+          - button "Google 로그인" [ref=e15] [cursor=pointer]
+    - main [ref=e16]:
+      - generic [ref=e17]:
+        - generic:
+          - generic: 계획된 활동
+          - generic: 시간
+          - generic: 실제 활동
+        - generic [ref=e18]:
+          - generic [ref=e481]:
+            - textbox "계획 활동 입력" [ref=e482] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e483]:
+              - generic [ref=e484]: "04"
+              - button "타이머 시작" [disabled] [ref=e487]: 시작
+            - generic [ref=e488]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e490]:
+            - textbox "계획 활동 입력" [ref=e491] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e492]:
+              - generic [ref=e493]: "05"
+              - button "타이머 시작" [disabled] [ref=e496]: 시작
+            - generic [ref=e497]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e499]:
+            - textbox "계획 활동 입력" [ref=e500] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e501]:
+              - generic [ref=e502]: "06"
+              - button "타이머 시작" [disabled] [ref=e505]: 시작
+            - generic [ref=e506]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e508]:
+            - textbox "계획 활동 입력" [ref=e509] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e510]:
+              - generic [ref=e511]: "07"
+              - button "타이머 시작" [disabled] [ref=e514]: 시작
+            - generic [ref=e515]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e517]:
+            - textbox "계획 활동 입력" [ref=e518] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e519]:
+              - generic [ref=e520]: "08"
+              - button "타이머 시작" [disabled] [ref=e523]: 시작
+            - generic [ref=e524]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e526]:
+            - textbox "계획 활동 입력" [ref=e527] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e528]:
+              - generic [ref=e529]: "09"
+              - button "타이머 시작" [disabled] [ref=e532]: 시작
+            - generic [ref=e533]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e535]:
+            - textbox "계획 활동 입력" [ref=e536] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e537]:
+              - generic [ref=e538]: "10"
+              - button "타이머 시작" [disabled] [ref=e541]: 시작
+            - generic [ref=e542]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e544]:
+            - textbox "계획 활동 입력" [ref=e545] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e546]:
+              - generic [ref=e547]: "11"
+              - button "타이머 시작" [disabled] [ref=e550]: 시작
+            - generic [ref=e551]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e553]:
+            - textbox "계획 활동 입력" [ref=e554] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e555]:
+              - generic [ref=e556]: "12"
+              - button "타이머 시작" [disabled] [ref=e559]: 시작
+            - generic [ref=e560]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e562]:
+            - textbox "계획 활동 입력" [ref=e563] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e564]:
+              - generic [ref=e565]: "13"
+              - button "타이머 시작" [disabled] [ref=e568]: 시작
+            - generic [ref=e569]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e571]:
+            - textbox "계획 활동 입력" [ref=e572] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e573]:
+              - generic [ref=e574]: "14"
+              - button "타이머 시작" [disabled] [ref=e577]: 시작
+            - generic [ref=e578]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e580]:
+            - textbox "계획 활동 입력" [ref=e581] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e582]:
+              - generic [ref=e583]: "15"
+              - button "타이머 시작" [disabled] [ref=e586]: 시작
+            - generic [ref=e587]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e589]:
+            - textbox "계획 활동 입력" [ref=e590] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e591]:
+              - generic [ref=e592]: "16"
+              - button "타이머 시작" [disabled] [ref=e595]: 시작
+            - generic [ref=e596]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e598]:
+            - textbox "계획 활동 입력" [ref=e599] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e600]:
+              - generic [ref=e601]: "17"
+              - button "타이머 시작" [disabled] [ref=e604]: 시작
+            - generic [ref=e605]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e607]:
+            - textbox "계획 활동 입력" [ref=e608] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e609]:
+              - generic [ref=e610]: "18"
+              - button "타이머 시작" [disabled] [ref=e613]: 시작
+            - generic [ref=e614]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e616]:
+            - textbox "계획 활동 입력" [ref=e617] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e618]:
+              - generic [ref=e619]: "19"
+              - button "타이머 시작" [disabled] [ref=e622]: 시작
+            - generic [ref=e623]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e625]:
+            - textbox "계획 활동 입력" [ref=e626] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e627]:
+              - generic [ref=e628]: "20"
+              - button "타이머 시작" [disabled] [ref=e631]: 시작
+            - generic [ref=e632]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e634]:
+            - textbox "계획 활동 입력" [ref=e635] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e636]:
+              - generic [ref=e637]: "21"
+              - button "타이머 시작" [disabled] [ref=e640]: 시작
+            - generic [ref=e641]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e643]:
+            - textbox "계획 활동 입력" [ref=e644] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e645]:
+              - generic [ref=e646]: "22"
+              - button "타이머 시작" [disabled] [ref=e649]: 시작
+            - generic [ref=e650]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e652]:
+            - textbox "계획 활동 입력" [ref=e653] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e654]:
+              - generic [ref=e655]: "23"
+              - button "타이머 시작" [disabled] [ref=e658]: 시작
+            - generic [ref=e659]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e661]:
+            - textbox "계획 활동 입력" [ref=e662] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e663]:
+              - generic [ref=e664]: "00"
+              - button "타이머 시작" [disabled] [ref=e667]: 시작
+            - generic [ref=e668]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e670]:
+            - textbox "계획 활동 입력" [ref=e671] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e672]:
+              - generic [ref=e673]: "01"
+              - button "타이머 시작" [disabled] [ref=e676]: 시작
+            - generic [ref=e677]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e679]:
+            - textbox "계획 활동 입력" [ref=e680] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e681]:
+              - generic [ref=e682]: "02"
+              - button "타이머 시작" [disabled] [ref=e685]: 시작
+            - generic [ref=e686]:
+              - button "활동 상세 기록 열기": 📝
+          - generic [ref=e688]:
+            - textbox "계획 활동 입력" [ref=e689] [cursor=pointer]:
+              - /placeholder: 계획을 입력하려면 클릭 또는 Enter
+            - generic [ref=e690]:
+              - generic [ref=e691]: "03"
+              - button "타이머 시작" [disabled] [ref=e694]: 시작
+            - generic [ref=e695]:
+              - button "활동 상세 기록 열기": 📝
+        - generic [ref=e235]:
+          - generic [ref=e236]:
+            - generic [ref=e237]: 0시간
+            - generic [ref=e238]: 합계
+            - generic [ref=e239]: 0시간
+          - generic [ref=e240]:
+            - generic [ref=e241]: 분석
+            - generic [ref=e242]:
+              - generic [ref=e243]:
+                - generic [ref=e244]: "실행률:"
+                - generic [ref=e245]: 0%
+              - generic [ref=e246]:
+                - generic [ref=e247]: "타이머 기록:"
+                - generic [ref=e248]: 0시간
+    - button "초기화" [ref=e250] [cursor=pointer]
+  - generic [ref=e697]:
+    - tab "직접 추가" [selected] [ref=e699] [cursor=pointer]
+    - generic [ref=e700]:
+      - textbox "활동 추가 또는 검색" [active] [ref=e701]
+      - button "추가" [ref=e702] [cursor=pointer]
+      - button "지우기" [ref=e703] [cursor=pointer]
+    - generic [ref=e704]:
+      - generic [ref=e705]:
+        - generic [ref=e706]: Pr
+        - generic [ref=e707]: Task Title
+      - list [ref=e708]:
+        - listitem [ref=e709]: 등록된 활동이 없습니다.
+    - button "세부 활동 분해" [ref=e710] [cursor=pointer]
+    - text: ▾

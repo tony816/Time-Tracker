@@ -73,21 +73,21 @@
 .timer-result-input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 3px;
+  border: none;
+  border-radius: 0;
   font-size: 14px;
-  text-align: center;
-  background: white;
+  text-align: left;
+  background: transparent;
   min-width: 0;
   /* 좌측열 병합 시 행 하단 가림요소(::after) 등보다 위에서 테두리를 보이도록 */
   position: relative;
   z-index: 4;
+  box-shadow: none;
 }
 
 .timer-result-input:focus {
-  outline: 2px solid #3498db;
-  outline-offset: -2px;
-  border-color: #3498db;
+  outline: none;
+  border-color: transparent;
 }
 
 .timer-result-input::placeholder {
@@ -154,7 +154,10 @@
 
 /* 좌우 패딩을 맞춰 플레이스홀더를 정확히 중앙에 배치 */
 .actual-field-container .timer-result-input {
-  padding: 8px 12px;
+  padding: 0;
+  min-height: auto;
+  display: flex;
+  align-items: center;
 }
 
 .actual-field-container {
@@ -162,12 +165,17 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: white;
+  background: transparent;
   border-right: none;
   /* 좌측열 병합 시 생성되는 하단 가림(overlay)보다 위에서 표시되어
      우측 입력창(활동 기록)의 테두리가 사라져 보이지 않도록 보정 */
   position: relative;
   z-index: 3;
+}
+
+.actual-field-container .actual-input:hover,
+.actual-field-container .actual-input:focus {
+  background: transparent;
 }
 
 
