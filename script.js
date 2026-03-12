@@ -53,6 +53,10 @@ class TimeTracker {
         this.inlinePlanScrollHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanContext = null;
+        this.inlinePriorityMenu = null;
+        this.inlinePriorityMenuContext = null;
+        this.inlinePriorityMenuOutsideHandler = null;
+        this.inlinePriorityMenuEscHandler = null;
         this.suppressInlinePlanClickOnce = null;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
@@ -91,6 +95,7 @@ class TimeTracker {
             try { const arr=crypto.getRandomValues(new Uint8Array(16)); arr[6]=(arr[6]&0x0f)|0x40; arr[8]=(arr[8]&0x3f)|0x80; const hex=Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join(''); return `${hex.substring(0,8)}-${hex.substring(8,12)}-${hex.substring(12,16)}-${hex.substring(16,20)}-${hex.substring(20)}`; } catch(_) { return 'device-anon'; } })();
         this._timesheetClearPending = new Set();
         this.loginIntent = null;
+        this.pendingAuthAnalyticsStorageKey = 'tt.pendingAuthAnalytics';
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
@@ -159,6 +164,7 @@ class TimeTracker {
         this.attachActivityModalEventListeners();
         this.startChangeWatcher();
         this.updateAuthUI();
+        this.handlePendingAuthAnalyticsCallback();
         this.attachConnectivityListeners();
         this.attachDayStartListeners();
         this.updateDayStartUI();
@@ -223,6 +229,105 @@ class TimeTracker {
             this.authStatusElement = null;
             this.authButton = null;
         }
+    }
+    ensureGtag() {
+        try {
+            if (typeof window === 'undefined') return null;
+            window.dataLayer = window.dataLayer || [];
+            if (typeof window.gtag !== 'function') {
+                window.gtag = function(){ window.dataLayer.push(arguments); };
+            }
+            return window.gtag;
+        } catch (_) {
+            return null;
+        }
+    }
+    trackAnalyticsEvent(name, params = {}) {
+        const eventName = String(name || '').trim();
+        if (!eventName) return;
+        try {
+            const gtag = this.ensureGtag();
+            if (!gtag) return;
+            gtag('event', eventName, params && typeof params === 'object' ? params : {});
+        } catch (_) {}
+    }
+    getPendingAuthAnalytics() {
+        try {
+            if (typeof sessionStorage === 'undefined' || !sessionStorage) return null;
+            const raw = sessionStorage.getItem(this.pendingAuthAnalyticsStorageKey);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            const provider = String(parsed.provider || '').trim();
+            const startedAt = Number(parsed.startedAt || 0);
+            if (!provider || !Number.isFinite(startedAt) || startedAt <= 0) return null;
+            return { provider, startedAt };
+        } catch (_) {
+            return null;
+        }
+    }
+    setPendingAuthAnalytics(provider) {
+        const normalizedProvider = String(provider || '').trim();
+        if (!normalizedProvider) return;
+        try {
+            if (typeof sessionStorage === 'undefined' || !sessionStorage) return;
+            sessionStorage.setItem(this.pendingAuthAnalyticsStorageKey, JSON.stringify({
+                provider: normalizedProvider,
+                startedAt: Date.now()
+            }));
+        } catch (_) {}
+    }
+    clearPendingAuthAnalytics() {
+        try {
+            if (typeof sessionStorage === 'undefined' || !sessionStorage) return;
+            sessionStorage.removeItem(this.pendingAuthAnalyticsStorageKey);
+        } catch (_) {}
+    }
+    consumePendingAuthAnalytics() {
+        const pending = this.getPendingAuthAnalytics();
+        if (!pending) return null;
+        this.clearPendingAuthAnalytics();
+        return pending;
+    }
+    getAuthCallbackErrorDetails() {
+        try {
+            if (typeof window === 'undefined' || !window.location) return null;
+            const params = new URLSearchParams(window.location.search || '');
+            const hash = String(window.location.hash || '').replace(/^#/, '');
+            const hashParams = new URLSearchParams(hash);
+            const all = [params, hashParams];
+            for (let i = 0; i < all.length; i++) {
+                const source = all[i];
+                const code = String(source.get('error_code') || source.get('error') || '').trim();
+                const description = String(source.get('error_description') || source.get('errorDescription') || '').trim();
+                if (code || description) {
+                    return {
+                        code: code || 'oauth_callback_error',
+                        source: i === 0 ? 'query' : 'hash'
+                    };
+                }
+            }
+        } catch (_) {}
+        return null;
+    }
+    handlePendingAuthAnalyticsCallback() {
+        const pending = this.getPendingAuthAnalytics();
+        if (!pending) return;
+        const maxAgeMs = 15 * 60 * 1000;
+        if (!Number.isFinite(pending.startedAt) || (Date.now() - pending.startedAt) > maxAgeMs) {
+            this.clearPendingAuthAnalytics();
+            return;
+        }
+        const callbackError = this.getAuthCallbackErrorDetails();
+        if (!callbackError) return;
+        this.clearPendingAuthAnalytics();
+        this.loginIntent = null;
+        this.trackAnalyticsEvent('login_failure', {
+            method: pending.provider,
+            auth_provider: pending.provider,
+            reason: callbackError.code,
+            failure_source: callbackError.source
+        });
     }
 
     getSupabaseRedirectTo() {
@@ -514,18 +619,31 @@ class TimeTracker {
                         });
                     });
                 } else {
+                    const provider = 'google';
                     const options = {};
                     const redirectTo = this.getSupabaseRedirectTo();
                     if (redirectTo) {
                         options.redirectTo = redirectTo;
                     }
-                    const params = { provider: 'google' };
+                    const params = { provider };
                     if (Object.keys(options).length > 0) {
                         params.options = options;
                     }
-                    this.loginIntent = 'google';
+                    this.loginIntent = provider;
+                    this.setPendingAuthAnalytics(provider);
+                    this.trackAnalyticsEvent('login_attempt', {
+                        method: provider,
+                        auth_provider: provider
+                    });
                     this.supabase.auth.signInWithOAuth(params).catch((err) => {
+                        this.loginIntent = null;
+                        this.clearPendingAuthAnalytics();
                         console.warn('[auth] sign in failed', err, { redirectTo: options.redirectTo || null });
+                        this.trackAnalyticsEvent('login_failure', {
+                            method: provider,
+                            auth_provider: provider,
+                            reason: 'oauth_start_failed'
+                        });
                         this.showNotification('Google 로그인에 실패했습니다.');
                     });
                 }
@@ -1552,6 +1670,7 @@ class TimeTracker {
     applySupabaseSession(session, opts = {}) {
         const user = session && session.user ? session.user : null;
         const previousId = this.supabaseUser && this.supabaseUser.id;
+        const pendingAuthAnalytics = this.getPendingAuthAnalytics();
         this.supabaseUser = user;
         this.updateAuthUI();
         const nextId = user && user.id;
@@ -1562,11 +1681,16 @@ class TimeTracker {
         const hadPrev = Boolean(previousId);
         const hasUser = Boolean(user && user.id);
         // 로그인 성공 알림: 실제로 사용자 의도로 로그인 플로우를 시작한 경우에만
-        if (ev === 'SIGNED_IN' && hasUser) {
+        if ((ev === 'SIGNED_IN' || opts.fromGetSession) && hasUser) {
             let startedByUser = false;
-            startedByUser = this.loginIntent === 'google';
+            startedByUser = this.loginIntent === 'google' || (pendingAuthAnalytics && pendingAuthAnalytics.provider === 'google');
             if (startedByUser) {
+                this.trackAnalyticsEvent('login_success', {
+                    method: 'google',
+                    auth_provider: 'google'
+                });
                 this.showNotification('Google 로그인에 성공했습니다.');
+                this.clearPendingAuthAnalytics();
             }
             this.loginIntent = null;
         }
@@ -7759,6 +7883,178 @@ class TimeTracker {
         this.planTitleMenuContext = null;
     }
 
+    openInlinePriorityMenu(anchorEl, options = {}) {
+        if (!anchorEl || !anchorEl.isConnected) return;
+        const label = this.normalizeActivityText ? this.normalizeActivityText(options.label || '') : String(options.label || '').trim();
+        if (!label) return;
+        if (options.source === 'notion') return;
+
+        const currentPriorityRank = this.normalizePriorityRankValue(options.priorityRank);
+        if (this.inlinePriorityMenu
+            && this.inlinePriorityMenuContext
+            && this.inlinePriorityMenuContext.label === label
+            && this.inlinePriorityMenuContext.anchorEl === anchorEl) {
+            this.closeInlinePriorityMenu();
+            return;
+        }
+
+        this.closeInlinePriorityMenu();
+
+        const menu = document.createElement('div');
+        menu.className = 'inline-priority-menu';
+        menu.setAttribute('role', 'menu');
+
+        const title = document.createElement('div');
+        title.className = 'inline-priority-menu-title';
+        title.textContent = '\uc6b0\uc120\uc21c\uc704 \uc120\ud0dd';
+        menu.appendChild(title);
+
+        [null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach((value) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'inline-priority-menu-item';
+            item.setAttribute('role', 'menuitemradio');
+            item.dataset.label = label;
+            item.dataset.priority = value == null ? '' : String(value);
+            item.setAttribute('aria-checked', String((currentPriorityRank ?? null) === (value ?? null)));
+            if ((currentPriorityRank ?? null) === (value ?? null)) {
+                item.classList.add('active');
+            }
+
+            const grip = document.createElement('span');
+            grip.className = 'inline-priority-menu-grip';
+            grip.setAttribute('aria-hidden', 'true');
+            item.appendChild(grip);
+
+            const badge = document.createElement('span');
+            badge.className = 'inline-plan-priority-chip';
+            if (value == null) {
+                badge.dataset.empty = 'true';
+                badge.textContent = '\ud574\uc81c';
+            } else {
+                badge.dataset.pr = String(value);
+                badge.textContent = `Pr.${value}`;
+            }
+            item.appendChild(badge);
+
+            menu.appendChild(item);
+        });
+
+        document.body.appendChild(menu);
+        this.inlinePriorityMenu = menu;
+        this.inlinePriorityMenuContext = { anchorEl, label };
+        anchorEl.setAttribute('aria-expanded', 'true');
+
+        menu.addEventListener('click', (event) => {
+            const btn = event.target.closest('.inline-priority-menu-item');
+            if (!btn || !menu.contains(btn)) return;
+            if (btn.disabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+
+            const rawValue = btn.dataset.priority != null ? btn.dataset.priority : '';
+            const nextValue = rawValue === '' ? null : Number(rawValue);
+            this.closeInlinePriorityMenu();
+            const changed = this.updatePlannedActivityPriority(label, nextValue);
+            if (changed && this.inlinePlanDropdown) {
+                this.renderInlinePlanDropdownOptions();
+                const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+                if (currentAnchor && currentAnchor.isConnected) {
+                    this.positionInlinePlanDropdown(currentAnchor);
+                }
+            }
+        });
+
+        this.positionInlinePriorityMenu(anchorEl);
+
+        this.inlinePriorityMenuOutsideHandler = (event) => {
+            if (!this.inlinePriorityMenu) return;
+            const target = event.target;
+            if (this.inlinePriorityMenu.contains(target)) return;
+            if (anchorEl && (target === anchorEl || (anchorEl.contains && anchorEl.contains(target)))) return;
+            this.closeInlinePriorityMenu();
+        };
+        document.addEventListener('mousedown', this.inlinePriorityMenuOutsideHandler, true);
+
+        this.inlinePriorityMenuEscHandler = (event) => {
+            if (event.key === 'Escape') {
+                this.closeInlinePriorityMenu();
+            }
+        };
+        document.addEventListener('keydown', this.inlinePriorityMenuEscHandler);
+    }
+
+    positionInlinePriorityMenu(anchorEl) {
+        if (!this.inlinePriorityMenu) return;
+        if (!anchorEl || !anchorEl.isConnected) {
+            this.closeInlinePriorityMenu();
+            return;
+        }
+
+        const rect = anchorEl.getBoundingClientRect();
+        if (!rect || (!rect.width && !rect.height)) {
+            this.closeInlinePriorityMenu();
+            return;
+        }
+
+        const menu = this.inlinePriorityMenu;
+        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+        const margin = 12;
+        const gap = 8;
+
+        menu.style.visibility = 'hidden';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+
+        const menuWidth = menu.offsetWidth || 148;
+        const menuHeight = menu.offsetHeight || 320;
+
+        let left = rect.left + scrollX;
+        let top = rect.bottom + scrollY + gap;
+
+        const maxLeft = scrollX + viewportWidth - menuWidth - margin;
+        if (left > maxLeft) {
+            left = Math.max(scrollX + margin, rect.right + scrollX - menuWidth);
+        }
+        if (left < scrollX + margin) {
+            left = scrollX + margin;
+        }
+
+        const maxTop = scrollY + viewportHeight - menuHeight - margin;
+        if (top > maxTop) {
+            top = rect.top + scrollY - menuHeight - gap;
+        }
+        if (top < scrollY + margin) {
+            top = scrollY + margin;
+        }
+
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+        menu.style.visibility = 'visible';
+    }
+
+    closeInlinePriorityMenu() {
+        if (this.inlinePriorityMenuOutsideHandler) {
+            document.removeEventListener('mousedown', this.inlinePriorityMenuOutsideHandler, true);
+            this.inlinePriorityMenuOutsideHandler = null;
+        }
+        if (this.inlinePriorityMenuEscHandler) {
+            document.removeEventListener('keydown', this.inlinePriorityMenuEscHandler);
+            this.inlinePriorityMenuEscHandler = null;
+        }
+        if (this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl) {
+            try { this.inlinePriorityMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
+        }
+        if (this.inlinePriorityMenu && this.inlinePriorityMenu.parentNode) {
+            this.inlinePriorityMenu.parentNode.removeChild(this.inlinePriorityMenu);
+        }
+        this.inlinePriorityMenu = null;
+        this.inlinePriorityMenuContext = null;
+    }
+
     handlePlanActivitiesRemoval(event) {
         const row = event.target.closest('.sub-activity-row');
         if (!row) return;
@@ -10116,6 +10412,9 @@ class TimeTracker {
     }
     renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
+        if (this.inlinePriorityMenu) {
+            this.closeInlinePriorityMenu();
+        }
         const list = this.inlinePlanDropdown.querySelector('.inline-plan-options-list');
         const tabs = this.inlinePlanDropdown.querySelector('.inline-plan-tabs');
         if (!list) return;
@@ -10160,6 +10459,8 @@ class TimeTracker {
             const priorityButton = document.createElement('button');
             priorityButton.type = 'button';
             priorityButton.className = 'inline-plan-priority-chip';
+            priorityButton.setAttribute('aria-haspopup', 'menu');
+            priorityButton.setAttribute('aria-expanded', 'false');
             if (Number.isFinite(priorityRank)) {
                 priorityButton.dataset.pr = String(priorityRank);
                 priorityButton.textContent = `Pr.${priorityRank}`;
@@ -10171,19 +10472,11 @@ class TimeTracker {
                 priorityButton.disabled = true;
                 priorityButton.title = 'Notion priority';
             } else {
-                priorityButton.title = 'Click to edit priority';
+                priorityButton.title = 'Priority options';
                 priorityButton.addEventListener('click', (event) => {
+                    event.preventDefault();
                     event.stopPropagation();
-                    const current = Number.isFinite(priorityRank) ? String(priorityRank) : '';
-                    const nextRaw = prompt('우선순위를 입력하세요. 비우려면 빈 값으로 저장하세요.', current);
-                    if (nextRaw === null) return;
-                    const nextValue = String(nextRaw).trim();
-                    if (nextValue && this.normalizePriorityRankValue(nextValue) == null) {
-                        this.showNotification('우선순위는 1 이상의 숫자만 가능합니다.', 'warn');
-                        return;
-                    }
-                    this.updatePlannedActivityPriority(label, nextValue);
-                    this.renderInlinePlanDropdownOptions();
+                    this.openInlinePriorityMenu(priorityButton, { label, source, priorityRank });
                 });
             }
             left.appendChild(priorityButton);
@@ -10905,6 +11198,7 @@ class TimeTracker {
             if (this.routineMenu && this.routineMenu.contains(event.target)) return;
             if (this.planActivityMenu && this.planActivityMenu.contains(event.target)) return;
             if (this.planTitleMenu && this.planTitleMenu.contains(event.target)) return;
+            if (this.inlinePriorityMenu && this.inlinePriorityMenu.contains(event.target)) return;
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
@@ -10925,6 +11219,8 @@ class TimeTracker {
             }
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor) this.positionInlinePlanDropdown(currentAnchor);
+            const priorityAnchor = this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl;
+            if (priorityAnchor) this.positionInlinePriorityMenu(priorityAnchor);
         };
         window.addEventListener('resize', this.inlinePlanScrollHandler);
         window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
@@ -10940,6 +11236,7 @@ class TimeTracker {
         }
     }
     closeInlinePlanDropdown() {
+        this.closeInlinePriorityMenu();
         this.closeRoutineMenu();
         this.closePlanActivityMenu();
         this.closePlanTitleMenu();

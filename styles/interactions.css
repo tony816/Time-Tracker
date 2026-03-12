@@ -878,6 +878,41 @@
   color: #684699;
 }
 
+.inline-plan-priority-chip[data-pr="4"] {
+  background: #d6e7f4;
+  color: #2a6693;
+}
+
+.inline-plan-priority-chip[data-pr="5"] {
+  background: #d6e8dd;
+  color: #2f6144;
+}
+
+.inline-plan-priority-chip[data-pr="6"] {
+  background: #e5d8cd;
+  color: #71533c;
+}
+
+.inline-plan-priority-chip[data-pr="7"] {
+  background: #f3d2e6;
+  color: #984472;
+}
+
+.inline-plan-priority-chip[data-pr="8"] {
+  background: #efd9c3;
+  color: #8b4d20;
+}
+
+.inline-plan-priority-chip[data-pr="9"] {
+  background: #dcdfe3;
+  color: #4a4f55;
+}
+
+.inline-plan-priority-chip[data-pr="10"] {
+  background: #e7e6e2;
+  color: #5a5a57;
+}
+
 .inline-plan-priority-chip[data-empty="true"] {
   background: #f1f4f7;
   color: #7d8793;
@@ -887,6 +922,65 @@
 .inline-plan-priority-chip:disabled {
   cursor: default;
   opacity: 0.8;
+}
+
+.inline-priority-menu {
+  position: absolute;
+  min-width: 132px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fbfbfc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.16);
+  padding: 8px;
+  z-index: 2106;
+}
+
+.inline-priority-menu-title {
+  padding: 6px 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a838f;
+}
+
+.inline-priority-menu-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.inline-priority-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.inline-priority-menu-item.active {
+  background: #eef4fb;
+}
+
+.inline-priority-menu-item .inline-plan-priority-chip {
+  min-width: 0;
+  width: auto;
+  padding: 6px 12px;
+  pointer-events: none;
+}
+
+.inline-priority-menu-grip {
+  width: 8px;
+  height: 18px;
+  opacity: 0.55;
+  background-image: radial-gradient(circle, #9aa3ad 1.2px, transparent 1.3px);
+  background-size: 4px 4px;
+  background-position: center;
+  background-repeat: repeat-y;
 }
 
 .inline-plan-task-cell {
