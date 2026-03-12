@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.vscode
+.env
+.env.local
+.env.*.local
+test-results
+playwright-report

@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "build": "echo \"no build step\"",
-    "test": "node --test __tests__/*.test.js"
+    "test": "node --test __tests__/*.test.js",
+    "check:env": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){console.error('Missing .env. Copy from .env.example'); process.exit(1)} console.log('.env present')\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.1",
@@ -17,8 +18,10 @@
     "express": "^4.21.2"
   },
   "engines": {
-    "node": ">=18"
+    "node": "20.11.x",
+    "npm": "10.x"
   },
+  "packageManager": "npm@10.2.4",
   "keywords": [],
   "author": "",
   "license": "ISC",

@@ -47,6 +47,33 @@
 - Notion 연동 서버(선택): 아래 “Notion 연동” 참고
  - Supabase 연동(선택): 아래 “Supabase 연동” 참고
 
+## 재현 가능한 개발환경(권장)
+
+서로 다른 PC에서도 동일하게 동작하도록 아래 규칙을 기본값으로 사용합니다.
+
+- Node 버전 고정: `.nvmrc` (`20.11.1`)
+- 패키지 매니저 고정: `packageManager` / `engines`로 npm 버전 범위 명시
+- 의존성 설치: `npm install` 대신 `npm ci` 사용
+- 환경변수: `.env`는 커밋하지 않고 `.env.example`로 공유
+- 에디터: `.vscode/settings.json`, `.vscode/extensions.json` 동기화
+- 컨테이너: `.devcontainer/`로 VS Code Dev Containers 지원
+
+### 로컬(비컨테이너) 빠른 시작
+
+```bash
+nvm use
+npm ci
+npm run check:env
+npm start
+```
+
+### Dev Container 사용
+
+1. VS Code에서 `Time-Tracker` 폴더 열기
+2. **Dev Containers: Reopen in Container** 실행
+3. 컨테이너 생성 후 `npm ci` 자동 실행
+4. `npm start` 후 `http://localhost:3000` 접속
+
 ## 서버 역할(선택)
 
 - `server.js`는 Express 기반의 정적 파일 서버 + Notion 브리지입니다.
@@ -107,10 +134,20 @@ NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 PORT=3000
 ```
 
+초기 세팅은 `.env.example`을 복제해서 시작하세요.
+
+```
+# macOS/Linux
+cp .env.example .env
+
+# Windows (PowerShell)
+Copy-Item .env.example .env
+```
+
 ### 설치/실행
 
 ```
-npm install
+npm ci
 npm start
 ```
 
