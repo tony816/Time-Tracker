@@ -9490,7 +9490,7 @@ class TimeTracker {
         const btnW = 30;
         const btnH = 30;
         const centerX = targetRect.left + scrollX + (targetRect.width * 0.5);
-        const centerY = targetRect.top + scrollY + (targetRect.height / 2)-5;
+        const centerY = targetRect.top + scrollY + (targetRect.height / 2);
 
         this.hideHoverActivityLogButton();
 
