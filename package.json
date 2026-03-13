@@ -9,6 +9,7 @@
     "dev": "node server.js",
     "build": "echo \"no build step\"",
     "test": "node --test __tests__/*.test.js",
+    "test:actual-lock": "node --test __tests__/actual-grid-locked-toggle-regression.test.js __tests__/actual-grid-failed-click-regression.test.js __tests__/actual-modal-assignment-regression.test.js",
     "check:env": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){console.error('Missing .env. Copy from .env.example'); process.exit(1)} console.log('.env present')\""
   },
   "dependencies": {

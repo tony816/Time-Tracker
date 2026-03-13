@@ -57,6 +57,14 @@
   - data compatibility notes when storage schema/keys change
 - Keep PRs small and focused.
 
+## Actual Lock Guardrail
+- When a task touches actual-grid locking, locked rows, assigned-duration changes, or extra-slot allocation, treat them as one feature surface.
+- Before editing, explicitly list the affected surfaces in the refined prompt.
+- Use [docs/actual-lock-guardrails.md](/C:/Time-Tracker/docs/actual-lock-guardrails.md) as the required checklist.
+- For those tasks, you MUST run `npm run test:actual-lock` before `npm test`.
+- If the change can affect UI behavior, you MUST also run the documented browser smoke check unless the user explicitly tells you not to.
+- Do not close the task after only fixing row data; verify row generation, effective lock mask, grid graphics, click blocking, and extra allocation together.
+
 ## Security & Compatibility Tips
 - `localStorage` is device-local; do not store sensitive data.
 - Keep compatibility with legacy/missing fields in timer/activity objects.
