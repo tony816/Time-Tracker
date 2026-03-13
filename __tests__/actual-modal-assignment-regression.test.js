@@ -41,6 +41,10 @@ const clampActualGridToAssigned = buildMethod(
     'clampActualGridToAssigned()',
     '()'
 );
+const isManualLockedActivityRow = buildMethod(
+    'isManualLockedActivityRow(item)',
+    '(item)'
+);
 const getActualGridLockedUnitsForBase = buildMethod(
     'getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
@@ -141,7 +145,14 @@ function extractLockedRowsFromActivities(activities = [], totalUnits = 0) {
         if (!isLockedRow(item)) return;
         const explicit = hasExplicit(item);
         const hasMeta = Number.isFinite(item.lockStart) || Number.isFinite(item.lockEnd);
-        const isManual = item.isAutoLocked === false || explicit || hasMeta;
+        let isManual = false;
+        if (item.isAutoLocked === false) {
+            isManual = true;
+        } else if (item.isAutoLocked === true) {
+            isManual = false;
+        } else {
+            isManual = explicit || hasMeta;
+        }
         if (isManual) {
             addRow(item, sourceIndex, manualRows, manualMask, manualRowsByIndex, false);
         } else {
@@ -159,6 +170,91 @@ function extractLockedRowsFromActivities(activities = [], totalUnits = 0) {
         manualCount: manualMask.reduce((sum, value) => sum + (value ? 1 : 0), 0),
     };
 }
+
+function createSinglePlanModalCtx(initialActivities, overrides = {}) {
+    return Object.assign({
+        timeSlots: [{ activityLog: { subActivities: Array.isArray(initialActivities) ? initialActivities.map((item) => ({ ...item })) : [] } }],
+        modalActualActivities: Array.isArray(initialActivities) ? initialActivities.map((item) => ({ ...item })) : [],
+        modalActualTotalSeconds: 10800,
+        modalActualHasPlanUnits: true,
+        modalActualPlanUnits: Array.from({ length: 18 }, () => 'A'),
+        modalActualPlanLabelSet: new Set(['A']),
+        modalActualGridUnits: Array.from({ length: 18 }, () => true),
+        modalActualBaseIndex: 0,
+        modalActualDirty: false,
+        isValidActualRow(index) {
+            return Number.isInteger(index) && index >= 0 && index < this.modalActualActivities.length;
+        },
+        normalizeActualDurationStep: normalizeToStep,
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw)
+                ? raw.filter((item) => item && typeof item === 'object').map((item) => ({ ...item }))
+                : [];
+        },
+        updateActualSpinnerDisplays() {},
+        updateActualActivitiesSummary() {},
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+        isManualLockedActivityRow(item) {
+            return isManualLockedActivityRow.call(this, item);
+        },
+        extractLockedRowsFromActivities(rows, totalUnits) {
+            return extractLockedRowsFromActivities(rows, totalUnits);
+        },
+        getActualGridLockedUnitsForBase(baseIndex, planUnits, activities) {
+            return getActualGridLockedUnitsForBase.call(this, baseIndex, planUnits, activities);
+        },
+        clampActualGridToAssigned() {
+            return clampActualGridToAssigned.call(this);
+        },
+        updatePlanActivitiesAssignment() {
+            this.planSyncCalls = (this.planSyncCalls || 0) + 1;
+        },
+    }, overrides);
+}
+
+test('isManualLockedActivityRow prioritizes explicit auto flag over lock metadata', () => {
+    const ctx = {
+        isLockedActivityRow(item) {
+            return item && item.source === 'locked';
+        },
+    };
+
+    assert.equal(
+        isManualLockedActivityRow.call(ctx, {
+            source: 'locked',
+            isAutoLocked: true,
+            lockUnits: [1],
+            lockStart: 1,
+            lockEnd: 1,
+        }),
+        false
+    );
+    assert.equal(
+        isManualLockedActivityRow.call(ctx, {
+            source: 'locked',
+            isAutoLocked: false,
+            lockUnits: [1],
+        }),
+        true
+    );
+    assert.equal(
+        isManualLockedActivityRow.call(ctx, {
+            source: 'locked',
+            lockUnits: [1],
+            lockStart: 1,
+            lockEnd: 1,
+        }),
+        true
+    );
+});
 
 test('applyActualDurationChange keeps other rows unchanged and allows unassigned gap', () => {
     const ctx = {
@@ -197,6 +293,59 @@ test('applyActualDurationChange keeps other rows unchanged and allows unassigned
     );
     assert.equal(ctx.clampCalls, 1);
     assert.equal(ctx.modalActualDirty, true);
+});
+
+test('applyActualDurationChange creates one auto locked row for a 20 minute deficit', () => {
+    const ctx = createSinglePlanModalCtx([
+        { label: 'A', seconds: 10800, source: 'grid', order: 0 },
+    ]);
+
+    applyActualDurationChange.call(ctx, 0, 9600, {});
+
+    const autoRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked' && item.isAutoLocked === true);
+    const totalAssigned = ctx.modalActualActivities.reduce((sum, item) => sum + (Number.isFinite(item && item.seconds) ? item.seconds : 0), 0);
+
+    assert.equal(autoRows.length, 1);
+    assert.equal(autoRows[0].seconds, 1200);
+    assert.deepEqual(autoRows[0].lockUnits, [16, 17]);
+    assert.equal(totalAssigned, 10800);
+});
+
+test('applyActualDurationChange replaces prior auto lock rows when reducing twice', () => {
+    const ctx = createSinglePlanModalCtx([
+        { label: 'A', seconds: 10800, source: 'grid', order: 0 },
+    ]);
+
+    applyActualDurationChange.call(ctx, 0, 10200, {});
+    applyActualDurationChange.call(ctx, 0, 9600, {});
+
+    const autoRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked' && item.isAutoLocked === true);
+    const totalAssigned = ctx.modalActualActivities.reduce((sum, item) => sum + (Number.isFinite(item && item.seconds) ? item.seconds : 0), 0);
+
+    assert.equal(autoRows.length, 1);
+    assert.equal(autoRows[0].seconds, 1200);
+    assert.deepEqual(autoRows[0].lockUnits, [16, 17]);
+    assert.equal(totalAssigned, 10800);
+});
+
+test('applyActualDurationChange keeps existing manual lock and adds only remaining auto deficit', () => {
+    const ctx = createSinglePlanModalCtx([
+        { label: 'A', seconds: 10200, source: 'grid', order: 0 },
+        { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockUnits: [17], lockStart: 17, lockEnd: 17, order: 1 },
+    ]);
+
+    applyActualDurationChange.call(ctx, 0, 9000, {});
+
+    const manualRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked' && item.isAutoLocked === false);
+    const autoRows = ctx.modalActualActivities.filter((item) => item && item.source === 'locked' && item.isAutoLocked === true);
+    const totalAssigned = ctx.modalActualActivities.reduce((sum, item) => sum + (Number.isFinite(item && item.seconds) ? item.seconds : 0), 0);
+
+    assert.equal(manualRows.length, 1);
+    assert.deepEqual(manualRows[0].lockUnits, [17]);
+    assert.equal(autoRows.length, 1);
+    assert.equal(autoRows[0].seconds, 1200);
+    assert.deepEqual(autoRows[0].lockUnits, [15, 16]);
+    assert.equal(totalAssigned, 10800);
 });
 
 test('addActualActivityRow assigns all remaining unassigned time to the new row', () => {

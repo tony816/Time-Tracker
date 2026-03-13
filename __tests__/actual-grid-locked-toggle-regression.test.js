@@ -14,6 +14,10 @@ const getActualGridManualLockedUnitsForBase = buildMethod(
     'getActualGridManualLockedUnitsForBase(baseIndex, planUnits = null, activities = null)',
     '(baseIndex, planUnits = null, activities = null)'
 );
+const computeSplitSegments = buildMethod(
+    'computeSplitSegments(type, index)',
+    '(type, index)'
+);
 const toggleActualGridLockedUnit = buildMethod(
     'toggleActualGridLockedUnit(index, unitIndex)',
     '(index, unitIndex)'
@@ -256,7 +260,7 @@ function manualUnitsFromRows(rows) {
         });
 }
 
-test('getActualGridLockedUnitsForBase merges manual+auto locked masks', () => {
+test('getActualGridLockedUnitsForBase treats manual locks as part of the total deficit', () => {
     const ctx = {
         timeSlots: [{ activityLog: { subActivities: [] } }],
         extractLockedRowsFromActivities: (rows, totalUnits) => extractLockedRowsFromActivities(rows, totalUnits),
@@ -276,7 +280,7 @@ test('getActualGridLockedUnitsForBase merges manual+auto locked masks', () => {
         { label: 'A', seconds: 1200, source: 'grid' }
     ]);
 
-    assert.deepEqual(locked, [false, true, true, true]);
+    assert.deepEqual(locked, [false, true, false, true]);
 });
 
 test('getActualGridManualLockedUnitsForBase returns only manual lock mask', () => {
@@ -291,6 +295,127 @@ test('getActualGridManualLockedUnitsForBase returns only manual lock mask', () =
     ]);
 
     assert.deepEqual(locked, [false, true, false, false]);
+});
+
+test('computeSplitSegments uses full locked mask for actual override graphics', () => {
+    let lockedCalls = 0;
+    let manualCalls = 0;
+    let allocationLockedUnits = null;
+    const lockedMask = [false, false, false, true, true, true];
+    const ctx = {
+        timeSlots: [{
+            planTitle: '',
+            planned: 'A',
+            planTitleBandOn: false,
+            activityLog: {
+                actualOverride: true,
+                subActivities: [
+                    { label: 'A', seconds: 1800, source: 'grid', order: 0 },
+                    { label: '', seconds: 1800, recordedSeconds: 1800, source: 'locked', isAutoLocked: true, lockStart: 3, lockEnd: 5, lockUnits: [3, 4, 5], order: 1 },
+                ],
+            },
+        }],
+        mergedFields: new Map(),
+        getSplitBaseIndex: () => 0,
+        getSplitRange: () => ({ start: 0, end: 0 }),
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        findMergeKey: () => null,
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        isActualGridMode: () => true,
+        getActualGridUnitCount: () => 6,
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(6) }),
+        getPaletteIndicesForLabels: () => new Set(),
+        getActualGridUnitsForBase: () => [true, true, true, true, true, true],
+        getActualFailedGridUnitsForBase: () => [false, false, false, false, false, false],
+        sortActivitiesByOrder(rows) {
+            return Array.isArray(rows) ? rows.slice() : [];
+        },
+        getActualGridLockedUnitsForBase() {
+            lockedCalls += 1;
+            return lockedMask.slice();
+        },
+        getActualGridManualLockedUnitsForBase() {
+            manualCalls += 1;
+            return new Array(6).fill(false);
+        },
+        getActualGridDisplayOrderIndicesWithExtras(planUnits) {
+            return planUnits.map((_label, idx) => idx);
+        },
+        buildExtraSlotAllocation(planUnits, _actualUnits, _extras, _orderIndices, lockedUnits) {
+            allocationLockedUnits = Array.isArray(lockedUnits) ? lockedUnits.slice() : null;
+            return { slotsByIndex: new Array(planUnits.length).fill('') };
+        },
+        buildExtraActiveGridUnits(totalUnits) {
+            return new Array(totalUnits).fill(false);
+        },
+    };
+
+    const result = computeSplitSegments.call(ctx, 'actual', 0);
+
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.locked)), lockedMask);
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.active)), [true, true, true, false, false, false]);
+    assert.deepEqual(allocationLockedUnits, lockedMask);
+    assert.equal(lockedCalls, 1);
+    assert.equal(manualCalls, 0);
+});
+
+test('computeSplitSegments uses full locked mask for plain actual grid graphics', () => {
+    let lockedCalls = 0;
+    let manualCalls = 0;
+    const lockedMask = [false, true, true, false];
+    const ctx = {
+        timeSlots: [{
+            planTitle: '',
+            planned: 'A',
+            planTitleBandOn: false,
+            activityLog: {
+                actualOverride: false,
+                subActivities: [
+                    { label: 'A', seconds: 1200, source: 'grid', order: 0 },
+                    { label: '', seconds: 1200, recordedSeconds: 1200, source: 'locked', isAutoLocked: true, lockStart: 1, lockEnd: 2, lockUnits: [1, 2], order: 1 },
+                ],
+            },
+        }],
+        mergedFields: new Map(),
+        getSplitBaseIndex: () => 0,
+        getSplitRange: () => ({ start: 0, end: 0 }),
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        findMergeKey: () => null,
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        isActualGridMode: () => true,
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(4) }),
+        getActualGridUnitsForBase: () => [true, true, true, true],
+        getActualFailedGridUnitsForBase: () => [false, false, false, false],
+        sortActivitiesByOrder(rows) {
+            return Array.isArray(rows) ? rows.slice() : [];
+        },
+        getActualGridLockedUnitsForBase() {
+            lockedCalls += 1;
+            return lockedMask.slice();
+        },
+        getActualGridManualLockedUnitsForBase() {
+            manualCalls += 1;
+            return [false, false, false, false];
+        },
+        getActualGridDisplayOrderIndices(planUnits) {
+            return planUnits.map((_label, idx) => idx);
+        },
+    };
+
+    const result = computeSplitSegments.call(ctx, 'actual', 0);
+
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.locked)), lockedMask);
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.active)), [true, false, false, true]);
+    assert.equal(lockedCalls, 1);
+    assert.equal(manualCalls, 0);
 });
 
 test('toggleActualGridLockedUnit preserves existing manual lock units when adding another unit', () => {

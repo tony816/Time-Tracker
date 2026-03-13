@@ -4552,6 +4552,7 @@ class TimeTracker {
 
     isManualLockedActivityRow(item) {
         if (!this.isLockedActivityRow(item)) return false;
+        if (item.isAutoLocked === true) return false;
         if (item.isAutoLocked === false) return true;
         const hasManualUnits = Array.isArray(item.lockUnits) && item.lockUnits.some((value) => Number.isFinite(value));
         const hasManualRange = Number.isFinite(item.lockStart) || Number.isFinite(item.lockEnd);
@@ -4825,6 +4826,9 @@ class TimeTracker {
         }
         const lockData = this.extractLockedRowsFromActivities(sourceActivities, units.length);
         const manualMask = Array.isArray(lockData.manualMask) ? lockData.manualMask : new Array(units.length).fill(false);
+        const manualCount = Array.isArray(lockData.manualMask)
+            ? lockData.manualMask.reduce((sum, value) => sum + (value ? 1 : 0), 0)
+            : 0;
 
         const nonManualActivities = (Array.isArray(sourceActivities) ? sourceActivities : []).filter(
             (item) => !isManualLocked(item)
@@ -4842,8 +4846,9 @@ class TimeTracker {
         });
         const lockedUnits = manualMask.slice(0);
         const allowedUnitsTotal = Math.max(0, Math.min(units.length, assignedUnitsTotal));
-        const lockedCount = Math.max(0, units.length - allowedUnitsTotal);
-        if (lockedCount <= 0) {
+        const totalLockedCount = Math.max(0, units.length - allowedUnitsTotal);
+        const autoLockedCount = Math.max(0, totalLockedCount - manualCount);
+        if (autoLockedCount <= 0) {
             return lockedUnits;
         }
 
@@ -4864,7 +4869,7 @@ class TimeTracker {
         }
 
         if (!hasLockedRow) {
-            const count = Math.min(lockedCount, autoSelectOrder.length);
+            const count = Math.min(autoLockedCount, autoSelectOrder.length);
             for (let i = 0; i < count; i++) {
                 const visualPos = autoSelectOrder.length - 1 - i;
                 const unitIndex = autoSelectOrder[visualPos];
@@ -4889,7 +4894,7 @@ class TimeTracker {
         const lockedRowIndex = nonManualActivities.findIndex((item) => item && item.source === 'locked');
         if (lockedRowIndex < 0) {
             for (let i = autoSelectOrder.length - 1;
-                i >= 0 && (autoSelectOrder.length - 1 - i) < lockedCount;
+                i >= 0 && (autoSelectOrder.length - 1 - i) < autoLockedCount;
                 i--) {
                 const unitIndex = autoSelectOrder[i];
                 if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
@@ -4916,11 +4921,11 @@ class TimeTracker {
             }, 0);
         }
         if (startAt >= units.length) {
-            startAt = Math.max(0, autoSelectOrder.length - lockedCount);
+            startAt = Math.max(0, autoSelectOrder.length - autoLockedCount);
         }
 
         let selectCount = 0;
-        for (let offset = 0; offset < lockedCount; offset++) {
+        for (let offset = 0; offset < autoLockedCount; offset++) {
             const visualPos = startAt + offset;
             if (visualPos < 0 || visualPos >= autoSelectOrder.length) break;
             const unitIndex = autoSelectOrder[visualPos];
@@ -4929,8 +4934,8 @@ class TimeTracker {
             selectCount += 1;
         }
 
-        if (selectCount < lockedCount && lockedUnits.length > 0) {
-            const fallbackCount = lockedCount - selectCount;
+        if (selectCount < autoLockedCount && lockedUnits.length > 0) {
+            const fallbackCount = autoLockedCount - selectCount;
             for (let i = autoSelectOrder.length - 1; i >= 0 && (autoSelectOrder.length - 1 - i) < fallbackCount; i--) {
                 const unitIndex = autoSelectOrder[i];
                 if (!Number.isFinite(unitIndex) || unitIndex < 0 || unitIndex >= units.length) continue;
@@ -6293,7 +6298,7 @@ class TimeTracker {
                       : [];
                   const normalizedSub = this.normalizeActivitiesArray(rawSub).map(item => ({ ...item }));
                   const orderedActual = this.sortActivitiesByOrder(normalizedSub);
-                  const lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+                  const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
                   const extras = orderedActual.filter((item) => {
                       const label = this.normalizeActivityText
                           ? this.normalizeActivityText(item.label || '')
@@ -6394,7 +6399,7 @@ class TimeTracker {
                 if (normalized) planLabelSet.add(normalized);
             });
             const orderedActual = this.sortActivitiesByOrder(actualActivities);
-            const lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
             let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
@@ -12273,6 +12278,12 @@ class TimeTracker {
             }
             return rows;
         };
+        const manualMask = (typeof this.extractLockedRowsFromActivities === 'function')
+            ? this.extractLockedRowsFromActivities(normalizedActivities, planUnits.length).manualMask
+            : new Array(planUnits.length).fill(false);
+        const manualLockedCount = Array.isArray(manualMask)
+            ? manualMask.reduce((sum, value) => sum + (value ? 1 : 0), 0)
+            : 0;
         let assignedUnitsTotal = 0;
         (Array.isArray(normalizedActivities) ? normalizedActivities : []).forEach((item) => {
             if (!item || isLockedRow(item)) return;
@@ -12282,29 +12293,36 @@ class TimeTracker {
         });
 
         const allowedUnitsTotal = Math.max(0, Math.min(planUnits.length, assignedUnitsTotal));
-        const lockedCount = Math.max(0, planUnits.length - allowedUnitsTotal);
-        let lockedMask = new Array(planUnits.length).fill(false);
+        const totalLockedCount = Math.max(0, planUnits.length - allowedUnitsTotal);
+        const autoLockedCount = Math.max(0, totalLockedCount - manualLockedCount);
+        let lockedMask = Array.isArray(manualMask)
+            ? manualMask.slice(0)
+            : new Array(planUnits.length).fill(false);
         if (typeof this.getActualGridLockedUnitsForBase === 'function') {
             lockedMask = this.getActualGridLockedUnitsForBase(
                 this.modalActualBaseIndex,
                 planUnits,
                 normalizedActivities
             );
-        } else if (lockedCount > 0) {
-            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+        } else if (autoLockedCount > 0) {
+            let filled = 0;
+            for (let i = planUnits.length - 1; i >= 0 && filled < autoLockedCount; i--) {
+                if (lockedMask[i]) continue;
                 lockedMask[i] = true;
+                filled += 1;
             }
         }
         if (!Array.isArray(lockedMask) || lockedMask.length !== planUnits.length) {
-            lockedMask = new Array(planUnits.length).fill(false);
-            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
+            lockedMask = Array.isArray(manualMask)
+                ? manualMask.slice(0)
+                : new Array(planUnits.length).fill(false);
+            let filled = 0;
+            for (let i = planUnits.length - 1; i >= 0 && filled < autoLockedCount; i--) {
+                if (lockedMask[i]) continue;
                 lockedMask[i] = true;
+                filled += 1;
             }
         }
-
-        const manualMask = (typeof this.extractLockedRowsFromActivities === 'function')
-            ? this.extractLockedRowsFromActivities(normalizedActivities, planUnits.length).manualMask
-            : new Array(planUnits.length).fill(false);
         const autoMask = lockedMask.map((isLocked, idx) => Boolean(isLocked && !manualMask[idx]));
 
         lockedMask.forEach((isLocked, idx) => {
@@ -12312,11 +12330,15 @@ class TimeTracker {
             gridUnits[idx] = false;
             changed = true;
         });
-        if (lockedCount > 0 && !lockedMask.some(Boolean)) {
-            for (let i = planUnits.length - 1; i >= 0 && (planUnits.length - 1 - i) < lockedCount; i--) {
-                if (!gridUnits[i]) continue;
-                gridUnits[i] = false;
-                changed = true;
+        if (autoLockedCount > 0 && !autoMask.some(Boolean)) {
+            let filled = 0;
+            for (let i = planUnits.length - 1; i >= 0 && filled < autoLockedCount; i--) {
+                if (manualMask[i]) continue;
+                if (gridUnits[i]) {
+                    gridUnits[i] = false;
+                    changed = true;
+                }
+                filled += 1;
             }
         }
 
