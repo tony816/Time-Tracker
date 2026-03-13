@@ -182,13 +182,12 @@
 
     .inline-plan-input-row.inline-plan-input-row-mobile-close {
         grid-template-columns: 64px minmax(0, 1fr);
-        gap: 10px;
+        gap: 0;
     }
 
     .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn {
         min-width: 64px;
         min-height: 56px;
-        border-radius: 20px;
         font-size: 38px;
     }
 
