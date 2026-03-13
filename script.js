@@ -6954,8 +6954,12 @@ class TimeTracker {
     }
 
     normalizeActualRecordedTimerSeconds(seconds) {
-        const normalized = this.normalizeActualTimerSeconds(Number.isFinite(seconds) ? Math.floor(seconds) : 0);
-        return normalized >= 420 ? normalized : 0;
+        const rawSeconds = Number.isFinite(seconds) ? Math.floor(seconds) : 0;
+        if (rawSeconds < 420) return 0;
+
+        const totalMinutes = Math.floor(rawSeconds / 60);
+        const roundedMinute = Math.floor(totalMinutes / 10) * 10 + (totalMinutes % 10 >= 5 ? 10 : 0);
+        return Math.max(0, roundedMinute * 60);
     }
 
     normalizeActualTimerSeconds(seconds) {
