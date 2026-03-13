@@ -365,6 +365,59 @@ test('toggleActualGridLockedUnit seeds planned rows so manual lock stays tied to
     assert.deepEqual(manualLocked.lockUnits, [0]);
 });
 
+test('toggleActualGridLockedUnit reduces assigned seconds for the locked activity label', () => {
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 2400, source: 'grid' }
+                ],
+                actualGridUnits: [false, false, false, false],
+            }
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(4), planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, false, false, false],
+    });
+
+    toggleActualGridLockedUnit.call(ctx, 0, 3);
+
+    const rows = (ctx.timeSlots[0].activityLog.subActivities || []);
+    const gridRow = rows.find((item) => item && item.label === 'A' && item.source === 'grid');
+    const lockedRow = rows.find((item) => item && item.source === 'locked' && item.isAutoLocked === false);
+
+    assert.ok(gridRow);
+    assert.equal(gridRow.seconds, 1800);
+    assert.ok(lockedRow);
+    assert.equal(lockedRow.seconds, 600);
+    assert.deepEqual(lockedRow.lockUnits, [3]);
+});
+
+test('toggleActualGridLockedUnit restores assigned seconds when unlocking the unit', () => {
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 1800, source: 'grid' },
+                    { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 3, lockEnd: 3, lockUnits: [3] }
+                ],
+                actualGridUnits: [false, false, false, false],
+            }
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(4), planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, false, false, false],
+    });
+
+    toggleActualGridLockedUnit.call(ctx, 0, 3);
+
+    const rows = (ctx.timeSlots[0].activityLog.subActivities || []);
+    const gridRow = rows.find((item) => item && item.label === 'A' && item.source === 'grid');
+    const lockedRows = rows.filter((item) => item && item.source === 'locked' && item.isAutoLocked === false);
+
+    assert.ok(gridRow);
+    assert.equal(gridRow.seconds, 2400);
+    assert.equal(lockedRows.length, 0);
+});
+
 test('toggleActualGridLockedUnit preserves existing actualGridUnits while toggling lock', () => {
     const ctx = makeCtx({
         timeSlots: [{

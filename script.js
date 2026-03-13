@@ -5580,14 +5580,149 @@ class TimeTracker {
             }
             return item && item.source === 'locked' && item.isAutoLocked === false;
         };
+        const normalizeLabel = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const normalizeAssignedSeconds = (value) => {
+            const raw = Number.isFinite(value) ? Math.floor(value) : 0;
+            if (typeof this.normalizeActualDurationStep === 'function') {
+                return this.normalizeActualDurationStep(raw);
+            }
+            return Math.max(0, raw);
+        };
+        const stepSeconds = Number.isFinite(this.getActualDurationStepSeconds())
+            ? this.getActualDurationStepSeconds()
+            : 600;
+        const planLabelSet = new Set();
+        planContext.units.forEach((label) => {
+            const normalizedLabel = normalizeLabel(label || '');
+            if (normalizedLabel) {
+                planLabelSet.add(normalizedLabel);
+            }
+        });
         const normalized = normalizeActivities(rawSub).map((item) => ({ ...item }));
         if (!Array.isArray(normalized)) return;
 
         const lockData = this.extractLockedRowsFromActivities(normalized, planContext.units.length);
-        const manualMask = Array.isArray(lockData.manualMask)
+        const previousManualMask = Array.isArray(lockData.manualMask)
             ? lockData.manualMask.slice(0)
             : new Array(planContext.units.length).fill(false);
+        const manualMask = previousManualMask.slice(0);
         manualMask[unitIndex] = !Boolean(manualMask[unitIndex]);
+
+        const seedPlanRows = (rows, requiredLabels = []) => {
+            const safeRows = Array.isArray(rows)
+                ? rows
+                    .filter((item) => item && typeof item === 'object')
+                    .map((item) => ({ ...item }))
+                : [];
+            const pendingLabels = Array.from(new Set(
+                (Array.isArray(requiredLabels) ? requiredLabels : [])
+                    .map((label) => normalizeLabel(label || ''))
+                    .filter(Boolean)
+            )).filter((label) => !safeRows.some((item) => {
+                if (!item || this.isLockedActivityRow(item)) return false;
+                const rowLabel = normalizeLabel(item.label || '');
+                if (!rowLabel || rowLabel !== label) return false;
+                return item.source === 'grid' || planLabelSet.has(rowLabel);
+            }));
+            if (pendingLabels.length === 0) return safeRows;
+            if (typeof this.getActualGridUnitsForBase === 'function'
+                && typeof this.buildActualActivitiesFromGrid === 'function'
+                && typeof this.mergeActualActivitiesWithGrid === 'function') {
+                const currentUnits = this.getActualGridUnitsForBase(
+                    baseIndex,
+                    planContext.units.length,
+                    planContext.units
+                );
+                const currentGridActivities = this.buildActualActivitiesFromGrid(
+                    planContext.units,
+                    Array.isArray(currentUnits) ? currentUnits : []
+                );
+                const seededRows = this.mergeActualActivitiesWithGrid(
+                    baseIndex,
+                    planContext.units,
+                    currentGridActivities,
+                    safeRows,
+                    planContext.planLabel || ''
+                );
+                return (Array.isArray(seededRows) ? seededRows : [])
+                    .filter((item) => !this.isLockedActivityRow(item))
+                    .map((item) => ({ ...item }));
+            }
+            pendingLabels.forEach((label) => {
+                safeRows.push({ label, seconds: 0, source: 'grid' });
+            });
+            return safeRows;
+        };
+        const applyManualLockAssignmentDelta = (rows) => {
+            const deltaByLabel = new Map();
+            for (let i = 0; i < planContext.units.length; i++) {
+                const wasLocked = Boolean(previousManualMask[i]);
+                const isLocked = Boolean(manualMask[i]);
+                if (wasLocked === isLocked) continue;
+                const label = normalizeLabel(planContext.units[i] || '');
+                if (!label) continue;
+                const delta = isLocked ? -stepSeconds : stepSeconds;
+                deltaByLabel.set(label, (deltaByLabel.get(label) || 0) + delta);
+            }
+            if (deltaByLabel.size === 0) {
+                return Array.isArray(rows) ? rows.map((item) => ({ ...item })) : [];
+            }
+
+            let nextRows = seedPlanRows(rows, Array.from(deltaByLabel.keys()));
+            const isAdjustablePlanRow = (item) => {
+                if (!item || this.isLockedActivityRow(item)) return false;
+                const label = normalizeLabel(item.label || '');
+                if (!label) return false;
+                return item.source === 'grid' || planLabelSet.has(label);
+            };
+
+            deltaByLabel.forEach((secondsDelta, label) => {
+                const matchingIndices = [];
+                nextRows.forEach((item, idx) => {
+                    if (!isAdjustablePlanRow(item)) return;
+                    const rowLabel = normalizeLabel(item.label || '');
+                    if (rowLabel === label) {
+                        matchingIndices.push(idx);
+                    }
+                });
+                if (matchingIndices.length === 0) return;
+
+                if (secondsDelta < 0) {
+                    let remaining = Math.abs(secondsDelta);
+                    for (let i = matchingIndices.length - 1; i >= 0 && remaining > 0; i--) {
+                        const rowIndex = matchingIndices[i];
+                        const current = Number.isFinite(nextRows[rowIndex].seconds)
+                            ? Math.max(0, Math.floor(nextRows[rowIndex].seconds))
+                            : 0;
+                        if (current <= 0) continue;
+                        const reduce = Math.min(current, remaining);
+                        nextRows[rowIndex].seconds = current - reduce;
+                        remaining -= reduce;
+                    }
+                    return;
+                }
+
+                const targetIndex = matchingIndices[matchingIndices.length - 1];
+                const current = Number.isFinite(nextRows[targetIndex].seconds)
+                    ? Math.max(0, Math.floor(nextRows[targetIndex].seconds))
+                    : 0;
+                nextRows[targetIndex].seconds = current + secondsDelta;
+            });
+
+            return nextRows
+                .map((item) => {
+                    if (!item || typeof item !== 'object') return item;
+                    const nextItem = { ...item };
+                    nextItem.seconds = normalizeAssignedSeconds(nextItem.seconds);
+                    if (Number.isFinite(nextItem.recordedSeconds)) {
+                        nextItem.recordedSeconds = normalizeAssignedSeconds(nextItem.recordedSeconds);
+                    }
+                    return nextItem;
+                })
+                .filter((item) => item && (item.label || item.seconds > 0 || item.source === 'locked'));
+        };
 
         let nonLockedRows = normalized.filter((item) => !this.isLockedActivityRow(item));
         if (nonLockedRows.length === 0
@@ -5612,6 +5747,7 @@ class TimeTracker {
             );
             nonLockedRows = (Array.isArray(seededRows) ? seededRows : []).filter((item) => !this.isLockedActivityRow(item));
         }
+        nonLockedRows = applyManualLockAssignmentDelta(nonLockedRows);
         const existingAutoMask = Array.isArray(lockData.autoMask)
             ? lockData.autoMask
             : new Array(planContext.units.length).fill(false);
@@ -5640,6 +5776,9 @@ class TimeTracker {
         slot.activityLog.subActivities = nextActivities.map((item) => ({ ...item }));
         if (Array.isArray(preservedGridUnits)) {
             slot.activityLog.actualGridUnits = preservedGridUnits.map((value) => Boolean(value));
+        }
+        if (typeof this.syncActualGridToSlots === 'function' && Array.isArray(preservedGridUnits)) {
+            this.syncActualGridToSlots(baseIndex, planContext.units, preservedGridUnits);
         }
 
         if (this.modalActualBaseIndex === baseIndex && this.modalActualHasPlanUnits) {
