@@ -52,6 +52,7 @@ class TimeTracker {
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
         this.inlinePlanWheelHandler = null;
+        this.inlinePlanInputFocusHandler = null;
         this.inlinePlanContext = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
@@ -10569,29 +10570,81 @@ class TimeTracker {
         if (this.canInlineWheelScroll(event.target, dropdown, deltaY)) return;
         event.preventDefault();
     }
+    isInlinePlanMobileInputContext() {
+        try {
+            if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+            return window.matchMedia('(hover: none), (pointer: coarse)').matches;
+        } catch (_) {
+            return false;
+        }
+    }
+    shouldAutofocusInlinePlanInput() {
+        return !this.isInlinePlanMobileInputContext();
+    }
+    getInlinePlanViewportMetrics() {
+        const docEl = document.documentElement;
+        const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
+        const layoutScrollY = window.scrollY || docEl.scrollTop || 0;
+        const vv = (typeof window !== 'undefined' && window.visualViewport) ? window.visualViewport : null;
+        const viewportLeft = vv ? (layoutScrollX + vv.offsetLeft) : layoutScrollX;
+        const viewportTop = vv ? (layoutScrollY + vv.offsetTop) : layoutScrollY;
+        const viewportWidth = vv ? vv.width : (docEl.clientWidth || window.innerWidth || 0);
+        const viewportHeight = vv ? vv.height : (docEl.clientHeight || window.innerHeight || 0);
+
+        return {
+            left: viewportLeft,
+            top: viewportTop,
+            width: viewportWidth,
+            height: viewportHeight,
+            right: viewportLeft + viewportWidth,
+            bottom: viewportTop + viewportHeight,
+        };
+    }
+    ensureInlinePlanInputVisible(inputEl) {
+        if (!inputEl || !this.inlinePlanDropdown || !this.isInlinePlanMobileInputContext()) return;
+
+        try {
+            inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        } catch (_) {}
+
+        const inputRow = inputEl.closest('.inline-plan-input-row');
+        if (inputRow && typeof inputRow.scrollIntoView === 'function') {
+            try {
+                inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            } catch (_) {}
+        }
+
+        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+        if (currentAnchor) {
+            this.positionInlinePlanDropdown(currentAnchor);
+        }
+    }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
         const rect = anchor.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
         const dropdown = this.inlinePlanDropdown;
-        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
+        const viewport = this.getInlinePlanViewportMetrics();
+        const anchorLeft = viewport.left + rect.left;
+        const anchorTop = viewport.top + rect.top;
+        const anchorBottom = viewport.top + rect.bottom;
         const margin = 12;
         const gap = 6;
 
-        const maxWidth = Math.max(240, viewportWidth - (margin * 2));
+        const maxWidth = Math.max(240, viewport.width - (margin * 2));
         const minWidth = Math.min(Math.max(240, rect.width + 32), maxWidth);
         dropdown.style.minWidth = `${minWidth}px`;
         dropdown.style.width = `${minWidth}px`;
 
-        let left = rect.left + scrollX;
-        const maxLeft = scrollX + viewportWidth - minWidth - margin;
+        let left = anchorLeft;
+        const maxLeft = viewport.right - minWidth - margin;
         if (left > maxLeft) {
-            left = Math.max(scrollX + margin, maxLeft);
+            left = Math.max(viewport.left + margin, maxLeft);
+        }
+        if (left < viewport.left + margin) {
+            left = viewport.left + margin;
         }
 
         dropdown.style.visibility = 'hidden';
@@ -10603,17 +10656,19 @@ class TimeTracker {
             Number(dropdown.scrollHeight) || 0,
             Number(dropdown.offsetHeight) || 0
         );
-        const spaceBelow = Math.max(120, Math.floor(viewportHeight - rect.bottom - margin));
-        const spaceAbove = Math.max(120, Math.floor(rect.top - margin));
+        const rawSpaceBelow = Math.floor(viewport.bottom - anchorBottom - margin);
+        const rawSpaceAbove = Math.floor(anchorTop - viewport.top - margin);
+        const spaceBelow = Math.max(120, rawSpaceBelow);
+        const spaceAbove = Math.max(120, rawSpaceAbove);
 
         let placeAbove = false;
-        if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+        if (rawSpaceBelow < 220 && rawSpaceAbove > rawSpaceBelow) {
             placeAbove = true;
         }
 
         let available = placeAbove ? spaceAbove : spaceBelow;
         if (available < 120) {
-            placeAbove = spaceAbove > spaceBelow;
+            placeAbove = rawSpaceAbove > rawSpaceBelow;
             available = Math.max(spaceAbove, spaceBelow, 120);
         }
 
@@ -10622,11 +10677,11 @@ class TimeTracker {
 
         const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
         let top = placeAbove
-            ? (rect.top + scrollY - estimatedHeight - gap)
-            : (rect.bottom + scrollY + gap);
+            ? (anchorTop - estimatedHeight - gap)
+            : (anchorBottom + gap);
 
-        const minTop = scrollY + margin;
-        const maxTop = scrollY + viewportHeight - margin - estimatedHeight;
+        const minTop = viewport.top + margin;
+        const maxTop = viewport.bottom - margin - estimatedHeight;
         if (top < minTop) top = minTop;
         if (top > maxTop) top = Math.max(minTop, maxTop);
 
@@ -11112,6 +11167,7 @@ class TimeTracker {
         const input = dropdown.querySelector('.inline-plan-input');
         const addBtn = dropdown.querySelector('.inline-plan-add-btn');
         const clearBtn = dropdown.querySelector('.inline-plan-sync-btn');
+        this.inlinePlanInputFocusHandler = null;
         const runInlineNotionSync = async () => {
             if (!this.prefetchNotionActivitiesIfConfigured) return false;
             try {
@@ -11236,6 +11292,16 @@ class TimeTracker {
                     addHandler({ keepOpen: true });
                 }
             });
+            this.inlinePlanInputFocusHandler = () => {
+                const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+                if (currentAnchor) {
+                    this.positionInlinePlanDropdown(currentAnchor);
+                }
+                requestAnimationFrame(() => {
+                    this.ensureInlinePlanInputVisible(input);
+                });
+            };
+            input.addEventListener('focus', this.inlinePlanInputFocusHandler);
         }
         if (addBtn) {
             addBtn.addEventListener('click', addHandler);
@@ -11413,7 +11479,7 @@ class TimeTracker {
             if (!anchorNow) return;
             this.inlinePlanTarget.anchor = anchorNow;
             this.positionInlinePlanDropdown(anchorNow);
-            if (input) input.focus();
+            if (input && this.shouldAutofocusInlinePlanInput()) input.focus();
         });
 
         this.inlinePlanOutsideHandler = (event) => {
@@ -11448,6 +11514,10 @@ class TimeTracker {
         };
         window.addEventListener('resize', this.inlinePlanScrollHandler);
         window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', this.inlinePlanScrollHandler);
+            window.visualViewport.addEventListener('scroll', this.inlinePlanScrollHandler);
+        }
 
         if (this.isNotionUIVisible() && this.prefetchNotionActivitiesIfConfigured) {
             this.prefetchNotionActivitiesIfConfigured()
@@ -11475,7 +11545,16 @@ class TimeTracker {
         if (this.inlinePlanScrollHandler) {
             window.removeEventListener('resize', this.inlinePlanScrollHandler);
             window.removeEventListener('scroll', this.inlinePlanScrollHandler, true);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', this.inlinePlanScrollHandler);
+                window.visualViewport.removeEventListener('scroll', this.inlinePlanScrollHandler);
+            }
             this.inlinePlanScrollHandler = null;
+        }
+        if (this.inlinePlanDropdown && this.inlinePlanInputFocusHandler) {
+            const input = this.inlinePlanDropdown.querySelector('.inline-plan-input');
+            if (input) input.removeEventListener('focus', this.inlinePlanInputFocusHandler);
+            this.inlinePlanInputFocusHandler = null;
         }
         if (this.inlinePlanDropdown && this.inlinePlanWheelHandler) {
             this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
@@ -11521,7 +11600,7 @@ class TimeTracker {
                 this.inlinePlanTarget.anchor = anchor;
                 this.positionInlinePlanDropdown(anchor);
                 const dropdownInput = this.inlinePlanDropdown && this.inlinePlanDropdown.querySelector('.inline-plan-input');
-                if (dropdownInput) dropdownInput.focus();
+                if (dropdownInput && this.shouldAutofocusInlinePlanInput()) dropdownInput.focus();
             }
             return;
         }
