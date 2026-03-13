@@ -11110,6 +11110,7 @@ class TimeTracker {
         this.closeInlinePlanDropdown();
         this.currentPlanSource = this.getActivePlanSource();
 
+        const isMobileInputContext = this.isInlinePlanMobileInputContext();
         this.inlinePlanTarget = { ...range, anchor };
         const dropdown = document.createElement('div');
         dropdown.className = 'inline-plan-dropdown';
@@ -11118,7 +11119,8 @@ class TimeTracker {
                 <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">직접 추가</button>
                 ${this.isNotionUIVisible() ? '<button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>' : ''}
             </div>
-            <div class="inline-plan-input-row">
+            <div class="inline-plan-input-row${isMobileInputContext ? ' inline-plan-input-row-mobile-close' : ''}">
+                ${isMobileInputContext ? '<button type="button" class="inline-plan-close-btn" aria-label="드롭다운 닫기">←</button>' : ''}
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn">추가</button>
                 <button type="button" class="inline-plan-sync-btn">지우기</button>
@@ -11167,6 +11169,7 @@ class TimeTracker {
         const input = dropdown.querySelector('.inline-plan-input');
         const addBtn = dropdown.querySelector('.inline-plan-add-btn');
         const clearBtn = dropdown.querySelector('.inline-plan-sync-btn');
+        const closeBtn = dropdown.querySelector('.inline-plan-close-btn');
         this.inlinePlanInputFocusHandler = null;
         const runInlineNotionSync = async () => {
             if (!this.prefetchNotionActivitiesIfConfigured) return false;
@@ -11309,6 +11312,12 @@ class TimeTracker {
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
                 clearHandler();
+            });
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.closeInlinePlanDropdown();
             });
         }
         const splitBtn = dropdown.querySelector('.inline-plan-split-btn');

@@ -180,6 +180,18 @@
         grid-template-columns: 1fr;
     }
 
+    .inline-plan-input-row.inline-plan-input-row-mobile-close {
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn {
+        min-width: 64px;
+        min-height: 56px;
+        border-radius: 20px;
+        font-size: 38px;
+    }
+
     .inline-plan-options-head,
     .inline-plan-option.inline-plan-option-row {
         grid-template-columns: 82px minmax(0, 1fr);

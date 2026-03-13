@@ -769,11 +769,71 @@
   margin-bottom: 8px;
 }
 
+.inline-plan-input-row.inline-plan-input-row-mobile-close {
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
 .inline-plan-input {
   padding: 8px 10px;
   border: 1px solid #dcdfe3;
   border-radius: 8px;
   font-size: 14px;
+}
+
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-input {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 52px;
+  border-radius: 18px;
+  font-size: 15px;
+}
+
+.inline-plan-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  min-height: 52px;
+  padding: 0;
+  border: 1px solid #e4e7eb;
+  border-radius: 18px;
+  background: #f3f4f6;
+  color: #636b75;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+  touch-action: manipulation;
+}
+
+.inline-plan-close-btn:hover {
+  background: #e8eaee;
+  border-color: #d9dde3;
+}
+
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn,
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn {
+  grid-row: 2;
+}
+
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
+  grid-row: 3;
 }
 
 .inline-plan-add-btn,
