@@ -6953,6 +6953,15 @@ class TimeTracker {
         return Math.max(0, Math.round(seconds / step) * step);
     }
 
+    normalizeActualRecordedTimerSeconds(seconds) {
+        const normalized = this.normalizeActualTimerSeconds(Number.isFinite(seconds) ? Math.floor(seconds) : 0);
+        return normalized >= 420 ? normalized : 0;
+    }
+
+    normalizeActualTimerSeconds(seconds) {
+        return this.normalizeActualDurationStep(Number.isFinite(seconds) ? Math.floor(seconds) : 0);
+    }
+
     normalizeActivitiesArray(raw) {
         const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
             ? globalThis.TimeTrackerActivityCore
@@ -11750,8 +11759,9 @@ class TimeTracker {
 
     pauseTimer(index) {
         const slot = this.timeSlots[index];
+        const nextElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
         slot.timer.running = false;
-        slot.timer.elapsed += Math.floor((Date.now() - slot.timer.startTime) / 1000);
+        slot.timer.elapsed = Math.max(0, nextElapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000));
         slot.timer.startTime = null;
 
         this.stopTimerInterval();
@@ -11784,20 +11794,26 @@ class TimeTracker {
 
     stopTimer(index) {
         const slot = this.timeSlots[index];
+        const roundedBefore = this.normalizeActualRecordedTimerSeconds(slot.timer.elapsed);
         let additionalSeconds = 0;
+        const elapsedBefore = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
 
         if (slot.timer.running) {
             additionalSeconds = Math.max(0, Math.floor((Date.now() - slot.timer.startTime) / 1000));
-            slot.timer.elapsed += additionalSeconds;
+            slot.timer.elapsed = elapsedBefore + additionalSeconds;
         }
 
         slot.timer.running = false;
         slot.timer.startTime = null;
+        const rawElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
+        const recordedElapsed = this.normalizeActualRecordedTimerSeconds(rawElapsed);
+        slot.timer.elapsed = recordedElapsed;
+        const roundedAdded = Math.max(0, recordedElapsed - roundedBefore);
 
         let recordedWithPlan = false;
 
         // 자동 기록: 타이머 시간을 실제 활동의 10분 그리드로 반영
-        if (additionalSeconds > 0) {
+        if (roundedAdded > 0) {
             const actualMergeKey = this.findMergeKey('actual', index);
             const actualBaseIndex = actualMergeKey ? parseInt(actualMergeKey.split('-')[1], 10) : index;
             if (this.isActualGridMode(actualBaseIndex)) {
@@ -11809,13 +11825,13 @@ class TimeTracker {
                     ? currentTimeIndex
                     : index;
                 const startRow = Math.max(0, targetIndex - range.start);
-                this.applyActualGridSeconds(actualBaseIndex, additionalSeconds, startRow);
+                this.applyActualGridSeconds(actualBaseIndex, roundedAdded, startRow);
                 recordedWithPlan = true;
             }
         }
 
         // 계획 분배에 실패했을 때의 기본 동작(기존 텍스트 기록 유지)
-        if (!recordedWithPlan && additionalSeconds > 0) {
+        if (!recordedWithPlan && roundedAdded > 0) {
             const timeStr = this.formatTime(slot.timer.elapsed);
 
             // 병합된 계획 값이 있으면 그 값을 우선 사용하여 라벨 구성
@@ -11862,7 +11878,9 @@ class TimeTracker {
         let changed = false;
         this.timeSlots.forEach((slot) => {
             if (slot.timer.running) {
-                slot.timer.elapsed += Math.max(0, Math.floor((nowMs - slot.timer.startTime) / 1000));
+                const current = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
+                const elapsed = Math.max(0, current + Math.floor((nowMs - slot.timer.startTime) / 1000));
+                slot.timer.elapsed = elapsed;
                 slot.timer.running = false;
                 slot.timer.startTime = null;
                 changed = true;
