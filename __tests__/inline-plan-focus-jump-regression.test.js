@@ -80,6 +80,14 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         scriptSource,
+        /const layoutScrollY = window\.scrollY \|\| docEl\.scrollTop \|\| 0;[\s\S]*?const anchorTop = layoutScrollY \+ rect\.top;[\s\S]*?const anchorBottom = layoutScrollY \+ rect\.bottom;/
+    );
+    assert.doesNotMatch(
+        scriptSource,
+        /const anchorTop = viewport\.top \+ rect\.top;/
+    );
+    assert.match(
+        scriptSource,
         /const minimumInteractiveHeight = this\.getInlinePlanMinimumInteractiveHeight\(dropdown\);/
     );
     assert.match(

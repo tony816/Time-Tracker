@@ -10908,9 +10908,12 @@ class TimeTracker {
         }
         const rect = anchor.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
-        const anchorLeft = viewport.left + rect.left;
-        const anchorTop = viewport.top + rect.top;
-        const anchorBottom = viewport.top + rect.bottom;
+        const docEl = document.documentElement;
+        const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
+        const layoutScrollY = window.scrollY || docEl.scrollTop || 0;
+        const anchorLeft = layoutScrollX + rect.left;
+        const anchorTop = layoutScrollY + rect.top;
+        const anchorBottom = layoutScrollY + rect.bottom;
         const minWidth = Math.min(Math.max(240, rect.width + 32), maxWidth);
         dropdown.style.minWidth = `${minWidth}px`;
         dropdown.style.width = `${minWidth}px`;
