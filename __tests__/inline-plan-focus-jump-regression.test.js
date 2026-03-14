@@ -73,6 +73,6 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.doesNotMatch(
         scriptSource,
-        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?if \(this\.isInlinePlanInputFocused\(\)\) \{/
+        /const referenceRect = inputRow \? inputRow\.getBoundingClientRect\(\) : dropdownRect;/
     );
 });

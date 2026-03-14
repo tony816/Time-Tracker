@@ -52,6 +52,7 @@ class TimeTracker {
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
         this.inlinePlanPageScrollCloseHandler = null;
+        this.inlinePlanGestureCloseHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanInputFocusHandler = null;
         this.inlinePlanFocusSyncTimer = null;
@@ -11782,10 +11783,29 @@ class TimeTracker {
                     return;
                 }
             }
+            if (this.isInlinePlanInputFocused()) {
+                this.scheduleInlinePlanViewportSync();
+                return;
+            }
             this.closeInlinePlanDropdown();
         };
         window.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
         document.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
+
+        this.inlinePlanGestureCloseHandler = (event) => {
+            if (!this.inlinePlanDropdown || !event || !event.target) return;
+            if (event.target === this.inlinePlanDropdown || this.inlinePlanDropdown.contains(event.target)) return;
+            if (this.routineMenu && this.routineMenu.contains(event.target)) return;
+            if (this.planActivityMenu && this.planActivityMenu.contains(event.target)) return;
+            if (this.planTitleMenu && this.planTitleMenu.contains(event.target)) return;
+            if (this.inlinePriorityMenu && this.inlinePriorityMenu.contains(event.target)) return;
+            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+            if (currentAnchor && currentAnchor.contains(event.target)) return;
+            if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
+            this.closeInlinePlanDropdown();
+        };
+        document.addEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
+        window.addEventListener('wheel', this.inlinePlanGestureCloseHandler, true);
 
         this.inlinePlanScrollHandler = () => {
             this.scheduleInlinePlanViewportSync();
@@ -11823,6 +11843,11 @@ class TimeTracker {
             window.removeEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
             document.removeEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
             this.inlinePlanPageScrollCloseHandler = null;
+        }
+        if (this.inlinePlanGestureCloseHandler) {
+            document.removeEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
+            window.removeEventListener('wheel', this.inlinePlanGestureCloseHandler, true);
+            this.inlinePlanGestureCloseHandler = null;
         }
         if (this.inlinePlanScrollHandler) {
             window.removeEventListener('resize', this.inlinePlanScrollHandler);
