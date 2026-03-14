@@ -57,6 +57,7 @@ class TimeTracker {
         this.inlinePlanInputFocusHandler = null;
         this.inlinePlanFocusSyncTimer = null;
         this.inlinePlanViewportSyncTimer = null;
+        this.inlinePlanInputIntentUntil = 0;
         this.inlinePlanContext = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
@@ -10885,6 +10886,14 @@ class TimeTracker {
         const inlineInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         return Boolean(inlineInput && document.activeElement === inlineInput);
     }
+    markInlinePlanInputIntent(durationMs = 420) {
+        const now = Date.now();
+        const windowMs = Math.max(120, Number(durationMs) || 0);
+        this.inlinePlanInputIntentUntil = now + windowMs;
+    }
+    hasRecentInlinePlanInputIntent() {
+        return Boolean(this.inlinePlanInputIntentUntil && Date.now() < this.inlinePlanInputIntentUntil);
+    }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
         const dropdown = this.inlinePlanDropdown;
@@ -11568,7 +11577,14 @@ class TimeTracker {
                     addHandler({ keepOpen: true });
                 }
             });
+            const markInputIntent = () => {
+                this.markInlinePlanInputIntent();
+            };
+            input.addEventListener('touchstart', markInputIntent, { passive: true });
+            input.addEventListener('pointerdown', markInputIntent, { passive: true });
+            input.addEventListener('mousedown', markInputIntent);
             this.inlinePlanInputFocusHandler = () => {
+                this.markInlinePlanInputIntent(700);
                 this.scheduleInlinePlanInputVisibilitySync(input);
             };
             input.addEventListener('focus', this.inlinePlanInputFocusHandler);
@@ -11783,7 +11799,7 @@ class TimeTracker {
                     return;
                 }
             }
-            if (this.isInlinePlanInputFocused()) {
+            if (this.isInlinePlanInputFocused() || this.hasRecentInlinePlanInputIntent()) {
                 this.scheduleInlinePlanViewportSync();
                 return;
             }
@@ -11880,6 +11896,7 @@ class TimeTracker {
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
         this.inlinePlanContext = null;
+        this.inlinePlanInputIntentUntil = 0;
     }
     applyInlinePlanSelection(label, options = {}) {
         if (!this.inlinePlanTarget) return;

@@ -8,7 +8,7 @@ const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'u
 test('inline plan focus defers visibility sync instead of immediate reposition', () => {
     assert.match(
         scriptSource,
-        /this\.inlinePlanInputFocusHandler = \(\) => \{\s+this\.scheduleInlinePlanInputVisibilitySync\(input\);\s+\};/
+        /this\.inlinePlanInputFocusHandler = \(\) => \{\s+this\.markInlinePlanInputIntent\(700\);\s+this\.scheduleInlinePlanInputVisibilitySync\(input\);\s+\};/
     );
     assert.match(
         scriptSource,
@@ -28,6 +28,29 @@ test('ensureInlinePlanInputVisible repositions from the current slot anchor with
     assert.doesNotMatch(
         scriptSource,
         /ensureInlinePlanInputVisible\(inputEl\) \{[\s\S]*?scrollIntoView\(/
+    );
+});
+
+test('mobile inline input intent is tracked to prevent focus-triggered scroll close', () => {
+    assert.match(
+        scriptSource,
+        /markInlinePlanInputIntent\(durationMs = 420\) \{[\s\S]*?this\.inlinePlanInputIntentUntil = now \+ windowMs;/
+    );
+    assert.match(
+        scriptSource,
+        /hasRecentInlinePlanInputIntent\(\) \{\s+return Boolean\(this\.inlinePlanInputIntentUntil && Date\.now\(\) < this\.inlinePlanInputIntentUntil\);\s+\}/
+    );
+    assert.match(
+        scriptSource,
+        /if \(this\.isInlinePlanInputFocused\(\) \|\| this\.hasRecentInlinePlanInputIntent\(\)\) \{\s+this\.scheduleInlinePlanViewportSync\(\);\s+return;\s+\}/
+    );
+    assert.match(
+        scriptSource,
+        /input\.addEventListener\('touchstart', markInputIntent, \{ passive: true \}\);/
+    );
+    assert.match(
+        scriptSource,
+        /input\.addEventListener\('pointerdown', markInputIntent, \{ passive: true \}\);/
     );
 });
 
