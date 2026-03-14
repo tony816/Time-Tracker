@@ -51,6 +51,7 @@ class TimeTracker {
         this.inlinePlanOutsideHandler = null;
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
+        this.inlinePlanPageScrollCloseHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanInputFocusHandler = null;
         this.inlinePlanFocusSyncTimer = null;
@@ -10782,7 +10783,6 @@ class TimeTracker {
     scheduleInlinePlanViewportSync() {
         if (!this.inlinePlanDropdown) return;
 
-        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
         const priorityAnchor = this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl;
         const inlineInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         const inputFocused = Boolean(
@@ -10793,6 +10793,16 @@ class TimeTracker {
 
         const runSync = () => {
             if (!this.inlinePlanDropdown) return;
+            const target = this.inlinePlanTarget;
+            const currentAnchor = target
+                ? this.resolveInlinePlanAnchor(
+                    target.anchor,
+                    Number.isInteger(target.startIndex) ? target.startIndex : null
+                )
+                : null;
+            if (target && currentAnchor) {
+                this.inlinePlanTarget.anchor = currentAnchor;
+            }
             if (inputFocused && inlineInput) {
                 this.ensureInlinePlanInputVisible(inlineInput);
             } else if (currentAnchor) {
@@ -10834,35 +10844,40 @@ class TimeTracker {
             bottom: viewportTop + viewportHeight,
         };
     }
+    getInlinePlanMinimumInteractiveHeight(dropdown = this.inlinePlanDropdown) {
+        if (!dropdown) return 0;
+        const baseMin = this.isInlinePlanMobileInputContext() ? 168 : 120;
+        const sections = [
+            dropdown.querySelector('.inline-plan-tabs'),
+            dropdown.querySelector('.inline-plan-input-row'),
+            dropdown.querySelector('.inline-plan-options-head'),
+            dropdown.querySelector('.inline-plan-options-list > li')
+        ];
+        const measured = sections.reduce((sum, el) => {
+            if (!el) return sum;
+            const rect = typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null;
+            const height = rect && Number.isFinite(rect.height) && rect.height > 0
+                ? rect.height
+                : (el.offsetHeight || 0);
+            return sum + Math.max(0, Math.ceil(height));
+        }, 0);
+        const buffer = this.isInlinePlanMobileInputContext() ? 18 : 12;
+        return Math.max(baseMin, measured + buffer);
+    }
     ensureInlinePlanInputVisible(inputEl) {
-        if (!inputEl || !this.inlinePlanDropdown || !this.isInlinePlanMobileInputContext()) return;
-
-        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
-        if (currentAnchor) {
-            this.positionInlinePlanDropdown(currentAnchor);
+        if (!inputEl || !this.inlinePlanDropdown) return;
+        const target = this.inlinePlanTarget;
+        const currentAnchor = target
+            ? this.resolveInlinePlanAnchor(
+                target.anchor,
+                Number.isInteger(target.startIndex) ? target.startIndex : null
+            )
+            : null;
+        if (!currentAnchor) return;
+        if (target && target.anchor !== currentAnchor) {
+            this.inlinePlanTarget.anchor = currentAnchor;
         }
-
-        const viewport = this.getInlinePlanViewportMetrics();
-        const inputRect = inputEl.getBoundingClientRect();
-        const inputTop = viewport.top + inputRect.top;
-        const inputBottom = viewport.top + inputRect.bottom;
-        const needsScroll = inputTop < (viewport.top + 12) || inputBottom > (viewport.bottom - 12);
-        if (!needsScroll) return;
-
-        const inputRow = inputEl.closest('.inline-plan-input-row');
-        if (inputRow && typeof inputRow.scrollIntoView === 'function') {
-            try {
-                inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-            } catch (_) {
-                try {
-                    inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-                } catch (_) {}
-            }
-        }
-
-        if (currentAnchor) {
-            this.positionInlinePlanDropdown(currentAnchor);
-        }
+        this.positionInlinePlanDropdown(currentAnchor);
     }
     isInlinePlanInputFocused() {
         if (!this.inlinePlanDropdown || !this.isInlinePlanMobileInputContext()) return false;
@@ -10876,65 +10891,11 @@ class TimeTracker {
         const margin = 12;
         const gap = 6;
         const maxWidth = Math.max(240, viewport.width - (margin * 2));
-
-        if (this.isInlinePlanInputFocused()) {
-            const dropdownRect = dropdown.getBoundingClientRect();
-            const inputRow = dropdown.querySelector('.inline-plan-input-row');
-            const referenceRect = inputRow ? inputRow.getBoundingClientRect() : dropdownRect;
-            const preferredWidth = Math.min(
-                Math.max(240, Math.round(dropdownRect.width || dropdown.offsetWidth || 240)),
-                maxWidth
-            );
-            let left = viewport.left + dropdownRect.left;
-            const maxLeft = viewport.right - preferredWidth - margin;
-            if (left > maxLeft) {
-                left = Math.max(viewport.left + margin, maxLeft);
-            }
-            if (left < viewport.left + margin) {
-                left = viewport.left + margin;
-            }
-
-            dropdown.style.minWidth = `${preferredWidth}px`;
-            dropdown.style.width = `${preferredWidth}px`;
-            dropdown.style.visibility = 'hidden';
-            dropdown.style.left = '0px';
-            dropdown.style.top = '0px';
-            dropdown.style.maxHeight = '';
-
-            const naturalHeight = Math.max(
-                Number(dropdown.scrollHeight) || 0,
-                Number(dropdown.offsetHeight) || 0
-            );
-            const maxHeight = Math.max(120, Math.floor(viewport.height - (margin * 2)));
-            dropdown.style.maxHeight = `${maxHeight}px`;
-
-            const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
-            let top = viewport.top + dropdownRect.top;
-            const referenceTop = viewport.top + referenceRect.top;
-            const referenceBottom = viewport.top + referenceRect.bottom;
-            const minVisibleTop = viewport.top + margin;
-            const maxVisibleBottom = viewport.bottom - margin;
-
-            if (referenceTop < minVisibleTop) {
-                top += (minVisibleTop - referenceTop);
-            }
-            if (referenceBottom > maxVisibleBottom) {
-                top -= (referenceBottom - maxVisibleBottom);
-            }
-
-            const minTop = viewport.top + margin;
-            const maxTop = viewport.bottom - margin - estimatedHeight;
-            if (top < minTop) top = minTop;
-            if (top > maxTop) top = Math.max(minTop, maxTop);
-
-            dropdown.style.left = `${Math.round(left)}px`;
-            dropdown.style.top = `${Math.round(top)}px`;
-            dropdown.style.visibility = 'visible';
-            return;
-        }
-
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
+        if (this.inlinePlanTarget && this.inlinePlanTarget.anchor !== anchor) {
+            this.inlinePlanTarget.anchor = anchor;
+        }
         const rect = anchor.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
         const anchorLeft = viewport.left + rect.left;
@@ -10962,23 +10923,28 @@ class TimeTracker {
             Number(dropdown.scrollHeight) || 0,
             Number(dropdown.offsetHeight) || 0
         );
-        const rawSpaceBelow = Math.floor(viewport.bottom - anchorBottom - margin);
-        const rawSpaceAbove = Math.floor(anchorTop - viewport.top - margin);
-        const spaceBelow = Math.max(120, rawSpaceBelow);
-        const spaceAbove = Math.max(120, rawSpaceAbove);
+        const minimumInteractiveHeight = this.getInlinePlanMinimumInteractiveHeight(dropdown);
+        const fallbackHeight = Math.max(1, Math.floor(viewport.height - (margin * 2)));
+        const rawSpaceBelow = Math.max(0, Math.floor(viewport.bottom - anchorBottom - gap - margin));
+        const rawSpaceAbove = Math.max(0, Math.floor(anchorTop - viewport.top - gap - margin));
 
         let placeAbove = false;
-        if (rawSpaceBelow < 220 && rawSpaceAbove > rawSpaceBelow) {
+        if (rawSpaceBelow <= 0 && rawSpaceAbove > 0) {
+            placeAbove = true;
+        } else if (
+            rawSpaceBelow < minimumInteractiveHeight
+            && rawSpaceAbove > rawSpaceBelow
+            && rawSpaceAbove >= Math.min(minimumInteractiveHeight, naturalHeight || minimumInteractiveHeight)
+        ) {
             placeAbove = true;
         }
 
-        let available = placeAbove ? spaceAbove : spaceBelow;
-        if (available < 120) {
-            placeAbove = rawSpaceAbove > rawSpaceBelow;
-            available = Math.max(spaceAbove, spaceBelow, 120);
+        let available = placeAbove ? rawSpaceAbove : rawSpaceBelow;
+        if (available <= 0) {
+            available = fallbackHeight;
         }
 
-        const maxHeight = Math.max(120, Math.floor(available));
+        const maxHeight = Math.max(1, available > 0 ? Math.floor(available) : fallbackHeight);
         dropdown.style.maxHeight = `${maxHeight}px`;
 
         const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
@@ -10986,10 +10952,10 @@ class TimeTracker {
             ? (anchorTop - estimatedHeight - gap)
             : (anchorBottom + gap);
 
-        const minTop = viewport.top + margin;
-        const maxTop = viewport.bottom - margin - estimatedHeight;
-        if (top < minTop) top = minTop;
-        if (top > maxTop) top = Math.max(minTop, maxTop);
+        if (placeAbove) {
+            const minTop = viewport.top + margin;
+            if (top < minTop) top = minTop;
+        }
 
         dropdown.style.left = `${Math.round(left)}px`;
         dropdown.style.top = `${Math.round(top)}px`;
@@ -11810,16 +11776,21 @@ class TimeTracker {
         };
         document.addEventListener('keydown', this.inlinePlanEscHandler);
 
-        this.inlinePlanScrollHandler = (event) => {
+        this.inlinePlanPageScrollCloseHandler = (event) => {
             if (this.inlinePlanDropdown && event && event.target) {
                 if (event.target === this.inlinePlanDropdown || this.inlinePlanDropdown.contains(event.target)) {
                     return;
                 }
             }
+            this.closeInlinePlanDropdown();
+        };
+        window.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
+        document.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
+
+        this.inlinePlanScrollHandler = () => {
             this.scheduleInlinePlanViewportSync();
         };
         window.addEventListener('resize', this.inlinePlanScrollHandler);
-        window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', this.inlinePlanScrollHandler);
             window.visualViewport.addEventListener('scroll', this.inlinePlanScrollHandler);
@@ -11848,9 +11819,13 @@ class TimeTracker {
             document.removeEventListener('keydown', this.inlinePlanEscHandler);
             this.inlinePlanEscHandler = null;
         }
+        if (this.inlinePlanPageScrollCloseHandler) {
+            window.removeEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
+            document.removeEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
+            this.inlinePlanPageScrollCloseHandler = null;
+        }
         if (this.inlinePlanScrollHandler) {
             window.removeEventListener('resize', this.inlinePlanScrollHandler);
-            window.removeEventListener('scroll', this.inlinePlanScrollHandler, true);
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', this.inlinePlanScrollHandler);
                 window.visualViewport.removeEventListener('scroll', this.inlinePlanScrollHandler);

@@ -16,18 +16,18 @@ test('inline plan focus defers visibility sync instead of immediate reposition',
     );
 });
 
-test('ensureInlinePlanInputVisible only scrolls when input is outside viewport bounds', () => {
+test('ensureInlinePlanInputVisible repositions from the current slot anchor without scrolling the page', () => {
     assert.match(
         scriptSource,
-        /const needsScroll = inputTop < \(viewport\.top \+ 12\) \|\| inputBottom > \(viewport\.bottom - 12\);/
+        /ensureInlinePlanInputVisible\(inputEl\) \{[\s\S]*?const currentAnchor = target[\s\S]*?this\.resolveInlinePlanAnchor\(/
     );
     assert.match(
         scriptSource,
-        /if \(!needsScroll\) return;/
+        /ensureInlinePlanInputVisible\(inputEl\) \{[\s\S]*?this\.positionInlinePlanDropdown\(currentAnchor\);/
     );
-    assert.match(
+    assert.doesNotMatch(
         scriptSource,
-        /inputRow\.scrollIntoView\(\{ block: 'nearest', inline: 'nearest', behavior: 'instant' \}\);/
+        /ensureInlinePlanInputVisible\(inputEl\) \{[\s\S]*?scrollIntoView\(/
     );
 });
 
@@ -46,21 +46,33 @@ test('viewport sync is debounced while mobile inline plan input is focused', () 
     );
     assert.match(
         scriptSource,
-        /this\.inlinePlanScrollHandler = \(event\) => \{[\s\S]*?this\.scheduleInlinePlanViewportSync\(\);[\s\S]*?\};/
+        /const target = this\.inlinePlanTarget;[\s\S]*?this\.resolveInlinePlanAnchor\(/
     );
 });
 
-test('focused mobile inline input repositions dropdown from the input row instead of the slot anchor', () => {
+test('focused mobile inline input keeps dropdown attached to the slot anchor and shrinks height before flipping above', () => {
     assert.match(
         scriptSource,
-        /isInlinePlanInputFocused\(\) \{[\s\S]*?document\.activeElement === inlineInput/
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?const anchor = this\.resolveInlinePlanAnchor\(anchorEl\);/
     );
     assert.match(
         scriptSource,
-        /if \(this\.isInlinePlanInputFocused\(\)\) \{[\s\S]*?const inputRow = dropdown\.querySelector\('\.inline-plan-input-row'\);/
+        /const minimumInteractiveHeight = this\.getInlinePlanMinimumInteractiveHeight\(dropdown\);/
     );
     assert.match(
         scriptSource,
-        /const referenceRect = inputRow \? inputRow\.getBoundingClientRect\(\) : dropdownRect;/
+        /const rawSpaceBelow = Math\.max\(0, Math\.floor\(viewport\.bottom - anchorBottom - gap - margin\)\);/
+    );
+    assert.match(
+        scriptSource,
+        /rawSpaceBelow < minimumInteractiveHeight[\s\S]*?rawSpaceAbove > rawSpaceBelow/
+    );
+    assert.match(
+        scriptSource,
+        /const maxHeight = Math\.max\(1, available > 0 \? Math\.floor\(available\) : fallbackHeight\);/
+    );
+    assert.doesNotMatch(
+        scriptSource,
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?if \(this\.isInlinePlanInputFocused\(\)\) \{/
     );
 });

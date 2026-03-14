@@ -107,3 +107,14 @@ test('planned mouseup path suppresses reopen when same-slot toggle close is arme
     assert.match(scriptSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
     assert.match(scriptSource, /if \(!e\.ctrlKey && !e\.metaKey\) \{\s+const anchor = plannedField\.closest\('\.split-cell-wrapper\.split-type-planned'\) \|\| plannedField;\s+this\.openInlinePlanDropdown\(base\.start, anchor\);\s+\}/);
 });
+
+test('external page scroll closes inline plan dropdown while visual viewport scroll only repositions it', () => {
+    assert.match(scriptSource, /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?this\.closeInlinePlanDropdown\(\);\s+\};/);
+    assert.match(scriptSource, /if \(event\.target === this\.inlinePlanDropdown \|\| this\.inlinePlanDropdown\.contains\(event\.target\)\) \{\s+return;\s+\}/);
+    assert.match(scriptSource, /window\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(scriptSource, /document\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(scriptSource, /window\.visualViewport\.addEventListener\('scroll', this\.inlinePlanScrollHandler\);/);
+    assert.doesNotMatch(scriptSource, /window\.addEventListener\('scroll', this\.inlinePlanScrollHandler, true\);/);
+    assert.match(scriptSource, /window\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(scriptSource, /document\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+});
