@@ -53,6 +53,7 @@ class TimeTracker {
         this.inlinePlanScrollHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanInputFocusHandler = null;
+        this.inlinePlanFocusSyncTimer = null;
         this.inlinePlanContext = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
@@ -10762,6 +10763,21 @@ class TimeTracker {
     shouldAutofocusInlinePlanInput() {
         return !this.isInlinePlanMobileInputContext();
     }
+    scheduleInlinePlanInputVisibilitySync(inputEl) {
+        if (!inputEl || !this.inlinePlanDropdown) return;
+        if (this.inlinePlanFocusSyncTimer) {
+            clearTimeout(this.inlinePlanFocusSyncTimer);
+            this.inlinePlanFocusSyncTimer = null;
+        }
+
+        const delay = this.isInlinePlanMobileInputContext() ? 140 : 0;
+        this.inlinePlanFocusSyncTimer = setTimeout(() => {
+            this.inlinePlanFocusSyncTimer = null;
+            requestAnimationFrame(() => {
+                this.ensureInlinePlanInputVisible(inputEl);
+            });
+        }, delay);
+    }
     getInlinePlanViewportMetrics() {
         const docEl = document.documentElement;
         const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
@@ -10784,18 +10800,29 @@ class TimeTracker {
     ensureInlinePlanInputVisible(inputEl) {
         if (!inputEl || !this.inlinePlanDropdown || !this.isInlinePlanMobileInputContext()) return;
 
-        try {
-            inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        } catch (_) {}
+        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+        if (currentAnchor) {
+            this.positionInlinePlanDropdown(currentAnchor);
+        }
+
+        const viewport = this.getInlinePlanViewportMetrics();
+        const inputRect = inputEl.getBoundingClientRect();
+        const inputTop = viewport.top + inputRect.top;
+        const inputBottom = viewport.top + inputRect.bottom;
+        const needsScroll = inputTop < (viewport.top + 12) || inputBottom > (viewport.bottom - 12);
+        if (!needsScroll) return;
 
         const inputRow = inputEl.closest('.inline-plan-input-row');
         if (inputRow && typeof inputRow.scrollIntoView === 'function') {
             try {
-                inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            } catch (_) {}
+                inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+            } catch (_) {
+                try {
+                    inputRow.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                } catch (_) {}
+            }
         }
 
-        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
         if (currentAnchor) {
             this.positionInlinePlanDropdown(currentAnchor);
         }
@@ -11477,13 +11504,7 @@ class TimeTracker {
                 }
             });
             this.inlinePlanInputFocusHandler = () => {
-                const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
-                if (currentAnchor) {
-                    this.positionInlinePlanDropdown(currentAnchor);
-                }
-                requestAnimationFrame(() => {
-                    this.ensureInlinePlanInputVisible(input);
-                });
+                this.scheduleInlinePlanInputVisibilitySync(input);
             };
             input.addEventListener('focus', this.inlinePlanInputFocusHandler);
         }
@@ -11745,6 +11766,10 @@ class TimeTracker {
             const input = this.inlinePlanDropdown.querySelector('.inline-plan-input');
             if (input) input.removeEventListener('focus', this.inlinePlanInputFocusHandler);
             this.inlinePlanInputFocusHandler = null;
+        }
+        if (this.inlinePlanFocusSyncTimer) {
+            clearTimeout(this.inlinePlanFocusSyncTimer);
+            this.inlinePlanFocusSyncTimer = null;
         }
         if (this.inlinePlanDropdown && this.inlinePlanWheelHandler) {
             this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
