@@ -131,6 +131,7 @@ const normalizeTimerStatus = buildMethod('normalizeTimerStatus(rawStatus, slot =
 const getTimerRawElapsed = buildMethod('getTimerRawElapsed(slot)', '(slot)');
 const getTimeUiHostIndex = buildMethod('getTimeUiHostIndex(index)', '(index)');
 const getMobileTimeUiState = buildMethod('getMobileTimeUiState(index, slotOverride = null)', '(index, slotOverride = null)');
+const createTimerControls = buildMethod('createTimerControls(index, slot)', '(index, slot)');
 
 test('normalizeMergeKey accepts valid keys and rejects malformed values', () => {
   const ctx = { timeSlots: new Array(48).fill({}) };
@@ -314,4 +315,43 @@ test('getMobileTimeUiState prioritizes running/paused/completed over plain label
   assert.equal(getMobileTimeUiState.call(ctx, 1).mode, 'paused');
   assert.equal(getMobileTimeUiState.call(ctx, 2).mode, 'completed');
   assert.equal(getMobileTimeUiState.call(ctx, 3).mode, 'running');
+});
+
+test('createTimerControls keeps accessible labels and renders mobile icon spans', () => {
+  const ctx = {
+    getTimerEligibility() {
+      return {
+        canStartWithoutDate: true,
+        disabledByDate: false,
+        hasPlannedActivity: true,
+        isCurrentTimeInRange: true,
+      };
+    },
+    normalizeTimerStatus(rawStatus, slot) {
+      return normalizeTimerStatus.call(this, rawStatus, slot);
+    },
+    getTimerRawElapsed(slot) {
+      return getTimerRawElapsed.call(this, slot);
+    },
+    isMobileTimeExpansionEnabled() {
+      return true;
+    },
+    formatTime(seconds) {
+      const total = Math.max(0, Number(seconds) || 0);
+      const hours = Math.floor(total / 3600).toString().padStart(2, '0');
+      const minutes = Math.floor((total % 3600) / 60).toString().padStart(2, '0');
+      const secs = Math.floor(total % 60).toString().padStart(2, '0');
+      return `${hours}:${minutes}:${secs}`;
+    },
+  };
+
+  const html = createTimerControls.call(ctx, 4, {
+    timer: { running: true, elapsed: 6, rawElapsed: 6, status: 'running' },
+  });
+
+  assert.match(html, /class="timer-btn-mobile-icon"[^>]*>⏸<\/span>/);
+  assert.match(html, /class="timer-btn-mobile-icon"[^>]*>■<\/span>/);
+  assert.match(html, /class="timer-btn-label">일시정지<\/span>/);
+  assert.match(html, /aria-label="타이머 일시정지"/);
+  assert.match(html, /aria-label="타이머 정지"/);
 });

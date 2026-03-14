@@ -6999,6 +6999,12 @@ class TimeTracker {
         const timerDisplay = this.formatTime(slot.timer.elapsed);
         const rawDisplayStyle = this.isMobileTimeExpansionEnabled() && rawElapsed > 0 ? 'display: block;' : 'display: none;';
         const rawDisplay = this.formatTime(rawElapsed);
+        const isCompactMobileTimeUi = this.isMobileTimeExpansionEnabled();
+        const stopLabel = '정지';
+        const mobileStartIcon = buttonAction === 'pause' ? '⏸' : '▶';
+        const mobileStopIcon = '■';
+        const startVisualLabel = isCompactMobileTimeUi ? mobileStartIcon : buttonIcon;
+        const stopVisualLabel = isCompactMobileTimeUi ? mobileStopIcon : stopLabel;
         const statusClasses = [
             isRunning ? 'timer-running' : '',
             timerStatus === 'paused' ? 'timer-paused' : '',
@@ -7011,13 +7017,15 @@ class TimeTracker {
                     <button class="timer-btn timer-start-pause"
                             data-index="${index}"
                             data-action="${buttonAction}" aria-label="타이머 ${buttonIcon}"${startButtonAttrString}>
-                        ${buttonIcon}
+                        <span class="timer-btn-mobile-icon" aria-hidden="true">${startVisualLabel}</span>
+                        <span class="timer-btn-label">${buttonIcon}</span>
                     </button>
                     <button class="timer-btn timer-stop"
                             data-index="${index}"
                             data-action="stop" aria-label="타이머 정지"
                             style="${stopButtonStyle}">
-                        정지
+                        <span class="timer-btn-mobile-icon" aria-hidden="true">${stopVisualLabel}</span>
+                        <span class="timer-btn-label">${stopLabel}</span>
                     </button>
                 </div>
                 <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
