@@ -131,6 +131,7 @@ class TimeTracker {
         this.activityModalFocusHandler = null;
         this.activityModalEscHandler = null;
         this.dayStartHour = this.loadDayStartHour();
+        this.mobileExpandedTimeRow = null;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -582,6 +583,7 @@ class TimeTracker {
         }
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
+        const expandedTimeRow = this.getNormalizedMobileExpandedTimeRow();
 
         this.timeSlots.forEach((slot, index) => {
             const entryDiv = document.createElement('div');
@@ -602,6 +604,12 @@ class TimeTracker {
 
             if (rowModel.hasActualMergeContinuation) {
                 entryDiv.classList.add('has-actual-merge');
+            }
+            if (expandedTimeRow === index) {
+                entryDiv.classList.add('is-time-expanded');
+            }
+            if (slot && slot.timer && slot.timer.running) {
+                entryDiv.classList.add('has-running-timer');
             }
 
             const plannedField = entryDiv.querySelector('.planned-input');
@@ -1002,6 +1010,9 @@ class TimeTracker {
             this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
         }, { passive: true });
+        document.addEventListener('click', (e) => {
+            this.handleMobileTimeExpansionDocumentClick(e);
+        }, true);
 
         window.addEventListener('resize', () => {
             this.updateSelectionOverlay('planned');
@@ -1021,6 +1032,105 @@ class TimeTracker {
 
     setCurrentDate() {
         document.getElementById('date').value = this.currentDate;
+    }
+
+    isMobileTimeExpansionEnabled() {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return false;
+        }
+        return window.matchMedia('(max-width: 640px)').matches;
+    }
+
+    getNormalizedMobileExpandedTimeRow() {
+        if (!this.isMobileTimeExpansionEnabled()) {
+            return null;
+        }
+        if (!Number.isInteger(this.mobileExpandedTimeRow)) {
+            return null;
+        }
+        if (this.mobileExpandedTimeRow < 0 || this.mobileExpandedTimeRow >= this.timeSlots.length) {
+            this.mobileExpandedTimeRow = null;
+            return null;
+        }
+        return this.mobileExpandedTimeRow;
+    }
+
+    setMobileExpandedTimeRow(index, options = {}) {
+        if (!this.isMobileTimeExpansionEnabled()) {
+            return;
+        }
+        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) {
+            return;
+        }
+        if (this.mobileExpandedTimeRow === index) {
+            return;
+        }
+        this.mobileExpandedTimeRow = index;
+        this.renderTimeEntries(Boolean(options.preserveInlineDropdown));
+    }
+
+    clearMobileExpandedTimeRow(options = {}) {
+        if (!Number.isInteger(this.mobileExpandedTimeRow)) {
+            return;
+        }
+        this.mobileExpandedTimeRow = null;
+        this.renderTimeEntries(Boolean(options.preserveInlineDropdown));
+    }
+
+    handleMobileTimeExpansionDocumentClick(e) {
+        if (!this.isMobileTimeExpansionEnabled()) {
+            return;
+        }
+        const target = e.target;
+        if (!target || !(target instanceof Element)) {
+            return;
+        }
+
+        if (
+            target.closest('.timer-btn')
+            || target.closest('.timer-controls-container')
+            || target.closest('.activity-log-btn')
+            || target.closest('.inline-plan-dropdown')
+            || target.closest('.plan-activity-menu')
+            || target.closest('.plan-title-menu')
+            || target.closest('.priority-menu')
+            || target.closest('.routine-menu')
+            || target.closest('.actual-activity-menu')
+            || target.closest('.modal-overlay')
+        ) {
+            return;
+        }
+
+        const row = target.closest('.time-entry[data-index]');
+        const timeSlot = target.closest('.time-slot-container');
+
+        if (row && timeSlot) {
+            if (timeSlot.classList.contains('merged-time-secondary')) {
+                return;
+            }
+            const mergeStart = parseInt(timeSlot.getAttribute('data-merge-start'), 10);
+            const rowIndex = Number.isInteger(mergeStart)
+                ? mergeStart
+                : parseInt(row.getAttribute('data-index'), 10);
+            if (Number.isInteger(rowIndex)) {
+                this.setMobileExpandedTimeRow(rowIndex, { preserveInlineDropdown: true });
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+
+        if (row) {
+            const rowIndex = parseInt(row.getAttribute('data-index'), 10);
+            if (Number.isInteger(this.mobileExpandedTimeRow) && rowIndex !== this.mobileExpandedTimeRow) {
+                this.clearMobileExpandedTimeRow({ preserveInlineDropdown: true });
+            }
+            return;
+        }
+
+        if (Number.isInteger(this.mobileExpandedTimeRow)) {
+            this.clearMobileExpandedTimeRow({ preserveInlineDropdown: true });
+        }
     }
 
     getMergeRangeBounds(mergeKey, fallbackIndex = null) {
@@ -1141,6 +1251,9 @@ class TimeTracker {
         if (timeMerged) {
             // 타이머 버튼/컨트롤 영역 클릭이면 통과시킴
             if (target.closest('.timer-controls-container') || target.closest('.timer-btn')) {
+                return;
+            }
+            if (this.isMobileTimeExpansionEnabled() && timeMerged.classList.contains('merged-time-main')) {
                 return;
             }
             e.preventDefault();
@@ -3394,6 +3507,7 @@ class TimeTracker {
 
         this.currentDate = targetDate;
         this.setCurrentDate();
+        this.mobileExpandedTimeRow = null;
 
         // 날짜 전환 시 이전 시트가 잠시라도 남지 않도록 즉시 초기화
         if (typeof this.generateTimeSlots === 'function') this.generateTimeSlots();
