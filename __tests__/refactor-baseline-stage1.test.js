@@ -47,7 +47,7 @@ test('createEmptyTimeSlots keeps 24-slot order and default shape', () => {
         assert.deepEqual(slot.planActivities, []);
         assert.equal(slot.planTitle, '');
         assert.equal(slot.planTitleBandOn, false);
-        assert.deepEqual(slot.timer, { running: false, elapsed: 0, startTime: null, method: 'manual' });
+        assert.deepEqual(slot.timer, { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' });
         assert.deepEqual(slot.activityLog, {
             title: '',
             details: '',
@@ -85,13 +85,13 @@ test('parseDurationFromText prefers last time token and supports ko/en units', (
 });
 
 test('createStateSnapshot deep-clones slots and serializes merged fields', () => {
-    const timeSlots = [{ planned: 'deep work', timer: { elapsed: 1200 } }];
+    const timeSlots = [{ planned: 'deep work', timer: { elapsed: 1200, rawElapsed: 1394, status: 'completed' } }];
     const mergedFields = new Map([['planned-0-0', 'deep work']]);
 
     const snapshot = createStateSnapshot.call({}, timeSlots, mergedFields);
 
     assert.deepEqual(snapshot.mergedFields, { 'planned-0-0': 'deep work' });
-    assert.deepEqual(snapshot.timeSlots, [{ planned: 'deep work', timer: { elapsed: 1200 } }]);
+    assert.deepEqual(snapshot.timeSlots, [{ planned: 'deep work', timer: { elapsed: 1200, rawElapsed: 1394, status: 'completed' } }]);
 
     snapshot.timeSlots[0].planned = 'changed';
     assert.equal(timeSlots[0].planned, 'deep work');

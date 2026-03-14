@@ -24,7 +24,7 @@
             planActivities: [],
             planTitle: '',
             planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            timer: { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' },
             activityLog: {
                 title: '',
                 details: '',

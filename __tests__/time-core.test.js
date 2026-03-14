@@ -19,7 +19,7 @@ test('time-core createEmptyTimeSlots returns 24 independent default slots', () =
     assert.equal(slots.length, 24);
     assert.deepEqual(slots.map((slot) => slot.time), core.TIME_SLOT_LABELS);
 
-    assert.deepEqual(slots[0].timer, { running: false, elapsed: 0, startTime: null, method: 'manual' });
+    assert.deepEqual(slots[0].timer, { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' });
     assert.deepEqual(slots[0].activityLog, {
         title: '',
         details: '',

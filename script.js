@@ -131,7 +131,7 @@ class TimeTracker {
         this.activityModalFocusHandler = null;
         this.activityModalEscHandler = null;
         this.dayStartHour = this.loadDayStartHour();
-        this.mobileExpandedTimeRow = null;
+        this.lastRenderedCurrentTimeIndex = null;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -491,7 +491,7 @@ class TimeTracker {
             planActivities: [],
             planTitle: '',
             planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, startTime: null, method: 'manual' },
+            timer: { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         }));
     }
@@ -581,9 +581,9 @@ class TimeTracker {
         if (!preserveInlineDropdown) {
             this.closeInlinePlanDropdown();
         }
+        this.lastRenderedCurrentTimeIndex = this.getCurrentTimeIndex();
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
-        const expandedTimeRow = this.getNormalizedMobileExpandedTimeRow();
 
         this.timeSlots.forEach((slot, index) => {
             const entryDiv = document.createElement('div');
@@ -605,11 +605,23 @@ class TimeTracker {
             if (rowModel.hasActualMergeContinuation) {
                 entryDiv.classList.add('has-actual-merge');
             }
-            if (expandedTimeRow === index) {
-                entryDiv.classList.add('is-time-expanded');
-            }
-            if (slot && slot.timer && slot.timer.running) {
-                entryDiv.classList.add('has-running-timer');
+
+            const timeUiState = this.getMobileTimeUiState(index, slot);
+            if (timeUiState.hostIndex === index) {
+                entryDiv.classList.add(`time-ui-${timeUiState.mode}`);
+                if (timeUiState.showControls) {
+                    entryDiv.classList.add('time-ui-visible');
+                }
+                if (timeUiState.isCurrent) {
+                    entryDiv.classList.add('current-time-slot');
+                }
+                if (timeUiState.status === 'running') {
+                    entryDiv.classList.add('running-timer-slot');
+                } else if (timeUiState.status === 'paused') {
+                    entryDiv.classList.add('paused-timer-slot');
+                } else if (timeUiState.status === 'completed') {
+                    entryDiv.classList.add('completed-timer-slot');
+                }
             }
 
             const plannedField = entryDiv.querySelector('.planned-input');
@@ -1010,22 +1022,20 @@ class TimeTracker {
             this.dragBaseEndIndex = -1;
             this.currentColumnType = null;
         }, { passive: true });
-        document.addEventListener('click', (e) => {
-            this.handleMobileTimeExpansionDocumentClick(e);
-        }, true);
-
         window.addEventListener('resize', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
             this.centerMergedTimeContent(document.getElementById('timeEntries'));
             this.hideHoverScheduleButton && this.hideHoverScheduleButton();
+            this.hideHoverActivityLogButton && this.hideHoverActivityLogButton();
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
             this.hideHoverScheduleButton && this.hideHoverScheduleButton();
+            this.hideHoverActivityLogButton && this.hideHoverActivityLogButton();
             this.centerMergedTimeContent(document.getElementById('timeEntries'));
         });
     }
@@ -1041,96 +1051,66 @@ class TimeTracker {
         return window.matchMedia('(max-width: 640px)').matches;
     }
 
-    getNormalizedMobileExpandedTimeRow() {
-        if (!this.isMobileTimeExpansionEnabled()) {
-            return null;
+    normalizeTimerStatus(rawStatus, slot = null) {
+        const normalized = String(rawStatus || '').trim();
+        if (normalized === 'running' || normalized === 'paused' || normalized === 'completed' || normalized === 'idle') {
+            return normalized;
         }
-        if (!Number.isInteger(this.mobileExpandedTimeRow)) {
-            return null;
+        if (slot && slot.timer && slot.timer.running) {
+            return 'running';
         }
-        if (this.mobileExpandedTimeRow < 0 || this.mobileExpandedTimeRow >= this.timeSlots.length) {
-            this.mobileExpandedTimeRow = null;
-            return null;
-        }
-        return this.mobileExpandedTimeRow;
+        return 'idle';
     }
 
-    setMobileExpandedTimeRow(index, options = {}) {
-        if (!this.isMobileTimeExpansionEnabled()) {
-            return;
+    getTimerRawElapsed(slot) {
+        if (!slot || !slot.timer) return 0;
+        if (Number.isFinite(slot.timer.rawElapsed) && Number(slot.timer.rawElapsed) > 0) {
+            return Math.max(0, Math.floor(slot.timer.rawElapsed));
         }
-        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) {
-            return;
+        if (slot.timer.running || this.normalizeTimerStatus(slot.timer.status, slot) === 'paused') {
+            return Number.isFinite(slot.timer.elapsed) ? Math.max(0, Math.floor(slot.timer.elapsed)) : 0;
         }
-        if (this.mobileExpandedTimeRow === index) {
-            return;
-        }
-        this.mobileExpandedTimeRow = index;
-        this.renderTimeEntries(Boolean(options.preserveInlineDropdown));
+        return 0;
     }
 
-    clearMobileExpandedTimeRow(options = {}) {
-        if (!Number.isInteger(this.mobileExpandedTimeRow)) {
-            return;
-        }
-        this.mobileExpandedTimeRow = null;
-        this.renderTimeEntries(Boolean(options.preserveInlineDropdown));
+    getTimeUiHostIndex(index) {
+        const timeMergeKey = this.findMergeKey('time', index);
+        if (!timeMergeKey) return index;
+        const [, startStr] = timeMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        return Number.isInteger(start) ? start : index;
     }
 
-    handleMobileTimeExpansionDocumentClick(e) {
-        if (!this.isMobileTimeExpansionEnabled()) {
-            return;
-        }
-        const target = e.target;
-        if (!target || !(target instanceof Element)) {
-            return;
+    getMobileTimeUiState(index, slotOverride = null) {
+        const slot = slotOverride || this.timeSlots[index] || {};
+        const hostIndex = this.getTimeUiHostIndex(index);
+        const status = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
+        const currentIndex = this.getCurrentTimeIndex();
+        const currentHostIndex = Number.isInteger(currentIndex) && currentIndex >= 0
+            ? this.getTimeUiHostIndex(currentIndex)
+            : -1;
+        const isCurrent = currentHostIndex === hostIndex;
+        const rawElapsed = this.getTimerRawElapsed(slot);
+        let mode = 'label';
+
+        if (status === 'running') {
+            mode = 'running';
+        } else if (status === 'paused') {
+            mode = 'paused';
+        } else if (status === 'completed' && rawElapsed > 0) {
+            mode = 'completed';
+        } else if (isCurrent) {
+            mode = 'current';
         }
 
-        if (
-            target.closest('.timer-btn')
-            || target.closest('.timer-controls-container')
-            || target.closest('.activity-log-btn')
-            || target.closest('.inline-plan-dropdown')
-            || target.closest('.plan-activity-menu')
-            || target.closest('.plan-title-menu')
-            || target.closest('.priority-menu')
-            || target.closest('.routine-menu')
-            || target.closest('.actual-activity-menu')
-            || target.closest('.modal-overlay')
-        ) {
-            return;
-        }
-
-        const row = target.closest('.time-entry[data-index]');
-        const timeSlot = target.closest('.time-slot-container');
-
-        if (row && timeSlot) {
-            if (timeSlot.classList.contains('merged-time-secondary')) {
-                return;
-            }
-            const mergeStart = parseInt(timeSlot.getAttribute('data-merge-start'), 10);
-            const rowIndex = Number.isInteger(mergeStart)
-                ? mergeStart
-                : parseInt(row.getAttribute('data-index'), 10);
-            if (Number.isInteger(rowIndex)) {
-                this.setMobileExpandedTimeRow(rowIndex, { preserveInlineDropdown: true });
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            return;
-        }
-
-        if (row) {
-            const rowIndex = parseInt(row.getAttribute('data-index'), 10);
-            if (Number.isInteger(this.mobileExpandedTimeRow) && rowIndex !== this.mobileExpandedTimeRow) {
-                this.clearMobileExpandedTimeRow({ preserveInlineDropdown: true });
-            }
-            return;
-        }
-
-        if (Number.isInteger(this.mobileExpandedTimeRow)) {
-            this.clearMobileExpandedTimeRow({ preserveInlineDropdown: true });
-        }
+        return {
+            hostIndex,
+            mode,
+            status,
+            rawElapsed,
+            isCurrent,
+            showControls: mode !== 'label',
+        };
     }
 
     getMergeRangeBounds(mergeKey, fallbackIndex = null) {
@@ -1251,9 +1231,6 @@ class TimeTracker {
         if (timeMerged) {
             // 타이머 버튼/컨트롤 영역 클릭이면 통과시킴
             if (target.closest('.timer-controls-container') || target.closest('.timer-btn')) {
-                return;
-            }
-            if (this.isMobileTimeExpansionEnabled() && timeMerged.classList.contains('merged-time-main')) {
                 return;
             }
             e.preventDefault();
@@ -1625,12 +1602,16 @@ class TimeTracker {
                             elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
                                 ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
                                 : 0,
+                            rawElapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.rawElapsed)
+                                ? Math.max(0, Math.floor(sourceSlot.timer.rawElapsed))
+                                : 0,
                             startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
                                 ? sourceSlot.timer.startTime
                                 : null,
                             method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
                                 ? 'pomodoro'
                                 : 'manual',
+                            status: this.normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
                         };
                         targetSlot.activityLog = {
                             title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
@@ -1730,6 +1711,12 @@ class TimeTracker {
                     timeSlots: this.timeSlots,
                     mergedFields: Object.fromEntries(this.mergedFields)
                 });
+                const currentTimeIndex = this.getCurrentTimeIndex ? this.getCurrentTimeIndex() : -1;
+                if (currentTimeIndex !== this.lastRenderedCurrentTimeIndex) {
+                    this.renderTimeEntries(Boolean(this.inlinePlanDropdown));
+                    this.calculateTotals();
+                    return;
+                }
                 if (sig !== this._lastSavedSignature) {
                     shouldPersist = true;
                 }
@@ -1959,13 +1946,29 @@ class TimeTracker {
                         ? startSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
                         : [];
                     const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
+                    const timerInfo = startSlot.timer && typeof startSlot.timer === 'object' ? startSlot.timer : {};
+                    const timerEntry = {
+                        running: Boolean(timerInfo.running),
+                        elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
+                        rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
+                        startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
+                        method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
+                        status: this.normalizeTimerStatus(timerInfo.status, startSlot),
+                    };
+                    const hasTimerEntry = timerEntry.running
+                        || timerEntry.elapsed > 0
+                        || timerEntry.rawElapsed > 0
+                        || timerEntry.startTime != null
+                        || timerEntry.method !== 'manual'
+                        || timerEntry.status !== 'idle';
 
                     if (plannedValue === ''
                         && actualValue === ''
                         && detailsValue === ''
                         && activitiesValue.length === 0
                         && planActivitiesValue.length === 0
-                        && !planTitleValue) {
+                        && !planTitleValue
+                        && !hasTimerEntry) {
                         return;
                     }
 
@@ -2001,6 +2004,9 @@ class TimeTracker {
                     if (hasActualFailedGridUnits) {
                         slots[storageKey].actualFailedGridUnits = actualFailedGridUnits;
                     }
+                    if (hasTimerEntry) {
+                        slots[storageKey].timer = timerEntry;
+                    }
                     return;
                 }
 
@@ -2027,12 +2033,28 @@ class TimeTracker {
                     ? slot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
                     : [];
                 const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
+                const timerInfo = slot.timer && typeof slot.timer === 'object' ? slot.timer : {};
+                const timerEntry = {
+                    running: Boolean(timerInfo.running),
+                    elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
+                    rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
+                    startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
+                    method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
+                    status: this.normalizeTimerStatus(timerInfo.status, slot),
+                };
+                const hasTimerEntry = timerEntry.running
+                    || timerEntry.elapsed > 0
+                    || timerEntry.rawElapsed > 0
+                    || timerEntry.startTime != null
+                    || timerEntry.method !== 'manual'
+                    || timerEntry.status !== 'idle';
                 if (planned !== ''
                     || actual !== ''
                     || details !== ''
                     || activitiesValue.length > 0
                     || planActivitiesValue.length > 0
-                    || planTitleValue) {
+                    || planTitleValue
+                    || hasTimerEntry) {
                     const entry = { planned, actual, details };
                     if (activitiesValue.length > 0) {
                         entry.activities = activitiesValue.map(item => ({ ...item }));
@@ -2057,6 +2079,9 @@ class TimeTracker {
                     }
                     if (hasActualFailedGridUnits) {
                         entry.actualFailedGridUnits = actualFailedGridUnits;
+                    }
+                    if (hasTimerEntry) {
+                        entry.timer = timerEntry;
                     }
                     slots[String(hour)] = entry;
                 }
@@ -2097,6 +2122,15 @@ class TimeTracker {
                 const actualFailedGridUnits = Array.isArray(row.actualFailedGridUnits)
                     ? row.actualFailedGridUnits.map(value => Boolean(value))
                     : [];
+                const timerRow = row && typeof row.timer === 'object' ? row.timer : null;
+                const normalizedTimer = {
+                    running: Boolean(timerRow && timerRow.running),
+                    elapsed: Number.isFinite(timerRow && timerRow.elapsed) ? Math.max(0, Math.floor(timerRow.elapsed)) : 0,
+                    rawElapsed: Number.isFinite(timerRow && timerRow.rawElapsed) ? Math.max(0, Math.floor(timerRow.rawElapsed)) : 0,
+                    startTime: Number.isFinite(timerRow && timerRow.startTime) ? timerRow.startTime : null,
+                    method: (timerRow && String(timerRow.method || 'manual') === 'pomodoro') ? 'pomodoro' : 'manual',
+                    status: this.normalizeTimerStatus(timerRow && timerRow.status, { timer: timerRow || {} }),
+                };
 
                 if (row && row.merged && typeof row.timeRange === 'string') {
                     const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
@@ -2133,6 +2167,15 @@ class TimeTracker {
                                 const desiredPlanTitle = (i === startIdx) ? planTitleValue : '';
                                 if (slot.planTitle !== desiredPlanTitle) {
                                     slot.planTitle = desiredPlanTitle;
+                                    changed = true;
+                                }
+                                const desiredTimer = (i === startIdx)
+                                    ? normalizedTimer
+                                    : { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' };
+                                const currentTimerSig = JSON.stringify(slot.timer || {});
+                                const desiredTimerSig = JSON.stringify(desiredTimer);
+                                if (currentTimerSig !== desiredTimerSig) {
+                                    slot.timer = { ...desiredTimer };
                                     changed = true;
                                 }
                                 const shouldPlanBand = (i === startIdx) && planTitleBand && Boolean(planTitleValue);
@@ -2183,6 +2226,12 @@ class TimeTracker {
                 const slot = this.timeSlots[idx];
                 if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
                 if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
+                const currentTimerSig = JSON.stringify(slot.timer || {});
+                const desiredTimerSig = JSON.stringify(normalizedTimer);
+                if (currentTimerSig !== desiredTimerSig) {
+                    slot.timer = { ...normalizedTimer };
+                    changed = true;
+                }
                 if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                 if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
                 const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
@@ -3507,7 +3556,6 @@ class TimeTracker {
 
         this.currentDate = targetDate;
         this.setCurrentDate();
-        this.mobileExpandedTimeRow = null;
 
         // 날짜 전환 시 이전 시트가 잠시라도 남지 않도록 즉시 초기화
         if (typeof this.generateTimeSlots === 'function') this.generateTimeSlots();
@@ -6894,6 +6942,8 @@ class TimeTracker {
         const isRunning = slot.timer.running;
         const hasElapsed = slot.timer.elapsed > 0;
         const eligibility = this.getTimerEligibility(index, slot);
+        const timerStatus = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
+        const rawElapsed = this.getTimerRawElapsed(slot);
 
         let buttonIcon = '시작';
         let buttonAction = 'start';
@@ -6947,9 +6997,16 @@ class TimeTracker {
         const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
         const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
         const timerDisplay = this.formatTime(slot.timer.elapsed);
+        const rawDisplayStyle = this.isMobileTimeExpansionEnabled() && rawElapsed > 0 ? 'display: block;' : 'display: none;';
+        const rawDisplay = this.formatTime(rawElapsed);
+        const statusClasses = [
+            isRunning ? 'timer-running' : '',
+            timerStatus === 'paused' ? 'timer-paused' : '',
+            timerStatus === 'completed' ? 'timer-completed' : '',
+        ].filter(Boolean).join(' ');
 
         return `
-            <div class="timer-controls-container ${isRunning ? 'timer-running' : ''}" data-index="${index}">
+            <div class="timer-controls-container ${statusClasses}" data-index="${index}">
                 <div class="timer-controls">
                     <button class="timer-btn timer-start-pause"
                             data-index="${index}"
@@ -6964,6 +7021,7 @@ class TimeTracker {
                     </button>
                 </div>
                 <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
+                <div class="timer-raw-display" style="${rawDisplayStyle}">${rawDisplay}</div>
             </div>
         `;
     }
@@ -8913,6 +8971,7 @@ class TimeTracker {
         slot.timer.running = false;
         slot.timer.startTime = null;
         slot.timer.method = 'manual';
+        slot.timer.status = slot.timer.elapsed > 0 ? 'completed' : 'idle';
 
         // 타이머 표시 즉시 갱신 (존재할 경우)
         try {
@@ -11954,9 +12013,11 @@ class TimeTracker {
         this.stopAllTimers();
 
         const slot = this.timeSlots[index];
+        slot.timer.rawElapsed = 0;
         slot.timer.running = true;
         slot.timer.startTime = Date.now();
         slot.timer.method = 'timer';
+        slot.timer.status = 'running';
 
         this.startTimerInterval();
         this.renderTimeEntries();
@@ -11968,7 +12029,9 @@ class TimeTracker {
         const nextElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
         slot.timer.running = false;
         slot.timer.elapsed = Math.max(0, nextElapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000));
+        slot.timer.rawElapsed = slot.timer.elapsed;
         slot.timer.startTime = null;
+        slot.timer.status = slot.timer.elapsed > 0 ? 'paused' : 'idle';
 
         this.stopTimerInterval();
         this.renderTimeEntries();
@@ -11992,6 +12055,7 @@ class TimeTracker {
         const slot = this.timeSlots[index];
         slot.timer.running = true;
         slot.timer.startTime = Date.now();
+        slot.timer.status = 'running';
 
         this.startTimerInterval();
         this.renderTimeEntries();
@@ -12012,8 +12076,10 @@ class TimeTracker {
         slot.timer.running = false;
         slot.timer.startTime = null;
         const rawElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
+        slot.timer.rawElapsed = rawElapsed;
         const recordedElapsed = this.normalizeActualRecordedTimerSeconds(rawElapsed);
         slot.timer.elapsed = recordedElapsed;
+        slot.timer.status = rawElapsed > 0 ? 'completed' : 'idle';
         const roundedAdded = Math.max(0, recordedElapsed - roundedBefore);
 
         let recordedWithPlan = false;
@@ -12087,8 +12153,10 @@ class TimeTracker {
                 const current = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
                 const elapsed = Math.max(0, current + Math.floor((nowMs - slot.timer.startTime) / 1000));
                 slot.timer.elapsed = elapsed;
+                slot.timer.rawElapsed = elapsed;
                 slot.timer.running = false;
                 slot.timer.startTime = null;
+                slot.timer.status = elapsed > 0 ? 'paused' : 'idle';
                 changed = true;
             }
         });

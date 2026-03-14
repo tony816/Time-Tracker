@@ -127,6 +127,10 @@ const escapeAttribute = buildMethod('escapeAttribute(text)', '(text)');
 const createTimerField = buildMethod('createTimerField(index, slot)', '(index, slot)');
 const updateRunningTimers = buildMethod('updateRunningTimers()', '()');
 const transitionToDate = buildMethod('transitionToDate(nextDate)', '(nextDate)');
+const normalizeTimerStatus = buildMethod('normalizeTimerStatus(rawStatus, slot = null)', '(rawStatus, slot = null)');
+const getTimerRawElapsed = buildMethod('getTimerRawElapsed(slot)', '(slot)');
+const getTimeUiHostIndex = buildMethod('getTimeUiHostIndex(index)', '(index)');
+const getMobileTimeUiState = buildMethod('getMobileTimeUiState(index, slotOverride = null)', '(index, slotOverride = null)');
 
 test('normalizeMergeKey accepts valid keys and rejects malformed values', () => {
   const ctx = { timeSlots: new Array(48).fill({}) };
@@ -264,4 +268,50 @@ test('transitionToDate skips snapshot persistence when commit has no changes', (
 
   assert.equal(ctx.currentDate, '2026-02-14');
   assert.deepEqual(calls, ['commit', 'setCurrentDate', 'loadData']);
+});
+
+test('normalizeTimerStatus prefers explicit valid status and falls back safely', () => {
+  assert.equal(normalizeTimerStatus.call({}, 'paused', null), 'paused');
+  assert.equal(normalizeTimerStatus.call({}, 'weird', { timer: { running: true } }), 'running');
+  assert.equal(normalizeTimerStatus.call({}, '', { timer: { running: false } }), 'idle');
+});
+
+test('getTimerRawElapsed prefers persisted raw value and falls back to paused/running elapsed', () => {
+  const ctx = {
+    normalizeTimerStatus(rawStatus, slot) {
+      return normalizeTimerStatus.call(this, rawStatus, slot);
+    },
+  };
+
+  assert.equal(getTimerRawElapsed.call(ctx, { timer: { rawElapsed: 1394, elapsed: 1200, status: 'completed' } }), 1394);
+  assert.equal(getTimerRawElapsed.call(ctx, { timer: { rawElapsed: 0, elapsed: 722, status: 'paused' } }), 722);
+  assert.equal(getTimerRawElapsed.call(ctx, { timer: { rawElapsed: 0, elapsed: 500, status: 'idle' } }), 0);
+});
+
+test('getMobileTimeUiState prioritizes running/paused/completed over plain labels', () => {
+  const ctx = {
+    timeSlots: [
+      { timer: { status: 'idle', rawElapsed: 0 } },
+      { timer: { status: 'paused', rawElapsed: 754 } },
+      { timer: { status: 'completed', rawElapsed: 1394 } },
+      { timer: { status: 'running', rawElapsed: 0, running: true } },
+    ],
+    getCurrentTimeIndex() { return 0; },
+    getTimeUiHostIndex(index) { return getTimeUiHostIndex.call(this, index); },
+    findMergeKey() { return null; },
+    normalizeTimerStatus(rawStatus, slot) { return normalizeTimerStatus.call(this, rawStatus, slot); },
+    getTimerRawElapsed(slot) { return getTimerRawElapsed.call(this, slot); },
+  };
+
+  assert.deepEqual(getMobileTimeUiState.call(ctx, 0), {
+    hostIndex: 0,
+    mode: 'current',
+    status: 'idle',
+    rawElapsed: 0,
+    isCurrent: true,
+    showControls: true,
+  });
+  assert.equal(getMobileTimeUiState.call(ctx, 1).mode, 'paused');
+  assert.equal(getMobileTimeUiState.call(ctx, 2).mode, 'completed');
+  assert.equal(getMobileTimeUiState.call(ctx, 3).mode, 'running');
 });
