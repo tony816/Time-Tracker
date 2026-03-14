@@ -30,3 +30,37 @@ test('ensureInlinePlanInputVisible only scrolls when input is outside viewport b
         /inputRow\.scrollIntoView\(\{ block: 'nearest', inline: 'nearest', behavior: 'instant' \}\);/
     );
 });
+
+test('viewport sync is debounced while mobile inline plan input is focused', () => {
+    assert.match(
+        scriptSource,
+        /scheduleInlinePlanViewportSync\(\) \{[\s\S]*?const inputFocused = Boolean\(/ 
+    );
+    assert.match(
+        scriptSource,
+        /if \(!inputFocused\) \{\s+runSync\(\);\s+return;\s+\}/
+    );
+    assert.match(
+        scriptSource,
+        /this\.inlinePlanViewportSyncTimer = setTimeout\(\(\) => \{[\s\S]*?runSync\(\);[\s\S]*?\}, 90\);/
+    );
+    assert.match(
+        scriptSource,
+        /this\.inlinePlanScrollHandler = \(event\) => \{[\s\S]*?this\.scheduleInlinePlanViewportSync\(\);[\s\S]*?\};/
+    );
+});
+
+test('focused mobile inline input repositions dropdown from the input row instead of the slot anchor', () => {
+    assert.match(
+        scriptSource,
+        /isInlinePlanInputFocused\(\) \{[\s\S]*?document\.activeElement === inlineInput/
+    );
+    assert.match(
+        scriptSource,
+        /if \(this\.isInlinePlanInputFocused\(\)\) \{[\s\S]*?const inputRow = dropdown\.querySelector\('\.inline-plan-input-row'\);/
+    );
+    assert.match(
+        scriptSource,
+        /const referenceRect = inputRow \? inputRow\.getBoundingClientRect\(\) : dropdownRect;/
+    );
+});

@@ -54,6 +54,7 @@ class TimeTracker {
         this.inlinePlanWheelHandler = null;
         this.inlinePlanInputFocusHandler = null;
         this.inlinePlanFocusSyncTimer = null;
+        this.inlinePlanViewportSyncTimer = null;
         this.inlinePlanContext = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
@@ -10778,6 +10779,42 @@ class TimeTracker {
             });
         }, delay);
     }
+    scheduleInlinePlanViewportSync() {
+        if (!this.inlinePlanDropdown) return;
+
+        const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+        const priorityAnchor = this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl;
+        const inlineInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
+        const inputFocused = Boolean(
+            this.isInlinePlanMobileInputContext()
+            && inlineInput
+            && document.activeElement === inlineInput
+        );
+
+        const runSync = () => {
+            if (!this.inlinePlanDropdown) return;
+            if (inputFocused && inlineInput) {
+                this.ensureInlinePlanInputVisible(inlineInput);
+            } else if (currentAnchor) {
+                this.positionInlinePlanDropdown(currentAnchor);
+            }
+            if (priorityAnchor) this.positionInlinePriorityMenu(priorityAnchor);
+        };
+
+        if (!inputFocused) {
+            runSync();
+            return;
+        }
+
+        if (this.inlinePlanViewportSyncTimer) {
+            clearTimeout(this.inlinePlanViewportSyncTimer);
+            this.inlinePlanViewportSyncTimer = null;
+        }
+        this.inlinePlanViewportSyncTimer = setTimeout(() => {
+            this.inlinePlanViewportSyncTimer = null;
+            runSync();
+        }, 90);
+    }
     getInlinePlanViewportMetrics() {
         const docEl = document.documentElement;
         const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
@@ -10827,21 +10864,82 @@ class TimeTracker {
             this.positionInlinePlanDropdown(currentAnchor);
         }
     }
+    isInlinePlanInputFocused() {
+        if (!this.inlinePlanDropdown || !this.isInlinePlanMobileInputContext()) return false;
+        const inlineInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
+        return Boolean(inlineInput && document.activeElement === inlineInput);
+    }
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
+        const dropdown = this.inlinePlanDropdown;
+        const viewport = this.getInlinePlanViewportMetrics();
+        const margin = 12;
+        const gap = 6;
+        const maxWidth = Math.max(240, viewport.width - (margin * 2));
+
+        if (this.isInlinePlanInputFocused()) {
+            const dropdownRect = dropdown.getBoundingClientRect();
+            const inputRow = dropdown.querySelector('.inline-plan-input-row');
+            const referenceRect = inputRow ? inputRow.getBoundingClientRect() : dropdownRect;
+            const preferredWidth = Math.min(
+                Math.max(240, Math.round(dropdownRect.width || dropdown.offsetWidth || 240)),
+                maxWidth
+            );
+            let left = viewport.left + dropdownRect.left;
+            const maxLeft = viewport.right - preferredWidth - margin;
+            if (left > maxLeft) {
+                left = Math.max(viewport.left + margin, maxLeft);
+            }
+            if (left < viewport.left + margin) {
+                left = viewport.left + margin;
+            }
+
+            dropdown.style.minWidth = `${preferredWidth}px`;
+            dropdown.style.width = `${preferredWidth}px`;
+            dropdown.style.visibility = 'hidden';
+            dropdown.style.left = '0px';
+            dropdown.style.top = '0px';
+            dropdown.style.maxHeight = '';
+
+            const naturalHeight = Math.max(
+                Number(dropdown.scrollHeight) || 0,
+                Number(dropdown.offsetHeight) || 0
+            );
+            const maxHeight = Math.max(120, Math.floor(viewport.height - (margin * 2)));
+            dropdown.style.maxHeight = `${maxHeight}px`;
+
+            const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
+            let top = viewport.top + dropdownRect.top;
+            const referenceTop = viewport.top + referenceRect.top;
+            const referenceBottom = viewport.top + referenceRect.bottom;
+            const minVisibleTop = viewport.top + margin;
+            const maxVisibleBottom = viewport.bottom - margin;
+
+            if (referenceTop < minVisibleTop) {
+                top += (minVisibleTop - referenceTop);
+            }
+            if (referenceBottom > maxVisibleBottom) {
+                top -= (referenceBottom - maxVisibleBottom);
+            }
+
+            const minTop = viewport.top + margin;
+            const maxTop = viewport.bottom - margin - estimatedHeight;
+            if (top < minTop) top = minTop;
+            if (top > maxTop) top = Math.max(minTop, maxTop);
+
+            dropdown.style.left = `${Math.round(left)}px`;
+            dropdown.style.top = `${Math.round(top)}px`;
+            dropdown.style.visibility = 'visible';
+            return;
+        }
+
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
         const rect = anchor.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
-        const dropdown = this.inlinePlanDropdown;
-        const viewport = this.getInlinePlanViewportMetrics();
         const anchorLeft = viewport.left + rect.left;
         const anchorTop = viewport.top + rect.top;
         const anchorBottom = viewport.top + rect.bottom;
-        const margin = 12;
-        const gap = 6;
-
-        const maxWidth = Math.max(240, viewport.width - (margin * 2));
         const minWidth = Math.min(Math.max(240, rect.width + 32), maxWidth);
         dropdown.style.minWidth = `${minWidth}px`;
         dropdown.style.width = `${minWidth}px`;
@@ -11718,10 +11816,7 @@ class TimeTracker {
                     return;
                 }
             }
-            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
-            if (currentAnchor) this.positionInlinePlanDropdown(currentAnchor);
-            const priorityAnchor = this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl;
-            if (priorityAnchor) this.positionInlinePriorityMenu(priorityAnchor);
+            this.scheduleInlinePlanViewportSync();
         };
         window.addEventListener('resize', this.inlinePlanScrollHandler);
         window.addEventListener('scroll', this.inlinePlanScrollHandler, true);
@@ -11770,6 +11865,10 @@ class TimeTracker {
         if (this.inlinePlanFocusSyncTimer) {
             clearTimeout(this.inlinePlanFocusSyncTimer);
             this.inlinePlanFocusSyncTimer = null;
+        }
+        if (this.inlinePlanViewportSyncTimer) {
+            clearTimeout(this.inlinePlanViewportSyncTimer);
+            this.inlinePlanViewportSyncTimer = null;
         }
         if (this.inlinePlanDropdown && this.inlinePlanWheelHandler) {
             this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
