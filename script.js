@@ -10942,20 +10942,24 @@ class TimeTracker {
         const rawSpaceBelow = Math.max(0, Math.floor(viewport.bottom - anchorBottom - gap - margin));
         const rawSpaceAbove = Math.max(0, Math.floor(anchorTop - viewport.top - gap - margin));
 
+        const forceBelow = this.isInlinePlanMobileInputContext();
+
         let placeAbove = false;
-        if (rawSpaceBelow <= 0 && rawSpaceAbove > 0) {
-            placeAbove = true;
-        } else if (
-            rawSpaceBelow < minimumInteractiveHeight
-            && rawSpaceAbove > rawSpaceBelow
-            && rawSpaceAbove >= Math.min(minimumInteractiveHeight, naturalHeight || minimumInteractiveHeight)
-        ) {
-            placeAbove = true;
+        if (!forceBelow) {
+            if (rawSpaceBelow <= 0 && rawSpaceAbove > 0) {
+                placeAbove = true;
+            } else if (
+                rawSpaceBelow < minimumInteractiveHeight
+                && rawSpaceAbove > rawSpaceBelow
+                && rawSpaceAbove >= Math.min(minimumInteractiveHeight, naturalHeight || minimumInteractiveHeight)
+            ) {
+                placeAbove = true;
+            }
         }
 
         let available = placeAbove ? rawSpaceAbove : rawSpaceBelow;
         if (available <= 0) {
-            available = fallbackHeight;
+            available = forceBelow ? 1 : fallbackHeight;
         }
 
         const maxHeight = Math.max(1, available > 0 ? Math.floor(available) : fallbackHeight);
