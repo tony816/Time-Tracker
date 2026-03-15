@@ -9827,46 +9827,13 @@ class TimeTracker {
         const wrapper = document.querySelector(`.time-entry[data-index="${index}"] .split-cell-wrapper.split-type-actual.split-has-data`);
         if (!wrapper) return;
 
-        const container = wrapper.querySelector('.actual-field-container') || wrapper;
-        const viz = wrapper.querySelector('.split-visualization');
-        const targetRect = (viz && viz.getBoundingClientRect()) || container.getBoundingClientRect();
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        const btnW = 30;
-        const btnH = 30;
-        const centerX = targetRect.left + scrollX + (targetRect.width * 0.5);
-        const centerY = targetRect.top + scrollY + (targetRect.height / 2);
+        const inlineBtn = wrapper.querySelector('.activity-log-btn');
+        if (!inlineBtn) return;
 
         this.hideHoverActivityLogButton();
-
-        const btn = document.createElement('button');
-        btn.className = 'activity-log-btn activity-log-btn-floating';
-        btn.textContent = '⌄';
-        btn.title = '상세 기록';
-        btn.setAttribute('aria-label', '상세 기록');
-        btn.style.left = `${Math.round(centerX - (btnW / 2))}px`;
-        btn.style.top = `${Math.round(centerY - (btnH / 2))}px`;
-
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            this.openActivityLogModal(index);
-        };
-
-        const requestHide = () => {
-            if (this.activityHoverHideTimer) clearTimeout(this.activityHoverHideTimer);
-            this.activityHoverHideTimer = setTimeout(() => this.hideHoverActivityLogButton(), 150);
-        };
-
-        btn.addEventListener('mouseleave', requestHide);
-        btn.addEventListener('mouseenter', () => {
-            if (this.activityHoverHideTimer) {
-                clearTimeout(this.activityHoverHideTimer);
-                this.activityHoverHideTimer = null;
-            }
-        });
-
-        document.body.appendChild(btn);
-        this.activityHoverButton = btn;
+        inlineBtn.style.opacity = '1';
+        inlineBtn.style.pointerEvents = 'auto';
+        this.activityHoverButton = inlineBtn;
     }
 
     hideHoverActivityLogButton() {
@@ -9874,8 +9841,15 @@ class TimeTracker {
             clearTimeout(this.activityHoverHideTimer);
             this.activityHoverHideTimer = null;
         }
-        if (this.activityHoverButton && this.activityHoverButton.parentNode) {
-            this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
+        if (this.activityHoverButton) {
+            if (this.activityHoverButton.classList && this.activityHoverButton.classList.contains('activity-log-btn-floating')) {
+                if (this.activityHoverButton.parentNode) {
+                    this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
+                }
+            } else {
+                this.activityHoverButton.style.opacity = '';
+                this.activityHoverButton.style.pointerEvents = '';
+            }
         }
         this.activityHoverButton = null;
     }
