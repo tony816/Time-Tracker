@@ -201,8 +201,11 @@
 
     .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container.merged-time-main::before {
         background-color: #eef5ff;
+        box-sizing: border-box;
         border-left: 2px solid #7ea7d4;
         border-right: 2px solid #7ea7d4;
+        border-top: 2px solid #7ea7d4;
+        border-bottom: 2px solid #7ea7d4;
     }
 
     .time-entry.paused-timer-slot .time-slot-container {
