@@ -842,11 +842,18 @@
 }
 
 .inline-plan-close-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: transparent;
 }
 
-.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn:hover,
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn:focus,
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn:active,
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn:focus-visible {
+  background: #fff;
+  color: #5f6873;
+  border-color: #dcdfe3;
+  box-shadow: none;
+  outline: none;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn,
