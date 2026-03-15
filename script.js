@@ -11607,8 +11607,9 @@ class TimeTracker {
         if (closeBtn) {
             closeBtn.addEventListener('click', (event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 if (this.isInlinePlanMobileInputContext()) {
-                    this.suppressInlinePlanOpenUntil = Date.now() + 420;
+                    this.suppressInlinePlanOpenUntil = Date.now() + 1500;
                     this.clearSelection('planned');
                 }
                 this.closeInlinePlanDropdown();
