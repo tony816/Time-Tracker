@@ -797,7 +797,9 @@
   width: 100%;
   min-width: 0;
   min-height: 44px;
-  font-size: 24px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #5f6873;
   border: 1px solid #dcdfe3;
   border-radius: 10px;
   background: #fff;
@@ -853,7 +855,7 @@
   min-height: 44px;
   padding: 0;
   border-radius: 10px;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn {
