@@ -323,7 +323,7 @@
 
     .inline-plan-input-row.inline-plan-input-row-mobile-close {
         grid-template-columns: minmax(40px, 1fr) minmax(0, 4fr) minmax(40px, 1fr) minmax(40px, 1fr);
-        gap: 6px;
+        gap: 0;
     }
 
     .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn {
