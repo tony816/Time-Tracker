@@ -11478,6 +11478,13 @@ class TimeTracker {
                 const btn = event.target.closest('.plan-tab');
                 if (!btn || !tabs.contains(btn)) return;
                 const source = this.isNotionUIVisible() && btn.dataset.source === 'notion' ? 'notion' : 'local';
+
+                // "직접 추가" 탭은 휴지통 버튼과 동일하게 입력/슬롯 내용을 비우는 액션 버튼으로 동작
+                if (source === 'local') {
+                    clearHandler();
+                    return;
+                }
+
                 if (this.currentPlanSource === source) return;
                 this.currentPlanSource = source;
                 this.renderInlinePlanDropdownOptions();
