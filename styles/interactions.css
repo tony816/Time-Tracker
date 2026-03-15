@@ -1790,7 +1790,11 @@
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
-  position: relative;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 4;
   background: transparent;
   overflow: visible;
