@@ -770,7 +770,7 @@
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close {
-  grid-template-columns: minmax(36px, 1fr) minmax(0, 4fr) minmax(36px, 1fr) minmax(36px, 1fr);
+  grid-template-columns: 26px minmax(0, 4fr) minmax(36px, 1fr) minmax(36px, 1fr);
   gap: 0;
   align-items: center;
   border: 1px solid #dcdfe3;
