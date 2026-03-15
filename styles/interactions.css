@@ -820,6 +820,13 @@
   padding: 0 12px;
 }
 
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-input:focus,
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: #dcdfe3;
+}
+
 .inline-plan-close-btn {
   display: inline-flex;
   align-items: center;
