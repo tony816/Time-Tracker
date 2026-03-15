@@ -842,6 +842,7 @@
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
   grid-column: 1 / -1;
   width: 100%;
+  min-height: 52px;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn {
