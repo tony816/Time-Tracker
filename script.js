@@ -11609,8 +11609,14 @@ class TimeTracker {
                 event.preventDefault();
                 event.stopPropagation();
                 if (this.isInlinePlanMobileInputContext()) {
-                    this.suppressInlinePlanOpenUntil = Date.now() + 1500;
+                    this.suppressInlinePlanOpenUntil = Date.now() + 800;
                     this.clearSelection('planned');
+                    const activeEl = document.activeElement;
+                    if (activeEl && typeof activeEl.blur === 'function') {
+                        try { activeEl.blur(); } catch (_) {}
+                    }
+                    this.scheduleInlinePlanViewportSync();
+                    return;
                 }
                 this.closeInlinePlanDropdown();
             });
