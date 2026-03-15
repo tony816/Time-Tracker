@@ -11823,6 +11823,10 @@ class TimeTracker {
                     return;
                 }
             }
+            if (this.isInlinePlanMobileInputContext()) {
+                this.scheduleInlinePlanViewportSync();
+                return;
+            }
             if (this.isInlinePlanInputFocused() || this.hasRecentInlinePlanInputIntent()) {
                 this.scheduleInlinePlanViewportSync();
                 return;
