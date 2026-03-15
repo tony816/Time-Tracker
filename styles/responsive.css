@@ -509,11 +509,6 @@
 
 @media (hover: none), (pointer: coarse) {
   .activity-log-btn { opacity: 1; pointer-events: auto; left: 50%; }
-  /* 모바일 병합 슬롯에서 시간열에 잘못 보이는 선택 외곽 박스 제거 */
-  .selection-overlay[data-type="planned"][data-fill="outline"] {
-    display: none !important;
-    box-shadow: none !important;
-  }
 }
 
 .notification-region { position:fixed; top:14px; right:14px; z-index:5000; display:flex; flex-direction:column; gap:8px; }
