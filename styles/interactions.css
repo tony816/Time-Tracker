@@ -99,7 +99,7 @@
 .activity-log-btn {
   position: absolute;
   left: 50%;
-  bottom: -2px;
+  bottom: 0;
   transform: translateX(-50%);
   background: #d8f1d6;
   color: #1e2b1f;
