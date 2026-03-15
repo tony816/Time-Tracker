@@ -1791,8 +1791,9 @@
 
 .split-cell-wrapper.split-type-actual.split-has-data .actual-field-container {
   position: relative;
-  z-index: 1;
+  z-index: 4;
   background: transparent;
+  overflow: visible;
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input {
@@ -1814,6 +1815,7 @@
 .split-cell-wrapper.split-type-actual.split-has-data .activity-log-btn {
   opacity: 0;
   pointer-events: none;
+  z-index: 12;
 }
 
 .split-cell-wrapper .split-visualization {
