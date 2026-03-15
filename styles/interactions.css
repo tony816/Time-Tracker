@@ -548,6 +548,19 @@
   outline-offset: 2px;
 }
 
+.inline-plan-tabs .plan-tab[data-source="local"] {
+  background: #e74c3c;
+  color: #fff;
+  border-color: #e74c3c;
+}
+
+.inline-plan-tabs .plan-tab[data-source="local"]:hover,
+.inline-plan-tabs .plan-tab[data-source="local"].active {
+  background: #c0392b;
+  color: #fff;
+  border-color: #c0392b;
+}
+
 .chip {
   background: #ecf5ff;
   color: #2c3e50;

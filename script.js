@@ -11405,7 +11405,7 @@ class TimeTracker {
         dropdown.className = 'inline-plan-dropdown';
         dropdown.innerHTML = `
             <div class="inline-plan-tabs plan-tabs">
-                <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">직접 추가</button>
+                <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">Clear</button>
                 ${this.isNotionUIVisible() ? '<button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>' : ''}
             </div>
             <div class="inline-plan-input-row${isMobileInputContext ? ' inline-plan-input-row-mobile-close' : ''}">
