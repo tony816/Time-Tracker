@@ -6889,7 +6889,7 @@ class TimeTracker {
                          data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">⌄</button>
                 </div>`;
     }
 
@@ -9150,7 +9150,7 @@ class TimeTracker {
                                        data-merge-key="${safeMergeKey}"
                                        data-value="${safeMergeValue}"
                                        title="${safeMergeValue}">${safeMergeValue}</div>
-                                <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">📝</button>
+                                <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">⌄</button>
                             </div>
                         </div>`;
             } else {
@@ -9841,7 +9841,7 @@ class TimeTracker {
 
         const btn = document.createElement('button');
         btn.className = 'activity-log-btn activity-log-btn-floating';
-        btn.textContent = '📝';
+        btn.textContent = '⌄';
         btn.title = '상세 기록';
         btn.setAttribute('aria-label', '상세 기록');
         btn.style.left = `${Math.round(centerX - (btnW / 2))}px`;
