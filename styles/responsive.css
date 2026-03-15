@@ -328,8 +328,8 @@
 
     .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-close-btn {
         min-width: 0;
-        min-height: 40px;
-        font-size: 17px;
+        min-height: 30px;
+        font-size: 16px;
     }
 
     .inline-plan-options-head,
