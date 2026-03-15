@@ -770,13 +770,14 @@
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close {
-  grid-template-columns: minmax(40px, 1fr) minmax(0, 4fr) minmax(40px, 1fr) minmax(40px, 1fr);
-  gap: 0;
+  grid-template-columns: minmax(36px, 1fr) minmax(0, 4fr) minmax(36px, 1fr) minmax(36px, 1fr);
+  gap: 4px;
   align-items: center;
   border: 1px solid #dcdfe3;
   border-radius: 16px;
   background: #f3f4f6;
-  padding: 4px;
+  padding: 3px;
+  box-sizing: border-box;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close:focus-within {
@@ -796,28 +797,30 @@
   grid-row: 1;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  font-size: 18px;
+  min-height: 40px;
+  font-size: 17px;
   font-weight: 600;
   color: #5f6873;
   border: 1px solid #dcdfe3;
   border-right: 0;
   border-radius: 10px 0 0 10px;
   background: #fff;
+  box-sizing: border-box;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-input {
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid #dcdfe3;
   border-left: 0;
   border-radius: 0 10px 10px 0;
   background: #fff;
   box-shadow: none;
   font-size: 16px;
-  padding: 0 12px;
+  padding: 0 10px;
+  box-sizing: border-box;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-input:focus,
@@ -868,20 +871,21 @@
   grid-row: 1;
   width: 100%;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0;
   border-radius: 10px;
-  font-size: 17px;
+  font-size: 16px;
+  box-sizing: border-box;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn {
   grid-column: 3;
-  margin-left: 6px;
+  margin-left: 0;
 }
 
 .inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
   grid-column: 4;
-  margin-left: 6px;
+  margin-left: 0;
 }
 
 .inline-plan-add-btn,
