@@ -194,6 +194,17 @@
         background-color: #eef5ff;
     }
 
+    /* 병합된 시간 슬롯의 현재시간 하이라이트는 메인 셀의 확장 블록 높이에 맞춰 그린다 */
+    .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container.merged-time-main {
+        background-color: #ecf0f1;
+    }
+
+    .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container.merged-time-main::before {
+        background-color: #eef5ff;
+        border-left: 2px solid #7ea7d4;
+        border-right: 2px solid #7ea7d4;
+    }
+
     .time-entry.paused-timer-slot .time-slot-container {
         background-color: #fff7e7;
         box-shadow: inset 0 0 0 2px rgba(214, 142, 0, 0.28);
