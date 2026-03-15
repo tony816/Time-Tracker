@@ -64,6 +64,7 @@ class TimeTracker {
         this.inlinePriorityMenuOutsideHandler = null;
         this.inlinePriorityMenuEscHandler = null;
         this.suppressInlinePlanClickOnce = null;
+        this.suppressInlinePlanOpenUntil = 0;
         // Notion integration (optional)
         this.notionEndpoint = this.loadNotionActivitiesEndpoint ? this.loadNotionActivitiesEndpoint() : (function(){
             try { return window.NOTION_ACTIVITIES_ENDPOINT || null; } catch(e){ return null; }
@@ -11380,6 +11381,9 @@ class TimeTracker {
     }
 
     openInlinePlanDropdown(index, anchorEl, endIndex = null) {
+        if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
+            return;
+        }
         const range = this.getPlannedRangeInfo(index);
         if (Number.isInteger(endIndex)) {
             range.startIndex = Math.min(range.startIndex, endIndex);
@@ -11604,6 +11608,7 @@ class TimeTracker {
             closeBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 if (this.isInlinePlanMobileInputContext()) {
+                    this.suppressInlinePlanOpenUntil = Date.now() + 420;
                     this.clearSelection('planned');
                 }
                 this.closeInlinePlanDropdown();
