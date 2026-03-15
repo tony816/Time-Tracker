@@ -11405,7 +11405,7 @@ class TimeTracker {
                 ${this.isNotionUIVisible() ? '<button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>' : ''}
             </div>
             <div class="inline-plan-input-row${isMobileInputContext ? ' inline-plan-input-row-mobile-close' : ''}">
-                ${isMobileInputContext ? '<button type="button" class="inline-plan-close-btn" aria-label="드롭다운 닫기">←</button>' : ''}
+                ${isMobileInputContext ? '<button type="button" class="inline-plan-close-btn" aria-label="드롭다운 닫기">‹</button>' : ''}
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn" aria-label="활동 추가" title="활동 추가">＋</button>
                 <button type="button" class="inline-plan-sync-btn" aria-label="입력 지우기" title="입력 지우기">🗑︎</button>
