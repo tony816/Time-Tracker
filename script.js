@@ -11605,15 +11605,6 @@ class TimeTracker {
             });
         }
         if (closeBtn) {
-            closeBtn.addEventListener('mousedown', (event) => {
-                event.preventDefault();
-            });
-            closeBtn.addEventListener('pointerdown', (event) => {
-                event.preventDefault();
-            });
-            closeBtn.addEventListener('touchstart', (event) => {
-                event.preventDefault();
-            }, { passive: false });
             closeBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
