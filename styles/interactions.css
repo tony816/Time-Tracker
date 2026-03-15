@@ -860,7 +860,11 @@
   border-radius: 8px;
   background: #f4f6f8;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 20px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition:
     background 0.15s ease,
