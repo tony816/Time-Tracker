@@ -11603,6 +11603,9 @@ class TimeTracker {
         if (closeBtn) {
             closeBtn.addEventListener('click', (event) => {
                 event.preventDefault();
+                if (this.isInlinePlanMobileInputContext()) {
+                    this.clearSelection('planned');
+                }
                 this.closeInlinePlanDropdown();
             });
         }
