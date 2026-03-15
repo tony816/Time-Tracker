@@ -1813,8 +1813,8 @@
 
 /* 실제 열에 그리드가 있을 때는 상세 기록 버튼을 항상 노출 */
 .split-cell-wrapper.split-type-actual.split-has-data .activity-log-btn {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   z-index: 12;
 }
 
