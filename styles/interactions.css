@@ -549,16 +549,16 @@
 }
 
 .inline-plan-tabs .plan-tab[data-source="local"] {
-  background: #e74c3c;
+  background: #ff0000;
   color: #fff;
-  border-color: #e74c3c;
+  border-color: #ff0000;
 }
 
 .inline-plan-tabs .plan-tab[data-source="local"]:hover,
 .inline-plan-tabs .plan-tab[data-source="local"].active {
-  background: #c0392b;
+  background: #cc0000;
   color: #fff;
-  border-color: #c0392b;
+  border-color: #cc0000;
 }
 
 .chip {
