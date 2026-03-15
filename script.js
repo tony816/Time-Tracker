@@ -11846,6 +11846,10 @@ class TimeTracker {
             const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
+            if (this.isInlinePlanMobileInputContext()) {
+                this.scheduleInlinePlanViewportSync();
+                return;
+            }
             this.closeInlinePlanDropdown();
         };
         document.addEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
