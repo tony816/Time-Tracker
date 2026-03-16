@@ -47,7 +47,9 @@ class TimeTracker {
         this.showNotionUI = false;
         this.planTabsContainer = null;
         this.inlinePlanDropdown = null;
+        this.inlinePlanBackdrop = null;
         this.inlinePlanTarget = null;
+        this.inlinePlanHighlightRange = null;
         this.inlinePlanOutsideHandler = null;
         this.inlinePlanEscHandler = null;
         this.inlinePlanScrollHandler = null;
@@ -11393,6 +11395,9 @@ class TimeTracker {
 
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
         this.inlinePlanTarget = { ...range, anchor };
+        this.inlinePlanHighlightRange = isMobileInputContext
+            ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
+            : null;
         const dropdown = document.createElement('div');
         dropdown.className = `inline-plan-dropdown${isMobileInputContext ? ' inline-plan-dropdown-sheet' : ''}`;
         dropdown.innerHTML = `
@@ -11867,6 +11872,26 @@ class TimeTracker {
                 })
                 .catch(() => {});
         }
+        this.applyInlinePlanBackgroundContext();
+    }
+    applyInlinePlanBackgroundContext() {
+        const timeEntries = document.getElementById('timeEntries');
+        if (!timeEntries) return;
+        timeEntries.classList.remove('inline-plan-context-active');
+        timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
+        if (!this.inlinePlanDropdown || !this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
+            return;
+        }
+        const range = this.inlinePlanHighlightRange;
+        if (!range) return;
+        const start = Number.isInteger(range.startIndex) ? Math.min(range.startIndex, range.endIndex) : null;
+        const end = Number.isInteger(range.endIndex) ? Math.max(range.startIndex, range.endIndex) : start;
+        if (!Number.isInteger(start) || !Number.isInteger(end)) return;
+        timeEntries.classList.add('inline-plan-context-active');
+        for (let i = start; i <= end; i += 1) {
+            const row = timeEntries.querySelector(`.time-entry[data-index="${i}"]`);
+            if (row) row.classList.add('inline-plan-context-keep-clear');
+        }
     }
     closeInlinePlanDropdown() {
         this.closeInlinePriorityMenu();
@@ -11924,8 +11949,14 @@ class TimeTracker {
         }
         this.inlinePlanBackdrop = null;
         document.body.classList.remove('inline-plan-sheet-open');
+        const timeEntries = document.getElementById('timeEntries');
+        if (timeEntries) {
+            timeEntries.classList.remove('inline-plan-context-active');
+            timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
+        }
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
+        this.inlinePlanHighlightRange = null;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }

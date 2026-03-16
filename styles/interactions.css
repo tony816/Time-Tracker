@@ -784,6 +784,26 @@ body.inline-plan-sheet-open {
   overflow: hidden;
 }
 
+body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry {
+  filter: blur(2px);
+  opacity: 0.58;
+  transition: filter 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear {
+  filter: none;
+  opacity: 1;
+  transform: none;
+  position: relative;
+  z-index: 1;
+}
+
+body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear .planned-input {
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.22);
+  border-color: #7fc5f3;
+  background: #f7fbff;
+}
+
 .inline-plan-dropdown .plan-tabs {
   margin-bottom: 8px;
 }

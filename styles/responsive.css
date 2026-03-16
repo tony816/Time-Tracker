@@ -374,6 +374,16 @@
         font-size: 16px;
     }
 
+    body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry {
+        filter: blur(1.6px);
+        opacity: 0.54;
+    }
+
+    body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear {
+        filter: none;
+        opacity: 1;
+    }
+
     .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-task-cell {
         padding: 14px 14px 12px;
     }
