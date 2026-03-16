@@ -10733,8 +10733,13 @@ class TimeTracker {
     }
     isInlinePlanMobileInputContext() {
         try {
-            if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-            return window.matchMedia('(hover: none), (pointer: coarse)').matches;
+            if (typeof window === 'undefined') return false;
+            const hasMatchMedia = typeof window.matchMedia === 'function';
+            const coarsePointer = hasMatchMedia
+                ? window.matchMedia('(hover: none), (pointer: coarse)').matches
+                : false;
+            const narrowViewport = Number.isFinite(window.innerWidth) ? window.innerWidth <= 768 : false;
+            return coarsePointer || narrowViewport;
         } catch (_) {
             return false;
         }
@@ -10872,6 +10877,19 @@ class TimeTracker {
     positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
         const dropdown = this.inlinePlanDropdown;
+        if (dropdown.classList.contains('inline-plan-dropdown-sheet')) {
+            dropdown.style.visibility = 'visible';
+            dropdown.style.position = 'fixed';
+            dropdown.style.left = '0px';
+            dropdown.style.right = '0px';
+            dropdown.style.top = 'auto';
+            dropdown.style.bottom = '0px';
+            dropdown.style.width = '100vw';
+            dropdown.style.minWidth = '0px';
+            dropdown.style.maxWidth = '100vw';
+            dropdown.style.maxHeight = '82vh';
+            return;
+        }
         const viewport = this.getInlinePlanViewportMetrics();
         const margin = 12;
         const gap = 6;
@@ -11376,7 +11394,7 @@ class TimeTracker {
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
         this.inlinePlanTarget = { ...range, anchor };
         const dropdown = document.createElement('div');
-        dropdown.className = 'inline-plan-dropdown';
+        dropdown.className = `inline-plan-dropdown${isMobileInputContext ? ' inline-plan-dropdown-sheet' : ''}`;
         dropdown.innerHTML = `
             <div class="inline-plan-tabs plan-tabs">
                 <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">Clear</button>
@@ -11419,6 +11437,14 @@ class TimeTracker {
             </div>
         `;
         dropdown.style.visibility = 'hidden';
+        if (isMobileInputContext) {
+            const backdrop = document.createElement('div');
+            backdrop.className = 'inline-plan-backdrop';
+            backdrop.addEventListener('click', () => this.closeInlinePlanDropdown());
+            document.body.appendChild(backdrop);
+            this.inlinePlanBackdrop = backdrop;
+            document.body.classList.add('inline-plan-sheet-open');
+        }
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
         this.inlinePlanWheelHandler = (event) => this.handleInlinePlanWheel(event);
@@ -11591,8 +11617,6 @@ class TimeTracker {
                     if (activeEl && typeof activeEl.blur === 'function') {
                         try { activeEl.blur(); } catch (_) {}
                     }
-                    this.scheduleInlinePlanViewportSync();
-                    return;
                 }
                 this.closeInlinePlanDropdown();
             });
@@ -11895,6 +11919,11 @@ class TimeTracker {
         if (this.inlinePlanDropdown && this.inlinePlanDropdown.parentNode) {
             this.inlinePlanDropdown.parentNode.removeChild(this.inlinePlanDropdown);
         }
+        if (this.inlinePlanBackdrop && this.inlinePlanBackdrop.parentNode) {
+            this.inlinePlanBackdrop.parentNode.removeChild(this.inlinePlanBackdrop);
+        }
+        this.inlinePlanBackdrop = null;
+        document.body.classList.remove('inline-plan-sheet-open');
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
         this.inlinePlanContext = null;
@@ -14287,5 +14316,7 @@ class TimeTracker {
 
     }
 }
+
+window.TimeTracker = TimeTracker;
 
 window.TimeTracker = TimeTracker;

@@ -319,6 +319,46 @@
         text-align: center;
     }
 
+    .inline-plan-dropdown.inline-plan-dropdown-sheet {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        max-height: min(82vh, 720px);
+        margin: 0;
+        padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
+        border: 1px solid rgba(221, 228, 234, 0.95);
+        box-shadow: 0 -18px 36px rgba(15, 23, 42, 0.24);
+        overflow: hidden;
+        z-index: 2099;
+    }
+
+    .inline-plan-dropdown.inline-plan-dropdown-sheet::before {
+        content: '';
+        width: 46px;
+        height: 5px;
+        border-radius: 999px;
+        background: #cbd5e1;
+        align-self: center;
+        margin-bottom: 2px;
+        flex: 0 0 auto;
+    }
+
+    .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-options {
+        max-height: none;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-options-list {
+        padding-bottom: 14px;
+    }
+
     .inline-plan-input-row {
         grid-template-columns: 1fr;
     }
@@ -332,6 +372,10 @@
         min-width: 0;
         min-height: 30px;
         font-size: 16px;
+    }
+
+    .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-task-cell {
+        padding: 14px 14px 12px;
     }
 
     .inline-plan-task-cell {
@@ -529,6 +573,25 @@
 
 .notification-region { position:fixed; top:14px; right:14px; z-index:5000; display:flex; flex-direction:column; gap:8px; }
 .toast { display:flex; align-items:center; gap:10px; min-width:220px; max-width:360px; padding:10px 12px; border-radius:10px; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.16); animation:toastIn .22s ease; }
+.toast-info { background:#2f7ad0; }
+.toast-success { background:#2d9d61; }
+.toast-warn { background:#b7791f; }
+.toast-error { background:#c0392b; }
+.toast-action { margin-left:auto; border:none; background:rgba(255,255,255,.2); color:#fff; border-radius:6px; padding:4px 8px; cursor:pointer; }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.toast-action:focus-visible,
+.timer-btn:focus-visible,
+.activity-log-btn:focus-visible {
+  outline: 3px solid #1f6feb;
+  outline-offset: 2px;
+}
+.toast-exit { animation:toastOut .22s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateY(-6px);} to { opacity:1; transform:translateY(0);} }
+@keyframes toastOut { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-5px);} }
+ex; align-items:center; gap:10px; min-width:220px; max-width:360px; padding:10px 12px; border-radius:10px; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.16); animation:toastIn .22s ease; }
 .toast-info { background:#2f7ad0; }
 .toast-success { background:#2d9d61; }
 .toast-warn { background:#b7791f; }
