@@ -954,22 +954,6 @@
   background: #f8fafc;
 }
 
-.inline-plan-options-head {
-  display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px 12px 6px;
-  color: #8d98a5;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.inline-plan-options-head-pr,
-.inline-plan-options-head-task {
-  display: flex;
-  align-items: center;
-}
-
 .inline-plan-options-list {
   list-style: none;
   margin: 0;

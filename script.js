@@ -11392,10 +11392,6 @@ class TimeTracker {
                 <button type="button" class="inline-plan-add-btn" aria-label="활동 추가" title="활동 추가">＋</button>
             </div>
             <div class="inline-plan-options dropdown">
-                <div class="inline-plan-options-head" aria-hidden="true">
-                    <span class="inline-plan-options-head-pr">Pr</span>
-                    <span class="inline-plan-options-head-task">Task Title</span>
-                </div>
                 <ul class="inline-plan-options-list"></ul>
             </div>
             <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해">세부 활동 분해</button>
