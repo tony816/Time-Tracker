@@ -243,11 +243,12 @@
     }
 
     .activity-log-btn {
-        width: 10px;
-        height: 10px;
-        font-size: 8px;
+        min-width: 42px;
+        height: 18px;
+        padding: 0 8px;
+        font-size: 9px;
         left: 50%;
-        bottom: 0;
+        bottom: 2px;
     }
 
     .analysis-row {

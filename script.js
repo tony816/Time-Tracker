@@ -6872,7 +6872,7 @@ class TimeTracker {
                          data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="?쒕룞 ?곸꽭 湲곕줉 ?닿린" title="?곸꽭 湲곕줉 ?닿린">?뱷</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">기록</button>
                 </div>`;
     }
 
@@ -6889,7 +6889,7 @@ class TimeTracker {
                          data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">⌄</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">기록</button>
                 </div>`;
     }
 
@@ -9150,7 +9150,7 @@ class TimeTracker {
                                        data-merge-key="${safeMergeKey}"
                                        data-value="${safeMergeValue}"
                                        title="${safeMergeValue}">${safeMergeValue}</div>
-                                <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">⌄</button>
+                                <button class="activity-log-btn" data-index="${index}" aria-label="활동 상세 기록 열기" title="상세 기록 열기">기록</button>
                             </div>
                         </div>`;
             } else {

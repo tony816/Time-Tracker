@@ -40,15 +40,17 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /border-bottom-color:\s*#fff\s*!important;/);
     assert.match(interactionsSource, /background-clip:\s*padding-box\s*!important;/);
     assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\s*\{[^}]*overflow:\s*hidden;/s);
-    assert.match(interactionsSource, /\.split-cell-wrapper \.split-visualization\s*\{[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
+    assert.match(interactionsSource, /\.split-cell-wrapper \.split-visualization\s*\{[^}]*top:\s*6px;[^}]*bottom:\s*6px;[^}]*left:\s*0;[^}]*right:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
+    assert.match(interactionsSource, /\.split-title-band\s*\{[^}]*margin-left:\s*6px\s*!important;[^}]*margin-right:\s*6px\s*!important;/s);
+    assert.match(interactionsSource, /\.split-grid\s*\{[^}]*margin-left:\s*6px\s*!important;[^}]*margin-right:\s*6px\s*!important;/s);
     assert.match(interactionsSource, /\.split-visualization-actual\s*\{[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.activity-log-btn/);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.actual-field-container\s*\{[^}]*pointer-events:\s*none;/s);
-    assert.match(interactionsSource, /\.activity-log-btn\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;[^}]*font-size:\s*8px;/s);
+    assert.match(interactionsSource, /\.activity-log-btn\s*\{[^}]*bottom:\s*2px;[^}]*min-width:\s*44px;[^}]*height:\s*18px;[^}]*padding:\s*0 10px;[^}]*font-size:\s*9px;/s);
     assert.match(interactionsSource, /pointer-events:\s*none;/);
     assert.match(responsiveSource, /Mobile responsive enhancements/);
     assert.match(responsiveSource, /--- UX enhancement patch ---/);
-    assert.match(responsiveSource, /\.activity-log-btn\s*\{[^}]*width:\s*10px;[^}]*height:\s*10px;[^}]*font-size:\s*8px;/s);
+    assert.match(responsiveSource, /\.activity-log-btn\s*\{[^}]*min-width:\s*42px;[^}]*height:\s*18px;[^}]*padding:\s*0 8px;[^}]*font-size:\s*9px;[^}]*left:\s*50%;[^}]*bottom:\s*2px;/s);
 });
 
 test('index.html links split css files directly in order', () => {
