@@ -10469,6 +10469,48 @@ class TimeTracker {
 
         return grouped;
     }
+    getHangulInitialSearchKey(text) {
+        const value = this.normalizeActivityText ? this.normalizeActivityText(text || '') : String(text || '').trim();
+        if (!value) return '';
+        const initials = [];
+        const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+        for (const char of value) {
+            const code = char.charCodeAt(0);
+            if (code >= 0xac00 && code <= 0xd7a3) {
+                const index = Math.floor((code - 0xac00) / 588);
+                initials.push(CHOSEONG[index] || char);
+            } else if (/\s/.test(char)) {
+                continue;
+            } else {
+                initials.push(char.toLowerCase());
+            }
+        }
+        return initials.join('');
+    }
+    scoreInlinePlanSearchMatch(label, query) {
+        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : String(label || '').trim();
+        const normalizedQuery = this.normalizeActivityText ? this.normalizeActivityText(query || '') : String(query || '').trim();
+        if (!normalizedQuery) return 0;
+        const labelLower = normalizedLabel.toLowerCase();
+        const queryLower = normalizedQuery.toLowerCase();
+        if (labelLower.startsWith(queryLower)) return 4000 - normalizedLabel.length;
+        const initials = this.getHangulInitialSearchKey(normalizedLabel);
+        if (initials && initials.startsWith(queryLower)) return 3000 - normalizedLabel.length;
+        return Number.NEGATIVE_INFINITY;
+    }
+    filterInlinePlanSearchItems(items, query) {
+        const safeItems = Array.isArray(items) ? items.slice() : [];
+        const normalizedQuery = this.normalizeActivityText ? this.normalizeActivityText(query || '') : String(query || '').trim();
+        if (!normalizedQuery) return safeItems;
+        return safeItems
+            .map((item, index) => ({ item, index, score: this.scoreInlinePlanSearchMatch(item && item.label, normalizedQuery) }))
+            .filter((entry) => Number.isFinite(entry.score))
+            .sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return a.index - b.index;
+            })
+            .map((entry) => entry.item);
+    }
     buildActivityLabelOptions(extraLabels = []) {
         const seen = new Set();
         const options = [];
@@ -10987,11 +11029,17 @@ class TimeTracker {
         const planActivities = this.getPlanActivitiesForIndex(startIndex);
         const hasPlanSplit = Array.isArray(planActivities) && planActivities.length > 0;
         const grouped = this.buildPlannedActivityOptions(!hasPlanSplit && currentValue ? [currentValue] : []);
-        const counts = { local: (grouped.local || []).length, notion: (grouped.notion || []).length };
+        const searchInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
+        const searchQuery = searchInput ? (searchInput.value || '') : '';
+        const filteredGrouped = {
+            local: this.filterInlinePlanSearchItems(grouped.local || [], searchQuery),
+            notion: this.filterInlinePlanSearchItems(grouped.notion || [], searchQuery)
+        };
+        const counts = { local: (filteredGrouped.local || []).length, notion: (filteredGrouped.notion || []).length };
         this.updatePlanSourceTabs(counts, tabs);
 
         const activeSource = this.getActivePlanSource();
-        const visibleItems = grouped[activeSource] || [];
+        const visibleItems = filteredGrouped[activeSource] || [];
         const normalizedCurrent = this.normalizeActivityText ? this.normalizeActivityText(currentValue) : String(currentValue || '').trim();
 
         list.innerHTML = '';
@@ -11590,6 +11638,9 @@ class TimeTracker {
                     e.preventDefault();
                     addHandler({ keepOpen: true });
                 }
+            });
+            input.addEventListener('input', () => {
+                this.renderInlinePlanDropdownOptions();
             });
             const markInputIntent = () => {
                 this.markInlinePlanInputIntent();
