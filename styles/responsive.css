@@ -375,8 +375,8 @@
     }
 
     body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry {
-        filter: blur(1.6px);
-        opacity: 0.54;
+        filter: none;
+        opacity: 1;
     }
 
     body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear {

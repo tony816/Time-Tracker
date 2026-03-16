@@ -785,9 +785,9 @@ body.inline-plan-sheet-open {
 }
 
 body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry {
-  filter: blur(2px);
-  opacity: 0.58;
-  transition: filter 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+  filter: none;
+  opacity: 1;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
 body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear {
