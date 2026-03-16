@@ -1796,6 +1796,7 @@
   z-index: 4;
   background: transparent;
   overflow: visible;
+  pointer-events: none;
 }
 
 .split-cell-wrapper.split-type-actual.split-has-data .input-field.actual-input {
