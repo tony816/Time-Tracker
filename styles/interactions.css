@@ -969,15 +969,16 @@
 }
 
 .inline-plan-priority-chip {
-  min-width: 58px;
+  min-width: 48px;
   flex: 0 0 auto;
   border: 1px solid #e6d9d2;
-  border-radius: 10px;
-  padding: 7px 10px;
+  border-radius: 8px;
+  padding: 5px 8px;
   background: #f7ebe6;
   color: #8f5b4b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.1;
   text-align: center;
   cursor: pointer;
 }
