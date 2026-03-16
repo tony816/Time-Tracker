@@ -1158,6 +1158,9 @@
 .inline-plan-option-label {
   min-width: 0;
   flex: 1 1 auto;
+  display: inline-block;
+  position: relative;
+  top: -0.01px;
   font-size: 14px;
   color: #1f2d3d;
   font-weight: 600;
