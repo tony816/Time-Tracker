@@ -961,24 +961,19 @@
 }
 
 .inline-plan-option.inline-plan-option-row {
-  display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 10px;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0;
   margin-bottom: 8px;
 }
 
-.inline-plan-priority-cell {
-  display: flex;
-  align-items: center;
-  padding: 10px 0;
-}
-
 .inline-plan-priority-chip {
-  min-width: 78px;
+  min-width: 58px;
+  flex: 0 0 auto;
   border: 1px solid #e6d9d2;
   border-radius: 10px;
-  padding: 7px 12px;
+  padding: 7px 10px;
   background: #f7ebe6;
   color: #8f5b4b;
   font-size: 13px;
@@ -1112,6 +1107,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 12px 14px;
   border: 1px solid #e4ebf3;
   border-radius: 12px;
@@ -1121,6 +1118,14 @@
     background 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+}
+
+.inline-plan-task-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .inline-plan-task-cell:hover {
@@ -1141,9 +1146,13 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
 .inline-plan-option-label {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 14px;
   color: #1f2d3d;
   font-weight: 600;

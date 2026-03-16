@@ -10997,8 +10997,10 @@ class TimeTracker {
                 li.classList.add('selected');
             }
 
-            const left = document.createElement('div');
-            left.className = 'inline-plan-priority-cell';
+            const content = document.createElement('div');
+            content.className = 'inline-plan-task-cell';
+            const titleWrap = document.createElement('div');
+            titleWrap.className = 'inline-plan-task-main';
             const priorityButton = document.createElement('button');
             priorityButton.type = 'button';
             priorityButton.className = 'inline-plan-priority-chip';
@@ -11022,12 +11024,7 @@ class TimeTracker {
                     this.openInlinePriorityMenu(priorityButton, { label, source, priorityRank });
                 });
             }
-            left.appendChild(priorityButton);
-
-            const content = document.createElement('div');
-            content.className = 'inline-plan-task-cell';
-            const titleWrap = document.createElement('div');
-            titleWrap.className = 'inline-plan-task-main';
+            titleWrap.appendChild(priorityButton);
             const text = document.createElement('span');
             text.className = 'inline-plan-option-label';
             text.textContent = label;
@@ -11087,7 +11084,6 @@ class TimeTracker {
 
             content.appendChild(titleWrap);
             content.appendChild(right);
-            li.appendChild(left);
             li.appendChild(content);
             content.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
             list.appendChild(li);
