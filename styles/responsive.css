@@ -243,9 +243,9 @@
     }
 
     .activity-log-btn {
-        width: 30px;
-        height: 30px;
-        font-size: 10px;
+        width: 10px;
+        height: 10px;
+        font-size: 8px;
         left: 50%;
         bottom: 0;
     }
