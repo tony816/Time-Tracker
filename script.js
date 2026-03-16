@@ -57,6 +57,8 @@ class TimeTracker {
         this.inlinePlanGestureCloseHandler = null;
         this.inlinePlanWheelHandler = null;
         this.inlinePlanInputFocusHandler = null;
+        this.inlinePlanSheetTouchState = null;
+        this.inlinePlanSheetTouchHandlers = null;
         this.inlinePlanFocusSyncTimer = null;
         this.inlinePlanViewportSyncTimer = null;
         this.inlinePlanInputIntentUntil = 0;
@@ -10791,6 +10793,102 @@ class TimeTracker {
     shouldAutofocusInlinePlanInput() {
         return !this.isInlinePlanMobileInputContext();
     }
+    setupInlinePlanSheetTouchDismiss(dropdown) {
+        if (!dropdown || !dropdown.classList.contains('inline-plan-dropdown-sheet')) return;
+        this.cleanupInlinePlanSheetTouchDismiss();
+        const state = {
+            startY: 0,
+            lastY: 0,
+            dragging: false,
+            armed: false,
+            pointerId: null
+        };
+        const getPointY = (event) => {
+            if (!event) return 0;
+            if (event.touches && event.touches.length) return event.touches[0].clientY;
+            if (event.changedTouches && event.changedTouches.length) return event.changedTouches[0].clientY;
+            return Number(event.clientY) || 0;
+        };
+        const shouldArm = (event) => {
+            if (!this.inlinePlanDropdown || this.inlinePlanDropdown !== dropdown) return false;
+            const scrollTop = dropdown.scrollTop || 0;
+            if (scrollTop > 2) return false;
+            const interactive = event.target && event.target.closest
+                ? event.target.closest('input, textarea, button, select, .inline-plan-options')
+                : null;
+            return !interactive || (interactive === dropdown.querySelector('.inline-plan-options') && scrollTop <= 2);
+        };
+        const start = (event) => {
+            if (!shouldArm(event)) return;
+            state.startY = getPointY(event);
+            state.lastY = state.startY;
+            state.dragging = false;
+            state.armed = true;
+            state.pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+            dropdown.style.transition = 'transform 0.18s ease';
+        };
+        const move = (event) => {
+            if (!state.armed) return;
+            if (state.pointerId !== null && Number.isFinite(event.pointerId) && event.pointerId !== state.pointerId) return;
+            const currentY = getPointY(event);
+            const deltaY = currentY - state.startY;
+            state.lastY = currentY;
+            if (deltaY <= 0) {
+                if (state.dragging) {
+                    dropdown.style.transform = 'translateY(0px)';
+                }
+                return;
+            }
+            state.dragging = true;
+            dropdown.style.transform = `translateY(${Math.min(deltaY, 240)}px)`;
+            if (event.cancelable) event.preventDefault();
+        };
+        const end = () => {
+            if (!state.armed) return;
+            const deltaY = state.lastY - state.startY;
+            dropdown.style.transition = 'transform 0.18s ease';
+            if (state.dragging && deltaY >= 90) {
+                dropdown.style.transform = 'translateY(100%)';
+                setTimeout(() => {
+                    if (this.inlinePlanDropdown === dropdown) this.closeInlinePlanDropdown();
+                }, 150);
+            } else {
+                dropdown.style.transform = 'translateY(0px)';
+            }
+            state.startY = 0;
+            state.lastY = 0;
+            state.dragging = false;
+            state.armed = false;
+            state.pointerId = null;
+        };
+        dropdown.addEventListener('touchstart', start, { passive: true });
+        dropdown.addEventListener('touchmove', move, { passive: false });
+        dropdown.addEventListener('touchend', end);
+        dropdown.addEventListener('touchcancel', end);
+        dropdown.addEventListener('pointerdown', start, { passive: true });
+        dropdown.addEventListener('pointermove', move);
+        dropdown.addEventListener('pointerup', end);
+        dropdown.addEventListener('pointercancel', end);
+        this.inlinePlanSheetTouchState = state;
+        this.inlinePlanSheetTouchHandlers = { start, move, end, dropdown };
+    }
+    cleanupInlinePlanSheetTouchDismiss() {
+        const handlers = this.inlinePlanSheetTouchHandlers;
+        if (!handlers || !handlers.dropdown) return;
+        const { dropdown, start, move, end } = handlers;
+        dropdown.removeEventListener('touchstart', start);
+        dropdown.removeEventListener('touchmove', move);
+        dropdown.removeEventListener('touchend', end);
+        dropdown.removeEventListener('touchcancel', end);
+        dropdown.removeEventListener('pointerdown', start);
+        dropdown.removeEventListener('pointermove', move);
+        dropdown.removeEventListener('pointerup', end);
+        dropdown.removeEventListener('pointercancel', end);
+        dropdown.style.transform = '';
+        dropdown.style.transition = '';
+        this.inlinePlanSheetTouchHandlers = null;
+        this.inlinePlanSheetTouchState = null;
+    }
     scheduleInlinePlanInputVisibilitySync(inputEl) {
         if (!inputEl || !this.inlinePlanDropdown) return;
         if (this.inlinePlanFocusSyncTimer) {
@@ -11500,6 +11598,9 @@ class TimeTracker {
         }
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
+        if (isMobileInputContext) {
+            this.setupInlinePlanSheetTouchDismiss(dropdown);
+        }
         this.inlinePlanWheelHandler = (event) => this.handleInlinePlanWheel(event);
         dropdown.addEventListener('wheel', this.inlinePlanWheelHandler, { passive: false });
 
@@ -11992,6 +12093,7 @@ class TimeTracker {
             this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
             this.inlinePlanWheelHandler = null;
         }
+        this.cleanupInlinePlanSheetTouchDismiss();
         if (this.inlinePlanDropdown && this.inlinePlanDropdown.parentNode) {
             this.inlinePlanDropdown.parentNode.removeChild(this.inlinePlanDropdown);
         }
