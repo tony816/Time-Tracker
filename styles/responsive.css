@@ -251,14 +251,6 @@
         bottom: 2px;
     }
 
-    .modal-content .activity-log-btn {
-        min-width: 22px;
-        height: 5px;
-        padding: 0 4px;
-        font-size: 6px;
-        border-radius: 6px 6px 3px 3px;
-    }
-
     .analysis-row {
         grid-template-columns: 64px 1fr;
     }
@@ -308,6 +300,9 @@
     .form-actions .save-btn,
     .form-actions .cancel-btn {
         width: 100%;
+        padding: 6px 12px;
+        font-size: 8px;
+        border-radius: 4px;
     }
 
     .schedule-preview {
