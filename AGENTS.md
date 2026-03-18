@@ -40,7 +40,9 @@
 - Current baseline uses `node:test` under `__tests__/`.
 - Add tests near related coverage and keep naming `*.test.js`.
 - For behavior changes, run related tests first, then run full suite with `npm test`.
-- 기본 체크는 `npm test` 실행 후 `desktop-commander`로 SPA를 띄우고 `playwright-mcp`를 사용해 UI 시나리오를 재현합니다.
+- The default validation flow MUST include browser-based real-use testing.
+- For browser validation, ALWAYS launch the SPA via `desktop-commander` and execute the UI scenario with `playwright` or `playwright-mcp` unless the user explicitly tells you not to.
+- Do not treat code-only or unit-test-only validation as sufficient when the change can affect rendered UI behavior, interaction flow, or browser-visible persistence behavior.
 - Manual checks for UI-impact changes:
   - slot rendering
   - selection/merge/split behavior

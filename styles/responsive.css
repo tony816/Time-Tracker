@@ -57,7 +57,7 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
     }
 
     .header-row > div,
@@ -67,12 +67,12 @@
     }
 
     .time-slot-container {
-        padding: 6px 4px;
-        gap: 2px;
+        padding: 5px 2px;
+        gap: 1px;
     }
 
     .time-slot-container .time-label {
-        font-size: 12px;
+        font-size: 11px;
     }
 
     .input-field {
@@ -120,32 +120,35 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container {
-        min-height: 72px;
-        padding: 6px 2px 8px;
-        gap: 3px;
+        min-height: 74px;
+        padding: 4px 1px 5px;
+        gap: 2px;
         background-color: #dfe9f5;
         box-shadow: inset 0 0 0 2px #7fa7cf;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls-container {
         display: flex;
+        gap: 2px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
         width: 100%;
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
         gap: 2px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
-        width: 22px;
-        min-width: 22px;
-        height: 22px;
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
         padding: 0;
-        border-radius: 6px;
-        font-size: 10px;
+        border-radius: 5px;
+        font-size: 8px;
         line-height: 1;
-        flex: 0 0 22px;
+        flex: 0 0 16px;
     }
 
     .timer-btn-mobile-icon {
@@ -163,7 +166,7 @@
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn .timer-btn-mobile-icon {
         display: inline-flex;
-        font-size: 10px;
+        font-size: 8px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn .timer-btn-label {
@@ -174,11 +177,14 @@
     .time-entry.time-ui-visible .time-slot-container .timer-raw-display {
         width: 100%;
         min-width: 0;
-        max-width: 44px;
+        max-width: 34px;
         box-sizing: border-box;
-        padding: 2px;
-        font-size: 9px;
-        letter-spacing: -0.2px;
+        padding: 0 1px;
+        font-size: 6px;
+        letter-spacing: -0.6px;
+        line-height: 1;
+        border-width: 0;
+        border-radius: 3px;
     }
 
     .time-entry.running-timer-slot .time-slot-container {
@@ -484,7 +490,7 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
     }
 
     .header-row > div,
@@ -502,35 +508,40 @@
     }
 
     .time-entry .time-slot-container {
-        min-height: 48px;
+        min-height: 46px;
     }
 
     .time-entry.time-ui-visible .time-slot-container {
-        min-height: 68px;
-        padding: 6px 2px;
+        min-height: 74px;
+        padding: 4px 1px 5px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
         gap: 2px;
+        flex-direction: column;
+        align-items: center;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
-        width: 20px;
-        min-width: 20px;
-        height: 20px;
-        font-size: 9px;
-        flex-basis: 20px;
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
+        font-size: 8px;
+        flex-basis: 16px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-display,
     .time-entry.time-ui-visible .time-slot-container .timer-raw-display {
-        max-width: 42px;
-        font-size: 8px;
-        letter-spacing: -0.3px;
+        max-width: 34px;
+        font-size: 6px;
+        letter-spacing: -0.6px;
+        line-height: 1;
+        border-width: 0;
+        border-radius: 3px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn .timer-btn-mobile-icon {
-        font-size: 9px;
+        font-size: 8px;
     }
 
     .activity-log-btn {
@@ -581,15 +592,44 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr);
     }
 
     .time-slot-container .time-label {
-        font-size: 11px;
+        font-size: 10px;
     }
 
     .timer-display {
         min-width: 48px;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container {
+        min-height: 72px;
+        padding: 4px 1px 5px;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container .timer-controls {
+        gap: 1px;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container .timer-btn {
+        width: 14px;
+        min-width: 14px;
+        height: 14px;
+        font-size: 7px;
+        flex-basis: 14px;
+        border-radius: 4px;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container .timer-display,
+    .time-entry.time-ui-visible .time-slot-container .timer-raw-display {
+        max-width: 30px;
+        font-size: 5px;
+        letter-spacing: -0.7px;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container .timer-btn .timer-btn-mobile-icon {
+        font-size: 7px;
     }
 }
 
