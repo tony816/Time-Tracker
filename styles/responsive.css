@@ -248,6 +248,13 @@
         white-space: nowrap;
     }
 
+    .timesheet,
+    .time-entries,
+    .time-entry,
+    .split-cell-wrapper.split-type-actual.split-has-data {
+        overflow: visible;
+    }
+
     .activity-log-btn {
         min-width: 42px;
         height: 18px;
@@ -269,19 +276,26 @@
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
         top: 6px;
-        bottom: -12px;
+        bottom: -40px;
         height: auto;
         justify-content: flex-start;
         overflow: visible;
+        z-index: 14;
+    }
+
+    .split-visualization-actual .split-title-band {
+        display: none;
     }
 
     .split-visualization-actual .split-grid {
         width: auto;
         flex: 0 0 auto;
         height: auto;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         grid-auto-rows: auto;
         align-content: start;
+        row-gap: 4px;
+        column-gap: 4px;
         margin-left: 6px !important;
         margin-right: 6px !important;
     }
