@@ -1,9 +1,10 @@
 /* 타이머 UI 스타일 */
 .timer-controls-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 6px;
   padding: 4px;
   border-radius: 4px;
   transition: all 0.3s ease;
