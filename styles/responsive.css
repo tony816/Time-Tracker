@@ -276,7 +276,7 @@
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
         top: 6px;
-        bottom: 6px;
+        bottom: 10px;
         height: auto;
         justify-content: flex-start;
         overflow: visible;
@@ -298,6 +298,13 @@
         column-gap: 0;
         margin-left: 6px !important;
         margin-right: 6px !important;
+        margin-bottom: 3px;
+    }
+
+    .split-visualization-planned .split-title-segment,
+    .split-visualization-planned .split-grid-segment,
+    .split-visualization-actual .split-grid-segment {
+        border-radius: 8px;
     }
 
     .split-visualization-actual .split-grid-segment {
@@ -306,7 +313,6 @@
         min-height: 0;
         padding: 0;
         border-bottom: none;
-        border-radius: 0;
         background-clip: border-box;
     }
 
