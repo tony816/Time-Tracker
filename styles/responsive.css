@@ -305,6 +305,9 @@
         height: auto;
         min-height: 0;
         padding: 0;
+        border-bottom: none;
+        border-radius: 0;
+        background-clip: border-box;
     }
 
     .analysis-row {
