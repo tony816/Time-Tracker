@@ -284,13 +284,6 @@
         box-sizing: border-box;
     }
 
-    .split-visualization-actual::after {
-        content: "";
-        display: block;
-        height: 4px;
-        flex: 0 0 4px;
-    }
-
     .split-visualization-actual .split-title-band {
         display: none;
     }
@@ -304,7 +297,7 @@
         align-content: start;
         row-gap: 0;
         column-gap: 0;
-        margin: 6px 6px 0 !important;
+        margin: 0 6px !important;
         box-sizing: border-box;
     }
 
@@ -315,7 +308,7 @@
     }
 
     .split-visualization-actual .split-grid-segment {
-        aspect-ratio: 1 / 0.42;
+        aspect-ratio: 1 / 0.44;
         height: auto;
         min-height: 0;
         padding: 0;
@@ -513,6 +506,12 @@
 
     .sub-activity-row.actual-row {
         grid-template-columns: minmax(0, 1fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) 48px;
+    }
+}
+
+@media (max-width: 380px) {
+    .split-visualization-actual .split-grid-segment {
+        aspect-ratio: 1 / 0.48;
     }
 }
 
