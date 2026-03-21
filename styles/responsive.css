@@ -120,7 +120,7 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container {
-        min-height: 74px;
+        min-height: 52px;
         padding: 4px 1px 5px;
         gap: 2px;
         background-color: #dfe9f5;
@@ -550,7 +550,7 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container {
-        min-height: 74px;
+        min-height: 46px;
         padding: 4px 1px 5px;
     }
 
@@ -642,7 +642,7 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container {
-        min-height: 72px;
+        min-height: 46px;
         padding: 4px 1px 5px;
     }
 
