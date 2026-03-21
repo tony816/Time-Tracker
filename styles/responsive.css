@@ -276,7 +276,7 @@
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
         top: 6px;
-        bottom: -40px;
+        bottom: 6px;
         height: auto;
         justify-content: flex-start;
         overflow: visible;
@@ -301,7 +301,7 @@
     }
 
     .split-visualization-actual .split-grid-segment {
-        aspect-ratio: 1 / 1;
+        aspect-ratio: 1 / 0.5;
         height: auto;
         min-height: 0;
         padding: 0;
