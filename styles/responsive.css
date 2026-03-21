@@ -275,7 +275,7 @@
     }
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
-        top: 6px;
+        top: 7px;
         bottom: auto;
         height: 44px;
         justify-content: flex-start;
