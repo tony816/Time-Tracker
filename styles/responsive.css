@@ -276,11 +276,19 @@
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
         top: 6px;
-        bottom: 10px;
+        bottom: auto;
         height: auto;
         justify-content: flex-start;
         overflow: visible;
         z-index: 14;
+        box-sizing: border-box;
+    }
+
+    .split-visualization-actual::after {
+        content: "";
+        display: block;
+        height: 4px;
+        flex: 0 0 4px;
     }
 
     .split-visualization-actual .split-title-band {
@@ -296,9 +304,8 @@
         align-content: start;
         row-gap: 0;
         column-gap: 0;
-        margin-left: 6px !important;
-        margin-right: 6px !important;
-        margin-bottom: 3px;
+        margin: 6px 6px 0 !important;
+        box-sizing: border-box;
     }
 
     .split-visualization-planned .split-title-segment,
@@ -308,7 +315,7 @@
     }
 
     .split-visualization-actual .split-grid-segment {
-        aspect-ratio: 1 / 0.5;
+        aspect-ratio: 1 / 0.42;
         height: auto;
         min-height: 0;
         padding: 0;
