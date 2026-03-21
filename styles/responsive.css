@@ -121,34 +121,34 @@
 
     .time-entry.time-ui-visible .time-slot-container {
         min-height: 52px;
-        padding: 4px 1px 5px;
-        gap: 2px;
+        padding: 1px;
+        gap: 1px;
         background-color: #dfe9f5;
         box-shadow: inset 0 0 0 2px #7fa7cf;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls-container {
         display: flex;
-        gap: 2px;
+        gap: 1px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
         width: 100%;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
         justify-content: center;
-        gap: 2px;
+        gap: 1px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
-        width: 16px;
-        min-width: 16px;
-        height: 16px;
+        width: 14px;
+        min-width: 14px;
+        height: 14px;
         padding: 0;
-        border-radius: 5px;
-        font-size: 8px;
+        border-radius: 4px;
+        font-size: 7px;
         line-height: 1;
-        flex: 0 0 16px;
+        flex: 0 0 14px;
     }
 
     .timer-btn-mobile-icon {
@@ -180,11 +180,12 @@
         max-width: 34px;
         box-sizing: border-box;
         padding: 0 1px;
-        font-size: 6px;
-        letter-spacing: -0.6px;
+        font-size: 5px;
+        letter-spacing: -0.7px;
         line-height: 1;
         border-width: 0;
         border-radius: 3px;
+        margin-top: 0;
     }
 
     .time-entry.running-timer-slot .time-slot-container {
@@ -194,6 +195,11 @@
 
     .time-entry.running-timer-slot .time-slot-container .time-label {
         color: #c0392b;
+    }
+
+    .time-entry.time-ui-visible .time-slot-container .time-label {
+        font-size: 10px;
+        line-height: 1;
     }
 
     .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container {
@@ -556,16 +562,17 @@
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
         gap: 2px;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
+        justify-content: center;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
-        width: 16px;
-        min-width: 16px;
-        height: 16px;
-        font-size: 8px;
-        flex-basis: 16px;
+        width: 14px;
+        min-width: 14px;
+        height: 14px;
+        font-size: 7px;
+        flex-basis: 14px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-display,
@@ -643,7 +650,7 @@
 
     .time-entry.time-ui-visible .time-slot-container {
         min-height: 46px;
-        padding: 4px 1px 5px;
+        padding: 1px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
@@ -651,11 +658,11 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
-        width: 14px;
-        min-width: 14px;
-        height: 14px;
-        font-size: 7px;
-        flex-basis: 14px;
+        width: 12px;
+        min-width: 12px;
+        height: 12px;
+        font-size: 6px;
+        flex-basis: 12px;
         border-radius: 4px;
     }
 
