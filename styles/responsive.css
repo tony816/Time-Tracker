@@ -269,9 +269,10 @@
 
     .split-cell-wrapper .split-visualization.split-visualization-actual {
         top: 6px;
-        bottom: auto;
+        bottom: -12px;
         height: auto;
         justify-content: flex-start;
+        overflow: visible;
     }
 
     .split-visualization-actual .split-grid {
