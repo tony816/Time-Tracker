@@ -1,0 +1,6 @@
+
+> time-tracker-notion-bridge@0.1.0 start
+> node server.js
+
+[server] Listening on http://localhost:3000
+[server] Notion configured: key=true db=(set)

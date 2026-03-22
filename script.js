@@ -4616,6 +4616,11 @@ class TimeTracker {
                 const failedIconHtml = failedClass
                     ? '<span class="split-grid-failed-mark" aria-hidden="true">X</span>'
                     : '';
+                const runningClass = (isActual && segment.runningOutline) ? ' is-running-outline' : '';
+                const runningTopClass = (isActual && segment.runningEdgeTop) ? ' running-edge-top' : '';
+                const runningRightClass = (isActual && segment.runningEdgeRight) ? ' running-edge-right' : '';
+                const runningBottomClass = (isActual && segment.runningEdgeBottom) ? ' running-edge-bottom' : '';
+                const runningLeftClass = (isActual && segment.runningEdgeLeft) ? ' running-edge-left' : '';
                 const unitAttr = (isActual && toggleable && Number.isFinite(segment.unitIndex))
                     ? ` data-unit-index="${segment.unitIndex}"`
                     : '';
@@ -14589,21 +14594,6 @@ window.__ttDebug = {
             ...(tracker.timeSlots[index].activityLog || {}),
             title: '샘플', details: '', subActivities: [], titleBandOn: true,
             actualGridUnits: [true, true, false, true, false, true],
-            actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
-        };
-        tracker.timeSlots[index].timer = {
-            running: false,
-            elapsed: 180,
-            rawElapsed: 180,
-            startTime: null,
-            method: 'manual',
-            status: 'completed'
-        };
-        tracker.renderTimeEntries();
-        return tracker.timeSlots[index].timer;
-    }
-};
-, false, true, false, true],
             actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
         };
         tracker.timeSlots[index].timer = {

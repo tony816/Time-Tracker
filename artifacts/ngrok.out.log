@@ -1,0 +1,25 @@
+t=2026-03-22T15:46:25+0900 lvl=info msg="no configuration paths supplied"
+t=2026-03-22T15:46:25+0900 lvl=info msg="using configuration at default config path" path=C:\\Users\\tony960816\\AppData\\Local/ngrok/ngrok.yml
+t=2026-03-22T15:46:25+0900 lvl=info msg="open config file" path=C:\\Users\\tony960816\\AppData\\Local\\ngrok\\ngrok.yml err=nil
+t=2026-03-22T15:46:25+0900 lvl=info msg="FIPS 140 mode" enabled=false
+t=2026-03-22T15:46:25+0900 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
+t=2026-03-22T15:46:26+0900 lvl=info msg="client session established" obj=tunnels.session
+t=2026-03-22T15:46:26+0900 lvl=info msg="tunnel session started" obj=tunnels.session
+t=2026-03-22T15:46:26+0900 lvl=info msg="started tunnel" obj=tunnels name=command_line addr=http://localhost:3000 url=https://nonaccruing-unimmanent-blossom.ngrok-free.dev
+t=2026-03-22T15:46:26+0900 lvl=info msg="update available" obj=updater
+t=2026-03-22T16:00:37+0900 lvl=info msg="join connections" obj=join id=e8643980d761 l=[::1]:3000 r=91.108.5.18:47626
+t=2026-03-22T16:01:11+0900 lvl=info msg="join connections" obj=join id=ec84e71276ce l=[::1]:3000 r=91.108.5.18:47626
+t=2026-03-22T16:02:22+0900 lvl=info msg="join connections" obj=join id=9a11b13a5f72 l=[::1]:3000 r=91.108.5.80:25728
+t=2026-03-22T16:02:24+0900 lvl=info msg="join connections" obj=join id=04dc46cac6c1 l=[::1]:3000 r=91.108.5.18:57780
+t=2026-03-22T16:02:42+0900 lvl=info msg="join connections" obj=join id=1bf5a76f443a l=[::1]:3000 r=91.108.5.18:57780
+t=2026-03-22T16:02:57+0900 lvl=info msg="join connections" obj=join id=60f4a63ed207 l=[::1]:3000 r=91.108.5.18:57780
+t=2026-03-22T16:03:33+0900 lvl=info msg="join connections" obj=join id=7e3caba2155e l=[::1]:3000 r=91.108.5.18:57780
+t=2026-03-22T16:04:38+0900 lvl=info msg="join connections" obj=join id=2fce25d1cef8 l=[::1]:3000 r=91.108.5.18:25048
+t=2026-03-22T16:07:39+0900 lvl=info msg="join connections" obj=join id=b9aca42550db l=[::1]:3000 r=91.108.5.18:37134
+t=2026-03-22T16:10:15+0900 lvl=info msg="join connections" obj=join id=8b44270b74b2 l=[::1]:3000 r=91.108.5.18:36372
+t=2026-03-22T16:12:57+0900 lvl=info msg="join connections" obj=join id=b58ed3d0a642 l=[::1]:3000 r=91.108.5.18:31428
+t=2026-03-22T16:17:14+0900 lvl=info msg="join connections" obj=join id=cf0ff584289f l=[::1]:3000 r=91.108.5.18:17660
+t=2026-03-22T16:22:21+0900 lvl=info msg="received stop request" obj=app stopReq="{err:<nil> restart:false}"
+t=2026-03-22T16:22:21+0900 lvl=info msg="session closing" obj=tunnels.session err=nil
+t=2026-03-22T16:22:21+0900 lvl=info msg="accept failed" obj=tunnels.session obj=csess id=ec84bb71b834 err="reconnecting session closed"
+t=2026-03-22T16:22:21+0900 lvl=info msg="no more state changes" obj=tunnels.session

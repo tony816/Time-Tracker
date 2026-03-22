@@ -13,6 +13,11 @@ try {
 const path = require('path');
 const express = require('express');
 const { Client } = require('@notionhq/client');
+const {
+    createTelegramCodexBridge,
+    getBridgeMode: getTelegramBridgeMode,
+    buildTaskFromUpdate,
+} = require('./infra/telegram-codex-bridge');
 
 const app = express();
 app.disable('x-powered-by');
@@ -137,6 +142,68 @@ app.get('/api/notion/ping', (_req, res) => {
     res.json({ ok: true });
 });
 
+app.get('/api/telegram/ping', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        ok: true,
+        configured: telegramBridge.isConfigured(),
+        mode: getTelegramBridgeMode(process.env),
+    });
+});
+
+app.post('/api/telegram/webhook', async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store');
+        if (!telegramBridge.isConfigured()) {
+            return res.status(503).json({ error: 'Telegram bridge is not configured on the server' });
+        }
+
+        const expectedSecret = String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+        if (expectedSecret) {
+            const receivedSecret = String(req.get('X-Telegram-Bot-Api-Secret-Token') || '').trim();
+            if (receivedSecret !== expectedSecret) {
+                return res.status(401).json({ error: 'Invalid Telegram webhook secret' });
+            }
+        }
+
+        const update = req.body || {};
+        const task = buildTaskFromUpdate(update);
+        if (!task) {
+            return res.json({ ok: true, handled: false, reason: 'no_task' });
+        }
+
+        const result = await telegramBridge.processUpdate(update);
+        return res.json({
+            ok: true,
+            handled: Boolean(result?.handled),
+            kind: result?.kind || null,
+            jobId: result?.jobId || null,
+        });
+    } catch (error) {
+        console.error('[telegram] webhook failed:', error);
+        return res.status(500).json({
+            error: 'Failed to process Telegram webhook',
+        });
+    }
+});
+
+app.get('/api/telegram/jobs/:jobId', (req, res) => {
+    const job = telegramBridge.getJob(req.params.jobId);
+    if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+    }
+    return res.json({
+        id: job.id,
+        chatId: job.chatId,
+        status: job.status,
+        command: job.task?.command || 'ask',
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        error: job.error,
+        result: job.result ? { text: job.result.text } : null,
+    });
+});
+
 // Main API to surface activities to the SPA
 app.get('/api/notion/activities', async (_req, res) => {
     try {
@@ -170,6 +237,10 @@ app.get('/api/notion/activities', async (_req, res) => {
 
 const staticDir = path.resolve(__dirname);
 const indexPath = path.join(staticDir, 'index.html');
+const telegramBridge = createTelegramCodexBridge({
+    env: process.env,
+    repoPath: staticDir,
+});
 
 function sendStaticFileByRequestPath(req, res, next) {
     const mapped = STATIC_FILE_MAP[req.path];
