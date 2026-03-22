@@ -313,7 +313,7 @@ test('getMobileTimeUiState prioritizes running/paused/completed over plain label
     showControls: true,
   });
   assert.equal(getMobileTimeUiState.call(ctx, 1).mode, 'paused');
-  assert.equal(getMobileTimeUiState.call(ctx, 2).mode, 'completed');
+  assert.equal(getMobileTimeUiState.call(ctx, 2).mode, 'label');
   assert.equal(getMobileTimeUiState.call(ctx, 3).mode, 'running');
 });
 

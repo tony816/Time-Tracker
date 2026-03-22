@@ -40,6 +40,7 @@
         const currentIndex = Number(options.currentIndex);
         const isCurrentDateToday = Boolean(options.isCurrentDateToday);
         const slotPlanned = String(options.slotPlanned || '');
+        const slotPlanActivities = Array.isArray(options.slotPlanActivities) ? options.slotPlanActivities : [];
         const findMergeKey = (typeof options.findMergeKey === 'function') ? options.findMergeKey : (() => null);
         const getMergedField = (typeof options.getMergedField === 'function') ? options.getMergedField : (() => '');
 
@@ -66,7 +67,7 @@
             plannedText = slotPlanned.trim();
         }
 
-        const hasPlannedActivity = plannedText !== '';
+        const hasPlannedActivity = plannedText !== '' || slotPlanActivities.some(item => String((item && item.label) || '').trim() !== '');
         const isCurrentTimeInRange = Number.isFinite(currentIndex)
             ? (currentIndex >= timeStart && currentIndex <= timeEnd)
             : false;
@@ -125,9 +126,9 @@
             buttonAction = 'pause';
             buttonDisabled = false;
         } else if (hasElapsed) {
-            buttonIcon = '재개';
+            buttonIcon = '재생';
             buttonAction = 'resume';
-            buttonDisabled = !canStartWithoutDate || disabledByDate;
+            buttonDisabled = disabledByDate || !state.hasPlannedActivity;
         }
 
         if (buttonDisabled) {

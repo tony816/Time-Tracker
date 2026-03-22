@@ -82,8 +82,9 @@ test('resolveTimerControlState returns start/pause/resume actions and tooltip', 
         { isRunning: false, hasElapsed: true }
     );
     assert.equal(resumeBlocked.buttonAction, 'resume');
-    assert.equal(resumeBlocked.buttonDisabled, true);
-    assert.equal(resumeBlocked.buttonTitle, '현재 시간 범위에서만 시작할 수 있습니다.');
+    assert.equal(resumeBlocked.buttonIcon, '재생');
+    assert.equal(resumeBlocked.buttonDisabled, false);
+    assert.equal(resumeBlocked.buttonTitle, '');
 
     const noPlan = timerController.resolveTimerControlState(
         { ...eligible, hasPlannedActivity: false, canStartWithoutDate: false },

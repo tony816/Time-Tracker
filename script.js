@@ -1107,7 +1107,7 @@ class TimeTracker {
             mode = 'running';
         } else if (status === 'paused') {
             mode = 'paused';
-        } else if (status === 'completed' && rawElapsed > 0) {
+        } else if (status === 'completed' && rawElapsed > 0 && isCurrent) {
             mode = 'completed';
         } else if (isCurrent) {
             mode = 'current';
@@ -6950,10 +6950,10 @@ class TimeTracker {
 
     createTimerControls(index, slot) {
         const isRunning = slot.timer.running;
-        const hasElapsed = slot.timer.elapsed > 0;
+        const rawElapsed = this.getTimerRawElapsed(slot);
+        const hasElapsed = rawElapsed > 0;
         const eligibility = this.getTimerEligibility(index, slot);
         const timerStatus = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
-        const rawElapsed = this.getTimerRawElapsed(slot);
 
         let buttonIcon = '시작';
         let buttonAction = 'start';
@@ -6983,7 +6983,7 @@ class TimeTracker {
                 buttonAction = 'pause';
                 buttonDisabled = false;
             } else if (hasElapsed) {
-                buttonIcon = '재개';
+                buttonIcon = '재생';
                 buttonAction = 'resume';
                 buttonDisabled = !eligibility.canStartWithoutDate || eligibility.disabledByDate;
             }
@@ -9045,6 +9045,7 @@ class TimeTracker {
                 currentIndex,
                 isCurrentDateToday,
                 slotPlanned: slot.planned,
+                slotPlanActivities: slot.planActivities,
                 findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
                 getMergedField: (mergeKey) => this.mergedFields.get(mergeKey),
             });
@@ -12417,6 +12418,12 @@ class TimeTracker {
         this.stopAllTimers();
 
         const slot = this.timeSlots[index];
+        const resumeBase = Math.max(
+            Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0,
+            Number.isFinite(slot.timer.rawElapsed) ? Math.floor(slot.timer.rawElapsed) : 0
+        );
+        slot.timer.elapsed = Math.max(0, resumeBase);
+        slot.timer.rawElapsed = Math.max(0, resumeBase);
         slot.timer.running = true;
         slot.timer.startTime = Date.now();
         slot.timer.status = 'running';
@@ -14503,4 +14510,57 @@ class TimeTracker {
 
 window.TimeTracker = TimeTracker;
 
-window.TimeTracker = TimeTracker;
+window.__ttDebug = {
+    ensureTracker() {
+        if (!window.tracker && typeof window.TimeTracker === 'function') {
+            window.tracker = new window.TimeTracker();
+        }
+        return window.tracker || null;
+    },
+    seedRunningTimer(index = 0) {
+        const tracker = this.ensureTracker();
+        if (!tracker) return null;
+        tracker.currentTimeSlotIndex = index;
+        tracker.timeSlots[index].planActivities = [{ label: '공부', seconds: 3600 }];
+        tracker.timeSlots[index].planTitleBandOn = true;
+        tracker.timeSlots[index].activityLog = {
+            ...(tracker.timeSlots[index].activityLog || {}),
+            title: '샘플', details: '', subActivities: [], titleBandOn: true,
+            actualGridUnits: [true, true, false, true, false, true],
+            actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
+        };
+        tracker.timeSlots[index].timer = {
+            running: true,
+            elapsed: 120,
+            rawElapsed: 120,
+            startTime: Date.now() - 30000,
+            method: 'manual',
+            status: 'running'
+        };
+        tracker.renderTimeEntries();
+        return tracker.timeSlots[index].timer;
+    },
+    seedStoppedTimer(index = 0) {
+        const tracker = this.ensureTracker();
+        if (!tracker) return null;
+        tracker.currentTimeSlotIndex = index;
+        tracker.timeSlots[index].planActivities = [{ label: '공부', seconds: 3600 }];
+        tracker.timeSlots[index].planTitleBandOn = true;
+        tracker.timeSlots[index].activityLog = {
+            ...(tracker.timeSlots[index].activityLog || {}),
+            title: '샘플', details: '', subActivities: [], titleBandOn: true,
+            actualGridUnits: [true, true, false, true, false, true],
+            actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
+        };
+        tracker.timeSlots[index].timer = {
+            running: false,
+            elapsed: 180,
+            rawElapsed: 180,
+            startTime: null,
+            method: 'manual',
+            status: 'completed'
+        };
+        tracker.renderTimeEntries();
+        return tracker.timeSlots[index].timer;
+    }
+};

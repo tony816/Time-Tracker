@@ -1,4 +1,6 @@
 (function bootstrapTimeTrackerApp() {
+    let bootstrapRetryTimer = null;
+
     function injectAnimationKeyframes() {
         if (!document || !document.head) return;
         if (document.getElementById('tt-animation-keyframes')) return;
@@ -20,12 +22,25 @@
     }
 
     function initTracker() {
-        if (window.tracker) return;
+        if (window.tracker) return true;
         if (typeof window.TimeTracker !== 'function') {
             console.error('[bootstrap] TimeTracker class is not available.');
-            return;
+            scheduleBootstrapRetry(200);
+            return false;
         }
         window.tracker = new window.TimeTracker();
+        return true;
+    }
+
+    function scheduleBootstrapRetry(delayMs) {
+        if (window.tracker) return;
+        if (bootstrapRetryTimer) {
+            clearTimeout(bootstrapRetryTimer);
+        }
+        bootstrapRetryTimer = window.setTimeout(() => {
+            bootstrapRetryTimer = null;
+            initTracker();
+        }, delayMs);
     }
 
     injectAnimationKeyframes();
@@ -35,4 +50,10 @@
     } else {
         initTracker();
     }
+
+    window.addEventListener('load', () => {
+        if (!window.tracker) {
+            initTracker();
+        }
+    }, { once: true });
 })();

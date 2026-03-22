@@ -232,11 +232,11 @@
 
     .time-entry.paused-timer-slot .timer-display,
     .time-entry.completed-timer-slot .timer-display {
-        display: none !important;
+        display: block !important;
     }
 
     .time-entry.completed-timer-slot .timer-controls {
-        display: none;
+        display: flex;
     }
 
     .timer-raw-display {
