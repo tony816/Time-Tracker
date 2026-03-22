@@ -14553,11 +14553,3 @@ window.__ttDebug = {
         return tracker.timeSlots[index].timer;
     }
 };
-    startTime: null,
-            method: 'manual',
-            status: 'completed'
-        };
-        tracker.renderTimeEntries();
-        return tracker.timeSlots[index].timer;
-    }
-};
