@@ -52,6 +52,13 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*width:\s*100%;/s);
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*max-width:\s*44px;/s);
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*box-sizing:\s*border-box;/s);
+    assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*padding:\s*0;/s);
+    assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*background:\s*transparent;/s);
+    assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*border:\s*none;/s);
+    assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*box-shadow:\s*none;/s);
+    assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*transition:\s*none;/s);
+    assert.doesNotMatch(interactionsSource, /\.timer-controls-container\.timer-running\s*\{[^}]*background:/s);
+    assert.doesNotMatch(interactionsSource, /\.timer-controls-container\.timer-running\s*\{[^}]*border:/s);
     assert.match(interactionsSource, /\.timer-controls\s*\{[^}]*flex-direction:\s*column;/s);
     assert.match(interactionsSource, /\.timer-controls\s*\{[^}]*width:\s*100%;/s);
     assert.match(interactionsSource, /\.timer-btn\s*\{[^}]*width:\s*100%;/s);
@@ -61,6 +68,14 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.timer-display\s*\{[^}]*width:\s*100%;/s);
     assert.match(interactionsSource, /\.timer-display\s*\{[^}]*min-width:\s*0;/s);
     assert.match(interactionsSource, /\.timer-display\s*\{[^}]*font-size:\s*7px;/s);
+    assert.match(responsiveSource, /\.timer-controls-container\s*\{[^}]*flex-direction:\s*column;/s);
+    assert.match(responsiveSource, /\.timer-controls-container\s*\{[^}]*background:\s*transparent;/s);
+    assert.match(responsiveSource, /\.timer-controls-container\s*\{[^}]*border:\s*none;/s);
+    assert.match(responsiveSource, /\.timer-controls\s*\{[^}]*flex-direction:\s*column;/s);
+    assert.match(responsiveSource, /\.timer-btn\s*\{[^}]*width:\s*100%;/s);
+    assert.match(responsiveSource, /\.timer-btn\s*\{[^}]*height:\s*16px;/s);
+    assert.match(responsiveSource, /\.timer-display\s*\{[^}]*min-width:\s*0;/s);
+    assert.match(responsiveSource, /\.timer-display\s*\{[^}]*font-size:\s*7px;/s);
     assert.match(responsiveSource, /Mobile responsive enhancements/);
     assert.match(responsiveSource, /--- UX enhancement patch ---/);
     assert.match(responsiveSource, /\.activity-log-btn\s*\{[^}]*min-width:\s*42px;[^}]*height:\s*18px;[^}]*padding:\s*0 8px;[^}]*font-size:\s*9px;[^}]*left:\s*50%;[^}]*bottom:\s*2px;/s);

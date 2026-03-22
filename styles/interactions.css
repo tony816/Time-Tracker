@@ -5,18 +5,16 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 2px 3px;
+  padding: 0;
   width: 100%;
   max-width: 44px;
   box-sizing: border-box;
   margin: 0 auto;
-  border-radius: 5px;
-  transition: all 0.3s ease;
-}
-
-.timer-controls-container.timer-running {
-  background: rgba(231, 76, 60, 0.1);
-  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  transition: none;
 }
 
 .timer-controls {
