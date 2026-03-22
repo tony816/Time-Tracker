@@ -7006,9 +7006,9 @@ class TimeTracker {
 
         const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
         const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
-        const timerDisplay = this.formatTime(slot.timer.elapsed);
-        const rawDisplayStyle = this.isMobileTimeExpansionEnabled() && rawElapsed > 0 ? 'display: block;' : 'display: none;';
-        const rawDisplay = this.formatTime(rawElapsed);
+        const timerDisplay = this.formatTime(Math.max(Number(slot.timer.elapsed) || 0, rawElapsed));
+        const rawDisplayStyle = 'display: none;';
+        const rawDisplay = '';
         const isCompactMobileTimeUi = this.isMobileTimeExpansionEnabled();
         const stopLabel = '정지';
         const mobileStartIcon = buttonAction === 'pause' ? '⏸' : '▶';
