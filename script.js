@@ -4621,7 +4621,7 @@ class TimeTracker {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
             }).join('')}</div>`
             : '';
 
@@ -4717,6 +4717,47 @@ class TimeTracker {
         }
 
         return units;
+    }
+
+    getRunningActualGridOutline(baseIndex, totalUnits) {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(totalUnits) || totalUnits <= 0) return null;
+        const slot = this.timeSlots[baseIndex];
+        if (!slot || !slot.timer || !slot.timer.running) return null;
+
+        const currentIndex = typeof this.getCurrentTimeIndex === 'function'
+            ? this.getCurrentTimeIndex()
+            : this.currentTimeSlotIndex;
+        const range = typeof this.getSplitRange === 'function'
+            ? this.getSplitRange('actual', baseIndex)
+            : { start: baseIndex, end: baseIndex };
+        const inCurrentRange = Number.isInteger(currentIndex)
+            && range
+            && currentIndex >= range.start
+            && currentIndex <= range.end;
+        if (!inCurrentRange) return null;
+
+        const rawElapsed = typeof this.getTimerRawElapsed === 'function'
+            ? this.getTimerRawElapsed(slot)
+            : Math.max(Number(slot.timer.rawElapsed) || 0, Number(slot.timer.elapsed) || 0);
+        const activeUnits = Math.max(1, Math.min(totalUnits, Math.ceil(Math.max(0, rawElapsed) / 600) || 1));
+        const columns = (typeof window !== 'undefined' && window.innerWidth <= 480) ? 3 : 6;
+        const outline = new Map();
+
+        for (let unitIndex = 0; unitIndex < activeUnits; unitIndex++) {
+            const col = unitIndex % columns;
+            const topNeighbor = unitIndex - columns;
+            const bottomNeighbor = unitIndex + columns;
+            const leftNeighbor = col > 0 ? unitIndex - 1 : -1;
+            const rightNeighbor = col < columns - 1 ? unitIndex + 1 : -1;
+            outline.set(unitIndex, {
+                runningOutline: true,
+                runningEdgeTop: topNeighbor < 0 || topNeighbor >= activeUnits,
+                runningEdgeRight: rightNeighbor < 0 || rightNeighbor >= activeUnits,
+                runningEdgeBottom: bottomNeighbor >= activeUnits,
+                runningEdgeLeft: leftNeighbor < 0 || leftNeighbor >= activeUnits,
+            });
+        }
+        return outline;
     }
 
     isLockedActivityRow(item) {
@@ -6498,6 +6539,9 @@ class TimeTracker {
                       slot && slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
                   );
                   const shownExtraLabels = new Set();
+                  const runningOutline = typeof this.getRunningActualGridOutline === 'function'
+                      ? this.getRunningActualGridOutline(baseIndex, planUnits.length)
+                      : null;
 
                   const gridSegments = displayOrder.map((unitIndex) => {
                       const label = planUnits[unitIndex];
@@ -6521,7 +6565,8 @@ class TimeTracker {
                               reservedIndices,
                               extraLabel,
                               alwaysVisibleLabel,
-                              suppressHoverLabel
+                              suppressHoverLabel,
+                              ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {})
                           };
                       }
                       return {
@@ -6532,7 +6577,8 @@ class TimeTracker {
                           locked: Boolean(lockedUnits[unitIndex]),
                           failed: Boolean(failedUnits[unitIndex]),
                           isExtra: false,
-                          reservedIndices
+                          reservedIndices,
+                          ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {})
                       };
                   });
 
@@ -6577,6 +6623,9 @@ class TimeTracker {
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
             }
+            const runningOutline = typeof this.getRunningActualGridOutline === 'function'
+                ? this.getRunningActualGridOutline(baseIndex, planUnits.length)
+                : null;
             const gridSegments = displayOrder.map((unitIndex) => ({
                 label: planUnits[unitIndex],
                 span: 1,
@@ -6584,6 +6633,7 @@ class TimeTracker {
                 active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
                 locked: Boolean(lockedUnits[unitIndex]),
                 failed: Boolean(failedUnits[unitIndex]),
+                ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {}),
             }));
             const hasLabels = planUnits.some(label => label);
             if (!hasLabels && !showTitleBand) {
@@ -14539,6 +14589,21 @@ window.__ttDebug = {
             ...(tracker.timeSlots[index].activityLog || {}),
             title: '샘플', details: '', subActivities: [], titleBandOn: true,
             actualGridUnits: [true, true, false, true, false, true],
+            actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
+        };
+        tracker.timeSlots[index].timer = {
+            running: false,
+            elapsed: 180,
+            rawElapsed: 180,
+            startTime: null,
+            method: 'manual',
+            status: 'completed'
+        };
+        tracker.renderTimeEntries();
+        return tracker.timeSlots[index].timer;
+    }
+};
+, false, true, false, true],
             actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
         };
         tracker.timeSlots[index].timer = {

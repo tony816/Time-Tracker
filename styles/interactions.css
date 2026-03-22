@@ -2061,6 +2061,39 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   overflow: hidden;
 }
 
+.split-visualization-actual .split-grid-segment.is-running-outline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0;
+  animation: runningGridPulse 1.35s ease-in-out infinite;
+  box-sizing: border-box;
+  z-index: 4;
+}
+
+.split-visualization-actual .split-grid-segment.is-running-outline.running-edge-top::after {
+  border-top-width: 2px;
+  border-top-color: #2ecc71;
+}
+
+.split-visualization-actual .split-grid-segment.is-running-outline.running-edge-right::after {
+  border-right-width: 2px;
+  border-right-color: #2ecc71;
+}
+
+.split-visualization-actual .split-grid-segment.is-running-outline.running-edge-bottom::after {
+  border-bottom-width: 2px;
+  border-bottom-color: #2ecc71;
+}
+
+.split-visualization-actual .split-grid-segment.is-running-outline.running-edge-left::after {
+  border-left-width: 2px;
+  border-left-color: #2ecc71;
+}
+
 .split-visualization-actual .split-grid-segment.is-failed {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.72);
 }
@@ -2078,6 +2111,17 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   letter-spacing: 0.2px;
   pointer-events: none;
   text-shadow: 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+@keyframes runningGridPulse {
+  0%, 100% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 rgba(46, 204, 113, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.28);
+  }
 }
 
 .split-visualization-actual .split-grid-label {
