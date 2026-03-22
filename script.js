@@ -6979,13 +6979,13 @@ class TimeTracker {
             buttonTitle = state.buttonTitle;
         } else {
             if (isRunning) {
-                buttonIcon = '일시정지';
-                buttonAction = 'pause';
+                buttonIcon = '정지';
+                buttonAction = 'stop';
                 buttonDisabled = false;
             } else if (hasElapsed) {
                 buttonIcon = '재생';
                 buttonAction = 'resume';
-                buttonDisabled = !eligibility.canStartWithoutDate || eligibility.disabledByDate;
+                buttonDisabled = eligibility.disabledByDate || !eligibility.hasPlannedActivity;
             }
 
             if (buttonDisabled) {
@@ -7004,17 +7004,13 @@ class TimeTracker {
         if (buttonTitle) startButtonAttributes.push(`title="${buttonTitle}"`);
         const startButtonAttrString = startButtonAttributes.length ? ' ' + startButtonAttributes.join(' ') : '';
 
-        const stopButtonStyle = isRunning || hasElapsed ? 'display: inline-block;' : 'display: none;';
         const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
         const timerDisplay = this.formatTime(Math.max(Number(slot.timer.elapsed) || 0, rawElapsed));
         const rawDisplayStyle = 'display: none;';
         const rawDisplay = '';
         const isCompactMobileTimeUi = this.isMobileTimeExpansionEnabled();
-        const stopLabel = '정지';
-        const mobileStartIcon = buttonAction === 'pause' ? '⏸' : '▶';
-        const mobileStopIcon = '■';
+        const mobileStartIcon = buttonAction === 'stop' ? '■' : '▶';
         const startVisualLabel = isCompactMobileTimeUi ? mobileStartIcon : buttonIcon;
-        const stopVisualLabel = isCompactMobileTimeUi ? mobileStopIcon : stopLabel;
         const statusClasses = [
             isRunning ? 'timer-running' : '',
             timerStatus === 'paused' ? 'timer-paused' : '',
@@ -7029,13 +7025,6 @@ class TimeTracker {
                             data-action="${buttonAction}" aria-label="타이머 ${buttonIcon}"${startButtonAttrString}>
                         <span class="timer-btn-mobile-icon" aria-hidden="true">${startVisualLabel}</span>
                         <span class="timer-btn-label">${buttonIcon}</span>
-                    </button>
-                    <button class="timer-btn timer-stop"
-                            data-index="${index}"
-                            data-action="stop" aria-label="타이머 정지"
-                            style="${stopButtonStyle}">
-                        <span class="timer-btn-mobile-icon" aria-hidden="true">${stopVisualLabel}</span>
-                        <span class="timer-btn-label">${stopLabel}</span>
                     </button>
                 </div>
                 <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
@@ -14557,6 +14546,14 @@ window.__ttDebug = {
             elapsed: 180,
             rawElapsed: 180,
             startTime: null,
+            method: 'manual',
+            status: 'completed'
+        };
+        tracker.renderTimeEntries();
+        return tracker.timeSlots[index].timer;
+    }
+};
+    startTime: null,
             method: 'manual',
             status: 'completed'
         };

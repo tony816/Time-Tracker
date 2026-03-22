@@ -64,7 +64,7 @@ test('getStartBlockReason preserves reason priority', () => {
     assert.equal(timerController.getStartBlockReason(base), null);
 });
 
-test('resolveTimerControlState returns start/pause/resume actions and tooltip', () => {
+test('resolveTimerControlState returns start/stop/resume actions and tooltip', () => {
     const eligible = {
         hasPlannedActivity: true,
         isCurrentTimeInRange: true,
@@ -73,8 +73,8 @@ test('resolveTimerControlState returns start/pause/resume actions and tooltip', 
     };
 
     const running = timerController.resolveTimerControlState(eligible, { isRunning: true, hasElapsed: true });
-    assert.equal(running.buttonAction, 'pause');
-    assert.equal(running.buttonIcon, '일시정지');
+    assert.equal(running.buttonAction, 'stop');
+    assert.equal(running.buttonIcon, '정지');
     assert.equal(running.buttonDisabled, false);
 
     const resumeBlocked = timerController.resolveTimerControlState(

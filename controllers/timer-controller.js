@@ -122,8 +122,8 @@
         let buttonTitle = '';
 
         if (isRunning) {
-            buttonIcon = '일시정지';
-            buttonAction = 'pause';
+            buttonIcon = '정지';
+            buttonAction = 'stop';
             buttonDisabled = false;
         } else if (hasElapsed) {
             buttonIcon = '재생';

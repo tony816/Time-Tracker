@@ -349,9 +349,8 @@ test('createTimerControls keeps accessible labels and renders mobile icon spans'
     timer: { running: true, elapsed: 6, rawElapsed: 6, status: 'running' },
   });
 
-  assert.match(html, /class="timer-btn-mobile-icon"[^>]*>⏸<\/span>/);
   assert.match(html, /class="timer-btn-mobile-icon"[^>]*>■<\/span>/);
-  assert.match(html, /class="timer-btn-label">일시정지<\/span>/);
-  assert.match(html, /aria-label="타이머 일시정지"/);
+  assert.match(html, /class="timer-btn-label">정지<\/span>/);
   assert.match(html, /aria-label="타이머 정지"/);
+  assert.doesNotMatch(html, /timer-stop/);
 });
