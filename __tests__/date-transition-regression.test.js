@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const scriptPath = path.join(__dirname, '..', 'script.js');
-const source = fs.readFileSync(scriptPath, 'utf8');
+const controllerPath = path.join(__dirname, '..', 'controllers', 'lifecycle-controller.js');
+const source = fs.readFileSync(controllerPath, 'utf8');
 
 test('transitionToDate commits timers before switching currentDate', () => {
   const fnStart = source.indexOf('transitionToDate(nextDate)');

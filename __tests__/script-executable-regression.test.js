@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const lifecycleController = require('../controllers/lifecycle-controller');
 
 const scriptPath = path.join(__dirname, '..', 'script.js');
 const source = fs.readFileSync(scriptPath, 'utf8');
@@ -126,7 +127,7 @@ const escapeHtml = buildMethod('escapeHtml(text)', '(text)');
 const escapeAttribute = buildMethod('escapeAttribute(text)', '(text)');
 const createTimerField = buildMethod('createTimerField(index, slot)', '(index, slot)');
 const updateRunningTimers = buildMethod('updateRunningTimers()', '()');
-const transitionToDate = buildMethod('transitionToDate(nextDate)', '(nextDate)');
+const { transitionToDate } = lifecycleController;
 const normalizeTimerStatus = buildMethod('normalizeTimerStatus(rawStatus, slot = null)', '(rawStatus, slot = null)');
 const getTimerRawElapsed = buildMethod('getTimerRawElapsed(slot)', '(slot)');
 const getTimeUiHostIndex = buildMethod('getTimeUiHostIndex(index)', '(index)');
