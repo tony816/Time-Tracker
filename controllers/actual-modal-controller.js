@@ -56,6 +56,152 @@
         } catch (e) {}
     }
 
+    function attachActualModalEventHandlers() {
+        const { list, addBtn } = this.getActualModalElements();
+
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                this.addActualActivityRow();
+            });
+        }
+
+        if (!list) return;
+
+        list.addEventListener('click', (event) => {
+            this.handleActualModalListClick(event);
+        });
+
+        list.addEventListener('change', (event) => {
+            this.handleActualModalListChange(event);
+        });
+
+        list.addEventListener('focusin', (event) => {
+            this.handleActualModalListFocusIn(event);
+        });
+    }
+
+    function handleActualModalListClick(event) {
+        const { list } = this.getActualModalElements();
+        if (!list) return;
+
+        const timeBtn = event.target.closest('.actual-time-btn');
+        if (timeBtn) {
+            if (timeBtn.disabled) return;
+            const direction = timeBtn.dataset.direction === 'up' ? 1 : -1;
+            const idx = parseInt(timeBtn.dataset.index, 10);
+            const kind = timeBtn.dataset.kind;
+            const row = timeBtn.closest('.sub-activity-row');
+            const locked = row && row.classList.contains('actual-row-locked');
+            if (locked) return;
+            if (Number.isFinite(idx)) {
+                this.setActualActiveRow(idx);
+                if (kind === 'grid') {
+                    this.adjustActualGridDuration(idx, direction);
+                } else {
+                    this.adjustActualActivityDuration(idx, direction);
+                }
+            }
+            return;
+        }
+
+        const moveBtn = event.target.closest('.actual-move-btn');
+        if (moveBtn) {
+            const row = moveBtn.closest('.sub-activity-row');
+            if (!row || row.classList.contains('actual-row-locked')) return;
+            const idx = parseInt(row.dataset.index, 10);
+            const direction = moveBtn.dataset.direction === 'up' ? -1 : 1;
+            if (Number.isFinite(idx)) {
+                this.moveActualActivityRow(idx, direction);
+            }
+            return;
+        }
+
+        const removeBtn = event.target.closest('.actual-remove-btn');
+        if (removeBtn) {
+            const row = removeBtn.closest('.sub-activity-row');
+            if (!row || row.classList.contains('actual-row-locked')) return;
+            const idx = parseInt(row.dataset.index, 10);
+            if (Number.isFinite(idx)) {
+                this.removeActualActivityRow(idx);
+            }
+            return;
+        }
+
+        const labelBtn = event.target.closest('.actual-activity-label');
+        if (labelBtn) {
+            const row = labelBtn.closest('.sub-activity-row');
+            if (!row || row.classList.contains('actual-row-locked')) return;
+            const idx = parseInt(row.dataset.index, 10);
+            if (Number.isFinite(idx)) {
+                this.setActualActiveRow(idx);
+                this.openActualActivityMenu(idx, labelBtn);
+            }
+            return;
+        }
+
+        const row = event.target.closest('.sub-activity-row');
+        if (row && list.contains(row)) {
+            if (row.classList.contains('actual-row-locked')) return;
+            const idx = parseInt(row.dataset.index, 10);
+            if (Number.isFinite(idx)) {
+                this.setActualActiveRow(idx);
+            }
+        }
+    }
+
+    function handleActualModalListChange(event) {
+        const target = event.target;
+        if (!target || !target.classList) return;
+
+        if (target.classList.contains('actual-assign-input')) {
+            const row = target.closest('.sub-activity-row');
+            if (!row || row.classList.contains('actual-row-locked')) return;
+            if (target.readOnly) {
+                this.updateActualSpinnerDisplays();
+                return;
+            }
+            const idx = parseInt(target.dataset.index, 10);
+            if (!Number.isFinite(idx)) return;
+            const parsed = this.parseActualDurationInput(target.value);
+            if (parsed == null) {
+                this.updateActualSpinnerDisplays();
+                return;
+            }
+            this.setActualActiveRow(idx);
+            this.applyActualDurationChange(idx, parsed);
+            return;
+        }
+
+        if (target.classList.contains('actual-grid-input')) {
+            const row = target.closest('.sub-activity-row');
+            if (!row || row.classList.contains('actual-row-locked')) return;
+            if (target.readOnly) {
+                this.updateActualSpinnerDisplays();
+                return;
+            }
+            const idx = parseInt(target.dataset.index, 10);
+            if (!Number.isFinite(idx)) return;
+            const parsed = this.parseActualDurationInput(target.value);
+            if (parsed == null) {
+                this.updateActualSpinnerDisplays();
+                return;
+            }
+            this.setActualActiveRow(idx);
+            this.applyActualGridDurationChange(idx, parsed);
+        }
+    }
+
+    function handleActualModalListFocusIn(event) {
+        const { list } = this.getActualModalElements();
+        if (!list) return;
+        const row = event.target.closest('.sub-activity-row');
+        if (!row || !list.contains(row)) return;
+        const idx = parseInt(row.dataset.index, 10);
+        if (Number.isFinite(idx)) {
+            this.setActualActiveRow(idx);
+        }
+    }
+
     function renderActualActivitiesList() {
         const { list } = this.getActualModalElements();
         if (!list) return;
@@ -648,6 +794,10 @@
         updateActualRowActiveStyles,
         setActualActiveRow,
         focusActualRowLabel,
+        attachActualModalEventHandlers,
+        handleActualModalListClick,
+        handleActualModalListChange,
+        handleActualModalListFocusIn,
         renderActualActivitiesList,
         addActualActivityRow,
         removeActualActivityRow,
