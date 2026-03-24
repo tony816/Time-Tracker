@@ -19,7 +19,7 @@ test('main.js is responsible for app bootstrap and animation keyframes injection
     assert.match(mainSource, /window\.tracker\s*=\s*new\s+window\.TimeTracker\(\)/);
 });
 
-test('index.html loads main.js after script.js', () => {
+test('index.html loads dependency modules before script.js and main.js', () => {
     const scriptTagIndex = (srcPath) => htmlSource.search(
         new RegExp(`<script[^>]*\\bsrc="${srcPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*></script>`)
     );
@@ -33,6 +33,7 @@ test('index.html loads main.js after script.js', () => {
     const textCoreIdx = scriptTagIndex('core/text-core.js');
     const timeCoreIdx = scriptTagIndex('core/time-core.js');
     const actualActivityRendererIdx = scriptTagIndex('ui/actual-activity-list-renderer.js');
+    const actualModalControllerIdx = scriptTagIndex('controllers/actual-modal-controller.js');
     const scriptIdx = scriptTagIndex('script.js');
     const mainIdx = scriptTagIndex('main.js');
 
@@ -45,6 +46,7 @@ test('index.html loads main.js after script.js', () => {
     assert.ok(actualGridCoreIdx >= 0, 'core/actual-grid-core.js include should exist');
     assert.ok(gridMetricsCoreIdx >= 0, 'core/grid-metrics-core.js include should exist');
     assert.ok(actualActivityRendererIdx >= 0, 'ui/actual-activity-list-renderer.js include should exist');
+    assert.ok(actualModalControllerIdx >= 0, 'controllers/actual-modal-controller.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
     assert.ok(timeCoreIdx < durationCoreIdx, 'duration-core.js should load after time-core.js');
@@ -55,6 +57,8 @@ test('index.html loads main.js after script.js', () => {
     assert.ok(activityCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after activity-core.js');
     assert.ok(actualGridCoreIdx < gridMetricsCoreIdx, 'grid-metrics-core.js should load after actual-grid-core.js');
     assert.ok(gridMetricsCoreIdx < actualActivityRendererIdx, 'ui/actual-activity-list-renderer.js should load after grid-metrics-core.js');
+    assert.ok(actualActivityRendererIdx < actualModalControllerIdx, 'controllers/actual-modal-controller.js should load after ui/actual-activity-list-renderer.js');
+    assert.ok(actualModalControllerIdx < scriptIdx, 'controllers/actual-modal-controller.js should load before script.js');
     assert.ok(actualActivityRendererIdx < scriptIdx, 'ui/actual-activity-list-renderer.js should load before script.js');
     assert.ok(scriptIdx < mainIdx, 'main.js should load after script.js');
 });
