@@ -13610,98 +13610,39 @@ class TimeTracker {
         }
 
         list.innerHTML = '';
+        const actualActivityRenderer = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActualActivityListRenderer)
+            ? globalThis.TimeTrackerActualActivityListRenderer
+            : null;
+        if (!actualActivityRenderer
+            || typeof actualActivityRenderer.buildActualActivityRowStates !== 'function'
+            || typeof actualActivityRenderer.createActualActivityRowElement !== 'function'
+            || typeof actualActivityRenderer.createActualActivitiesEmptyState !== 'function') {
+            return;
+        }
+
         const gridSecondsMap = this.getActualGridSecondsMap();
         const planLabelSet = (this.modalActualPlanLabelSet instanceof Set) ? this.modalActualPlanLabelSet : new Set();
-        (this.modalActualActivities || []).forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'sub-activity-row actual-row';
-            const isLockedRow = item && item.source === 'locked';
-            row.dataset.index = String(idx);
-            if (idx === this.modalActualActiveRow) row.classList.add('active');
-            if (isLockedRow) row.classList.add('actual-row-locked');
-
-            const labelButton = document.createElement('button');
-            labelButton.type = 'button';
-            labelButton.className = 'actual-activity-label';
-            labelButton.setAttribute('aria-label', '세부 활동');
-            labelButton.setAttribute('aria-haspopup', 'menu');
-            labelButton.setAttribute('aria-expanded', 'false');
-            const normalizedLabel = this.normalizeActivityText
-                ? this.normalizeActivityText(item.label || '')
-                : String(item.label || '').trim();
-            labelButton.textContent = normalizedLabel || '세부 활동';
-            if (!normalizedLabel) labelButton.classList.add('empty');
-
-            const safeSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const isPlanLabel = Boolean(normalizedLabel)
-                && (planLabelSet.has(normalizedLabel) || item.source === 'grid');
-            const isExtraLabel = Boolean(normalizedLabel) && !isPlanLabel;
-            if (isExtraLabel) row.classList.add('actual-row-extra');
-            const recordedSeconds = Number.isFinite(item.recordedSeconds)
-                ? Math.max(0, Math.floor(item.recordedSeconds))
-                : safeSeconds;
-            const gridSeconds = isPlanLabel
-                ? (gridSecondsMap.get(normalizedLabel) || 0)
-                : recordedSeconds;
-            const gridDisabled = isLockedRow || !this.modalActualHasPlanUnits
-                || !normalizedLabel
-                || (!isPlanLabel && !isExtraLabel);
-            const gridControl = this.createActualTimeControl({
-                kind: 'grid',
-                index: idx,
-                seconds: gridSeconds,
-                label: normalizedLabel,
-                disabled: gridDisabled
+        const rowStates = actualActivityRenderer.buildActualActivityRowStates(this.modalActualActivities || [], {
+            activeIndex: this.modalActualActiveRow,
+            hasPlanUnits: this.modalActualHasPlanUnits,
+            gridSecondsMap,
+            planLabelSet,
+            normalizeActivityText: this.normalizeActivityText
+                ? (value) => this.normalizeActivityText(value)
+                : undefined,
+        });
+        rowStates.forEach((rowState) => {
+            const row = actualActivityRenderer.createActualActivityRowElement({
+                document,
+                rowState,
+                createActualTimeControl: (options) => this.createActualTimeControl(options),
             });
-            if (isExtraLabel) gridControl.classList.add('actual-time-extra');
-
-            const assignControl = this.createActualTimeControl({
-                kind: 'assign',
-                index: idx,
-                seconds: safeSeconds,
-                label: normalizedLabel,
-                disabled: isLockedRow
-            });
-
-            const actions = document.createElement('div');
-            actions.className = 'actual-row-actions';
-
-            const upBtn = document.createElement('button');
-            upBtn.type = 'button';
-            upBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
-            upBtn.dataset.direction = 'up';
-            upBtn.textContent = '위';
-            upBtn.disabled = isLockedRow || idx === 0;
-
-            const downBtn = document.createElement('button');
-            downBtn.type = 'button';
-            downBtn.className = 'sub-activity-action-btn sub-activity-action-compact actual-move-btn';
-            downBtn.dataset.direction = 'down';
-            downBtn.textContent = '아래';
-            downBtn.disabled = isLockedRow || idx >= (this.modalActualActivities.length - 1);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'actual-remove-btn';
-            removeBtn.textContent = '삭제';
-            removeBtn.disabled = isLockedRow || (this.modalActualActivities.length <= 1);
-
-            actions.appendChild(upBtn);
-            actions.appendChild(downBtn);
-            actions.appendChild(removeBtn);
-
-            row.appendChild(labelButton);
-            row.appendChild(gridControl);
-            row.appendChild(assignControl);
-            row.appendChild(actions);
-            list.appendChild(row);
+            if (row) list.appendChild(row);
         });
 
         if ((this.modalActualActivities || []).length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'sub-activities-empty';
-            empty.textContent = '세부 활동을 추가하세요.';
-            list.appendChild(empty);
+            const empty = actualActivityRenderer.createActualActivitiesEmptyState({ document });
+            if (empty) list.appendChild(empty);
         }
 
         this.updateActualActivitiesSummary();
