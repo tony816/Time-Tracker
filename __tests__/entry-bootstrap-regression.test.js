@@ -34,6 +34,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     const timeCoreIdx = scriptTagIndex('core/time-core.js');
     const actualActivityRendererIdx = scriptTagIndex('ui/actual-activity-list-renderer.js');
     const actualModalControllerIdx = scriptTagIndex('controllers/actual-modal-controller.js');
+    const persistenceControllerIdx = scriptTagIndex('controllers/persistence-controller.js');
     const scriptIdx = scriptTagIndex('script.js');
     const mainIdx = scriptTagIndex('main.js');
 
@@ -47,6 +48,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(gridMetricsCoreIdx >= 0, 'core/grid-metrics-core.js include should exist');
     assert.ok(actualActivityRendererIdx >= 0, 'ui/actual-activity-list-renderer.js include should exist');
     assert.ok(actualModalControllerIdx >= 0, 'controllers/actual-modal-controller.js include should exist');
+    assert.ok(persistenceControllerIdx >= 0, 'controllers/persistence-controller.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
     assert.ok(timeCoreIdx < durationCoreIdx, 'duration-core.js should load after time-core.js');
@@ -58,6 +60,8 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(actualGridCoreIdx < gridMetricsCoreIdx, 'grid-metrics-core.js should load after actual-grid-core.js');
     assert.ok(gridMetricsCoreIdx < actualActivityRendererIdx, 'ui/actual-activity-list-renderer.js should load after grid-metrics-core.js');
     assert.ok(actualActivityRendererIdx < actualModalControllerIdx, 'controllers/actual-modal-controller.js should load after ui/actual-activity-list-renderer.js');
+    assert.ok(actualModalControllerIdx < persistenceControllerIdx, 'controllers/persistence-controller.js should load after controllers/actual-modal-controller.js');
+    assert.ok(persistenceControllerIdx < scriptIdx, 'controllers/persistence-controller.js should load before script.js');
     assert.ok(actualModalControllerIdx < scriptIdx, 'controllers/actual-modal-controller.js should load before script.js');
     assert.ok(actualActivityRendererIdx < scriptIdx, 'ui/actual-activity-list-renderer.js should load before script.js');
     assert.ok(scriptIdx < mainIdx, 'main.js should load after script.js');

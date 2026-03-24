@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+require('../controllers/persistence-controller');
+
 const { buildMethod } = require('./helpers/script-method-builder');
 
 const formatSlotTimeLabel = buildMethod('formatSlotTimeLabel(rawHour)', '(rawHour)');
