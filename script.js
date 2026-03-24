@@ -1529,20 +1529,26 @@ class TimeTracker {
         } catch(_) {}
     }
     persistLocalSnapshotNow() {
-        let mergedFieldsObject = {};
-        if (this.mergedFields instanceof Map) {
-            mergedFieldsObject = Object.fromEntries(this.mergedFields);
-        } else if (this.mergedFields && typeof this.mergedFields === 'object') {
-            mergedFieldsObject = { ...this.mergedFields };
-        }
-
+        const stateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStateCore)
+            ? globalThis.TimeTrackerStateCore
+            : null;
         let serializedSnapshot = '';
         try {
-            serializedSnapshot = JSON.stringify({
-                date: this.currentDate,
-                timeSlots: this.timeSlots,
-                mergedFields: mergedFieldsObject
-            });
+            if (stateCore && typeof stateCore.serializeStateSnapshot === 'function') {
+                serializedSnapshot = stateCore.serializeStateSnapshot(this.currentDate, this.timeSlots, this.mergedFields);
+            } else {
+                let mergedFieldsObject = {};
+                if (this.mergedFields instanceof Map) {
+                    mergedFieldsObject = Object.fromEntries(this.mergedFields);
+                } else if (this.mergedFields && typeof this.mergedFields === 'object') {
+                    mergedFieldsObject = { ...this.mergedFields };
+                }
+                serializedSnapshot = JSON.stringify({
+                    date: this.currentDate,
+                    timeSlots: this.timeSlots,
+                    mergedFields: mergedFieldsObject
+                });
+            }
             const storage = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStorage)
                 ? globalThis.TimeTrackerStorage
                 : null;
@@ -1557,6 +1563,12 @@ class TimeTracker {
         return serializedSnapshot;
     }
     createStateSnapshot(timeSlots = this.timeSlots, mergedFields = this.mergedFields) {
+        const stateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStateCore)
+            ? globalThis.TimeTrackerStateCore
+            : null;
+        if (stateCore && typeof stateCore.createStateSnapshot === 'function') {
+            return stateCore.createStateSnapshot(timeSlots, mergedFields);
+        }
         const safeSlots = Array.isArray(timeSlots) ? timeSlots : [];
         let clonedSlots;
         try {
@@ -1595,65 +1607,85 @@ class TimeTracker {
             }
             if (serialized) {
                 const parsed = JSON.parse(serialized);
-                if (Array.isArray(parsed && parsed.timeSlots) && parsed.timeSlots.length > 0) {
-                    const nextSlots = this.createEmptyTimeSlots();
-                    parsed.timeSlots.slice(0, nextSlots.length).forEach((sourceSlot, index) => {
-                        if (!sourceSlot || typeof sourceSlot !== 'object') return;
-                        const targetSlot = nextSlots[index];
-                        targetSlot.planned = String(sourceSlot.planned || '');
-                        targetSlot.actual = String(sourceSlot.actual || '');
-                        targetSlot.planActivities = this.normalizePlanActivitiesArray(sourceSlot.planActivities);
-                        targetSlot.planTitle = this.normalizeActivityText
-                            ? this.normalizeActivityText(sourceSlot.planTitle || '')
-                            : String(sourceSlot.planTitle || '').trim();
-                        targetSlot.planTitleBandOn = Boolean(sourceSlot.planTitleBandOn);
-                        targetSlot.timer = {
-                            running: Boolean(sourceSlot.timer && sourceSlot.timer.running),
-                            elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
-                                ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
-                                : 0,
-                            rawElapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.rawElapsed)
-                                ? Math.max(0, Math.floor(sourceSlot.timer.rawElapsed))
-                                : 0,
-                            startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
-                                ? sourceSlot.timer.startTime
-                                : null,
-                            method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
-                                ? 'pomodoro'
-                                : 'manual',
-                            status: this.normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
-                        };
-                        targetSlot.activityLog = {
-                            title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
-                            details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),
-                            subActivities: this.normalizeActivitiesArray(sourceSlot.activityLog && sourceSlot.activityLog.subActivities),
-                            titleBandOn: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.titleBandOn),
-                            actualGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualGridUnits)
-                                ? sourceSlot.activityLog.actualGridUnits.map(value => Boolean(value))
-                                : [],
-                            actualExtraGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualExtraGridUnits)
-                                ? sourceSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
-                                : [],
-                            actualFailedGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualFailedGridUnits)
-                                ? sourceSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
-                                : [],
-                            actualOverride: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.actualOverride),
-                        };
-                        this.normalizeActivityLog(targetSlot);
+                const stateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStateCore)
+                    ? globalThis.TimeTrackerStateCore
+                    : null;
+                if (stateCore && typeof stateCore.restoreStateSnapshot === 'function') {
+                    const restored = stateCore.restoreStateSnapshot(parsed, {
+                        templateSlots: this.createEmptyTimeSlots(),
+                        normalizePlanActivitiesArray: (items) => this.normalizePlanActivitiesArray(items),
+                        normalizeActivityText: this.normalizeActivityText
+                            ? (value) => this.normalizeActivityText(value)
+                            : undefined,
+                        normalizeTimerStatus: (status, slot) => this.normalizeTimerStatus(status, slot),
+                        normalizeActivitiesArray: (items) => this.normalizeActivitiesArray(items),
+                        normalizeMergeKey: this.normalizeMergeKey
+                            ? (mergeKey) => this.normalizeMergeKey(mergeKey)
+                            : undefined,
                     });
-                    this.timeSlots = nextSlots;
-                }
+                    this.timeSlots = restored.timeSlots;
+                    this.mergedFields = restored.mergedFields;
+                } else {
+                    if (Array.isArray(parsed && parsed.timeSlots) && parsed.timeSlots.length > 0) {
+                        const nextSlots = this.createEmptyTimeSlots();
+                        parsed.timeSlots.slice(0, nextSlots.length).forEach((sourceSlot, index) => {
+                            if (!sourceSlot || typeof sourceSlot !== 'object') return;
+                            const targetSlot = nextSlots[index];
+                            targetSlot.planned = String(sourceSlot.planned || '');
+                            targetSlot.actual = String(sourceSlot.actual || '');
+                            targetSlot.planActivities = this.normalizePlanActivitiesArray(sourceSlot.planActivities);
+                            targetSlot.planTitle = this.normalizeActivityText
+                                ? this.normalizeActivityText(sourceSlot.planTitle || '')
+                                : String(sourceSlot.planTitle || '').trim();
+                            targetSlot.planTitleBandOn = Boolean(sourceSlot.planTitleBandOn);
+                            targetSlot.timer = {
+                                running: Boolean(sourceSlot.timer && sourceSlot.timer.running),
+                                elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
+                                    ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
+                                    : 0,
+                                rawElapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.rawElapsed)
+                                    ? Math.max(0, Math.floor(sourceSlot.timer.rawElapsed))
+                                    : 0,
+                                startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
+                                    ? sourceSlot.timer.startTime
+                                    : null,
+                                method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
+                                    ? 'pomodoro'
+                                    : 'manual',
+                                status: this.normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
+                            };
+                            targetSlot.activityLog = {
+                                title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
+                                details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),
+                                subActivities: this.normalizeActivitiesArray(sourceSlot.activityLog && sourceSlot.activityLog.subActivities),
+                                titleBandOn: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.titleBandOn),
+                                actualGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualGridUnits)
+                                    ? sourceSlot.activityLog.actualGridUnits.map(value => Boolean(value))
+                                    : [],
+                                actualExtraGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualExtraGridUnits)
+                                    ? sourceSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
+                                    : [],
+                                actualFailedGridUnits: Array.isArray(sourceSlot.activityLog && sourceSlot.activityLog.actualFailedGridUnits)
+                                    ? sourceSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
+                                    : [],
+                                actualOverride: Boolean(sourceSlot.activityLog && sourceSlot.activityLog.actualOverride),
+                            };
+                            this.normalizeActivityLog(targetSlot);
+                        });
+                        this.timeSlots = nextSlots;
+                    }
 
-                const parsedMergedFields = (parsed && parsed.mergedFields && typeof parsed.mergedFields === 'object')
-                    ? parsed.mergedFields
-                    : {};
-                const nextMergedFields = new Map();
-                Object.entries(parsedMergedFields).forEach(([mergeKey, mergeValue]) => {
-                    const safeMergeKey = this.normalizeMergeKey ? this.normalizeMergeKey(mergeKey) : mergeKey;
-                    if (!safeMergeKey) return;
-                    nextMergedFields.set(safeMergeKey, String(mergeValue || ''));
-                });
-                this.mergedFields = nextMergedFields;
+                    const parsedMergedFields = (parsed && parsed.mergedFields && typeof parsed.mergedFields === 'object')
+                        ? parsed.mergedFields
+                        : {};
+                    const nextMergedFields = new Map();
+                    Object.entries(parsedMergedFields).forEach(([mergeKey, mergeValue]) => {
+                        const safeMergeKey = this.normalizeMergeKey ? this.normalizeMergeKey(mergeKey) : mergeKey;
+                        if (!safeMergeKey) return;
+                        nextMergedFields.set(safeMergeKey, String(mergeValue || ''));
+                    });
+                    this.mergedFields = nextMergedFields;
+                }
             }
         } catch (_) {}
 
@@ -3495,6 +3527,15 @@ class TimeTracker {
     }
 
     normalizeActivityLog(slot) {
+        const stateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerStateCore)
+            ? globalThis.TimeTrackerStateCore
+            : null;
+        if (slot && typeof slot === 'object' && stateCore && typeof stateCore.normalizeActivityLog === 'function') {
+            slot.activityLog = stateCore.normalizeActivityLog(slot.activityLog, {
+                normalizeActivitiesArray: (items) => this.normalizeActivitiesArray(items),
+            });
+            return slot;
+        }
         try {
             if (!slot || typeof slot !== 'object') return slot;
             if (!slot.activityLog || typeof slot.activityLog !== 'object') {
