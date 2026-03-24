@@ -1,9 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildMethod } = require('./helpers/script-method-builder');
-
-const buildSplitVisualization = buildMethod('buildSplitVisualization(type, index)', '(type, index)');
+const controller = require('../controllers/time-entry-render-controller');
+const { buildSplitVisualization } = controller;
 
 test('buildSplitVisualization renders running outline classes without throwing', () => {
     const ctx = {

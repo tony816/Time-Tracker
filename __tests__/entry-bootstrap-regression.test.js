@@ -37,6 +37,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     const inlinePlanDropdownControllerIdx = scriptTagIndex('controllers/inline-plan-dropdown-controller.js');
     const persistenceControllerIdx = scriptTagIndex('controllers/persistence-controller.js');
     const supabaseSyncControllerIdx = scriptTagIndex('controllers/supabase-sync-controller.js');
+    const timeEntryRenderControllerIdx = scriptTagIndex('controllers/time-entry-render-controller.js');
     const scriptIdx = scriptTagIndex('script.js');
     const mainIdx = scriptTagIndex('main.js');
 
@@ -53,6 +54,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(inlinePlanDropdownControllerIdx >= 0, 'controllers/inline-plan-dropdown-controller.js include should exist');
     assert.ok(persistenceControllerIdx >= 0, 'controllers/persistence-controller.js include should exist');
     assert.ok(supabaseSyncControllerIdx >= 0, 'controllers/supabase-sync-controller.js include should exist');
+    assert.ok(timeEntryRenderControllerIdx >= 0, 'controllers/time-entry-render-controller.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
     assert.ok(timeCoreIdx < durationCoreIdx, 'duration-core.js should load after time-core.js');
@@ -67,6 +69,8 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(actualModalControllerIdx < inlinePlanDropdownControllerIdx, 'controllers/inline-plan-dropdown-controller.js should load after controllers/actual-modal-controller.js');
     assert.ok(inlinePlanDropdownControllerIdx < persistenceControllerIdx, 'controllers/persistence-controller.js should load after controllers/inline-plan-dropdown-controller.js');
     assert.ok(persistenceControllerIdx < supabaseSyncControllerIdx, 'controllers/supabase-sync-controller.js should load after controllers/persistence-controller.js');
+    assert.ok(supabaseSyncControllerIdx < timeEntryRenderControllerIdx, 'controllers/time-entry-render-controller.js should load after controllers/supabase-sync-controller.js');
+    assert.ok(timeEntryRenderControllerIdx < scriptIdx, 'controllers/time-entry-render-controller.js should load before script.js');
     assert.ok(supabaseSyncControllerIdx < scriptIdx, 'controllers/supabase-sync-controller.js should load before script.js');
     assert.ok(persistenceControllerIdx < scriptIdx, 'controllers/persistence-controller.js should load before script.js');
     assert.ok(actualModalControllerIdx < scriptIdx, 'controllers/actual-modal-controller.js should load before script.js');
