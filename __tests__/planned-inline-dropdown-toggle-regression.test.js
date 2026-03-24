@@ -3,13 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildMethod } = require('./helpers/script-method-builder');
+const controller = require('../controllers/inline-plan-dropdown-controller');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
+const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
 
-const isSameInlinePlanTarget = buildMethod(
-    'isSameInlinePlanTarget(range, anchorEl = null)',
-    '(range, anchorEl = null)'
-);
+const { isSameInlinePlanTarget } = controller;
 
 test('isSameInlinePlanTarget matches same single-slot range without requiring anchor', () => {
     const ctx = {
@@ -64,8 +62,8 @@ test('isSameInlinePlanTarget ignores anchor changes when range is the same', () 
 });
 
 test('inline plan outside close runs on click phase so same-slot toggle can close first', () => {
-    assert.match(scriptSource, /document\.addEventListener\('click', this\.inlinePlanOutsideHandler, true\)/);
-    assert.doesNotMatch(scriptSource, /document\.addEventListener\('mousedown', this\.inlinePlanOutsideHandler, true\)/);
+    assert.match(controllerSource, /document\.addEventListener\('click', this\.inlinePlanOutsideHandler, true\)/);
+    assert.doesNotMatch(controllerSource, /document\.addEventListener\('mousedown', this\.inlinePlanOutsideHandler, true\)/);
 });
 
 test('attachCellClickListeners binds direct planned-input click handler for same-slot toggle', () => {
@@ -93,7 +91,7 @@ test('merged click capture closes dropdown when clicking planned column inside c
 });
 
 test('inline add auto-apply on empty slots forces dropdown close', () => {
-    assert.match(scriptSource, /if \(canAutoApply\) \{\s+const applyOptions = \{ \.\.\.options, keepOpen: false \};\s+this\.applyInlinePlanSelection\(val, applyOptions\);\s+\}/);
+    assert.match(controllerSource, /if \(canAutoApply\) \{\s+const applyOptions = \{ \.\.\.options, keepOpen: false \};\s+this\.applyInlinePlanSelection\(val, applyOptions\);\s+\}/);
 });
 
 test('planned selection overlay click closes same-range inline dropdown on mouseup', () => {
@@ -109,18 +107,18 @@ test('planned mouseup path suppresses reopen when same-slot toggle close is arme
 });
 
 test('external page scroll closes inline plan dropdown while visual viewport scroll only repositions it', () => {
-    assert.match(scriptSource, /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?this\.closeInlinePlanDropdown\(\);\s+\};/);
-    assert.match(scriptSource, /if \(event\.target === this\.inlinePlanDropdown \|\| this\.inlinePlanDropdown\.contains\(event\.target\)\) \{\s+return;\s+\}/);
-    assert.match(scriptSource, /if \(this\.isInlinePlanInputFocused\(\) \|\| this\.hasRecentInlinePlanInputIntent\(\)\) \{\s+this\.scheduleInlinePlanViewportSync\(\);\s+return;\s+\}/);
-    assert.match(scriptSource, /window\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
-    assert.match(scriptSource, /document\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
-    assert.match(scriptSource, /this\.inlinePlanGestureCloseHandler = \(event\) => \{[\s\S]*?this\.closeInlinePlanDropdown\(\);\s+\};/);
-    assert.match(scriptSource, /document\.addEventListener\('touchmove', this\.inlinePlanGestureCloseHandler, true\);/);
-    assert.match(scriptSource, /window\.addEventListener\('wheel', this\.inlinePlanGestureCloseHandler, true\);/);
-    assert.match(scriptSource, /window\.visualViewport\.addEventListener\('scroll', this\.inlinePlanScrollHandler\);/);
-    assert.doesNotMatch(scriptSource, /window\.addEventListener\('scroll', this\.inlinePlanScrollHandler, true\);/);
-    assert.match(scriptSource, /window\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
-    assert.match(scriptSource, /document\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
-    assert.match(scriptSource, /document\.removeEventListener\('touchmove', this\.inlinePlanGestureCloseHandler, true\);/);
-    assert.match(scriptSource, /window\.removeEventListener\('wheel', this\.inlinePlanGestureCloseHandler, true\);/);
+    assert.match(controllerSource, /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?this\.closeInlinePlanDropdown\(\);\s+\};/);
+    assert.match(controllerSource, /if \(event\.target === this\.inlinePlanDropdown \|\| this\.inlinePlanDropdown\.contains\(event\.target\)\) \{\s+return;\s+\}/);
+    assert.match(controllerSource, /if \(this\.isInlinePlanInputFocused\(\) \|\| this\.hasRecentInlinePlanInputIntent\(\)\) \{\s+this\.scheduleInlinePlanViewportSync\(\);\s+return;\s+\}/);
+    assert.match(controllerSource, /window\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(controllerSource, /document\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(controllerSource, /this\.inlinePlanGestureCloseHandler = \(event\) => \{[\s\S]*?this\.closeInlinePlanDropdown\(\);\s+\};/);
+    assert.match(controllerSource, /document\.addEventListener\('touchmove', this\.inlinePlanGestureCloseHandler, true\);/);
+    assert.match(controllerSource, /window\.addEventListener\('wheel', this\.inlinePlanGestureCloseHandler, true\);/);
+    assert.match(controllerSource, /window\.visualViewport\.addEventListener\('scroll', this\.inlinePlanScrollHandler\);/);
+    assert.doesNotMatch(controllerSource, /window\.addEventListener\('scroll', this\.inlinePlanScrollHandler, true\);/);
+    assert.match(controllerSource, /window\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(controllerSource, /document\.removeEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
+    assert.match(controllerSource, /document\.removeEventListener\('touchmove', this\.inlinePlanGestureCloseHandler, true\);/);
+    assert.match(controllerSource, /window\.removeEventListener\('wheel', this\.inlinePlanGestureCloseHandler, true\);/);
 });
