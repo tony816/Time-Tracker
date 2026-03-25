@@ -8,9 +8,13 @@ test('actual-grid-core exports are available and attached to global', () => {
     assert.equal(typeof actualGridCore.getActualGridBlockRange, 'function');
     assert.equal(typeof actualGridCore.buildActualUnitsFromActivities, 'function');
     assert.equal(typeof actualGridCore.buildActualActivitiesFromGrid, 'function');
+    assert.equal(typeof actualGridCore.normalizeActualGridBooleanUnits, 'function');
+    assert.equal(typeof actualGridCore.rebuildLockedRowsFromUnitSet, 'function');
     assert.equal(typeof actualGridCore.insertLockedRowsAfterRelatedActivities, 'function');
     assert.equal(typeof actualGridCore.getActualGridLockedUnitsForBase, 'function');
     assert.equal(typeof actualGridCore.getActualGridManualLockedUnitsForBase, 'function');
+    assert.equal(typeof actualGridCore.getActualExtraGridUnitsForBase, 'function');
+    assert.equal(typeof actualGridCore.getActualFailedGridUnitsForBase, 'function');
     assert.equal(typeof actualGridCore.buildExtraSlotAllocation, 'function');
     assert.equal(typeof actualGridCore.mergeActualActivitiesWithGrid, 'function');
 
@@ -62,4 +66,76 @@ test('buildActualActivitiesFromGrid keeps plan order and aggregates active label
         { label: 'A', seconds: 300, source: 'grid' },
         { label: 'B', seconds: 600, source: 'grid' },
     ]);
+});
+
+test('normalizeActualGridBooleanUnits clamps and pads boolean masks', () => {
+    assert.deepEqual(actualGridCore.normalizeActualGridBooleanUnits([1, 0, '', true], 3), [true, false, false]);
+    assert.deepEqual(actualGridCore.normalizeActualGridBooleanUnits([true], 3), [true, false, false]);
+    assert.deepEqual(actualGridCore.normalizeActualGridBooleanUnits(null, 2), [false, false]);
+    assert.deepEqual(actualGridCore.normalizeActualGridBooleanUnits([true], 0), []);
+});
+
+test('rebuildLockedRowsFromUnitSet preserves contiguous segments and auto-lock collapse', () => {
+    const segmented = actualGridCore.rebuildLockedRowsFromUnitSet([true, true, false, true], {
+        stepSeconds: 600,
+        normalizeDurationStep: (value) => value,
+    });
+    assert.deepEqual(segmented, [
+        {
+            label: '',
+            seconds: 1200,
+            recordedSeconds: 1200,
+            source: 'locked',
+            isAutoLocked: false,
+            lockStart: 0,
+            lockEnd: 1,
+            lockUnits: [0, 1],
+        },
+        {
+            label: '',
+            seconds: 600,
+            recordedSeconds: 600,
+            source: 'locked',
+            isAutoLocked: false,
+            lockStart: 3,
+            lockEnd: 3,
+            lockUnits: [3],
+        },
+    ]);
+
+    const collapsedAuto = actualGridCore.rebuildLockedRowsFromUnitSet([false, true, false, true], {
+        isAutoLocked: true,
+        allowSegments: false,
+        stepSeconds: 600,
+        normalizeDurationStep: (value) => value,
+    });
+    assert.deepEqual(collapsedAuto, [
+        {
+            label: '',
+            seconds: 1200,
+            recordedSeconds: 1200,
+            source: 'locked',
+            isAutoLocked: true,
+            lockStart: 1,
+            lockEnd: 3,
+            lockUnits: [1, 3],
+        },
+    ]);
+});
+
+test('extra and failed grid unit readers normalize stored masks', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                activityLog: {
+                    actualExtraGridUnits: [1, 0, true],
+                    actualFailedGridUnits: [false, 'x'],
+                },
+            },
+        ],
+        normalizeActualGridBooleanUnits: actualGridCore.normalizeActualGridBooleanUnits,
+    };
+
+    assert.deepEqual(actualGridCore.getActualExtraGridUnitsForBase.call(ctx, 0, 4), [true, false, true, false]);
+    assert.deepEqual(actualGridCore.getActualFailedGridUnitsForBase.call(ctx, 0, 3), [false, true, false]);
 });

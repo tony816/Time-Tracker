@@ -2237,65 +2237,11 @@ class TimeTracker {
     }
 
     rebuildLockedRowsFromUnitSet(unitMask = [], options = {}) {
-        const units = Array.isArray(unitMask) ? unitMask.map(value => Boolean(value)) : [];
-        const isAutoLocked = options.isAutoLocked === true;
-        const allowSegments = options.allowSegments !== false;
-        const step = Number.isFinite(this.getActualDurationStepSeconds())
-            ? this.getActualDurationStepSeconds()
-            : 600;
-        const normalizeDurationStep = (value) => {
-            const raw = Number.isFinite(value) ? Math.floor(value) : 0;
-            return this.normalizeActualDurationStep(raw);
-        };
-        const rows = [];
-        const activeUnits = [];
-        for (let i = 0; i < units.length; i++) {
-            if (units[i]) {
-                activeUnits.push(i);
-            }
-        }
-        if (activeUnits.length === 0) return rows;
-        if (isAutoLocked && !allowSegments) {
-            const first = activeUnits[0];
-            const last = activeUnits[activeUnits.length - 1];
-            const seconds = normalizeDurationStep(activeUnits.length * step);
-            rows.push({
-                label: '',
-                seconds,
-                recordedSeconds: seconds,
-                source: 'locked',
-                isAutoLocked,
-                lockStart: first,
-                lockEnd: last,
-                lockUnits: activeUnits.slice(),
-            });
-            return rows;
-        }
-        for (let index = 0; index < units.length; index++) {
-            if (!units[index]) continue;
-            let end = index;
-            while (end + 1 < units.length && units[end + 1]) {
-                end += 1;
-            }
-            const length = end - index + 1;
-            const seconds = normalizeDurationStep(length * step);
-            const lockUnits = [];
-            for (let unit = index; unit <= end; unit++) {
-                lockUnits.push(unit);
-            }
-            rows.push({
-                label: '',
-                seconds,
-                recordedSeconds: seconds,
-                source: 'locked',
-                isAutoLocked,
-                lockStart: index,
-                lockEnd: end,
-                lockUnits,
-            });
-            index = end;
-        }
-        return rows;
+        return globalThis.TimeTrackerActualGridCore.rebuildLockedRowsFromUnitSet.call(this, unitMask, {
+            ...options,
+            stepSeconds: this.getActualDurationStepSeconds(),
+            normalizeDurationStep: (value) => this.normalizeActualDurationStep(value),
+        });
     }
 
     getActualGridLockedUnitsForBase(baseIndex, planUnits = null, activities = null) {
@@ -2318,27 +2264,15 @@ class TimeTracker {
     }
 
     getActualExtraGridUnitsForBase(baseIndex, totalUnits) {
-        const slot = this.timeSlots[baseIndex];
-        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
-            ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
-            : [];
-        return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+        return globalThis.TimeTrackerActualGridCore.getActualExtraGridUnitsForBase.call(this, ...arguments);
     }
 
     getActualFailedGridUnitsForBase(baseIndex, totalUnits) {
-        const slot = this.timeSlots[baseIndex];
-        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualFailedGridUnits))
-            ? slot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
-            : [];
-        return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+        return globalThis.TimeTrackerActualGridCore.getActualFailedGridUnitsForBase.call(this, ...arguments);
     }
 
     normalizeActualGridBooleanUnits(units, totalUnits) {
-        if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
-        let safe = Array.isArray(units) ? units.map(value => Boolean(value)) : [];
-        if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
-        if (safe.length < totalUnits) safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
-        return safe;
+        return globalThis.TimeTrackerActualGridCore.normalizeActualGridBooleanUnits.call(this, ...arguments);
     }
 
     getExtraActivityUnitCount(item) {

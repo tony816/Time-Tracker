@@ -104,6 +104,81 @@
         return activities;
     }
 
+    function normalizeActualGridBooleanUnits(units, totalUnits) {
+        if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
+        let safe = Array.isArray(units) ? units.map((value) => Boolean(value)) : [];
+        if (safe.length > totalUnits) safe = safe.slice(0, totalUnits);
+        if (safe.length < totalUnits) {
+            safe = safe.concat(new Array(totalUnits - safe.length).fill(false));
+        }
+        return safe;
+    }
+
+    function rebuildLockedRowsFromUnitSet(unitMask = [], options = {}) {
+        const units = Array.isArray(unitMask) ? unitMask.map((value) => Boolean(value)) : [];
+        const isAutoLocked = options.isAutoLocked === true;
+        const allowSegments = options.allowSegments !== false;
+        const step = resolveStepSeconds(options.stepSeconds);
+        const normalizeDurationStep = typeof options.normalizeDurationStep === 'function'
+            ? (value) => {
+                const raw = Number.isFinite(value) ? Math.floor(value) : 0;
+                return options.normalizeDurationStep(raw);
+            }
+            : (value) => {
+                const raw = Number.isFinite(value) ? Math.floor(value) : 0;
+                return Math.max(0, raw);
+            };
+        const rows = [];
+        const activeUnits = [];
+        for (let i = 0; i < units.length; i++) {
+            if (units[i]) {
+                activeUnits.push(i);
+            }
+        }
+        if (activeUnits.length === 0) return rows;
+        if (isAutoLocked && !allowSegments) {
+            const first = activeUnits[0];
+            const last = activeUnits[activeUnits.length - 1];
+            const seconds = normalizeDurationStep(activeUnits.length * step);
+            rows.push({
+                label: '',
+                seconds,
+                recordedSeconds: seconds,
+                source: 'locked',
+                isAutoLocked,
+                lockStart: first,
+                lockEnd: last,
+                lockUnits: activeUnits.slice(),
+            });
+            return rows;
+        }
+        for (let index = 0; index < units.length; index++) {
+            if (!units[index]) continue;
+            let end = index;
+            while (end + 1 < units.length && units[end + 1]) {
+                end += 1;
+            }
+            const length = end - index + 1;
+            const seconds = normalizeDurationStep(length * step);
+            const lockUnits = [];
+            for (let unit = index; unit <= end; unit++) {
+                lockUnits.push(unit);
+            }
+            rows.push({
+                label: '',
+                seconds,
+                recordedSeconds: seconds,
+                source: 'locked',
+                isAutoLocked,
+                lockStart: index,
+                lockEnd: end,
+                lockUnits,
+            });
+            index = end;
+        }
+        return rows;
+    }
+
     function insertLockedRowsAfterRelatedActivities(baseRows = [], lockedRows = [], planUnits = null) {
         const isLocked = (item) => {
             if (typeof this.isLockedActivityRow === 'function') {
@@ -364,6 +439,28 @@
             : new Array(units.length).fill(false);
     }
 
+    function getActualExtraGridUnitsForBase(baseIndex, totalUnits) {
+        const slot = this.timeSlots[baseIndex];
+        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
+            ? slot.activityLog.actualExtraGridUnits.map((value) => Boolean(value))
+            : [];
+        if (typeof this.normalizeActualGridBooleanUnits === 'function') {
+            return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+        }
+        return normalizeActualGridBooleanUnits(raw, totalUnits);
+    }
+
+    function getActualFailedGridUnitsForBase(baseIndex, totalUnits) {
+        const slot = this.timeSlots[baseIndex];
+        const raw = (slot && slot.activityLog && Array.isArray(slot.activityLog.actualFailedGridUnits))
+            ? slot.activityLog.actualFailedGridUnits.map((value) => Boolean(value))
+            : [];
+        if (typeof this.normalizeActualGridBooleanUnits === 'function') {
+            return this.normalizeActualGridBooleanUnits(raw, totalUnits);
+        }
+        return normalizeActualGridBooleanUnits(raw, totalUnits);
+    }
+
     function buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null) {
         const slotsByIndex = Array.isArray(planUnits) ? new Array(planUnits.length).fill('') : [];
         const slotsByLabel = new Map();
@@ -616,9 +713,13 @@
         getActualGridBlockRange,
         buildActualUnitsFromActivities,
         buildActualActivitiesFromGrid,
+        normalizeActualGridBooleanUnits,
+        rebuildLockedRowsFromUnitSet,
         insertLockedRowsAfterRelatedActivities,
         getActualGridLockedUnitsForBase,
         getActualGridManualLockedUnitsForBase,
+        getActualExtraGridUnitsForBase,
+        getActualFailedGridUnitsForBase,
         buildExtraSlotAllocation,
         mergeActualActivitiesWithGrid,
     });
