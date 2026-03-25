@@ -108,3 +108,125 @@ test('repositionButtonsNextToSchedule can consume the shared schedule anchor sur
     assert.equal(ctx.undoButton.style.left, '81px');
     assert.equal(ctx.undoButton.style.top, '26px');
 });
+
+test('showScheduleButtonOnHover creates and clears a hover button for a planned slot', () => {
+    const originalDocument = global.document;
+    const originalWindow = global.window;
+    const created = [];
+    const appended = [];
+    const removed = [];
+    const field = {
+        getBoundingClientRect() {
+            return { left: 100, top: 200, width: 80, height: 24 };
+        },
+    };
+    const body = {
+        appendChild(node) {
+            appended.push(node);
+            node.parentNode = body;
+        },
+        removeChild(node) {
+            removed.push(node);
+            node.parentNode = null;
+        },
+    };
+
+    global.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="3"] .planned-input') return field;
+            if (selector === '[data-index="3"]') return { id: 'row-3' };
+            return null;
+        },
+        createElement(tag) {
+            const listeners = {};
+            const node = {
+                tagName: tag,
+                style: {},
+                className: '',
+                textContent: '',
+                title: '',
+                attributes: {},
+                parentNode: null,
+                setAttribute(name, value) {
+                    this.attributes[name] = value;
+                },
+                addEventListener(type, handler) {
+                    listeners[type] = handler;
+                },
+                matches() {
+                    return false;
+                },
+                get listeners() {
+                    return listeners;
+                },
+            };
+            created.push(node);
+            return node;
+        },
+        body,
+        documentElement: { scrollLeft: 0, scrollTop: 0 },
+    };
+    global.window = { scrollX: 10, scrollY: 20 };
+
+    const calls = [];
+    const ctx = {
+        selectedPlannedFields: new Set(),
+        selectedActualFields: new Set(),
+        scheduleHoverButton: null,
+        hoveredMergeKey: null,
+        undoButton: null,
+        hideHoverScheduleButton() {
+            return controller.hideHoverScheduleButton.call(this);
+        },
+        findMergeKey() {
+            return null;
+        },
+        isMergeRangeSelected() {
+            return false;
+        },
+        removeHoverSelectionOverlay(type) {
+            calls.push(['removeHoverSelectionOverlay', type]);
+        },
+        updateHoverSelectionOverlay(type, start, end) {
+            calls.push(['updateHoverSelectionOverlay', type, start, end]);
+        },
+        showUndoButton(type, mergeKey) {
+            calls.push(['showUndoButton', type, mergeKey]);
+        },
+        hideUndoButton() {
+            calls.push(['hideUndoButton']);
+        },
+        repositionButtonsNextToSchedule() {
+            calls.push(['repositionButtonsNextToSchedule']);
+        },
+        openInlinePlanDropdown(index, anchor, endIndex) {
+            calls.push(['openInlinePlanDropdown', index, anchor, endIndex]);
+        },
+    };
+
+    try {
+        controller.showScheduleButtonOnHover.call(ctx, 3);
+
+        assert.equal(created.length, 1);
+        assert.equal(appended.length, 1);
+        assert.equal(ctx.scheduleHoverButton, created[0]);
+        assert.equal(created[0].style.left, '136px');
+        assert.equal(created[0].style.top, '218px');
+        assert.deepEqual(calls, [
+            ['removeHoverSelectionOverlay', 'planned'],
+            ['removeHoverSelectionOverlay', 'planned'],
+            ['updateHoverSelectionOverlay', 'planned', 3, 3],
+            ['hideUndoButton'],
+            ['repositionButtonsNextToSchedule'],
+        ]);
+
+        controller.hideHoverScheduleButton.call(ctx);
+
+        assert.equal(ctx.scheduleHoverButton, null);
+        assert.equal(removed.length, 1);
+        assert.deepEqual(calls.slice(-1)[0], ['removeHoverSelectionOverlay', 'planned']);
+    } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+    }
+});
