@@ -12,6 +12,39 @@
         root.TimeTrackerInlinePlanDropdownController = Object.assign(existing, api);
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function buildTimeTrackerInlinePlanDropdownController(root) {
+function getControllerStateAccess() {
+        return (root && root.TimeTrackerControllerStateAccess && typeof root.TimeTrackerControllerStateAccess === 'object')
+            ? root.TimeTrackerControllerStateAccess
+            : null;
+    }
+
+function getInlinePlanTargetState() {
+        const access = getControllerStateAccess();
+        if (access && typeof access.getInlinePlanTarget === 'function') {
+            return access.getInlinePlanTarget.call(this);
+        }
+        return this.inlinePlanTarget || null;
+    }
+
+function getInlinePlanAnchorState() {
+        const access = getControllerStateAccess();
+        if (access && typeof access.getInlinePlanAnchor === 'function') {
+            return access.getInlinePlanAnchor.call(this);
+        }
+        const target = getInlinePlanTargetState.call(this);
+        return target && target.anchor ? target.anchor : null;
+    }
+
+function setInlinePlanAnchorState(anchor) {
+        const access = getControllerStateAccess();
+        if (access && typeof access.setInlinePlanAnchor === 'function') {
+            return access.setInlinePlanAnchor.call(this, anchor);
+        }
+        const target = getInlinePlanTargetState.call(this);
+        if (!target) return null;
+        target.anchor = anchor || null;
+        return target.anchor;
+    }
 
 function buildPlannedActivityOptions(extraLabels = []) {
         const grouped = { local: [], notion: [] };
@@ -87,7 +120,7 @@ function filterInlinePlanSearchItems(items, query) {
 
 function resolveInlinePlanAnchor(anchorEl, fallbackIndex = null) {
         if (anchorEl && anchorEl.isConnected) return anchorEl;
-        const target = this.inlinePlanTarget;
+        const target = getInlinePlanTargetState.call(this);
         const index = Number.isInteger(fallbackIndex)
             ? fallbackIndex
             : (target && Number.isInteger(target.startIndex) ? target.startIndex : null);
@@ -271,15 +304,15 @@ function scheduleInlinePlanViewportSync() {
 
         const runSync = () => {
             if (!this.inlinePlanDropdown) return;
-            const target = this.inlinePlanTarget;
+            const target = getInlinePlanTargetState.call(this);
             const currentAnchor = target
                 ? this.resolveInlinePlanAnchor(
-                    target.anchor,
+                    getInlinePlanAnchorState.call(this),
                     Number.isInteger(target.startIndex) ? target.startIndex : null
                 )
                 : null;
             if (target && currentAnchor) {
-                this.inlinePlanTarget.anchor = currentAnchor;
+                setInlinePlanAnchorState.call(this, currentAnchor);
             }
             if (inputFocused && inlineInput) {
                 this.ensureInlinePlanInputVisible(inlineInput);
@@ -347,16 +380,16 @@ function getInlinePlanMinimumInteractiveHeight(dropdown = this.inlinePlanDropdow
 
 function ensureInlinePlanInputVisible(inputEl) {
         if (!inputEl || !this.inlinePlanDropdown) return;
-        const target = this.inlinePlanTarget;
+        const target = getInlinePlanTargetState.call(this);
         const currentAnchor = target
             ? this.resolveInlinePlanAnchor(
-                target.anchor,
+                getInlinePlanAnchorState.call(this),
                 Number.isInteger(target.startIndex) ? target.startIndex : null
             )
             : null;
         if (!currentAnchor) return;
-        if (target && target.anchor !== currentAnchor) {
-            this.inlinePlanTarget.anchor = currentAnchor;
+        if (target && getInlinePlanAnchorState.call(this) !== currentAnchor) {
+            setInlinePlanAnchorState.call(this, currentAnchor);
         }
         this.positionInlinePlanDropdown(currentAnchor);
     }
@@ -399,8 +432,8 @@ function positionInlinePlanDropdown(anchorEl) {
         const maxWidth = Math.max(240, viewport.width - (margin * 2));
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
-        if (this.inlinePlanTarget && this.inlinePlanTarget.anchor !== anchor) {
-            this.inlinePlanTarget.anchor = anchor;
+        if (getInlinePlanTargetState.call(this) && getInlinePlanAnchorState.call(this) !== anchor) {
+            setInlinePlanAnchorState.call(this, anchor);
         }
         const rect = anchor.getBoundingClientRect();
         if (!rect || (!rect.width && !rect.height)) return;
@@ -710,7 +743,7 @@ function openRoutineMenuFromInlinePlan(label, anchorEl) {
     }
 
 function isSameInlinePlanTarget(range, anchorEl = null) {
-        const current = this.inlinePlanTarget;
+        const current = getInlinePlanTargetState.call(this);
         if (!current || !range) return false;
 
         const currentStart = Number.isInteger(current.startIndex) ? current.startIndex : null;
@@ -725,7 +758,7 @@ function isSameInlinePlanTarget(range, anchorEl = null) {
     }
 
 function isEventWithinCurrentInlinePlanRange(targetEl) {
-        const current = this.inlinePlanTarget;
+        const current = getInlinePlanTargetState.call(this);
         if (!current || !targetEl || !targetEl.closest) return false;
 
         const row = targetEl.closest('.time-entry[data-index]');
@@ -945,11 +978,11 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             this.autoSave();
             this.renderInlinePlanDropdownOptions();
 
-            if (this.inlinePlanTarget) {
+            if (getInlinePlanTargetState.call(this)) {
                 const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
                     || document.querySelector(`[data-index="${baseIndex}"]`);
                 if (anchor) {
-                    this.inlinePlanTarget.anchor = anchor;
+                    setInlinePlanAnchorState.call(this, anchor);
                     this.positionInlinePlanDropdown(anchor);
                 }
             }
@@ -1166,7 +1199,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             if (!this.inlinePlanDropdown) return;
             const anchorNow = this.resolveInlinePlanAnchor(anchor, range.startIndex);
             if (!anchorNow) return;
-            this.inlinePlanTarget.anchor = anchorNow;
+            setInlinePlanAnchorState.call(this, anchorNow);
             this.positionInlinePlanDropdown(anchorNow);
             if (input && this.shouldAutofocusInlinePlanInput()) input.focus();
         });
@@ -1178,7 +1211,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             if (this.planActivityMenu && this.planActivityMenu.contains(event.target)) return;
             if (this.planTitleMenu && this.planTitleMenu.contains(event.target)) return;
             if (this.inlinePriorityMenu && this.inlinePriorityMenu.contains(event.target)) return;
-            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+            const currentAnchor = getInlinePlanAnchorState.call(this);
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
             this.closeInlinePlanDropdown();
@@ -1216,7 +1249,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             if (this.planActivityMenu && this.planActivityMenu.contains(event.target)) return;
             if (this.planTitleMenu && this.planTitleMenu.contains(event.target)) return;
             if (this.inlinePriorityMenu && this.inlinePriorityMenu.contains(event.target)) return;
-            const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
+            const currentAnchor = getInlinePlanAnchorState.call(this);
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
             if (this.isInlinePlanMobileInputContext()) {
@@ -1368,7 +1401,7 @@ function applyInlinePlanSelection(label, options = {}) {
             const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
                 || document.querySelector(`[data-index="${startIndex}"]`);
             if (anchor) {
-                this.inlinePlanTarget.anchor = anchor;
+                setInlinePlanAnchorState.call(this, anchor);
                 this.positionInlinePlanDropdown(anchor);
                 const dropdownInput = this.inlinePlanDropdown && this.inlinePlanDropdown.querySelector('.inline-plan-input');
                 if (dropdownInput && this.shouldAutofocusInlinePlanInput()) dropdownInput.focus();

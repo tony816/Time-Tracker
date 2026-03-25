@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildMethod } = require('./helpers/script-method-builder');
+const controller = require('../controllers/selection-overlay-controller');
 
-const selectFieldRange = buildMethod('selectFieldRange(type, startIndex, endIndex)', '(type, startIndex, endIndex)');
+const { selectFieldRange } = controller;
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
 
 test('selectFieldRange expands to merged planned slot boundaries', () => {
@@ -47,10 +47,9 @@ test('selectFieldRange expands to merged planned slot boundaries', () => {
 test('merged planned drag start no longer depends on hold delay', () => {
     const anchor = scriptSource.slice(
         scriptSource.indexOf('if (!this.isSelectingPlanned && this.pendingMergedMouseSelection)'),
-        scriptSource.indexOf('if (!this.isSelectingPlanned || this.currentColumnType !== \'planned\')')
+        scriptSource.indexOf("if (!this.isSelectingPlanned || this.currentColumnType !== 'planned')")
     );
 
     assert.match(anchor, /if \(movedPx >= 4\)/);
     assert.doesNotMatch(anchor, /elapsedMs\s*>=\s*220/);
 });
-

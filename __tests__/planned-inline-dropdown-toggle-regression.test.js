@@ -6,6 +6,7 @@ const path = require('node:path');
 const controller = require('../controllers/inline-plan-dropdown-controller');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
 const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
+const selectionControllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'selection-overlay-controller.js'), 'utf8');
 
 const { isSameInlinePlanTarget } = controller;
 
@@ -95,9 +96,9 @@ test('inline add auto-apply on empty slots forces dropdown close', () => {
 });
 
 test('planned selection overlay click closes same-range inline dropdown on mouseup', () => {
-    assert.match(scriptSource, /if \(type === 'planned' && this\.inlinePlanDropdown && Number\.isInteger\(overlayDrag\.startIndex\)\) \{/);
-    assert.match(scriptSource, /const clickedRange = this\.getPlannedRangeInfo\(overlayDrag\.startIndex\);/);
-    assert.match(scriptSource, /if \(this\.isSameInlinePlanTarget\(clickedRange\)\) \{\s+this\.closeInlinePlanDropdown\(\);\s+\}/);
+    assert.match(selectionControllerSource, /if \(type === 'planned' && this\.inlinePlanDropdown && Number\.isInteger\(overlayDrag\.startIndex\)\) \{/);
+    assert.match(selectionControllerSource, /const clickedRange = this\.getPlannedRangeInfo\(overlayDrag\.startIndex\);/);
+    assert.match(selectionControllerSource, /if \(this\.isSameInlinePlanTarget\(clickedRange\)\) \{\s+this\.closeInlinePlanDropdown\(\);\s+\}/);
 });
 
 test('planned mouseup path suppresses reopen when same-slot toggle close is armed', () => {

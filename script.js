@@ -1383,378 +1383,12 @@ class TimeTracker {
         return n === 0 ? '00' : String(n);
     }
     // 메모리 -> DB 전송용 slots JSON 생성(비어있는 시간은 생략)
-    buildSlotsJson() {
-        const slots = {};
-        const handledMerges = new Set();
-        try {
-            this.timeSlots.forEach((slot, index) => {
-                const timeMergeKey = this.findMergeKey('time', index);
-                if (timeMergeKey) {
-                    if (handledMerges.has(timeMergeKey)) return;
-                    handledMerges.add(timeMergeKey);
-
-                    const [, startStr, endStr] = timeMergeKey.split('-');
-                    const start = parseInt(startStr, 10);
-                    const end = parseInt(endStr, 10);
-                    if (isNaN(start) || isNaN(end)) return;
-                    const startSlot = this.timeSlots[start];
-                    const endSlot = this.timeSlots[end];
-                    if (!startSlot || !endSlot) return;
-
-                    const startLabel = String(startSlot.time || '').trim();
-                    const endLabel = String(endSlot.time || '').trim();
-                    const plannedKey = `planned-${start}-${end}`;
-                    const actualKey = `actual-${start}-${end}`;
-                    const plannedValue = String((this.mergedFields.get(plannedKey) ?? startSlot.planned ?? '')).trim();
-                    const actualValue = String((this.mergedFields.get(actualKey) ?? startSlot.actual ?? '')).trim();
-                    const detailsValue = String((startSlot.activityLog && startSlot.activityLog.details) || '').trim();
-                    const activitiesValue = this.normalizeActivitiesArray(startSlot.activityLog && startSlot.activityLog.subActivities);
-                    const planActivitiesValue = this.normalizePlanActivitiesArray(startSlot.planActivities);
-                    const planTitleValue = this.normalizeActivityText
-                        ? this.normalizeActivityText(startSlot.planTitle || '')
-                        : String(startSlot.planTitle || '').trim();
-                    const planTitleBand = Boolean(startSlot.planTitleBandOn && planTitleValue);
-                    const actualTitleBand = Boolean(startSlot.activityLog && startSlot.activityLog.titleBandOn);
-                    const actualGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualGridUnits))
-                        ? startSlot.activityLog.actualGridUnits.map(value => Boolean(value))
-                        : [];
-                    const hasActualGridUnits = actualGridUnits.some(value => value);
-                    const actualExtraGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualExtraGridUnits))
-                        ? startSlot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
-                        : [];
-                    const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
-                    const actualFailedGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualFailedGridUnits))
-                        ? startSlot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
-                        : [];
-                    const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
-                    const timerInfo = startSlot.timer && typeof startSlot.timer === 'object' ? startSlot.timer : {};
-                    const timerEntry = {
-                        running: Boolean(timerInfo.running),
-                        elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
-                        rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
-                        startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
-                        method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
-                        status: this.normalizeTimerStatus(timerInfo.status, startSlot),
-                    };
-                    const hasTimerEntry = timerEntry.running
-                        || timerEntry.elapsed > 0
-                        || timerEntry.rawElapsed > 0
-                        || timerEntry.startTime != null
-                        || timerEntry.method !== 'manual'
-                        || timerEntry.status !== 'idle';
-
-                    if (plannedValue === ''
-                        && actualValue === ''
-                        && detailsValue === ''
-                        && activitiesValue.length === 0
-                        && planActivitiesValue.length === 0
-                        && !planTitleValue
-                        && !hasTimerEntry) {
-                        return;
-                    }
-
-                    const storageKey = String(this.labelToHour(startLabel));
-                    slots[storageKey] = {
-                        planned: plannedValue,
-                        actual: actualValue,
-                        details: detailsValue,
-                        merged: true,
-                        timeRange: `${startLabel} ~ ${endLabel}`
-                    };
-                    if (activitiesValue.length > 0) {
-                        slots[storageKey].activities = activitiesValue.map(item => ({ ...item }));
-                    }
-                    if (planActivitiesValue.length > 0) {
-                        slots[storageKey].planActivities = planActivitiesValue.map(item => ({ ...item }));
-                    }
-                    if (planTitleValue) {
-                        slots[storageKey].planTitle = planTitleValue;
-                    }
-                    if (planTitleBand) {
-                        slots[storageKey].planTitleBandOn = true;
-                    }
-                    if (actualTitleBand) {
-                        slots[storageKey].actualTitleBandOn = true;
-                    }
-                    if (hasActualGridUnits) {
-                        slots[storageKey].actualGridUnits = actualGridUnits;
-                    }
-                    if (hasActualExtraGridUnits) {
-                        slots[storageKey].actualExtraGridUnits = actualExtraGridUnits;
-                    }
-                    if (hasActualFailedGridUnits) {
-                        slots[storageKey].actualFailedGridUnits = actualFailedGridUnits;
-                    }
-                    if (hasTimerEntry) {
-                        slots[storageKey].timer = timerEntry;
-                    }
-                    return;
-                }
-
-                const hour = this.labelToHour(slot.time);
-                const planned = String(slot.planned || '').trim();
-                const actual = String(slot.actual || '').trim();
-                const details = String((slot.activityLog && slot.activityLog.details) || '').trim();
-                const activitiesValue = this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities);
-                const planActivitiesValue = this.normalizePlanActivitiesArray(slot.planActivities);
-                const planTitleValue = this.normalizeActivityText
-                    ? this.normalizeActivityText(slot.planTitle || '')
-                    : String(slot.planTitle || '').trim();
-                const planTitleBand = Boolean(slot.planTitleBandOn && planTitleValue);
-                const actualTitleBand = Boolean(slot.activityLog && slot.activityLog.titleBandOn);
-                const actualGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualGridUnits))
-                    ? slot.activityLog.actualGridUnits.map(value => Boolean(value))
-                    : [];
-                const hasActualGridUnits = actualGridUnits.some(value => value);
-                const actualExtraGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualExtraGridUnits))
-                    ? slot.activityLog.actualExtraGridUnits.map(value => Boolean(value))
-                    : [];
-                const hasActualExtraGridUnits = actualExtraGridUnits.some(value => value);
-                const actualFailedGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualFailedGridUnits))
-                    ? slot.activityLog.actualFailedGridUnits.map(value => Boolean(value))
-                    : [];
-                const hasActualFailedGridUnits = actualFailedGridUnits.some(value => value);
-                const timerInfo = slot.timer && typeof slot.timer === 'object' ? slot.timer : {};
-                const timerEntry = {
-                    running: Boolean(timerInfo.running),
-                    elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
-                    rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
-                    startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
-                    method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
-                    status: this.normalizeTimerStatus(timerInfo.status, slot),
-                };
-                const hasTimerEntry = timerEntry.running
-                    || timerEntry.elapsed > 0
-                    || timerEntry.rawElapsed > 0
-                    || timerEntry.startTime != null
-                    || timerEntry.method !== 'manual'
-                    || timerEntry.status !== 'idle';
-                if (planned !== ''
-                    || actual !== ''
-                    || details !== ''
-                    || activitiesValue.length > 0
-                    || planActivitiesValue.length > 0
-                    || planTitleValue
-                    || hasTimerEntry) {
-                    const entry = { planned, actual, details };
-                    if (activitiesValue.length > 0) {
-                        entry.activities = activitiesValue.map(item => ({ ...item }));
-                    }
-                    if (planActivitiesValue.length > 0) {
-                        entry.planActivities = planActivitiesValue.map(item => ({ ...item }));
-                    }
-                    if (planTitleValue) {
-                        entry.planTitle = planTitleValue;
-                    }
-                    if (planTitleBand) {
-                        entry.planTitleBandOn = true;
-                    }
-                    if (actualTitleBand) {
-                        entry.actualTitleBandOn = true;
-                    }
-                    if (hasActualGridUnits) {
-                        entry.actualGridUnits = actualGridUnits;
-                    }
-                    if (hasActualExtraGridUnits) {
-                        entry.actualExtraGridUnits = actualExtraGridUnits;
-                    }
-                    if (hasActualFailedGridUnits) {
-                        entry.actualFailedGridUnits = actualFailedGridUnits;
-                    }
-                    if (hasTimerEntry) {
-                        entry.timer = timerEntry;
-                    }
-                    slots[String(hour)] = entry;
-                }
-            });
-        } catch (_) {}
-        return slots;
+        buildSlotsJson() {
+        return globalThis.TimeTrackerPersistenceController.buildSlotsJson.call(this);
     }
     // DB slots JSON -> 메모리 반영(존재하는 키만 반영)
-    applySlotsJson(slotsJson) {
-        if (!slotsJson || typeof slotsJson !== 'object') return false;
-        let changed = false;
-        const nextMergedFields = new Map();
-        try {
-            Object.keys(slotsJson).forEach((k) => {
-                const hour = parseInt(k, 10);
-                if (isNaN(hour)) return;
-                const label = this.hourToLabel(hour);
-                const idx = this.timeSlots.findIndex(s => String(s.time) === label);
-                if (idx < 0) return;
-                const row = slotsJson[k] || {};
-
-                const plannedValue = typeof row.planned === 'string' ? row.planned : '';
-                const actualValue = typeof row.actual === 'string' ? row.actual : '';
-                const detailsValue = typeof row.details === 'string' ? row.details : '';
-                const hasActivities = Array.isArray(row.activities);
-                const hasPlanActivities = Array.isArray(row.planActivities);
-                const planTitleValue = typeof row.planTitle === 'string'
-                    ? (this.normalizeActivityText ? this.normalizeActivityText(row.planTitle) : row.planTitle.trim())
-                    : '';
-                const planTitleBand = Boolean(row.planTitleBandOn);
-                const actualTitleBand = Boolean(row.actualTitleBandOn);
-                const actualGridUnits = Array.isArray(row.actualGridUnits)
-                    ? row.actualGridUnits.map(value => Boolean(value))
-                    : [];
-                const actualExtraGridUnits = Array.isArray(row.actualExtraGridUnits)
-                    ? row.actualExtraGridUnits.map(value => Boolean(value))
-                    : [];
-                const actualFailedGridUnits = Array.isArray(row.actualFailedGridUnits)
-                    ? row.actualFailedGridUnits.map(value => Boolean(value))
-                    : [];
-                const timerRow = row && typeof row.timer === 'object' ? row.timer : null;
-                const normalizedTimer = {
-                    running: Boolean(timerRow && timerRow.running),
-                    elapsed: Number.isFinite(timerRow && timerRow.elapsed) ? Math.max(0, Math.floor(timerRow.elapsed)) : 0,
-                    rawElapsed: Number.isFinite(timerRow && timerRow.rawElapsed) ? Math.max(0, Math.floor(timerRow.rawElapsed)) : 0,
-                    startTime: Number.isFinite(timerRow && timerRow.startTime) ? timerRow.startTime : null,
-                    method: (timerRow && String(timerRow.method || 'manual') === 'pomodoro') ? 'pomodoro' : 'manual',
-                    status: this.normalizeTimerStatus(timerRow && timerRow.status, { timer: timerRow || {} }),
-                };
-
-                if (row && row.merged && typeof row.timeRange === 'string') {
-                    const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
-                    if (parts.length === 2) {
-                        const [startLabel, endLabel] = parts;
-                        const startIdx = this.timeSlots.findIndex(s => String(s.time) === startLabel);
-                        const endIdx = this.timeSlots.findIndex(s => String(s.time) === endLabel);
-                        if (startIdx >= 0 && endIdx >= startIdx) {
-                            const plannedKey = `planned-${startIdx}-${endIdx}`;
-                            const timeKey = `time-${startIdx}-${endIdx}`;
-                            const actualKey = `actual-${startIdx}-${endIdx}`;
-                            const plannedTrimmed = String(plannedValue || '').trim();
-                            const actualTrimmed = String(actualValue || '').trim();
-                            const activitiesValue = hasActivities ? this.normalizeActivitiesArray(row.activities) : null;
-                            const planActivitiesValue = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : null;
-                            nextMergedFields.set(plannedKey, plannedTrimmed);
-                            nextMergedFields.set(timeKey, `${startLabel}-${endLabel}`);
-                            nextMergedFields.set(actualKey, actualTrimmed);
-
-                            for (let i = startIdx; i <= endIdx; i++) {
-                                const slot = this.timeSlots[i];
-                                const nextPlanned = i === startIdx ? plannedTrimmed : '';
-                                const nextActual = i === startIdx ? actualTrimmed : '';
-                                if (slot.planned !== nextPlanned) { slot.planned = nextPlanned; changed = true; }
-                                if (slot.actual !== nextActual) { slot.actual = nextActual; changed = true; }
-                                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-                                }
-                                const desiredDetails = (i === startIdx) ? detailsValue : '';
-                                if (slot.activityLog.details !== desiredDetails) {
-                                    slot.activityLog.details = desiredDetails;
-                                    changed = true;
-                                }
-                                const desiredPlanTitle = (i === startIdx) ? planTitleValue : '';
-                                if (slot.planTitle !== desiredPlanTitle) {
-                                    slot.planTitle = desiredPlanTitle;
-                                    changed = true;
-                                }
-                                const desiredTimer = (i === startIdx)
-                                    ? normalizedTimer
-                                    : { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' };
-                                const currentTimerSig = JSON.stringify(slot.timer || {});
-                                const desiredTimerSig = JSON.stringify(desiredTimer);
-                                if (currentTimerSig !== desiredTimerSig) {
-                                    slot.timer = { ...desiredTimer };
-                                    changed = true;
-                                }
-                                const shouldPlanBand = (i === startIdx) && planTitleBand && Boolean(planTitleValue);
-                                if (slot.planTitleBandOn !== shouldPlanBand) {
-                                    slot.planTitleBandOn = shouldPlanBand;
-                                    changed = true;
-                                }
-                                const desiredTitleBand = (i === startIdx) && actualTitleBand && Array.isArray(activitiesValue) && activitiesValue.length > 0;
-                                if (slot.activityLog.titleBandOn !== desiredTitleBand) {
-                                    slot.activityLog.titleBandOn = desiredTitleBand;
-                                    changed = true;
-                                }
-                                if (i === startIdx) {
-                                    slot.activityLog.actualGridUnits = actualGridUnits.slice();
-                                    slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
-                                    slot.activityLog.actualFailedGridUnits = actualFailedGridUnits.slice();
-                                } else {
-                                    slot.activityLog.actualGridUnits = [];
-                                    slot.activityLog.actualExtraGridUnits = [];
-                                    slot.activityLog.actualFailedGridUnits = [];
-                                }
-                                if (hasActivities) {
-                                    const desiredActivities = (i === startIdx) ? activitiesValue : [];
-                                    const currentActivities = Array.isArray(slot.activityLog.subActivities) ? slot.activityLog.subActivities : [];
-                                    const desiredSignature = JSON.stringify(desiredActivities);
-                                    const currentSignature = JSON.stringify(this.normalizeActivitiesArray(currentActivities));
-                                    if (desiredSignature !== currentSignature) {
-                                        slot.activityLog.subActivities = desiredActivities.map(item => ({ ...item }));
-                                        changed = true;
-                                    }
-                                }
-                                if (hasPlanActivities) {
-                                    const desiredPlan = (i === startIdx) ? planActivitiesValue : [];
-                                    const currentPlan = Array.isArray(slot.planActivities) ? slot.planActivities : [];
-                                    const desiredPlanSig = JSON.stringify(desiredPlan);
-                                    const currentPlanSig = JSON.stringify(this.normalizePlanActivitiesArray(currentPlan));
-                                    if (desiredPlanSig !== currentPlanSig) {
-                                        slot.planActivities = desiredPlan.map(item => ({ ...item }));
-                                        changed = true;
-                                    }
-                                }
-                            }
-                            return;
-                        }
-                    }
-                }
-
-                const slot = this.timeSlots[idx];
-                if (slot.planned !== plannedValue) { slot.planned = plannedValue; changed = true; }
-                if (slot.actual !== actualValue) { slot.actual = actualValue; changed = true; }
-                const currentTimerSig = JSON.stringify(slot.timer || {});
-                const desiredTimerSig = JSON.stringify(normalizedTimer);
-                if (currentTimerSig !== desiredTimerSig) {
-                    slot.timer = { ...normalizedTimer };
-                    changed = true;
-                }
-                if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-                if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
-                const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
-                const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
-                if (slot.planTitle !== planTitleValue) { slot.planTitle = planTitleValue; changed = true; }
-                const appliedPlanBand = planTitleBand && Boolean(planTitleValue);
-                if (slot.planTitleBandOn !== appliedPlanBand) { slot.planTitleBandOn = appliedPlanBand; changed = true; }
-                const appliedTitleBand = actualTitleBand && normalizedActivities.length > 0;
-                if (slot.activityLog.titleBandOn !== appliedTitleBand) { slot.activityLog.titleBandOn = appliedTitleBand; changed = true; }
-                slot.activityLog.actualGridUnits = actualGridUnits.slice();
-                slot.activityLog.actualExtraGridUnits = actualExtraGridUnits.slice();
-                slot.activityLog.actualFailedGridUnits = actualFailedGridUnits.slice();
-                if (hasActivities) {
-                    const currentActivities = Array.isArray(slot.activityLog.subActivities) ? slot.activityLog.subActivities : [];
-                    const desiredSignature = JSON.stringify(normalizedActivities);
-                    const currentSignature = JSON.stringify(this.normalizeActivitiesArray(currentActivities));
-                    if (desiredSignature !== currentSignature) {
-                        slot.activityLog.subActivities = normalizedActivities.map(item => ({ ...item }));
-                        changed = true;
-                    }
-                }
-                if (hasPlanActivities) {
-                    const currentPlan = Array.isArray(slot.planActivities) ? slot.planActivities : [];
-                    const desiredPlanSig = JSON.stringify(normalizedPlanActivities);
-                    const currentPlanSig = JSON.stringify(this.normalizePlanActivitiesArray(currentPlan));
-                    if (desiredPlanSig !== currentPlanSig) {
-                        slot.planActivities = normalizedPlanActivities.map(item => ({ ...item }));
-                        changed = true;
-                    }
-                }
-            });
-        } catch (_) {}
-
-        const currentMergedSignature = JSON.stringify(Object.fromEntries(this.mergedFields));
-        const nextMergedSignature = JSON.stringify(Object.fromEntries(nextMergedFields));
-        if (currentMergedSignature !== nextMergedSignature) {
-            this.mergedFields = nextMergedFields;
-            changed = true;
-        } else {
-            this.mergedFields = nextMergedFields;
-        }
-        return changed;
+        applySlotsJson(slotsJson) {
+        return globalThis.TimeTrackerPersistenceController.applySlotsJson.call(this, slotsJson);
     }
     loadOrCreateDeviceId() {
         try {
@@ -1871,832 +1505,151 @@ class TimeTracker {
             });
         return JSON.stringify(normalized);
     }
-    applyPlannedCatalogJson(slotsJson) {
-        if (!slotsJson || typeof slotsJson !== 'object') return false;
-        const catalog = (slotsJson && typeof slotsJson.catalog === 'object') ? slotsJson.catalog : null;
-        const locals = Array.isArray(catalog && catalog.locals) ? catalog.locals : [];
-        const normalizedLocals = this.normalizeLocalPlannedCatalogEntries(locals);
-        const remoteSignature = this.computePlannedSignature(normalizedLocals);
-        if (remoteSignature && remoteSignature === this._lastSupabasePlannedSignature) {
-            return false;
-        }
-
-        const before = JSON.stringify(this.plannedActivities || []);
-        const merged = [];
-        const seen = new Set();
-
-        normalizedLocals.forEach(({ label, priorityRank }) => {
-            if (seen.has(label)) return;
-            seen.add(label);
-            merged.push({ label, source: 'local', priorityRank, recommendedSeconds: null });
-        });
-
-        (this.plannedActivities || []).forEach((item) => {
-            if (!item) return;
-            const label = this.normalizeActivityText(item.label || '');
-            if (!label) return;
-            if (item.source === 'notion') {
-                merged.push({
-                    label,
-                    source: 'notion',
-                    priorityRank: Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null,
-                    recommendedSeconds: Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null
-                });
-                seen.add(label);
-            }
-        });
-
-        this.plannedActivities = merged;
-        this.dedupeAndSortPlannedActivities();
-        const after = JSON.stringify(this.plannedActivities || []);
-        const selectionChanged = this.pruneSelectedActivitiesByAvailability ? this.pruneSelectedActivitiesByAvailability() : false;
-        const changed = before !== after || selectionChanged;
-        this.savePlannedActivities({ skipSupabase: true });
-        if (remoteSignature) {
-            this._lastSupabasePlannedSignature = remoteSignature;
-        }
-        return changed;
+        applyPlannedCatalogJson(slotsJson) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.applyPlannedCatalogJson.call(this, ...arguments);
     }
-    async fetchPlannedCatalogFromSupabase() {
-        if (!this.supabaseConfigured || !this.supabase) return false;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
-        try {
-            const { data, error } = await this.supabase
-                .from('timesheet_days')
-                .select('slots')
-                .eq('user_id', identity)
-                .eq('day', this.PLANNED_SENTINEL_DAY)
-                .maybeSingle();
-            if (error && error.code !== 'PGRST116') throw error;
-            if (data && data.slots) {
-                const changed = this.applyPlannedCatalogJson(data.slots);
-                if (this.renderPlannedActivityDropdown) {
-                    this.renderPlannedActivityDropdown();
-                }
-                return true;
-            }
-            // 센티널 행이 없는데 로컬 데이터가 있으면 서버로 업로드 스케줄링
-            const localEntries = this.getLocalPlannedEntries();
-            if (localEntries.length > 0) {
-                this.scheduleSupabasePlannedSave(true);
-            }
-            return true;
-        } catch (e) {
-            console.warn('[supabase] planned catalog fetch failed:', e);
-            return false;
-        }
+        async fetchPlannedCatalogFromSupabase() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.fetchPlannedCatalogFromSupabase.call(this, ...arguments);
     }
-    scheduleSupabasePlannedSave(force = false) {
-        if (!this.supabaseConfigured || !this.supabase) return;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return;
-        clearTimeout(this._plannedSaveTimer);
-        const executor = () => {
-            this._plannedSaveTimer = null;
-            try {
-                const promise = this.savePlannedCatalogToSupabase(force);
-                if (promise && typeof promise.catch === 'function') {
-                    promise.catch(() => {});
-                }
-            } catch (_) {}
-        };
-        if (force) {
-            executor();
-        } else {
-            this._plannedSaveTimer = setTimeout(executor, 500);
-        }
+        scheduleSupabasePlannedSave(force = false) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.scheduleSupabasePlannedSave.call(this, ...arguments);
     }
-    async savePlannedCatalogToSupabase(force = false) {
-        if (!this.supabaseConfigured || !this.supabase) return false;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
-        const locals = this.getLocalPlannedEntries();
-        const signature = this.computePlannedSignature(locals);
-        if (!force && signature && signature === this._lastSupabasePlannedSignature) {
-            return true;
-        }
-        try {
-            const catalog = {
-                version: 1,
-                locals,
-                updatedAt: new Date().toISOString(),
-                updatedBy: this.deviceId || null,
-            };
-            const payload = {
-                user_id: identity,
-                day: this.PLANNED_SENTINEL_DAY,
-                slots: { catalog },
-                updated_at: new Date().toISOString(),
-            };
-            const { error } = await this.supabase
-                .from('timesheet_days')
-                .upsert([payload], { onConflict: 'user_id,day' });
-            if (error) throw error;
-            this._lastSupabasePlannedSignature = signature;
-            return true;
-        } catch (e) {
-            console.warn('[supabase] planned catalog upsert failed:', e);
-            return false;
-        }
+        async savePlannedCatalogToSupabase(force = false) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.savePlannedCatalogToSupabase.call(this, ...arguments);
     }
 
     // ===== Routines (planned auto-fill) =====
-    normalizeRoutinePattern(pattern) {
-        const p = String(pattern || '').trim().toLowerCase();
-        if (p === 'weekday' || p === 'weekdays') return 'weekday';
-        if (p === 'weekend' || p === 'weekends') return 'weekend';
-        return 'daily';
+        normalizeRoutinePattern(pattern) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.normalizeRoutinePattern.call(this, ...arguments);
     }
-    getRoutinePatternLabel(pattern) {
-        const p = this.normalizeRoutinePattern(pattern);
-        if (p === 'weekday') return '평일';
-        if (p === 'weekend') return '주말';
-        return '매일';
+        getRoutinePatternLabel(pattern) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getRoutinePatternLabel.call(this, ...arguments);
     }
-    createRoutineId() {
-        try {
-            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-                return crypto.randomUUID();
-            }
-        } catch (_) {}
-        return `routine_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        createRoutineId() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.createRoutineId.call(this, ...arguments);
     }
-    normalizeRoutineItems(items) {
-        if (!Array.isArray(items)) return [];
-        const seen = new Set();
-        const out = [];
-        items.forEach((raw) => {
-            if (!raw || typeof raw !== 'object') return;
-            const id = String(raw.id || '').trim() || this.createRoutineId();
-            if (seen.has(id)) return;
-            seen.add(id);
-            const label = this.normalizeActivityText
-                ? this.normalizeActivityText(raw.label || '')
-                : String(raw.label || '').trim();
-            if (!label) return;
-            const startHour = Number.isFinite(raw.startHour) ? (Number(raw.startHour) % 24) : this.labelToHour(raw.startHour);
-            const durationHours = Number.isFinite(raw.durationHours)
-                ? Math.max(1, Math.min(24, Math.floor(Number(raw.durationHours))))
-                : 1;
-            const pattern = this.normalizeRoutinePattern(raw.pattern);
-            const stoppedAtMs = Number.isFinite(raw.stoppedAtMs) ? Math.max(0, Math.floor(Number(raw.stoppedAtMs))) : null;
-            const passDates = Array.isArray(raw.passDates)
-                ? raw.passDates.map(d => String(d || '').trim()).filter(Boolean)
-                : [];
-            const uniquePasses = Array.from(new Set(passDates)).sort((a, b) => a.localeCompare(b));
-            out.push({
-                id,
-                label,
-                startHour: (startHour + 24) % 24,
-                durationHours,
-                pattern,
-                passDates: uniquePasses,
-                stoppedAtMs,
-                createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : null,
-                createdBy: typeof raw.createdBy === 'string' ? raw.createdBy : null,
-                updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
-                updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
-            });
-        });
-        return out;
+        normalizeRoutineItems(items) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.normalizeRoutineItems.call(this, ...arguments);
     }
-    computeRoutineSignature(items) {
-        try {
-            const normalized = this.normalizeRoutineItems(items).map((r) => ({
-                id: r.id,
-                label: r.label,
-                startHour: r.startHour,
-                durationHours: r.durationHours,
-                pattern: r.pattern,
-                passDates: Array.isArray(r.passDates) ? Array.from(new Set(r.passDates)).sort() : [],
-                stoppedAtMs: Number.isFinite(r.stoppedAtMs) ? r.stoppedAtMs : null,
-            }));
-            normalized.sort((a, b) => {
-                const aKey = `${a.label}|${a.startHour}|${a.durationHours}|${a.id}`;
-                const bKey = `${b.label}|${b.startHour}|${b.durationHours}|${b.id}`;
-                return aKey.localeCompare(bKey);
-            });
-            return JSON.stringify(normalized);
-        } catch (_) {
-            return '';
-        }
+        computeRoutineSignature(items) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.computeRoutineSignature.call(this, ...arguments);
     }
-    applyRoutinesJson(slotsJson) {
-        const routines = (slotsJson && typeof slotsJson === 'object' && slotsJson.routines && typeof slotsJson.routines === 'object')
-            ? slotsJson.routines
-            : null;
-        const items = routines && Array.isArray(routines.items) ? routines.items : [];
-        const next = this.normalizeRoutineItems(items);
-        const before = JSON.stringify(this.routines || []);
-        const after = JSON.stringify(next);
-        const changed = before !== after;
-        this.routines = next;
-        this.routinesLoaded = true;
-        const signature = this.computeRoutineSignature(next);
-        if (signature) {
-            this._lastSupabaseRoutineSignature = signature;
-        }
-        return changed;
+        applyRoutinesJson(slotsJson) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.applyRoutinesJson.call(this, ...arguments);
     }
-    applyRoutinesFromRow(row) {
-        if (!row || typeof row !== 'object') return false;
-        const slots = row.slots || {};
-        return this.applyRoutinesJson(slots);
+        applyRoutinesFromRow(row) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.applyRoutinesFromRow.call(this, ...arguments);
     }
-    async fetchRoutinesFromSupabase() {
-        if (!this.supabaseConfigured || !this.supabase) return false;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
-        try {
-            const { data, error } = await this.supabase
-                .from('timesheet_days')
-                .select('slots')
-                .eq('user_id', identity)
-                .eq('day', this.ROUTINE_SENTINEL_DAY)
-                .maybeSingle();
-            if (error && error.code !== 'PGRST116') throw error;
-            if (data && data.slots) {
-                const changed = this.applyRoutinesJson(data.slots);
-                if (changed) {
-                    const applied = this.applyRoutinesToDate ? this.applyRoutinesToDate(this.currentDate, { reason: 'routines-fetch' }) : false;
-                    if (applied) {
-                        this.renderTimeEntries();
-                        this.calculateTotals();
-                        this.autoSave();
-                    }
-                } else {
-                    this.routinesLoaded = true;
-                }
-                return true;
-            }
-            this.routinesLoaded = true;
-            return true;
-        } catch (e) {
-            console.warn('[supabase] routines fetch failed:', e);
-            return false;
-        }
+        async fetchRoutinesFromSupabase() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.fetchRoutinesFromSupabase.call(this, ...arguments);
     }
-    scheduleSupabaseRoutineSave(force = false) {
-        if (!this.supabaseConfigured || !this.supabase) return;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return;
-        clearTimeout(this._routineSaveTimer);
-        const executor = () => {
-            this._routineSaveTimer = null;
-            try {
-                const promise = this.saveRoutinesToSupabase(force);
-                if (promise && typeof promise.catch === 'function') {
-                    promise.catch(() => {});
-                }
-            } catch (_) {}
-        };
-        if (force) {
-            executor();
-        } else {
-            this._routineSaveTimer = setTimeout(executor, 500);
-        }
+        scheduleSupabaseRoutineSave(force = false) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.scheduleSupabaseRoutineSave.call(this, ...arguments);
     }
-    async saveRoutinesToSupabase(force = false) {
-        if (!this.supabaseConfigured || !this.supabase) return false;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
-        const items = this.normalizeRoutineItems(this.routines || []);
-        const signature = this.computeRoutineSignature(items);
-        if (!force && signature && signature === this._lastSupabaseRoutineSignature) {
-            return true;
-        }
-        try {
-            const routines = {
-                version: 1,
-                items,
-                updatedAt: new Date().toISOString(),
-                updatedBy: this.deviceId || null,
-            };
-            const payload = {
-                user_id: identity,
-                day: this.ROUTINE_SENTINEL_DAY,
-                slots: { routines },
-                updated_at: new Date().toISOString(),
-            };
-            const { error } = await this.supabase
-                .from('timesheet_days')
-                .upsert([payload], { onConflict: 'user_id,day' });
-            if (error) throw error;
-            this._lastSupabaseRoutineSignature = signature;
-            return true;
-        } catch (e) {
-            console.warn('[supabase] routines upsert failed:', e);
-            return false;
-        }
+        async saveRoutinesToSupabase(force = false) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.saveRoutinesToSupabase.call(this, ...arguments);
     }
-    getLocalDateParts(date) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.parseLocalDateParts === 'function') {
-            return dateCore.parseLocalDateParts(date);
-        }
-        const s = String(date || '').trim();
-        const [yStr, mStr, dStr] = s.split('-');
-        const year = parseInt(yStr, 10);
-        const month = parseInt(mStr, 10);
-        const day = parseInt(dStr, 10);
-        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
-        return { year, month, day };
+        getLocalDateParts(date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getLocalDateParts.call(this, ...arguments);
     }
-    getDateValue(date) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.getDateValue === 'function') {
-            return dateCore.getDateValue(date);
-        }
-        const parts = this.getLocalDateParts(date);
-        if (!parts) return null;
-        const ms = new Date(parts.year, parts.month - 1, parts.day, 0, 0, 0, 0).getTime();
-        return Number.isFinite(ms) ? ms : null;
+        getDateValue(date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getDateValue.call(this, ...arguments);
     }
-    compareDateStrings(a, b) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.compareDateStrings === 'function') {
-            return dateCore.compareDateStrings(a, b);
-        }
-        const av = this.getDateValue(a);
-        const bv = this.getDateValue(b);
-        if (!Number.isFinite(av) || !Number.isFinite(bv)) return 0;
-        if (av < bv) return -1;
-        if (av > bv) return 1;
-        return 0;
+        compareDateStrings(a, b) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.compareDateStrings.call(this, ...arguments);
     }
-    formatDateFromMsLocal(ms) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.formatDateFromMsLocal === 'function') {
-            return dateCore.formatDateFromMsLocal(ms);
-        }
-        if (!Number.isFinite(ms)) return '';
-        const dt = new Date(ms);
-        if (isNaN(dt.getTime())) return '';
-        const y = dt.getFullYear();
-        const m = String(dt.getMonth() + 1).padStart(2, '0');
-        const d = String(dt.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
+        formatDateFromMsLocal(ms) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.formatDateFromMsLocal.call(this, ...arguments);
     }
-    getTodayLocalDateString() {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.getTodayLocalDateString === 'function') {
-            return dateCore.getTodayLocalDateString();
-        }
-        return this.formatDateFromMsLocal(Date.now());
+        getTodayLocalDateString() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getTodayLocalDateString.call(this, ...arguments);
     }
-    getLocalSlotStartMs(date, hour) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.getLocalSlotStartMs === 'function') {
-            return dateCore.getLocalSlotStartMs(date, hour);
-        }
-        const parts = this.getLocalDateParts(date);
-        if (!parts) return null;
-        const h = Number.isFinite(hour) ? Math.floor(Number(hour)) : 0;
-        const dt = new Date(parts.year, parts.month - 1, parts.day, h, 0, 0, 0);
-        const ms = dt.getTime();
-        return Number.isFinite(ms) ? ms : null;
+        getLocalSlotStartMs(date, hour) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getLocalSlotStartMs.call(this, ...arguments);
     }
-    getDayOfWeek(date) {
-        const dateCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDateCore)
-            ? globalThis.TimeTrackerDateCore
-            : null;
-        if (dateCore && typeof dateCore.getDayOfWeek === 'function') {
-            return dateCore.getDayOfWeek(date);
-        }
-        const parts = this.getLocalDateParts(date);
-        if (!parts) return 0;
-        return new Date(parts.year, parts.month - 1, parts.day).getDay();
+        getDayOfWeek(date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getDayOfWeek.call(this, ...arguments);
     }
-    withTemporarySlots(timeSlots, mergedFieldsMap, fn) {
-        const originalSlots = this.timeSlots;
-        const originalMerged = this.mergedFields;
-        this.timeSlots = timeSlots;
-        this.mergedFields = mergedFieldsMap;
-        try {
-            return fn();
-        } finally {
-            this.timeSlots = originalSlots;
-            this.mergedFields = originalMerged;
-        }
+        withTemporarySlots(timeSlots, mergedFieldsMap, fn) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.withTemporarySlots.call(this, ...arguments);
     }
-    applySlotsJsonToContext(slotsJson, timeSlots, mergedFieldsMap) {
-        return this.withTemporarySlots(timeSlots, mergedFieldsMap, () => this.applySlotsJson(slotsJson));
+        applySlotsJsonToContext(slotsJson, timeSlots, mergedFieldsMap) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.applySlotsJsonToContext.call(this, ...arguments);
     }
-    buildSlotsJsonForContext(timeSlots, mergedFieldsMap) {
-        return this.withTemporarySlots(timeSlots, mergedFieldsMap, () => this.buildSlotsJson());
+        buildSlotsJsonForContext(timeSlots, mergedFieldsMap) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.buildSlotsJsonForContext.call(this, ...arguments);
     }
-    findMergeKeyInMap(mergedFieldsMap, type, index) {
-        if (!mergedFieldsMap || !Number.isInteger(index)) return null;
-        const entries = mergedFieldsMap instanceof Map ? mergedFieldsMap : new Map(Object.entries(mergedFieldsMap));
-        for (let [key] of entries) {
-            if (!key || !key.startsWith(`${type}-`)) continue;
-            const [, startStr, endStr] = key.split('-');
-            const start = parseInt(startStr, 10);
-            const end = parseInt(endStr, 10);
-            if (index >= start && index <= end) {
-                return key;
-            }
-        }
-        return null;
+        findMergeKeyInMap(mergedFieldsMap, type, index) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.findMergeKeyInMap.call(this, ...arguments);
     }
-    routineIncludesHour(routine, hour) {
-        if (!routine || typeof routine !== 'object') return false;
-        const h = (Number(hour) + 24) % 24;
-        const start = (Number(routine.startHour) + 24) % 24;
-        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
-        for (let i = 0; i < dur; i++) {
-            const hh = (start + i) % 24;
-            if (hh === h) return true;
-        }
-        return false;
+        routineIncludesHour(routine, hour) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.routineIncludesHour.call(this, ...arguments);
     }
-    findRoutineForLabelAtIndex(label, index, date = null) {
-        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
-        if (!normalizedLabel) return null;
-        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
-        const hour = this.labelToHour(this.timeSlots[index] && this.timeSlots[index].time);
-        const targetDate = date || this.currentDate;
-        return (this.routines || []).find((r) => {
-            if (!r || r.label !== normalizedLabel) return false;
-            if (!this.routineIncludesHour(r, hour)) return false;
-            if (this.isRoutineStoppedForDate(r, targetDate)) return false;
-            return !this.isRoutineStoppedAtSlot(r, targetDate, hour);
-        }) || null;
+        findRoutineForLabelAtIndex(label, index, date = null) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.findRoutineForLabelAtIndex.call(this, ...arguments);
     }
-    findActiveRoutineForLabelAtIndex(label, index, date = null) {
-        const targetDate = date || this.currentDate;
-        const routine = this.findRoutineForLabelAtIndex(label, index, targetDate);
-        if (!routine) return null;
-        if (!this.isRoutineActiveOnDate(routine, targetDate)) return null;
-        return routine;
+        findActiveRoutineForLabelAtIndex(label, index, date = null) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.findActiveRoutineForLabelAtIndex.call(this, ...arguments);
     }
-    findRoutineForLabelAndWindow(label, startHour, durationHours) {
-        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
-        if (!normalizedLabel) return null;
-        const s = (Number(startHour) + 24) % 24;
-        const d = Number.isFinite(durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(durationHours)))) : 1;
-        return (this.routines || []).find((r) => {
-            if (!r || r.label !== normalizedLabel) return false;
-            const rs = (Number(r.startHour) + 24) % 24;
-            const rd = Number.isFinite(r.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(r.durationHours)))) : 1;
-            return rs === s && rd === d;
-        }) || null;
+        findRoutineForLabelAndWindow(label, startHour, durationHours) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.findRoutineForLabelAndWindow.call(this, ...arguments);
     }
-    isRoutineActiveOnDate(routine, date) {
-        if (!routine || typeof routine !== 'object') return false;
-        const passes = Array.isArray(routine.passDates) ? routine.passDates : [];
-        if (passes.includes(date)) return false;
-        const dow = this.getDayOfWeek(date);
-        const pattern = this.normalizeRoutinePattern(routine.pattern);
-        if (pattern === 'weekday') return dow >= 1 && dow <= 5;
-        if (pattern === 'weekend') return dow === 0 || dow === 6;
-        return true;
+        isRoutineActiveOnDate(routine, date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isRoutineActiveOnDate.call(this, ...arguments);
     }
-    isRoutineStoppedAtSlot(routine, date, hour) {
-        if (!Number.isFinite(routine && routine.stoppedAtMs)) return false;
-        const slotStartMs = this.getLocalSlotStartMs(date, hour);
-        return slotStartMs != null && slotStartMs >= routine.stoppedAtMs;
+        isRoutineStoppedAtSlot(routine, date, hour) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isRoutineStoppedAtSlot.call(this, ...arguments);
     }
-    isRoutineStoppedForDate(routine, date) {
-        if (!Number.isFinite(routine && routine.stoppedAtMs)) return false;
-        const stopDate = this.formatDateFromMsLocal(routine.stoppedAtMs);
-        if (!stopDate) return false;
-        return this.compareDateStrings(date, stopDate) >= 0;
+        isRoutineStoppedForDate(routine, date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isRoutineStoppedForDate.call(this, ...arguments);
     }
-    isRoutineActiveAtSlot(routine, date, hour) {
-        if (this.isRoutineStoppedForDate(routine, date)) return false;
-        if (!this.isRoutineActiveOnDate(routine, date)) return false;
-        return !this.isRoutineStoppedAtSlot(routine, date, hour);
+        isRoutineActiveAtSlot(routine, date, hour) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isRoutineActiveAtSlot.call(this, ...arguments);
     }
-    isRoutinePresentOnDate(routine) {
-        if (!routine || typeof routine !== 'object') return false;
-        const label = this.normalizeActivityText
-            ? this.normalizeActivityText(routine.label || '')
-            : String(routine.label || '').trim();
-        if (!label) return false;
-        const startHour = (Number(routine.startHour) + 24) % 24;
-        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
-        for (let i = 0; i < dur; i++) {
-            const hour = (startHour + i) % 24;
-            const labelForHour = this.hourToLabel(hour);
-            const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
-            if (index < 0) continue;
-            const plannedValue = this.getPlannedValueForIndex(index);
-            if (plannedValue && plannedValue === label) return true;
-            const slot = this.timeSlots[index];
-            const titleValue = this.normalizeActivityText
-                ? this.normalizeActivityText((slot && slot.planTitle) || '')
-                : String((slot && slot.planTitle) || '').trim();
-            if (titleValue && titleValue === label) return true;
-        }
-        return false;
+        isRoutinePresentOnDate(routine) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isRoutinePresentOnDate.call(this, ...arguments);
     }
-    getRoutineForPlannedIndex(index, date = null) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
-        const plannedLabel = this.getPlannedValueForIndex(index);
-        if (!plannedLabel) return null;
-        const targetDate = date || this.currentDate;
-        return this.findActiveRoutineForLabelAtIndex(plannedLabel, index, targetDate);
+        getRoutineForPlannedIndex(index, date = null) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getRoutineForPlannedIndex.call(this, ...arguments);
     }
-    isPlanSlotEmptyForRoutine(index) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return false;
-        const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
-        if (mk) return false;
-        const slot = this.timeSlots[index];
-        if (!slot) return false;
-        const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
-        const planTitle = this.normalizeActivityText ? this.normalizeActivityText(slot.planTitle || '') : String(slot.planTitle || '').trim();
-        const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
-        return !planned && !planTitle && planActivities.length === 0;
+        isPlanSlotEmptyForRoutine(index) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isPlanSlotEmptyForRoutine.call(this, ...arguments);
     }
-    isPlanSlotEmptyForInline(index) {
-        if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return false;
-        const planned = this.getPlannedValueForIndex(index);
-        const slot = this.timeSlots[index];
-        const planTitle = this.normalizeActivityText
-            ? this.normalizeActivityText((slot && slot.planTitle) || '')
-            : String((slot && slot.planTitle) || '').trim();
-        const planActivities = this.normalizePlanActivitiesArray(slot && slot.planActivities);
-        return !planned && !planTitle && planActivities.length === 0;
+        isPlanSlotEmptyForInline(index) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.isPlanSlotEmptyForInline.call(this, ...arguments);
     }
-    applyRoutinesToDate(date, options = {}) {
-        if (!this.routinesLoaded) return false;
-        const d = String(date || '').trim();
-        if (!d) return false;
-        const routines = Array.isArray(this.routines) ? this.routines : [];
-        if (routines.length === 0) return false;
-
-        let changed = false;
-
-        routines.forEach((routine) => {
-            if (this.isRoutineStoppedForDate(routine, d)) return;
-            if (!this.isRoutineActiveOnDate(routine, d)) return;
-            const label = String(routine.label || '').trim();
-            if (!label) return;
-            const startHour = (Number(routine.startHour) + 24) % 24;
-            const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
-            for (let i = 0; i < dur; i++) {
-                const hour = (startHour + i) % 24;
-                const slotStartMs = this.getLocalSlotStartMs(d, hour);
-                if (slotStartMs != null && Number.isFinite(routine.stoppedAtMs) && slotStartMs >= routine.stoppedAtMs) {
-                    continue;
-                }
-                const labelForHour = this.hourToLabel(hour);
-                const index = this.timeSlots.findIndex(s => s && String(s.time) === labelForHour);
-                if (index < 0) continue;
-                if (!this.isPlanSlotEmptyForRoutine(index)) continue;
-                const slot = this.timeSlots[index];
-                slot.planned = label;
-                slot.planTitle = label;
-                slot.planActivities = [];
-                slot.planTitleBandOn = false;
-                changed = true;
-            }
-        });
-
-        if (changed && options && options.reason === 'routines-realtime') {
-            // no-op: caller handles render/save
-        }
-        return changed;
+        applyRoutinesToDate(date, options = {}) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.applyRoutinesToDate.call(this, ...arguments);
     }
-    updateRoutineItem(id, patch = {}) {
-        const list = Array.isArray(this.routines) ? this.routines : [];
-        const idx = list.findIndex(r => r && r.id === id);
-        if (idx < 0) return false;
-        const before = JSON.stringify(list[idx]);
-        const next = { ...list[idx], ...patch };
-        next.updatedAt = new Date().toISOString();
-        next.updatedBy = this.deviceId || null;
-        list[idx] = next;
-        this.routines = list;
-        return JSON.stringify(next) !== before;
+        updateRoutineItem(id, patch = {}) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.updateRoutineItem.call(this, ...arguments);
     }
-    upsertRoutineByWindow(label, startHour, durationHours, patch = {}) {
-        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
-        if (!normalizedLabel) return null;
-        const s = (Number(startHour) + 24) % 24;
-        const d = Number.isFinite(durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(durationHours)))) : 1;
-        const existing = this.findRoutineForLabelAndWindow(normalizedLabel, s, d);
-        if (existing) {
-            const updated = this.updateRoutineItem(existing.id, { ...patch, label: normalizedLabel, startHour: s, durationHours: d });
-            return updated ? this.findRoutineForLabelAndWindow(normalizedLabel, s, d) : existing;
-        }
-        const now = new Date().toISOString();
-        const item = {
-            id: this.createRoutineId(),
-            label: normalizedLabel,
-            startHour: s,
-            durationHours: d,
-            pattern: this.normalizeRoutinePattern(patch.pattern),
-            passDates: Array.isArray(patch.passDates) ? patch.passDates.slice() : [],
-            stoppedAtMs: Number.isFinite(patch.stoppedAtMs) ? patch.stoppedAtMs : null,
-            createdAt: now,
-            createdBy: this.deviceId || null,
-            updatedAt: now,
-            updatedBy: this.deviceId || null,
-        };
-        this.routines = [...(this.routines || []), item];
-        return item;
+        upsertRoutineByWindow(label, startHour, durationHours, patch = {}) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.upsertRoutineByWindow.call(this, ...arguments);
     }
-    getInlineTargetRange() {
-        if (!this.inlinePlanTarget) return null;
-        const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
-        const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
-        const startIndex = Math.min(safeStart, safeEnd);
-        const endIndex = Math.max(safeStart, safeEnd);
-        return { startIndex, endIndex };
+        getInlineTargetRange() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getInlineTargetRange.call(this, ...arguments);
     }
-    getRoutineWindowFromRange(startIndex, endIndex) {
-        if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) return null;
-        const startSlot = this.timeSlots[startIndex];
-        const endSlot = this.timeSlots[endIndex];
-        if (!startSlot || !endSlot) return null;
-        const startHour = this.labelToHour(startSlot.time);
-        const durationHours = Math.max(1, endIndex - startIndex + 1);
-        return { startHour, durationHours };
+        getRoutineWindowFromRange(startIndex, endIndex) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.getRoutineWindowFromRange.call(this, ...arguments);
     }
-    passRoutineForDate(routineId, date) {
-        const d = String(date || '').trim();
-        if (!d) return false;
-        const routine = (this.routines || []).find(r => r && r.id === routineId);
-        if (!routine) return false;
-        const passes = Array.isArray(routine.passDates) ? routine.passDates.slice() : [];
-        if (!passes.includes(d)) passes.push(d);
-        passes.sort((a, b) => a.localeCompare(b));
-        return this.updateRoutineItem(routineId, { passDates: passes });
+        passRoutineForDate(routineId, date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.passRoutineForDate.call(this, ...arguments);
     }
-    clearRoutinePassForDate(routineId, date) {
-        const d = String(date || '').trim();
-        if (!d) return false;
-        const routine = (this.routines || []).find(r => r && r.id === routineId);
-        if (!routine) return false;
-        const passes = Array.isArray(routine.passDates) ? routine.passDates.filter(x => x !== d) : [];
-        return this.updateRoutineItem(routineId, { passDates: passes });
+        clearRoutinePassForDate(routineId, date) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.clearRoutinePassForDate.call(this, ...arguments);
     }
-    clearRoutineRangeForDate(routine, date, options = {}) {
-        if (!routine || typeof routine !== 'object') return false;
-        const d = String(date || '').trim();
-        if (!d) return false;
-        const slots = Array.isArray(options.timeSlots) ? options.timeSlots : this.timeSlots;
-        const mergedMap = options.mergedFieldsMap instanceof Map ? options.mergedFieldsMap : this.mergedFields;
-        if (!Array.isArray(slots) || !mergedMap) return false;
-        const label = this.normalizeActivityText
-            ? this.normalizeActivityText(routine.label || '')
-            : String(routine.label || '').trim();
-        if (!label) return false;
-
-        const startHour = (Number(routine.startHour) + 24) % 24;
-        const dur = Number.isFinite(routine.durationHours) ? Math.max(1, Math.min(24, Math.floor(Number(routine.durationHours)))) : 1;
-        const indicesToClear = new Set();
-
-        for (let i = 0; i < dur; i++) {
-            const hour = (startHour + i) % 24;
-            const slotStartMs = this.getLocalSlotStartMs(d, hour);
-            if (Number.isFinite(options.minSlotStartMs) && slotStartMs != null && slotStartMs < options.minSlotStartMs) {
-                continue;
-            }
-            const labelForHour = this.hourToLabel(hour);
-            const index = slots.findIndex(s => s && String(s.time) === labelForHour);
-            if (index >= 0) indicesToClear.add(index);
-        }
-
-        if (indicesToClear.size === 0) return false;
-
-        let changed = false;
-        const handledMerges = new Set();
-        const clearSlot = (slot) => {
-            if (!slot) return;
-            if (slot.planned !== '') { slot.planned = ''; changed = true; }
-            if (slot.planTitle !== '') { slot.planTitle = ''; changed = true; }
-            if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
-            const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
-            if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
-        };
-
-        indicesToClear.forEach((index) => {
-            const mk = this.findMergeKeyInMap(mergedMap, 'planned', index);
-            if (mk) {
-                if (handledMerges.has(mk)) return;
-                handledMerges.add(mk);
-                const [, startStr, endStr] = mk.split('-');
-                const start = parseInt(startStr, 10);
-                const end = parseInt(endStr, 10);
-                if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return;
-                const baseSlot = slots[start];
-                const mergedRaw = mergedMap.has(mk)
-                    ? mergedMap.get(mk)
-                    : (baseSlot && baseSlot.planned) || '';
-                const mergedText = this.normalizeActivityText
-                    ? this.normalizeActivityText(mergedRaw || '')
-                    : String(mergedRaw || '').trim();
-                if (mergedText && mergedText !== label) return;
-
-                let clearAll = true;
-                for (let j = start; j <= end; j++) {
-                    if (!indicesToClear.has(j)) {
-                        clearAll = false;
-                        break;
-                    }
-                }
-
-                if (mergedMap.has(mk)) {
-                    mergedMap.delete(mk);
-                    changed = true;
-                }
-
-                for (let j = start; j <= end; j++) {
-                    const slot = slots[j];
-                    if (!slot) continue;
-                    if (clearAll || indicesToClear.has(j)) {
-                        clearSlot(slot);
-                    } else {
-                        if (slot.planned !== label) { slot.planned = label; changed = true; }
-                        if (slot.planTitle !== label) { slot.planTitle = label; changed = true; }
-                        if (slot.planTitleBandOn !== false) { slot.planTitleBandOn = false; changed = true; }
-                        const planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
-                        if (planActivities.length > 0) { slot.planActivities = []; changed = true; }
-                    }
-                }
-                return;
-            }
-
-            const slot = slots[index];
-            if (!slot) return;
-            const planned = this.normalizeActivityText ? this.normalizeActivityText(slot.planned || '') : String(slot.planned || '').trim();
-            const planTitle = this.normalizeActivityText ? this.normalizeActivityText(slot.planTitle || '') : String(slot.planTitle || '').trim();
-            if ((planned && planned !== label) && (planTitle && planTitle !== label)) return;
-            clearSlot(slot);
-        });
-
-        return changed;
+        clearRoutineRangeForDate(routine, date, options = {}) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.clearRoutineRangeForDate.call(this, ...arguments);
     }
-    clearRoutineFromLocalStorageFutureDates(routine, fromDate) {
-        // local storage disabled
+        clearRoutineFromLocalStorageFutureDates(routine, fromDate) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.clearRoutineFromLocalStorageFutureDates.call(this, ...arguments);
     }
-    async clearRoutineFromSupabaseFutureDates(routine, fromDate) {
-        if (!this.supabaseConfigured || !this.supabase) return false;
-        const identity = this.getSupabaseIdentity();
-        if (!identity) return false;
-        try {
-            const { data, error } = await this.supabase
-                .from('timesheet_days')
-                .select('day, slots')
-                .eq('user_id', identity)
-                .gte('day', fromDate)
-                .neq('day', this.PLANNED_SENTINEL_DAY)
-                .neq('day', this.ROUTINE_SENTINEL_DAY);
-            if (error) throw error;
-            if (!Array.isArray(data) || data.length === 0) return true;
-
-            for (const row of data) {
-                if (!row || !row.day || row.day === fromDate) continue;
-                const slotsJson = row.slots || {};
-                const tempSlots = this.createEmptyTimeSlots();
-                const tempMerged = new Map();
-                this.applySlotsJsonToContext(slotsJson, tempSlots, tempMerged);
-                const changed = this.clearRoutineRangeForDate(routine, row.day, {
-                    timeSlots: tempSlots,
-                    mergedFieldsMap: tempMerged
-                });
-                if (!changed) continue;
-                const nextSlotsJson = this.buildSlotsJsonForContext(tempSlots, tempMerged);
-                if (Object.keys(nextSlotsJson).length === 0) {
-                    await this.deleteFromSupabaseForDate(row.day);
-                } else {
-                    const payload = {
-                        user_id: identity,
-                        day: row.day,
-                        slots: nextSlotsJson,
-                        updated_at: new Date().toISOString(),
-                    };
-                    await this.supabase
-                        .from('timesheet_days')
-                        .upsert([payload], { onConflict: 'user_id,day' });
-                }
-            }
-            return true;
-        } catch (e) {
-            console.warn('[supabase] routines future cleanup failed:', e);
-            return false;
-        }
+        async clearRoutineFromSupabaseFutureDates(routine, fromDate) {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.clearRoutineFromSupabaseFutureDates.call(this, ...arguments);
     }
-    ensureRoutinesAvailableOrNotify() {
-        if (this.supabaseConfigured && this.supabase && this.getSupabaseIdentity()) return true;
-        this.showNotification('루틴 기능은 Google 로그인 후 사용할 수 있습니다.');
-        return false;
+        ensureRoutinesAvailableOrNotify() {
+        return globalThis.TimeTrackerPlannedCatalogRoutineController.ensureRoutinesAvailableOrNotify.call(this, ...arguments);
     }
 
     normalizeActivityLog(slot) {
@@ -3238,332 +2191,35 @@ class TimeTracker {
     }
 
     selectFieldRange(type, startIndex, endIndex) {
-        if (type !== 'planned') return; // 우측 열 멀티 선택 금지
-        this.clearSelection(type);
-
-        let start = Math.min(startIndex, endIndex);
-        let end = Math.max(startIndex, endIndex);
-
-        if (Number.isInteger(start) && Number.isInteger(end)) {
-            const startInfo = this.getPlannedRangeInfo
-                ? this.getPlannedRangeInfo(start)
-                : { startIndex: start, endIndex: start };
-            const endInfo = this.getPlannedRangeInfo
-                ? this.getPlannedRangeInfo(end)
-                : { startIndex: end, endIndex: end };
-
-            if (startInfo) {
-                if (Number.isInteger(startInfo.startIndex)) start = Math.min(start, startInfo.startIndex);
-                if (Number.isInteger(startInfo.endIndex)) end = Math.max(end, startInfo.endIndex);
-            }
-            if (endInfo) {
-                if (Number.isInteger(endInfo.startIndex)) start = Math.min(start, endInfo.startIndex);
-                if (Number.isInteger(endInfo.endIndex)) end = Math.max(end, endInfo.endIndex);
-            }
-        }
-
-        const maxIndex = Array.isArray(this.timeSlots) ? this.timeSlots.length - 1 : end;
-        if (!Number.isFinite(maxIndex) || maxIndex < 0) return;
-        start = Math.max(0, start);
-        end = Math.min(maxIndex, end);
-        if (start > end) return;
-
-        for (let i = start; i <= end; i++) {
-            const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-            selectedSet.add(i);
-            // 필드 클래스 하이라이트는 사용하지 않음 (투명 오버레이만)
-        }
-
-        this.updateSelectionOverlay(type);
-
-        const selectedSet = this.selectedPlannedFields;
-        if (selectedSet.size > 1) {
-            this.showMergeButton('planned');
-        }
-        this.showScheduleButtonForSelection(type);
+        return globalThis.TimeTrackerSelectionOverlayController.selectFieldRange.call(this, type, startIndex, endIndex);
     }
 
     clearSelection(type) {
-        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        selectedSet.forEach(index => {
-            const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
-            if (field) {
-                field.classList.remove('field-selected');
-                const row = field.closest('.time-entry');
-                if (row) {
-                    row.classList.remove('selected-merged-planned', 'selected-merged-actual');
-                }
-            }
-        });
-        selectedSet.clear();
-
-        this.hideMergeButton();
-        this.hideUndoButton();
-        this.removeSelectionOverlay(type);
-        this.hideScheduleButton();
+        return globalThis.TimeTrackerSelectionOverlayController.clearSelection.call(this, type);
     }
 
     clearAllSelections() {
-        this.clearSelection('planned');
-        this.clearSelection('actual');
+        return globalThis.TimeTrackerSelectionOverlayController.clearAllSelections.call(this);
     }
 
     showMergeButton(type) {
-        if (type !== 'planned') return; // 우측 열 병합 버튼 금지
-        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-
-        if (selectedSet.size > 1) {
-            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const startIndex = selectedIndices[0];
-            const endIndex = selectedIndices[selectedIndices.length - 1];
-
-            const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
-            const endField = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
-
-            if (startField && endField) {
-                const startRect = startField.getBoundingClientRect();
-                const endRect = endField.getBoundingClientRect();
-
-                let centerX, centerY;
-
-                const selectedCount = selectedIndices.length;
-
-                if (selectedCount % 2 === 1) {
-                    const middleIndex = selectedIndices[Math.floor(selectedCount / 2)];
-                    const middleField = document.querySelector(`[data-index="${middleIndex}"] .${type}-input`);
-                    const middleRect = middleField.getBoundingClientRect();
-                    centerX = middleRect.left + (middleRect.width / 2);
-                    centerY = middleRect.top + (middleRect.height / 2);
-                } else {
-                    const midIndex1 = Math.floor(selectedCount / 2) - 1;
-                    const midIndex2 = Math.floor(selectedCount / 2);
-                    const field1 = document.querySelector(`[data-index="${selectedIndices[midIndex1]}"] .${type}-input`);
-                    const field2 = document.querySelector(`[data-index="${selectedIndices[midIndex2]}"] .${type}-input`);
-                    const rect1 = field1.getBoundingClientRect();
-                    const rect2 = field2.getBoundingClientRect();
-
-                    centerX = (rect1.left + rect1.width / 2 + rect2.left + rect2.width / 2) / 2;
-                    centerY = (rect1.bottom + rect2.top) / 2;
-                }
-
-                this.hideMergeButton();
-
-                const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-                const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-
-                this.mergeButton = document.createElement('button');
-                this.mergeButton.className = 'merge-button';
-                this.mergeButton.textContent = '병합';
-                // 기본 배치(선택 중앙) 후, 스케줄 버튼이 있으면 우측으로 재배치
-                this.mergeButton.style.left = `${centerX + scrollX - 25}px`;
-                this.mergeButton.style.top = `${centerY + scrollY - 15}px`;
-
-                this.mergeButton.addEventListener('click', () => {
-                    this.mergeSelectedFields(type);
-                });
-
-                document.body.appendChild(this.mergeButton);
-                // 병합 버튼과 스케줄 버튼은 동시 표기하지 않음
-                this.hideScheduleButton();
-                this.repositionButtonsNextToSchedule();
-            }
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.showMergeButton.call(this, type);
     }
 
     hideMergeButton() {
-        if (this.mergeButton && this.mergeButton.parentNode) {
-            this.mergeButton.parentNode.removeChild(this.mergeButton);
-            this.mergeButton = null;
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.hideMergeButton.call(this);
     }
 
     showUndoButton(type, mergeKey) {
-        // 우측(실제) 열은 병합 해제 기능 제거
-        if (type !== 'planned') return;
-        const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-
-        const startField = document.querySelector(`[data-index="${start}"] .${type}-input`);
-        const endField = document.querySelector(`[data-index="${end}"] .${type}-input`);
-
-        if (startField && endField) {
-            const startRect = startField.getBoundingClientRect();
-            const endRect = endField.getBoundingClientRect();
-
-            this.hideUndoButton();
-
-            const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-            const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-
-            const anchor = this.scheduleHoverButton || this.scheduleButton;
-            let defaultLeft, defaultTop;
-            if (anchor) {
-                const sbRect = anchor.getBoundingClientRect();
-                defaultLeft = window.scrollX + sbRect.left + sbRect.width + 8;
-                defaultTop = window.scrollY + sbRect.top;
-            } else {
-                const centerX = startRect.left + (startRect.width / 2);
-                const centerY = startRect.top + ((endRect.bottom - startRect.top) / 2);
-                defaultLeft = centerX + scrollX - 17;
-                defaultTop = centerY + scrollY - 17;
-            }
-
-            this.undoButton = document.createElement('button');
-            this.undoButton.className = 'undo-button';
-            // 기본 배치: 스케줄 버튼이 있으면 바로 우측, 없으면 중앙
-            this.undoButton.style.left = `${Math.round(defaultLeft)}px`;
-            this.undoButton.style.top = `${Math.round(defaultTop)}px`;
-
-            this.undoButton.addEventListener('click', () => {
-                this.undoMerge(type, mergeKey);
-            });
-
-            document.body.appendChild(this.undoButton);
-            this.repositionButtonsNextToSchedule();
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.showUndoButton.call(this, type, mergeKey);
     }
 
     hideUndoButton() {
-        if (this.undoButton && this.undoButton.parentNode) {
-            this.undoButton.parentNode.removeChild(this.undoButton);
-            this.undoButton = null;
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.hideUndoButton.call(this);
     }
 
     undoMerge(type, mergeKey) {
-        // 우측(실제) 열은 병합 해제 불가
-        if (type !== 'planned') {
-            this.hideUndoButton();
-            this.clearSelection(type);
-            return;
-        }
-        const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-        const slotCount = Math.max(1, (end - start + 1));
-
-        const timeRangeKey = `time-${start}-${end}`;
-        const actualMergeKey = `actual-${start}-${end}`;
-        const baseSlot = this.timeSlots[start] || {};
-
-        const mergedPlannedText = String(this.mergedFields.get(mergeKey) ?? baseSlot.planned ?? '').trim();
-        const mergedActualText = String(this.mergedFields.get(actualMergeKey) ?? baseSlot.actual ?? '').trim();
-        const mergedPlanTitle = String(baseSlot.planTitle || '').trim();
-
-        const sourcePlanActivities = this.normalizePlanActivitiesArray(baseSlot.planActivities);
-        const sourceActualActivities = this.normalizeActivitiesArray(baseSlot.activityLog && baseSlot.activityLog.subActivities);
-
-        const splitSecondsEvenly = (totalSeconds, count) => {
-            const safeTotal = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-            const n = Math.max(1, Math.floor(Number(count) || 1));
-            const base = Math.floor(safeTotal / n);
-            let rem = safeTotal - (base * n);
-            const out = new Array(n).fill(base);
-            for (let i = 0; i < n && rem > 0; i += 1, rem -= 1) out[i] += 1;
-            return out;
-        };
-
-        const splitActivitiesBySlots = (items, count, isActual = false) => {
-            const normalized = Array.isArray(items) ? items : [];
-            const perSlot = Array.from({ length: count }, () => []);
-            normalized.forEach((item) => {
-                if (!item) return;
-                const totalSec = Math.max(0, Math.floor(Number(item.seconds) || 0));
-                if (totalSec <= 0) return;
-                const secChunks = splitSecondsEvenly(totalSec, count);
-
-                let recChunks = null;
-                if (isActual) {
-                    const rec = Number.isFinite(item.recordedSeconds)
-                        ? Math.max(0, Math.floor(Number(item.recordedSeconds)))
-                        : totalSec;
-                    recChunks = splitSecondsEvenly(rec, count);
-                }
-
-                for (let idx = 0; idx < count; idx++) {
-                    const sec = secChunks[idx] || 0;
-                    if (sec <= 0) continue;
-                    const next = { ...item, seconds: sec };
-                    if (isActual) {
-                        next.recordedSeconds = recChunks ? (recChunks[idx] || sec) : sec;
-                    }
-                    perSlot[idx].push(next);
-                }
-            });
-            return perSlot;
-        };
-
-        const summarizeLabel = (items, fallbackText) => {
-            const arr = Array.isArray(items) ? items : [];
-            if (arr.length <= 0) return String(fallbackText || '').trim();
-            const labels = arr
-                .map((it) => String(it && it.label ? it.label : '').trim())
-                .filter(Boolean);
-            if (labels.length <= 0) return String(fallbackText || '').trim();
-            if (labels.length === 1) return labels[0];
-            return `${labels[0]} 외 ${labels.length - 1}`;
-        };
-
-        const splitBooleanUnits = (units, count) => {
-            const src = Array.isArray(units) ? units.map(v => Boolean(v)) : [];
-            const n = Math.max(1, Math.floor(Number(count) || 1));
-            const lengths = splitSecondsEvenly(src.length, n);
-            const out = [];
-            let offset = 0;
-            for (let i = 0; i < n; i++) {
-                const len = lengths[i] || 0;
-                out.push(src.slice(offset, offset + len));
-                offset += len;
-            }
-            return out;
-        };
-
-        const planBySlot = splitActivitiesBySlots(sourcePlanActivities, slotCount, false);
-        const actualBySlot = splitActivitiesBySlots(sourceActualActivities, slotCount, true);
-        const baseLog = (baseSlot && baseSlot.activityLog && typeof baseSlot.activityLog === 'object')
-            ? baseSlot.activityLog
-            : {};
-        const actualUnitsBySlot = splitBooleanUnits(baseLog.actualGridUnits, slotCount);
-        const extraUnitsBySlot = splitBooleanUnits(baseLog.actualExtraGridUnits, slotCount);
-        const failedUnitsBySlot = splitBooleanUnits(baseLog.actualFailedGridUnits, slotCount);
-
-        // 병합 키 제거
-        this.mergedFields.delete(mergeKey);
-        this.mergedFields.delete(timeRangeKey);
-        this.mergedFields.delete(actualMergeKey);
-
-        for (let i = start; i <= end; i++) {
-            const rel = i - start;
-            const slot = this.timeSlots[i];
-            if (!slot) continue;
-
-            if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-            }
-
-            const slotPlanActivities = Array.isArray(planBySlot[rel]) ? planBySlot[rel] : [];
-            const slotActualActivities = Array.isArray(actualBySlot[rel]) ? actualBySlot[rel] : [];
-
-            slot.planActivities = slotPlanActivities.map(item => ({ ...item }));
-            slot.activityLog.subActivities = slotActualActivities.map(item => ({ ...item }));
-
-            slot.planned = summarizeLabel(slotPlanActivities, mergedPlannedText);
-            slot.actual = summarizeLabel(slotActualActivities, mergedActualText);
-
-            slot.planTitle = slot.planned ? mergedPlanTitle : '';
-            slot.planTitleBandOn = Boolean(slot.planTitle && slotPlanActivities.length > 0);
-            slot.activityLog.titleBandOn = Boolean(slot.activityLog.titleBandOn && slotActualActivities.length > 0);
-            slot.activityLog.actualOverride = false;
-            slot.activityLog.actualGridUnits = Array.isArray(actualUnitsBySlot[rel]) ? actualUnitsBySlot[rel].slice() : [];
-            slot.activityLog.actualExtraGridUnits = Array.isArray(extraUnitsBySlot[rel]) ? extraUnitsBySlot[rel].slice() : [];
-            slot.activityLog.actualFailedGridUnits = Array.isArray(failedUnitsBySlot[rel]) ? failedUnitsBySlot[rel].slice() : [];
-        }
-
-        this.renderTimeEntries();
-        this.clearAllSelections();
-        this.calculateTotals();
-        this.autoSave();
+        return globalThis.TimeTrackerSelectionOverlayController.undoMerge.call(this, type, mergeKey);
     }
 
     mergeSelectedFields(type) {
@@ -6531,277 +5187,52 @@ class TimeTracker {
         }
     }
 
-    getPlanActivitiesForIndex(index) {
-        let baseIndex = index;
-        const plannedMergeKey = this.findMergeKey('planned', index);
-        if (plannedMergeKey) {
-            const [, startStr] = plannedMergeKey.split('-');
-            const start = parseInt(startStr, 10);
-            if (Number.isFinite(start)) baseIndex = start;
-        }
-        const slot = this.timeSlots[baseIndex];
-        return this.normalizePlanActivitiesArray(slot && slot.planActivities);
+        getPlanActivitiesForIndex(index) {
+        return globalThis.TimeTrackerPlannedEditorController.getPlanActivitiesForIndex.call(this, ...arguments);
     }
 
-    updatePlanActivitiesAssignment(baseIndex, label, seconds) {
-        if (!Number.isFinite(baseIndex) || baseIndex < 0 || baseIndex >= this.timeSlots.length) return false;
-        const normalizedLabel = this.normalizeActivityText
-            ? this.normalizeActivityText(label || '')
-            : String(label || '').trim();
-        if (!normalizedLabel) return false;
-        const plannedBaseIndex = this.getSplitBaseIndex ? this.getSplitBaseIndex('planned', baseIndex) : baseIndex;
-        const slot = this.timeSlots[plannedBaseIndex];
-        if (!slot) return false;
-        const normalizedSeconds = this.normalizeDurationStep(Number.isFinite(seconds) ? seconds : 0) || 0;
-        let planActivities = this.normalizePlanActivitiesArray(slot.planActivities);
-        let updated = false;
-
-        if (planActivities.length > 0) {
-            let found = false;
-            planActivities = planActivities.map((item) => {
-                const itemLabel = this.normalizeActivityText
-                    ? this.normalizeActivityText(item.label || '')
-                    : String(item.label || '').trim();
-                if (!itemLabel) return item;
-                if (itemLabel === normalizedLabel) {
-                    found = true;
-                    updated = true;
-                    return { label: itemLabel, seconds: normalizedSeconds };
-                }
-                return item;
-            });
-            if (!found) {
-                planActivities.push({ label: normalizedLabel, seconds: normalizedSeconds });
-                updated = true;
-            }
-        } else {
-            planActivities = [{ label: normalizedLabel, seconds: normalizedSeconds }];
-            updated = true;
-        }
-
-        if (updated) {
-            slot.planActivities = planActivities.map(item => ({ ...item }));
-        }
-        return updated;
+        updatePlanActivitiesAssignment(baseIndex, label, seconds) {
+        return globalThis.TimeTrackerPlannedEditorController.updatePlanActivitiesAssignment.call(this, ...arguments);
     }
 
-    getValidPlanActivitiesSeconds() {
-        if (!Array.isArray(this.modalPlanActivities)) return 0;
-        return this.modalPlanActivities.reduce((sum, item) => {
-            if (!item || item.invalid) return sum;
-            const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            return sum + secs;
-        }, 0);
+        getValidPlanActivitiesSeconds() {
+        return globalThis.TimeTrackerPlannedEditorController.getValidPlanActivitiesSeconds.call(this, ...arguments);
     }
 
-    getPlanUIElements() {
-        if (this.inlinePlanContext) {
-            return this.inlinePlanContext;
-        }
-        return {
-            list: document.getElementById('planActivitiesList'),
-            totalEl: document.getElementById('planSplitTotalTime'),
-            usedEl: document.getElementById('planSplitUsedTime'),
-            noticeEl: document.getElementById('planActivitiesNotice'),
-            fillBtn: document.getElementById('fillRemainingPlanActivity'),
-            addBtn: document.getElementById('addPlanActivityRow'),
-            section: document.getElementById('planActivitiesSection')
-        };
+        getPlanUIElements() {
+        return globalThis.TimeTrackerPlannedEditorController.getPlanUIElements.call(this, ...arguments);
     }
 
-    updatePlanActivitiesToggleLabel() {
-        const toggleBtn = document.getElementById('togglePlanActivities');
-        if (toggleBtn) {
-            toggleBtn.textContent = this.modalPlanSectionOpen ? '세부 활동 접기' : '세부 활동 분해';
-        }
+        updatePlanActivitiesToggleLabel() {
+        return globalThis.TimeTrackerPlannedEditorController.updatePlanActivitiesToggleLabel.call(this, ...arguments);
     }
 
-    updatePlanActivitiesSummary() {
-        const { totalEl, usedEl, noticeEl } = this.getPlanUIElements();
-        if (!totalEl || !usedEl || !noticeEl) return;
-
-        const total = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
-        const used = this.getValidPlanActivitiesSeconds();
-        const hasInvalid = (this.modalPlanActivities || []).some(item => item && item.invalid);
-
-        totalEl.textContent = this.formatDurationSummary(total);
-        usedEl.textContent = this.formatDurationSummary(used);
-
-        noticeEl.textContent = '';
-        noticeEl.classList.remove('ok');
-
-        if (!Array.isArray(this.modalPlanActivities) || this.modalPlanActivities.length === 0) {
-            if (total > 0) {
-                noticeEl.textContent = '분해를 추가하지 않으면 전체 시간이 동일하게 적용됩니다.';
-            }
-            return;
-        }
-
-        if (hasInvalid) {
-            noticeEl.textContent = '잘못된 시간 형식이 있습니다.';
-            return;
-        }
-
-        if (total === 0) {
-            noticeEl.textContent = '총 시간이 0이라 분해 합계 검증을 건너뜁니다.';
-            noticeEl.classList.add('ok');
-            return;
-        }
-
-        if (used === total) {
-            noticeEl.textContent = '분해 합계가 총 시간과 일치합니다.';
-            noticeEl.classList.add('ok');
-        } else if (used > total) {
-            noticeEl.textContent = '분해 합계가 총 시간을 초과했습니다.';
-        } else {
-            const remaining = total - used;
-            noticeEl.textContent = `잔여 시간 ${this.formatDurationSummary(remaining)}이 남아 있습니다.`;
-        }
-        this.refreshSpinnerStates('plan');
-        this.syncPlanTitleBandToggleState();
+        updatePlanActivitiesSummary() {
+        return globalThis.TimeTrackerPlannedEditorController.updatePlanActivitiesSummary.call(this, ...arguments);
     }
 
-    syncPlanTitleBandToggleState() {
-        const ctxToggle = this.inlinePlanContext && this.inlinePlanContext.titleToggle;
-        const ctxField = this.inlinePlanContext && this.inlinePlanContext.titleField;
-        const ctxInput = this.inlinePlanContext && this.inlinePlanContext.titleInput;
-        const toggle = ctxToggle || document.getElementById('planTitleBandToggle');
-        const field = ctxField || document.getElementById('planTitleField');
-        const input = ctxInput || this.ensurePlanTitleButton(document.getElementById('planTitleInput'));
-        if (!toggle) return;
-        const normalizedTitle = this.normalizeActivityText
-            ? this.normalizeActivityText(this.modalPlanTitle || '')
-            : (this.modalPlanTitle || '').trim();
-        const hasTitle = Boolean(normalizedTitle);
-
-        // 제목이 없더라도 토글은 항상 활성화(입력 가능하게)하고,
-        // 토글이 켜졌는데 제목이 없다면 기본값을 자동 채움
-        if (this.modalPlanTitleBandOn && !hasTitle) {
-            const fallbackRaw = (this.modalSelectedActivities && this.modalSelectedActivities[0])
-                || (this.modalPlanActivities && this.modalPlanActivities[0] && this.modalPlanActivities[0].label)
-                || '';
-            const fallback = this.normalizeActivityText
-                ? this.normalizeActivityText(fallbackRaw || '')
-                : (fallbackRaw || '').trim();
-            if (fallback) {
-                this.modalPlanTitle = fallback;
-                if (input) input.value = fallback;
-            }
-        }
-
-        if (field) {
-            field.hidden = !this.modalPlanTitleBandOn;
-        }
-        if (input) {
-            this.setPlanTitleInputDisplay(input, this.modalPlanTitle || '');
-        }
-        toggle.checked = this.modalPlanTitleBandOn;
-        toggle.disabled = false;
-        this.updateSchedulePreview && this.updateSchedulePreview();
+        syncPlanTitleBandToggleState() {
+        return globalThis.TimeTrackerPlannedEditorController.syncPlanTitleBandToggleState.call(this, ...arguments);
     }
 
-    renderPlanActivitiesList() {
-        const { list } = this.getPlanUIElements();
-        if (!list) return;
-        const dropdown = this.inlinePlanDropdown;
-        const previousDropdownScrollTop = dropdown ? dropdown.scrollTop : null;
-        this.closePlanActivityMenu();
-        list.innerHTML = '';
-        (this.modalPlanActivities || []).forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'sub-activity-row';
-            row.dataset.index = String(idx);
-            if (item.invalid) row.classList.add('invalid');
-            if (idx === this.modalPlanActiveRow) row.classList.add('active');
-
-            const labelButton = document.createElement('button');
-            labelButton.type = 'button';
-            labelButton.className = 'plan-activity-label';
-            labelButton.setAttribute('aria-label', '세부 활동');
-            labelButton.setAttribute('aria-haspopup', 'menu');
-            labelButton.setAttribute('aria-expanded', 'false');
-            const normalizedLabel = this.normalizeActivityText
-                ? this.normalizeActivityText(item.label || '')
-                : String(item.label || '').trim();
-            labelButton.textContent = normalizedLabel || '세부 활동';
-            if (!normalizedLabel) labelButton.classList.add('empty');
-            labelButton.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                this.setPlanActiveRow(idx);
-                this.openPlanActivityMenu(idx, labelButton);
-            });
-
-            const spinner = this.createDurationSpinner({
-                kind: 'plan',
-                index: idx,
-                seconds: Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0
-            });
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'remove-sub-activity';
-            removeBtn.textContent = '삭제';
-
-            row.appendChild(labelButton);
-            row.appendChild(spinner);
-            row.appendChild(removeBtn);
-            list.appendChild(row);
-        });
-
-        if ((this.modalPlanActivities || []).length === 0 && this.modalPlanSectionOpen) {
-            const empty = document.createElement('div');
-            empty.className = 'sub-activities-empty';
-            empty.textContent = '세부 활동을 추가해보세요.';
-            list.appendChild(empty);
-        }
-
-        this.updatePlanActivitiesSummary();
-        this.refreshSpinnerStates('plan');
-        this.updatePlanRowActiveStyles();
-        this.syncPlanTitleBandToggleState();
-        this.syncInlinePlanToSlots();
-        if (dropdown && previousDropdownScrollTop != null) {
-            const maxScrollTop = Math.max(0, dropdown.scrollHeight - dropdown.clientHeight);
-            dropdown.scrollTop = Math.min(previousDropdownScrollTop, maxScrollTop);
-        }
+        renderPlanActivitiesList() {
+        return globalThis.TimeTrackerPlannedEditorController.renderPlanActivitiesList.call(this, ...arguments);
     }
 
-    isValidPlanRow(index) {
-        return Number.isInteger(index)
-            && index >= 0
-            && index < (this.modalPlanActivities ? this.modalPlanActivities.length : 0);
+        isValidPlanRow(index) {
+        return globalThis.TimeTrackerPlannedEditorController.isValidPlanRow.call(this, ...arguments);
     }
 
-    updatePlanRowActiveStyles() {
-        const { list } = this.getPlanUIElements();
-        if (!list) return;
-        const activeIndex = this.isValidPlanRow(this.modalPlanActiveRow) ? this.modalPlanActiveRow : -1;
-        list.querySelectorAll('.sub-activity-row').forEach((rowEl) => {
-            const idx = parseInt(rowEl.dataset.index, 10);
-            rowEl.classList.toggle('active', idx === activeIndex);
-        });
+        updatePlanRowActiveStyles() {
+        return globalThis.TimeTrackerPlannedEditorController.updatePlanRowActiveStyles.call(this, ...arguments);
     }
 
-    setPlanActiveRow(index, options = {}) {
-        const validIndex = this.isValidPlanRow(index) ? index : -1;
-        this.modalPlanActiveRow = validIndex;
-        this.updatePlanRowActiveStyles();
-        if (options.focusLabel && this.isValidPlanRow(validIndex)) {
-            this.focusPlanRowLabel(validIndex);
-        }
+        setPlanActiveRow(index, options = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.setPlanActiveRow.call(this, ...arguments);
     }
 
-    focusPlanRowLabel(index) {
-        if (!this.isValidPlanRow(index)) return;
-        try {
-            const { list } = this.getPlanUIElements();
-            if (!list) return;
-            const row = list.querySelector(`.sub-activity-row[data-index="${index}"]`);
-            if (!row) return;
-            const input = row.querySelector('.plan-activity-label');
-            if (input) input.focus();
-        } catch (e) {}
+        focusPlanRowLabel(index) {
+        return globalThis.TimeTrackerPlannedEditorController.focusPlanRowLabel.call(this, ...arguments);
     }
 
     syncSelectedActivitiesFromPlan(options = {}) {
@@ -6821,42 +5252,8 @@ class TimeTracker {
         return changed;
     }
 
-    resolveRecommendedPlanSeconds(meta = {}) {
-        if (!meta || typeof meta !== 'object') return 0;
-        const secondKeys = [
-            'recommendedSeconds',
-            'suggestedSeconds',
-            'seconds',
-            'estimatedSeconds',
-            'expectedSeconds',
-            'plannedSeconds',
-            'defaultSeconds',
-            'durationSeconds'
-        ];
-        for (const key of secondKeys) {
-            if (!Object.prototype.hasOwnProperty.call(meta, key)) continue;
-            const value = Number(meta[key]);
-            if (Number.isFinite(value) && value > 0) {
-                return value;
-            }
-        }
-        const minuteKeys = [
-            'recommendedMinutes',
-            'suggestedMinutes',
-            'minutes',
-            'estimatedMinutes',
-            'expectedMinutes',
-            'plannedMinutes',
-            'durationMinutes'
-        ];
-        for (const key of minuteKeys) {
-            if (!Object.prototype.hasOwnProperty.call(meta, key)) continue;
-            const value = Number(meta[key]);
-            if (Number.isFinite(value) && value > 0) {
-                return value * 60;
-            }
-        }
-        return 0;
+        resolveRecommendedPlanSeconds(meta = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.resolveRecommendedPlanSeconds.call(this, ...arguments);
     }
 
     createDurationSpinner({ kind, index, seconds }) {
@@ -7014,1069 +5411,112 @@ class TimeTracker {
         });
     }
 
-    adjustActivityDuration(kind, index, direction) {
-        if (kind !== 'plan') return;
-        const step = 600;
-        const items = this.modalPlanActivities || [];
-        if (!items[index]) return;
-        const ctx = this.getPlanUIElements();
-        const spinnerList = (ctx && ctx.list) || document.getElementById('planActivitiesList');
-        const spinner = spinnerList ? spinnerList.querySelector(`.time-spinner[data-kind="${kind}"][data-index="${index}"]`) : null;
-        const currentSeconds = Number.isFinite(items[index].seconds) ? Math.max(0, Math.floor(items[index].seconds)) : 0;
-        const limit = Number(this.modalPlanTotalSeconds) || 0;
-
-        let available = 0;
-        if (Number.isFinite(limit) && limit > 0 && Array.isArray(items)) {
-            const otherSum = items.reduce((sum, item, idx) => {
-                if (idx === index || !item) return sum;
-                const secs = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                return sum + secs;
-            }, 0);
-            available = Math.max(0, limit - otherSum);
-        }
-
-        let newSeconds;
-        if (direction < 0 && currentSeconds === 0) {
-            newSeconds = available > 0 ? available : 0;
-        } else {
-            newSeconds = currentSeconds + (direction * step);
-        }
-        if (newSeconds < 0) newSeconds = 0;
-        if (Number.isFinite(available) && newSeconds > available) {
-            newSeconds = available;
-        }
-
-        newSeconds = this.normalizeDurationStep(newSeconds) || 0;
-        if (Number.isFinite(available) && newSeconds > available) {
-            newSeconds = this.normalizeDurationStep(available) || available;
-        }
-        if (!Number.isFinite(newSeconds)) newSeconds = 0;
-
-        items[index].seconds = newSeconds;
-        items[index].invalid = false;
-        if (spinner) this.updateSpinnerDisplay(spinner, newSeconds);
-
-        this.updatePlanActivitiesSummary();
-        this.syncInlinePlanToSlots();
-        this.refreshSpinnerStates(kind);
+        adjustActivityDuration(kind, index, direction) {
+        return globalThis.TimeTrackerPlannedEditorController.adjustActivityDuration.call(this, ...arguments);
     }
 
-    openPlanActivitiesSection() {
-        const ctx = this.getPlanUIElements();
-        const section = ctx.section || document.getElementById('planActivitiesSection');
-        this.modalPlanSectionOpen = true;
-        if (section) section.hidden = false;
-        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
-        if (planTitleToggleRow) {
-            planTitleToggleRow.hidden = false;
-        }
-        const fillPlanBtn = ctx.fillBtn || document.getElementById('fillRemainingPlanActivity');
-        if (fillPlanBtn) {
-            fillPlanBtn.hidden = false;
-        }
-        this.updatePlanActivitiesToggleLabel();
-        if (!this.isValidPlanRow(this.modalPlanActiveRow) && (this.modalPlanActivities || []).length > 0) {
-            this.modalPlanActiveRow = 0;
-        }
-        this.updatePlanRowActiveStyles();
+        openPlanActivitiesSection() {
+        return globalThis.TimeTrackerPlannedEditorController.openPlanActivitiesSection.call(this, ...arguments);
     }
 
-    closePlanActivitiesSection() {
-        const ctx = this.getPlanUIElements();
-        const section = ctx.section || document.getElementById('planActivitiesSection');
-        this.modalPlanSectionOpen = false;
-        if (section) section.hidden = true;
-        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
-        if (planTitleToggleRow) {
-            planTitleToggleRow.hidden = true;
-        }
-        const fillPlanBtn = ctx.fillBtn || document.getElementById('fillRemainingPlanActivity');
-        if (fillPlanBtn) {
-            fillPlanBtn.hidden = true;
-        }
-        this.updatePlanActivitiesToggleLabel();
-        this.modalPlanActiveRow = -1;
-        this.updatePlanRowActiveStyles();
+        closePlanActivitiesSection() {
+        return globalThis.TimeTrackerPlannedEditorController.closePlanActivitiesSection.call(this, ...arguments);
     }
 
-    addPlanActivityRow(defaults = {}) {
-        const seconds = this.normalizeDurationStep(Number.isFinite(defaults.seconds) ? Number(defaults.seconds) : 0) || 0;
-        const label = typeof defaults.label === 'string' ? defaults.label : '';
-        const newIndex = this.modalPlanActivities.push({ label, seconds, invalid: !!defaults.invalid }) - 1;
-        this.modalPlanActiveRow = newIndex;
-        this.renderPlanActivitiesList();
-        if (defaults.focusLabel !== false) {
-            this.focusPlanRowLabel(newIndex);
-        }
-        this.syncInlinePlanToSlots();
+        addPlanActivityRow(defaults = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.addPlanActivityRow.call(this, ...arguments);
     }
 
-    handlePlanActivitiesInput(event) {
-        const { list } = this.getPlanUIElements();
-        if (!list || !list.contains(event.target)) return;
-        const row = event.target.closest('.sub-activity-row');
-        if (!row) return;
-        const idx = parseInt(row.dataset.index, 10);
-        if (!Number.isFinite(idx) || !this.modalPlanActivities[idx]) return;
-        const item = this.modalPlanActivities[idx];
-
-        if (event.target.classList.contains('plan-activity-label')) {
-            item.label = this.normalizeActivityText
-                ? this.normalizeActivityText(event.target.value || '')
-                : String(event.target.value || '').trim();
-        }
-
-        this.updatePlanActivitiesSummary();
-        this.syncInlinePlanToSlots();
+        handlePlanActivitiesInput(event) {
+        return globalThis.TimeTrackerPlannedEditorController.handlePlanActivitiesInput.call(this, ...arguments);
     }
 
-    applyPlanActivityLabelSelection(index, label) {
-        if (!this.isValidPlanRow(index)) return false;
-        const normalized = this.normalizeActivityText
-            ? this.normalizeActivityText(label || '')
-            : String(label || '').trim();
-        const item = this.modalPlanActivities[index];
-        if (!item) return false;
-        item.label = normalized;
-        item.invalid = false;
-        this.modalPlanActiveRow = index;
-        this.renderPlanActivitiesList();
-        return true;
+        applyPlanActivityLabelSelection(index, label) {
+        return globalThis.TimeTrackerPlannedEditorController.applyPlanActivityLabelSelection.call(this, ...arguments);
     }
 
-    openPlanActivityMenu(index, anchorEl) {
-        if (!this.isValidPlanRow(index) || !anchorEl || !anchorEl.isConnected) return;
-        this.closePlanActivityMenu();
-
-        const currentRaw = this.modalPlanActivities[index] && this.modalPlanActivities[index].label;
-        const normalize = (value) => this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : String(value || '').trim();
-        const normalizedCurrent = normalize(currentRaw);
-        const grouped = this.buildPlannedActivityOptions(normalizedCurrent ? [normalizedCurrent] : []);
-
-        const menu = document.createElement('div');
-        menu.className = 'plan-activity-menu actual-activity-menu';
-        menu.setAttribute('role', 'menu');
-
-        const clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
-        clearBtn.dataset.label = '';
-        clearBtn.textContent = '비우기';
-        menu.appendChild(clearBtn);
-
-        const divider = document.createElement('div');
-        divider.className = 'plan-activity-menu-divider';
-        menu.appendChild(divider);
-
-        const buildSection = (title, items) => {
-            const section = document.createElement('div');
-            section.className = 'plan-activity-menu-section';
-            const heading = document.createElement('div');
-            heading.className = 'plan-activity-menu-title';
-            heading.textContent = title;
-            section.appendChild(heading);
-            if (!items || items.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'plan-activity-menu-empty';
-                empty.textContent = '목록 없음';
-                section.appendChild(empty);
-                return section;
-            }
-            items.forEach((item) => {
-                const label = normalize(item && item.label);
-                if (!label) return;
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'plan-activity-menu-item';
-                btn.dataset.label = label;
-                btn.textContent = label;
-                if (normalizedCurrent && label === normalizedCurrent) {
-                    btn.classList.add('active');
-                }
-                section.appendChild(btn);
-            });
-            return section;
-        };
-
-        menu.appendChild(buildSection('직접 추가', grouped.local || []));
-        if (this.isNotionUIVisible()) menu.appendChild(buildSection('노션', grouped.notion || []));
-
-        document.body.appendChild(menu);
-        this.planActivityMenu = menu;
-        this.planActivityMenuContext = { index, anchorEl };
-        anchorEl.setAttribute('aria-expanded', 'true');
-
-        menu.addEventListener('click', (event) => {
-            const btn = event.target.closest('.plan-activity-menu-item');
-            if (!btn || !menu.contains(btn)) return;
-            if (btn.disabled) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const label = btn.dataset.label != null ? btn.dataset.label : '';
-            this.applyPlanActivityLabelSelection(index, label);
-            this.closePlanActivityMenu();
-        });
-
-        this.positionPlanActivityMenu(anchorEl);
-
-        this.planActivityMenuOutsideHandler = (event) => {
-            if (!this.planActivityMenu) return;
-            const t = event.target;
-            if (this.planActivityMenu.contains(t)) return;
-            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
-            this.closePlanActivityMenu();
-        };
-        document.addEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
-
-        this.planActivityMenuEscHandler = (event) => {
-            if (event.key === 'Escape') {
-                this.closePlanActivityMenu();
-            }
-        };
-        document.addEventListener('keydown', this.planActivityMenuEscHandler);
+        openPlanActivityMenu(index, anchorEl) {
+        return globalThis.TimeTrackerPlannedEditorController.openPlanActivityMenu.call(this, ...arguments);
     }
 
-    positionPlanActivityMenu(anchorEl) {
-        if (!this.planActivityMenu) return;
-        if (!anchorEl || !anchorEl.isConnected) return;
-        const rect = anchorEl.getBoundingClientRect();
-        if (!rect || (!rect.width && !rect.height)) return;
-
-        const menu = this.planActivityMenu;
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
-
-        menu.style.visibility = 'hidden';
-        menu.style.left = '0px';
-        menu.style.top = '0px';
-
-        const menuWidth = menu.offsetWidth || 240;
-        const menuHeight = menu.offsetHeight || 220;
-
-        let left = rect.left + scrollX;
-        let top = rect.bottom + scrollY + 6;
-
-        const maxLeft = scrollX + viewportWidth - menuWidth - 12;
-        if (left > maxLeft) {
-            left = Math.max(scrollX + 12, maxLeft);
-        }
-
-        const maxTop = scrollY + viewportHeight - menuHeight - 12;
-        if (top > maxTop) {
-            top = rect.top + scrollY - menuHeight - 6;
-        }
-        if (top < scrollY + 12) {
-            top = scrollY + 12;
-        }
-
-        menu.style.left = `${Math.round(left)}px`;
-        menu.style.top = `${Math.round(top)}px`;
-        menu.style.visibility = 'visible';
+        positionPlanActivityMenu(anchorEl) {
+        return globalThis.TimeTrackerPlannedEditorController.positionPlanActivityMenu.call(this, ...arguments);
     }
 
-    closePlanActivityMenu() {
-        if (this.planActivityMenuOutsideHandler) {
-            document.removeEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
-            this.planActivityMenuOutsideHandler = null;
-        }
-        if (this.planActivityMenuEscHandler) {
-            document.removeEventListener('keydown', this.planActivityMenuEscHandler);
-            this.planActivityMenuEscHandler = null;
-        }
-        if (this.planActivityMenuContext && this.planActivityMenuContext.anchorEl) {
-            try { this.planActivityMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
-        }
-        if (this.planActivityMenu && this.planActivityMenu.parentNode) {
-            this.planActivityMenu.parentNode.removeChild(this.planActivityMenu);
-        }
-        this.planActivityMenu = null;
-        this.planActivityMenuContext = null;
+        closePlanActivityMenu() {
+        return globalThis.TimeTrackerPlannedEditorController.closePlanActivityMenu.call(this, ...arguments);
     }
 
-    openPlanTitleMenu(anchorEl, options = {}) {
-        if (!anchorEl || !anchorEl.isConnected) return;
-        this.closePlanActivityMenu();
-        this.closePlanTitleMenu();
-
-        const normalize = (value) => this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : String(value || '').trim();
-        const normalizedCurrent = normalize(this.modalPlanTitle || '');
-        const grouped = this.buildPlannedActivityOptions(normalizedCurrent ? [normalizedCurrent] : []);
-
-        const menu = document.createElement('div');
-        menu.className = 'plan-activity-menu actual-activity-menu';
-        menu.setAttribute('role', 'menu');
-
-        const clearBtn = document.createElement('button');
-        clearBtn.type = 'button';
-        clearBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
-        clearBtn.dataset.label = '';
-        clearBtn.textContent = '비우기';
-        menu.appendChild(clearBtn);
-
-        const divider = document.createElement('div');
-        divider.className = 'plan-activity-menu-divider';
-        menu.appendChild(divider);
-
-        const buildSection = (title, items) => {
-            const section = document.createElement('div');
-            section.className = 'plan-activity-menu-section';
-            const heading = document.createElement('div');
-            heading.className = 'plan-activity-menu-title';
-            heading.textContent = title;
-            section.appendChild(heading);
-            if (!items || items.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'plan-activity-menu-empty';
-                empty.textContent = '목록 없음';
-                section.appendChild(empty);
-                return section;
-            }
-            items.forEach((item) => {
-                const label = normalize(item && item.label);
-                if (!label) return;
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'plan-activity-menu-item';
-                btn.dataset.label = label;
-                btn.textContent = label;
-                if (normalizedCurrent && label === normalizedCurrent) {
-                    btn.classList.add('active');
-                }
-                section.appendChild(btn);
-            });
-            return section;
-        };
-
-        menu.appendChild(buildSection('직접 추가', grouped.local || []));
-        if (this.isNotionUIVisible()) menu.appendChild(buildSection('노션', grouped.notion || []));
-
-        document.body.appendChild(menu);
-        this.planTitleMenu = menu;
-        this.planTitleMenuContext = { anchorEl, inline: Boolean(options.inline) };
-        anchorEl.setAttribute('aria-expanded', 'true');
-
-        menu.addEventListener('click', (event) => {
-            const btn = event.target.closest('.plan-activity-menu-item');
-            if (!btn || !menu.contains(btn)) return;
-            if (btn.disabled) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const label = btn.dataset.label != null ? btn.dataset.label : '';
-            if (!label) {
-                this.modalPlanTitle = '';
-                this.modalPlanTitleBandOn = false;
-            } else {
-                this.modalPlanTitle = label;
-            }
-            this.syncPlanTitleBandToggleState();
-            this.syncInlinePlanToSlots();
-            this.closePlanTitleMenu();
-        });
-
-        this.positionPlanTitleMenu(anchorEl);
-
-        this.planTitleMenuOutsideHandler = (event) => {
-            if (!this.planTitleMenu) return;
-            const t = event.target;
-            if (this.planTitleMenu.contains(t)) return;
-            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
-            this.closePlanTitleMenu();
-        };
-        document.addEventListener('mousedown', this.planTitleMenuOutsideHandler, true);
-
-        this.planTitleMenuEscHandler = (event) => {
-            if (event.key === 'Escape') {
-                this.closePlanTitleMenu();
-            }
-        };
-        document.addEventListener('keydown', this.planTitleMenuEscHandler);
+        openPlanTitleMenu(anchorEl, options = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.openPlanTitleMenu.call(this, ...arguments);
     }
 
-    positionPlanTitleMenu(anchorEl) {
-        if (!this.planTitleMenu) return;
-        if (!anchorEl || !anchorEl.isConnected) return;
-        const rect = anchorEl.getBoundingClientRect();
-        if (!rect || (!rect.width && !rect.height)) return;
-
-        const menu = this.planTitleMenu;
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
-
-        menu.style.visibility = 'hidden';
-        menu.style.left = '0px';
-        menu.style.top = '0px';
-
-        const menuWidth = menu.offsetWidth || 240;
-        const menuHeight = menu.offsetHeight || 220;
-
-        let left = rect.left + scrollX;
-        let top = rect.bottom + scrollY + 6;
-
-        const maxLeft = scrollX + viewportWidth - menuWidth - 12;
-        if (left > maxLeft) {
-            left = Math.max(scrollX + 12, maxLeft);
-        }
-
-        const maxTop = scrollY + viewportHeight - menuHeight - 12;
-        if (top > maxTop) {
-            top = rect.top + scrollY - menuHeight - 6;
-        }
-        if (top < scrollY + 12) {
-            top = scrollY + 12;
-        }
-
-        menu.style.left = `${Math.round(left)}px`;
-        menu.style.top = `${Math.round(top)}px`;
-        menu.style.visibility = 'visible';
+        positionPlanTitleMenu(anchorEl) {
+        return globalThis.TimeTrackerPlannedEditorController.positionPlanTitleMenu.call(this, ...arguments);
     }
 
-    closePlanTitleMenu() {
-        if (this.planTitleMenuOutsideHandler) {
-            document.removeEventListener('mousedown', this.planTitleMenuOutsideHandler, true);
-            this.planTitleMenuOutsideHandler = null;
-        }
-        if (this.planTitleMenuEscHandler) {
-            document.removeEventListener('keydown', this.planTitleMenuEscHandler);
-            this.planTitleMenuEscHandler = null;
-        }
-        if (this.planTitleMenuContext && this.planTitleMenuContext.anchorEl) {
-            try { this.planTitleMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
-        }
-        if (this.planTitleMenu && this.planTitleMenu.parentNode) {
-            this.planTitleMenu.parentNode.removeChild(this.planTitleMenu);
-        }
-        this.planTitleMenu = null;
-        this.planTitleMenuContext = null;
+        closePlanTitleMenu() {
+        return globalThis.TimeTrackerPlannedEditorController.closePlanTitleMenu.call(this, ...arguments);
     }
 
-    openInlinePriorityMenu(anchorEl, options = {}) {
-        if (!anchorEl || !anchorEl.isConnected) return;
-        const label = this.normalizeActivityText ? this.normalizeActivityText(options.label || '') : String(options.label || '').trim();
-        if (!label) return;
-        if (options.source === 'notion') return;
-
-        const currentPriorityRank = this.normalizePriorityRankValue(options.priorityRank);
-        if (this.inlinePriorityMenu
-            && this.inlinePriorityMenuContext
-            && this.inlinePriorityMenuContext.label === label
-            && this.inlinePriorityMenuContext.anchorEl === anchorEl) {
-            this.closeInlinePriorityMenu();
-            return;
-        }
-
-        this.closeInlinePriorityMenu();
-
-        const menu = document.createElement('div');
-        menu.className = 'inline-priority-menu';
-        menu.setAttribute('role', 'menu');
-
-        const title = document.createElement('div');
-        title.className = 'inline-priority-menu-title';
-        title.textContent = '\uc6b0\uc120\uc21c\uc704 \uc120\ud0dd';
-        menu.appendChild(title);
-
-        [null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].forEach((value) => {
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'inline-priority-menu-item';
-            item.setAttribute('role', 'menuitemradio');
-            item.dataset.label = label;
-            item.dataset.priority = value == null ? '' : String(value);
-            item.setAttribute('aria-checked', String((currentPriorityRank ?? null) === (value ?? null)));
-            if ((currentPriorityRank ?? null) === (value ?? null)) {
-                item.classList.add('active');
-            }
-
-            const grip = document.createElement('span');
-            grip.className = 'inline-priority-menu-grip';
-            grip.setAttribute('aria-hidden', 'true');
-            item.appendChild(grip);
-
-            const badge = document.createElement('span');
-            badge.className = 'inline-plan-priority-chip';
-            if (value == null) {
-                badge.dataset.empty = 'true';
-                badge.textContent = '\ud574\uc81c';
-            } else {
-                badge.dataset.pr = String(value);
-                badge.textContent = `Pr.${value}`;
-            }
-            item.appendChild(badge);
-
-            menu.appendChild(item);
-        });
-
-        document.body.appendChild(menu);
-        this.inlinePriorityMenu = menu;
-        this.inlinePriorityMenuContext = { anchorEl, label };
-        anchorEl.setAttribute('aria-expanded', 'true');
-
-        menu.addEventListener('click', (event) => {
-            const btn = event.target.closest('.inline-priority-menu-item');
-            if (!btn || !menu.contains(btn)) return;
-            if (btn.disabled) return;
-            event.preventDefault();
-            event.stopPropagation();
-
-            const rawValue = btn.dataset.priority != null ? btn.dataset.priority : '';
-            const nextValue = rawValue === '' ? null : Number(rawValue);
-            this.closeInlinePriorityMenu();
-            const changed = this.updatePlannedActivityPriority(label, nextValue);
-            if (changed && this.inlinePlanDropdown) {
-                this.renderInlinePlanDropdownOptions();
-                const currentAnchor = this.inlinePlanTarget && this.inlinePlanTarget.anchor;
-                if (currentAnchor && currentAnchor.isConnected) {
-                    this.positionInlinePlanDropdown(currentAnchor);
-                }
-            }
-        });
-
-        this.positionInlinePriorityMenu(anchorEl);
-
-        this.inlinePriorityMenuOutsideHandler = (event) => {
-            if (!this.inlinePriorityMenu) return;
-            const target = event.target;
-            if (this.inlinePriorityMenu.contains(target)) return;
-            if (anchorEl && (target === anchorEl || (anchorEl.contains && anchorEl.contains(target)))) return;
-            this.closeInlinePriorityMenu();
-        };
-        document.addEventListener('mousedown', this.inlinePriorityMenuOutsideHandler, true);
-
-        this.inlinePriorityMenuEscHandler = (event) => {
-            if (event.key === 'Escape') {
-                this.closeInlinePriorityMenu();
-            }
-        };
-        document.addEventListener('keydown', this.inlinePriorityMenuEscHandler);
+        openInlinePriorityMenu(anchorEl, options = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.openInlinePriorityMenu.call(this, ...arguments);
     }
 
-    positionInlinePriorityMenu(anchorEl) {
-        if (!this.inlinePriorityMenu) return;
-        if (!anchorEl || !anchorEl.isConnected) {
-            this.closeInlinePriorityMenu();
-            return;
-        }
-
-        const rect = anchorEl.getBoundingClientRect();
-        if (!rect || (!rect.width && !rect.height)) {
-            this.closeInlinePriorityMenu();
-            return;
-        }
-
-        const menu = this.inlinePriorityMenu;
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-        const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-        const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 0;
-        const margin = 12;
-        const gap = 8;
-
-        menu.style.visibility = 'hidden';
-        menu.style.left = '0px';
-        menu.style.top = '0px';
-
-        const menuWidth = menu.offsetWidth || 148;
-        const menuHeight = menu.offsetHeight || 320;
-
-        let left = rect.left + scrollX;
-        let top = rect.bottom + scrollY + gap;
-
-        const maxLeft = scrollX + viewportWidth - menuWidth - margin;
-        if (left > maxLeft) {
-            left = Math.max(scrollX + margin, rect.right + scrollX - menuWidth);
-        }
-        if (left < scrollX + margin) {
-            left = scrollX + margin;
-        }
-
-        const maxTop = scrollY + viewportHeight - menuHeight - margin;
-        if (top > maxTop) {
-            top = rect.top + scrollY - menuHeight - gap;
-        }
-        if (top < scrollY + margin) {
-            top = scrollY + margin;
-        }
-
-        menu.style.left = `${Math.round(left)}px`;
-        menu.style.top = `${Math.round(top)}px`;
-        menu.style.visibility = 'visible';
+        positionInlinePriorityMenu(anchorEl) {
+        return globalThis.TimeTrackerPlannedEditorController.positionInlinePriorityMenu.call(this, ...arguments);
     }
 
-    closeInlinePriorityMenu() {
-        if (this.inlinePriorityMenuOutsideHandler) {
-            document.removeEventListener('mousedown', this.inlinePriorityMenuOutsideHandler, true);
-            this.inlinePriorityMenuOutsideHandler = null;
-        }
-        if (this.inlinePriorityMenuEscHandler) {
-            document.removeEventListener('keydown', this.inlinePriorityMenuEscHandler);
-            this.inlinePriorityMenuEscHandler = null;
-        }
-        if (this.inlinePriorityMenuContext && this.inlinePriorityMenuContext.anchorEl) {
-            try { this.inlinePriorityMenuContext.anchorEl.setAttribute('aria-expanded', 'false'); } catch (_) {}
-        }
-        if (this.inlinePriorityMenu && this.inlinePriorityMenu.parentNode) {
-            this.inlinePriorityMenu.parentNode.removeChild(this.inlinePriorityMenu);
-        }
-        this.inlinePriorityMenu = null;
-        this.inlinePriorityMenuContext = null;
+        closeInlinePriorityMenu() {
+        return globalThis.TimeTrackerPlannedEditorController.closeInlinePriorityMenu.call(this, ...arguments);
     }
 
-    handlePlanActivitiesRemoval(event) {
-        const row = event.target.closest('.sub-activity-row');
-        if (!row) return;
-        const idx = parseInt(row.dataset.index, 10);
-        if (!Number.isFinite(idx)) return;
-        this.modalPlanActivities.splice(idx, 1);
-        if (this.modalPlanActivities.length === 0) {
-            this.modalPlanActiveRow = -1;
-        } else if (this.modalPlanActiveRow === idx) {
-            this.modalPlanActiveRow = Math.min(idx, this.modalPlanActivities.length - 1);
-        } else if (this.modalPlanActiveRow > idx) {
-            this.modalPlanActiveRow = Math.max(0, this.modalPlanActiveRow - 1);
-        }
-        this.renderPlanActivitiesList();
-        this.syncInlinePlanToSlots();
+        handlePlanActivitiesRemoval(event) {
+        return globalThis.TimeTrackerPlannedEditorController.handlePlanActivitiesRemoval.call(this, ...arguments);
     }
 
-    insertPlanLabelToRow(label, meta = {}) {
-        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : (label || '').trim();
-        if (!normalizedLabel) return;
-
-        if (!Array.isArray(this.modalPlanActivities)) {
-            this.modalPlanActivities = [];
-        }
-
-        const planActivities = this.modalPlanActivities;
-        const totalLimit = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
-        const usedSeconds = this.getValidPlanActivitiesSeconds();
-        const recommendedRaw = this.resolveRecommendedPlanSeconds(meta);
-        const recommendedNormalized = recommendedRaw > 0
-            ? (this.normalizeDurationStep(recommendedRaw) || recommendedRaw)
-            : 0;
-
-        const normalizeWithin = (value, limit) => {
-            if (!(value > 0)) return 0;
-            let candidate = Number.isFinite(value) ? value : 0;
-            if (candidate > 0 && Number.isFinite(candidate)) {
-                const rounded = this.normalizeDurationStep(candidate);
-                if (rounded != null) candidate = rounded;
-            }
-            if (Number.isFinite(limit) && limit > 0 && candidate > limit) {
-                const floored = Math.floor(limit / 600) * 600;
-                candidate = floored > 0 ? floored : Math.min(limit, candidate);
-            }
-            if (Number.isFinite(limit) && limit > 0 && candidate > limit) {
-                candidate = limit;
-            }
-            return candidate > 0 ? candidate : 0;
-        };
-
-        const defaultIncrement = (available) => {
-            if (!(available > 0)) return 0;
-            if (recommendedNormalized > 0) {
-                return Math.min(available, recommendedNormalized);
-            }
-            if (available >= 600) return 600;
-            return available;
-        };
-
-        const normalize = (value) => this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : (value || '').trim();
-
-        const existingIndex = planActivities.findIndex(item => normalize(item?.label) === normalizedLabel);
-        let targetIndex = this.isValidPlanRow(this.modalPlanActiveRow) ? this.modalPlanActiveRow : -1;
-
-        if (existingIndex >= 0 && existingIndex !== targetIndex) {
-            this.setPlanActiveRow(existingIndex);
-            this.showNotification('이미 동일한 라벨이 있어 해당 행으로 이동했어요.');
-            return;
-        }
-
-        if (existingIndex >= 0) {
-            targetIndex = existingIndex;
-        }
-
-        if (targetIndex >= 0) {
-            const item = planActivities[targetIndex] || { label: '', seconds: 0, invalid: false };
-            const currentSeconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            const otherSum = Math.max(0, usedSeconds - currentSeconds);
-            const rowLimit = totalLimit > 0 ? Math.max(0, totalLimit - otherSum) : Infinity;
-            if (!(rowLimit > 0)) {
-                this.setPlanActiveRow(targetIndex);
-                this.showNotification('잔여 시간이 없어 더 이상 시간을 늘릴 수 없습니다.');
-                return;
-            }
-
-            const sameLabel = normalize(item.label) === normalizedLabel;
-            let nextSeconds = currentSeconds;
-
-            if (sameLabel) {
-                const availableIncrease = Math.max(0, rowLimit - currentSeconds);
-                if (availableIncrease <= 0) {
-                    this.setPlanActiveRow(targetIndex);
-                    this.showNotification('잔여 시간이 없어 더 이상 시간을 늘릴 수 없습니다.');
-                    return;
-                }
-                const increment = normalizeWithin(defaultIncrement(availableIncrease), availableIncrease);
-                if (!(increment > 0)) {
-                    this.setPlanActiveRow(targetIndex);
-                    this.showNotification('10분 단위로 배분할 수 있는 잔여 시간이 없어요.');
-                    return;
-                }
-                nextSeconds = currentSeconds + increment;
-            } else {
-                item.label = normalizedLabel;
-                if (currentSeconds === 0) {
-                    const candidate = normalizeWithin(defaultIncrement(rowLimit), rowLimit);
-                    if (candidate > 0) {
-                        nextSeconds = candidate;
-                    } else {
-                        item.seconds = 0;
-                        item.invalid = false;
-                        planActivities[targetIndex] = item;
-                        this.setPlanActiveRow(targetIndex);
-                        this.renderPlanActivitiesList();
-                        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
-                        return;
-                    }
-                } else if (Number.isFinite(rowLimit) && currentSeconds > rowLimit) {
-                    nextSeconds = rowLimit;
-                }
-            }
-
-            nextSeconds = normalizeWithin(nextSeconds, rowLimit);
-            item.label = normalizedLabel;
-            item.seconds = nextSeconds;
-            item.invalid = false;
-            planActivities[targetIndex] = item;
-            this.setPlanActiveRow(targetIndex);
-            this.renderPlanActivitiesList();
-            this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
-            return;
-        }
-
-        const remaining = totalLimit > 0 ? Math.max(0, totalLimit - usedSeconds) : defaultIncrement(Infinity);
-        if (!(remaining > 0)) {
-            this.showNotification('잔여 계획 시간이 없어 새 행을 만들 수 없어요.');
-            return;
-        }
-        const assigned = normalizeWithin(defaultIncrement(remaining), remaining);
-        if (!(assigned > 0)) {
-            this.showNotification('잔여 시간이 너무 적어 새 행을 만들 수 없어요.');
-            return;
-        }
-        planActivities.push({ label: normalizedLabel, seconds: assigned, invalid: false });
-        this.modalPlanActiveRow = planActivities.length - 1;
-        this.renderPlanActivitiesList();
-        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
+        insertPlanLabelToRow(label, meta = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.insertPlanLabelToRow.call(this, ...arguments);
     }
 
-    removePlanActivitiesByLabel(label) {
-        const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : (label || '').trim();
-        if (!normalizedLabel || !Array.isArray(this.modalPlanActivities)) return false;
-        const beforeLength = this.modalPlanActivities.length;
-        const previousActive = this.modalPlanActiveRow;
-        if (beforeLength === 0) return false;
-        this.modalPlanActivities = this.modalPlanActivities.filter((item) => {
-            if (!item) return false;
-            const current = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
-            return current !== normalizedLabel;
-        });
-        if (this.modalPlanActivities.length === beforeLength) {
-            return false;
-        }
-        if (this.modalPlanActivities.length === 0) {
-            this.modalPlanActiveRow = -1;
-        } else if (previousActive >= 0) {
-            this.modalPlanActiveRow = Math.min(previousActive, this.modalPlanActivities.length - 1);
-        } else {
-            this.modalPlanActiveRow = -1;
-        }
-        this.renderPlanActivitiesList();
-        this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
-        return true;
+        removePlanActivitiesByLabel(label) {
+        return globalThis.TimeTrackerPlannedEditorController.removePlanActivitiesByLabel.call(this, ...arguments);
     }
 
-    syncInlinePlanToSlots() {
-        const target = this.inlinePlanTarget;
-        if (!target) return;
-        const dropdown = this.inlinePlanDropdown;
-        const previousDropdownScrollTop = dropdown ? dropdown.scrollTop : null;
-        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
-        const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
-        const baseIndex = Math.min(startIndex, endIndex);
-        const planActivities = (this.modalPlanActivities || [])
-            .filter(item => item && !item.invalid && (String(item.label || '').trim() !== '' || (Number.isFinite(item.seconds) && item.seconds > 0)))
-            .map(item => {
-                const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
-                const seconds = this.normalizeDurationStep(Number.isFinite(item.seconds) ? Number(item.seconds) : 0) || 0;
-                return { label, seconds };
-            });
-
-        const planSummary = (() => {
-            const summary = this.formatActivitiesSummary ? this.formatActivitiesSummary(planActivities) : '';
-            if (summary) return summary;
-            const labels = planActivities.map(item => item.label).filter(Boolean);
-            return labels.join(', ');
-        })();
-
-        for (let i = startIndex; i <= endIndex; i++) {
-            const slot = this.timeSlots[i];
-            if (!slot) continue;
-            slot.planActivities = [];
-            slot.planTitle = '';
-            slot.planTitleBandOn = false;
-            // keep planned text empty here; will set below
-            if (!target.mergeKey) slot.planned = '';
-        }
-
-        if (this.timeSlots[baseIndex]) {
-            this.timeSlots[baseIndex].planActivities = planActivities.map(item => ({ ...item }));
-            const plannedText = planSummary || this.timeSlots[baseIndex].planned || this.modalPlanTitle || '';
-            this.timeSlots[baseIndex].planned = plannedText;
-            this.timeSlots[baseIndex].planTitle = this.modalPlanTitle || '';
-            this.timeSlots[baseIndex].planTitleBandOn = Boolean(this.modalPlanTitleBandOn && this.modalPlanTitle);
-
-            if (target.mergeKey) {
-                this.mergedFields.set(target.mergeKey, plannedText);
-                // ensure other merged slots blank planned text
-                for (let i = startIndex; i <= endIndex; i++) {
-                    if (i === baseIndex) continue;
-                    if (this.timeSlots[i]) this.timeSlots[i].planned = '';
-                }
-            }
-        }
-
-        this.renderTimeEntries(true);
-        if (this.inlinePlanTarget) {
-            const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
-                || document.querySelector(`[data-index="${baseIndex}"]`);
-            if (anchor) {
-                this.inlinePlanTarget.anchor = anchor;
-                this.positionInlinePlanDropdown(anchor);
-            }
-        }
-        if (dropdown && previousDropdownScrollTop != null) {
-            const maxScrollTop = Math.max(0, dropdown.scrollHeight - dropdown.clientHeight);
-            dropdown.scrollTop = Math.min(previousDropdownScrollTop, maxScrollTop);
-        }
-        this.calculateTotals();
-        this.autoSave();
+        syncInlinePlanToSlots() {
+        return globalThis.TimeTrackerPlannedEditorController.syncInlinePlanToSlots.call(this, ...arguments);
     }
 
-    fillRemainingPlanActivity() {
-        const remainingRaw = Math.max(0, this.modalPlanTotalSeconds - this.getValidPlanActivitiesSeconds());
-        const remaining = this.normalizeDurationStep(remainingRaw) || 0;
-        if (remaining <= 0) {
-            const { noticeEl } = this.getPlanUIElements();
-            if (noticeEl) {
-                noticeEl.textContent = '잔여 시간이 없습니다.';
-                noticeEl.classList.remove('ok');
-            }
-            return;
-        }
-        this.openPlanActivitiesSection();
-        this.addPlanActivityRow({ seconds: remaining });
-        this.updatePlanActivitiesSummary();
-        this.syncInlinePlanToSlots();
+        fillRemainingPlanActivity() {
+        return globalThis.TimeTrackerPlannedEditorController.fillRemainingPlanActivity.call(this, ...arguments);
     }
 
-    ensurePlanTitleButton(inputEl) {
-        if (!inputEl || !inputEl.parentNode) return inputEl || null;
-        if (inputEl.tagName === 'BUTTON') return inputEl;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.id = inputEl.id || '';
-        btn.className = `plan-title-input ${inputEl.className || ''}`.trim();
-        btn.setAttribute('aria-haspopup', 'menu');
-        btn.setAttribute('aria-expanded', 'false');
-        const placeholder = inputEl.getAttribute('placeholder') || '활동 제목';
-        const value = typeof inputEl.value === 'string' ? inputEl.value.trim() : '';
-        btn.textContent = value || placeholder;
-        if (!value) btn.classList.add('empty');
-        inputEl.parentNode.replaceChild(btn, inputEl);
-        return btn;
+        ensurePlanTitleButton(inputEl) {
+        return globalThis.TimeTrackerPlannedEditorController.ensurePlanTitleButton.call(this, ...arguments);
     }
 
-    getPlanTitleInputValue(inputEl) {
-        if (!inputEl) return '';
-        if (inputEl.tagName === 'BUTTON') {
-            return this.normalizeActivityText
-                ? this.normalizeActivityText(this.modalPlanTitle || '')
-                : String(this.modalPlanTitle || '').trim();
-        }
-        return this.normalizeActivityText
-            ? this.normalizeActivityText(inputEl.value || '')
-            : String(inputEl.value || '').trim();
+        getPlanTitleInputValue(inputEl) {
+        return globalThis.TimeTrackerPlannedEditorController.getPlanTitleInputValue.call(this, ...arguments);
     }
 
-    setPlanTitleInputDisplay(inputEl, value) {
-        if (!inputEl) return;
-        const normalized = this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : String(value || '').trim();
-        if (inputEl.tagName === 'BUTTON') {
-            inputEl.textContent = normalized || '활동 제목';
-            inputEl.classList.toggle('empty', !normalized);
-            return;
-        }
-        inputEl.value = normalized;
+        setPlanTitleInputDisplay(inputEl, value) {
+        return globalThis.TimeTrackerPlannedEditorController.setPlanTitleInputDisplay.call(this, ...arguments);
     }
 
-    setPlanTitle(text) {
-        const normalized = this.normalizeActivityText
-            ? this.normalizeActivityText(text)
-            : (text || '').trim();
-        this.modalPlanTitle = normalized;
-        const input = this.ensurePlanTitleButton(document.getElementById('planTitleInput'));
-        this.setPlanTitleInputDisplay(input, normalized);
-        this.syncPlanTitleBandToggleState();
-        if (this.renderPlanTitleDropdown) this.renderPlanTitleDropdown();
+        setPlanTitle(text) {
+        return globalThis.TimeTrackerPlannedEditorController.setPlanTitle.call(this, ...arguments);
     }
 
-    confirmPlanTitleSelection() {
-        const input = this.ensurePlanTitleButton(document.getElementById('planTitleInput'));
-        if (!input) return;
-        if (input.tagName === 'BUTTON') return;
-        const value = input.value;
-        if (!value) {
-            this.modalPlanTitle = '';
-            this.modalPlanTitleBandOn = false;
-            this.syncPlanTitleBandToggleState();
-            const dropdown = document.getElementById('planTitleDropdown');
-            if (dropdown) dropdown.classList.remove('open');
-            return;
-        }
-        this.setPlanTitle(value);
-        const dropdown = document.getElementById('planTitleDropdown');
-        if (dropdown) dropdown.classList.remove('open');
+        confirmPlanTitleSelection() {
+        return globalThis.TimeTrackerPlannedEditorController.confirmPlanTitleSelection.call(this, ...arguments);
     }
 
-    renderPlanTitleDropdown(options = {}) {
-        const dropdown = document.getElementById('planTitleDropdown');
-        const list = document.getElementById('planTitleOptions');
-        const input = this.ensurePlanTitleButton(document.getElementById('planTitleInput'));
-        if (!dropdown || !list || !input) return;
-        if (input.tagName === 'BUTTON') return;
-
-        const { open = false } = options || {};
-        const rawSearch = input.value || '';
-        const search = this.normalizeActivityText
-            ? this.normalizeActivityText(rawSearch)
-            : rawSearch.trim();
-        const activeSource = this.getActivePlanSource();
-
-        const suggestions = [];
-        const seen = new Set();
-        (this.plannedActivities || []).forEach((item) => {
-            if (!item) return;
-            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || '') : (item.label || '').trim();
-            if (!label || seen.has(label)) return;
-            const source = item.source === 'notion' ? 'notion' : 'local';
-            if (!this.isNotionUIVisible() && source === 'notion') return;
-            if (source !== activeSource) return;
-            if (search && !label.toLowerCase().includes(search.toLowerCase())) return;
-            seen.add(label);
-            const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
-            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-            suggestions.push({ label, priorityRank, recommendedSeconds });
-        });
-
-        list.innerHTML = '';
-
-        const normalizedTitle = this.normalizeActivityText
-            ? this.normalizeActivityText(this.modalPlanTitle || '')
-            : (this.modalPlanTitle || '').trim();
-
-        if (search && !seen.has(search)) {
-            const li = document.createElement('li');
-            li.dataset.label = search;
-            li.className = 'use-input-option';
-            const labelWrap = document.createElement('div');
-            labelWrap.className = 'title-option-label';
-            labelWrap.textContent = `"${search}" 제목 사용`;
-            li.appendChild(labelWrap);
-            list.appendChild(li);
-        }
-
-        suggestions.slice(0, 20).forEach((item) => {
-            const li = document.createElement('li');
-            li.dataset.label = item.label;
-            if (normalizedTitle && normalizedTitle === item.label) {
-                li.classList.add('active');
-            }
-            const labelWrap = document.createElement('div');
-            labelWrap.className = 'title-option-label';
-            const badge = this.makePriorityBadge ? this.makePriorityBadge(item.priorityRank) : null;
-            if (badge) labelWrap.appendChild(badge);
-            const textSpan = document.createElement('span');
-            textSpan.textContent = item.label;
-            labelWrap.appendChild(textSpan);
-            li.appendChild(labelWrap);
-
-            if (Number.isFinite(item.recommendedSeconds) && item.recommendedSeconds > 0 && this.formatDurationSummary) {
-                const meta = document.createElement('span');
-                meta.className = 'title-option-meta';
-                meta.textContent = this.formatDurationSummary(item.recommendedSeconds);
-                li.appendChild(meta);
-            }
-            list.appendChild(li);
-        });
-
-        if (!list.children.length) {
-            const empty = document.createElement('li');
-            empty.className = 'empty-option';
-            empty.textContent = activeSource === 'notion'
-                ? '노션에서 사용할 제목이 없습니다.'
-                : '추가된 활동 제목이 없습니다.';
-            list.appendChild(empty);
-        }
-
-        const isFocused = document.activeElement === input;
-        const shouldOpen = open || isFocused || Boolean(rawSearch);
-        if (shouldOpen) {
-            dropdown.classList.add('open');
-        } else {
-            dropdown.classList.remove('open');
-        }
+        renderPlanTitleDropdown(options = {}) {
+        return globalThis.TimeTrackerPlannedEditorController.renderPlanTitleDropdown.call(this, ...arguments);
     }
 
-    preparePlanActivitiesSection(startIndex, endIndex) {
-        const section = document.getElementById('planActivitiesSection');
-        if (!section) return;
-        const activities = this.getPlanActivitiesForIndex(startIndex);
-        this.modalPlanActivities = activities.map(item => ({ ...item, invalid: false }));
-        const shouldOpen = this.modalPlanActivities.length > 0;
-        this.modalPlanSectionOpen = shouldOpen;
-        this.modalPlanActiveRow = shouldOpen ? 0 : -1;
-        section.hidden = !shouldOpen;
-        const planTitleToggleRow = document.getElementById('planTitleToggleRow');
-        if (planTitleToggleRow) {
-            planTitleToggleRow.hidden = !shouldOpen;
-        }
-        const fillPlanBtn = document.getElementById('fillRemainingPlanActivity');
-        if (fillPlanBtn) {
-            fillPlanBtn.hidden = !shouldOpen;
-        }
-        const baseSlot = this.timeSlots[startIndex] || {};
-        const storedBand = Boolean(baseSlot.planTitleBandOn);
-        const normalizedTitle = this.normalizeActivityText
-            ? this.normalizeActivityText(this.modalPlanTitle || '')
-            : (this.modalPlanTitle || '').trim();
-        this.modalPlanTitleBandOn = storedBand && Boolean(normalizedTitle);
-        this.syncPlanTitleBandToggleState();
-        this.updatePlanActivitiesToggleLabel();
-        this.renderPlanActivitiesList();
-        this.updatePlanActivitiesSummary();
+        preparePlanActivitiesSection(startIndex, endIndex) {
+        return globalThis.TimeTrackerPlannedEditorController.preparePlanActivitiesSection.call(this, ...arguments);
     }
 
     // 텍스트에서 시간값(HH:MM(:SS) 또는 1h/분/초 표기)을 초로 파싱
@@ -8500,272 +5940,45 @@ class TimeTracker {
     // 인풋 필드는 표시/선택 용도로만 사용합니다.
 
     selectMergedRange(type, mergeKey, opts = {}) {
-        if (type !== 'planned') return; // 우측 열 병합 범위 선택 금지
-        const [, startStr, endStr] = mergeKey.split('-');
-        let start = parseInt(startStr, 10);
-        let end = parseInt(endStr, 10);
-        if (!Number.isFinite(start) || !Number.isFinite(end)) return;
-
-        const append = Boolean(opts && opts.append);
-        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-
-        if (append && selectedSet && selectedSet.size > 0) {
-            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const curStart = selectedIndices[0];
-            const curEnd = selectedIndices[selectedIndices.length - 1];
-            start = Math.min(start, curStart);
-            end = Math.max(end, curEnd);
-        }
-
-        this.clearSelection(type);
-
-        for (let i = start; i <= end; i++) {
-            selectedSet.add(i);
-            // 선택 시각 효과는 공통 오버레이로 대체
-        }
-
-        this.updateSelectionOverlay(type);
-        this.showScheduleButtonForSelection(type);
-        if (type === 'planned' && selectedSet.size > 1) {
-            if (append) this.showMergeButton('planned');
-            else this.hideMergeButton();
-        }
-
-        // Undo 버튼은 "기존 병합 블록 단독 선택"일 때만 노출
-        if (!append && type === 'planned') {
-            this.showUndoButton(type, mergeKey);
-        } else {
-            this.hideUndoButton();
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.selectMergedRange.call(this, type, mergeKey, opts);
     }
 
     ensureSelectionOverlay(type) {
-        if (!this.selectionOverlay[type]) {
-            const el = document.createElement('div');
-            el.className = 'selection-overlay';
-            el.dataset.type = type;
-
-            // 오버레이 위에서 드래그 시작을 허용하여 단일 선택 상태에서도 드래그 확장 가능
-            let overlayDrag = { active: false, moved: false, startIndex: -1 };
-
-            const onOverlayMouseDown = (e) => {
-                if (e.button !== 0) return; // 좌클릭만 처리
-                // 오버레이 내부 버튼(스케줄/되돌리기/병합) 클릭은 통과
-                if (e.target.closest('.schedule-button') || e.target.closest('.undo-button') || e.target.closest('.merge-button')) {
-                    return;
-                }
-                e.preventDefault();
-                e.stopPropagation();
-                const idx = this.getIndexAtClientPosition(type, e.clientX, e.clientY);
-                if (idx == null || isNaN(idx)) return;
-                overlayDrag = { active: true, moved: false, startIndex: idx };
-                this.currentColumnType = type;
-                if (type === 'planned') this.isSelectingPlanned = true; else this.isSelectingActual = true;
-
-                // 드래그가 오버레이 밖으로 나가도 추적되도록 문서 레벨로 이동/업 핸들러 바인딩
-                this._overlayMouseMove = (ev) => {
-                    if (!overlayDrag.active) return;
-                    const curIdx = this.getIndexAtClientPosition(type, ev.clientX, ev.clientY);
-                    if (curIdx == null || isNaN(curIdx)) return;
-                    if (curIdx !== overlayDrag.startIndex) overlayDrag.moved = true;
-                    // 드래그 확장: 기존 선택을 드래그 범위로 갱신
-                    this.selectFieldRange(type, overlayDrag.startIndex, curIdx);
-                };
-                this._overlayMouseUp = (ev) => {
-                    if (!overlayDrag.active) return;
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    // 드래그 없이 클릭만 했다면 기존 동작(선택 해제) 유지
-                    if (!overlayDrag.moved) {
-                        if (type === 'planned' && this.inlinePlanDropdown && Number.isInteger(overlayDrag.startIndex)) {
-                            const clickedRange = this.getPlannedRangeInfo(overlayDrag.startIndex);
-                            if (this.isSameInlinePlanTarget(clickedRange)) {
-                                this.closeInlinePlanDropdown();
-                            }
-                        }
-                        this.clearSelection(type);
-                    }
-                    overlayDrag = { active: false, moved: false, startIndex: -1 };
-                    if (type === 'planned') this.isSelectingPlanned = false; else this.isSelectingActual = false;
-                    this.currentColumnType = null;
-                    document.removeEventListener('mousemove', this._overlayMouseMove, true);
-                    document.removeEventListener('mouseup', this._overlayMouseUp, true);
-                    this._overlayMouseMove = null;
-                    this._overlayMouseUp = null;
-                };
-                document.addEventListener('mousemove', this._overlayMouseMove, true);
-                document.addEventListener('mouseup', this._overlayMouseUp, true);
-            };
-
-            el.addEventListener('mousedown', onOverlayMouseDown, true);
-            // 클릭만의 경우(드래그 없음)는 mouseup 핸들러에서 clearSelection 처리
-
-            document.body.appendChild(el);
-            this.selectionOverlay[type] = el;
-        }
-        return this.selectionOverlay[type];
+        return globalThis.TimeTrackerSelectionOverlayController.ensureSelectionOverlay.call(this, type);
     }
 
     // 현재 좌표 위치에 있는 type 컬럼(.planned-input | .actual-input)의 인덱스를 반환
     getIndexAtClientPosition(type, clientX, clientY) {
-        const selector = type === 'planned' ? '.planned-input' : '.actual-input';
-        const elements = document.elementsFromPoint(clientX, clientY) || [];
-        for (const el of elements) {
-            if (el.matches && el.matches(selector)) {
-                const idx = el.getAttribute('data-index');
-                if (idx !== null) return parseInt(idx, 10);
-            }
-            const row = el.closest && el.closest('.time-entry[data-index]');
-            if (row) {
-                const rowIdx = row.getAttribute('data-index');
-                if (rowIdx !== null) return parseInt(rowIdx, 10);
-            }
-        }
-        return null;
+        return globalThis.TimeTrackerSelectionOverlayController.getIndexAtClientPosition.call(this, type, clientX, clientY);
     }
 
     removeSelectionOverlay(type) {
-        const el = this.selectionOverlay[type];
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-        this.selectionOverlay[type] = null;
+        return globalThis.TimeTrackerSelectionOverlayController.removeSelectionOverlay.call(this, type);
     }
 
     updateSelectionOverlay(type) {
-        const selectedSet = (type === 'planned') ? this.selectedPlannedFields : this.selectedActualFields;
-        if (!selectedSet || selectedSet.size < 1) {
-            this.removeSelectionOverlay(type);
-            return;
-        }
-        this.removeHoverSelectionOverlay(type);
-        if (type === 'planned') this.hoveredMergeKey = null;
-
-        const idx = Array.from(selectedSet).sort((a,b)=>a-b);
-        const startIndex = idx[0];
-        const endIndex   = idx[idx.length - 1];
-
-        const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
-        const endField   = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
-        if (!startField || !endField) {
-            this.removeSelectionOverlay(type);
-            return;
-        }
-
-        // 좌/우 컬럼별 선택 기준 요소(rect)를 계산
-        const startRect = this.getSelectionCellRect(type, startIndex);
-        if (!startRect) {
-            this.removeSelectionOverlay(type);
-            return;
-        }
-        // 하단 기준 계산
-        let endBottom;
-        if (type === 'actual') {
-            // 우측은 "활동 기록" 입력창의 하단까지로 한정
-            const endRect = this.getSelectionCellRect(type, endIndex) || endField.getBoundingClientRect();
-            endBottom = endRect.bottom;
-        } else {
-            // 좌측은 행 경계 하단까지
-            const endRow = endField.closest('.time-entry');
-            const endRowRect = endRow ? endRow.getBoundingClientRect() : endField.getBoundingClientRect();
-            endBottom = endRowRect.bottom;
-        }
-
-        const overlay   = this.ensureSelectionOverlay(type);
-        if (type === 'planned') {
-            overlay.dataset.fill = selectedSet.size > 1 ? 'solid' : 'outline';
-        } else {
-            delete overlay.dataset.fill;
-        }
-        const left      = startRect.left + window.scrollX;
-        const top       = startRect.top  + window.scrollY;
-        const width     = startRect.width;
-        const height    = Math.max(0, (endBottom - startRect.top));
-
-        overlay.style.left   = `${left}px`;
-        overlay.style.top    = `${top}px`;
-        overlay.style.width  = `${width}px`;
-        overlay.style.height = `${height}px`;
+        return globalThis.TimeTrackerSelectionOverlayController.updateSelectionOverlay.call(this, type);
     }
 
     // 선택 박스의 기준 사각형을 컬럼/병합 상태에 맞춰 반환
     getSelectionCellRect(type, index) {
-        if (type === 'actual') {
-            const mergeKey = this.findMergeKey('actual', index);
-            if (mergeKey) {
-                const [ , startStr ] = mergeKey.split('-');
-                const start = parseInt(startStr, 10);
-                const input = document.querySelector(`[data-index="${start}"] .actual-field-container.merged-actual-main .timer-result-input`);
-                if (input) return input.getBoundingClientRect();
-            }
-            const input = document.querySelector(`[data-index="${index}"] .timer-result-input`);
-            if (input) return input.getBoundingClientRect();
-            // 폴백: 필드 자체
-            const field = document.querySelector(`[data-index="${index}"] .actual-input`);
-            return field ? field.getBoundingClientRect() : null;
-        } else {
-            const field = document.querySelector(`[data-index="${index}"] .${type}-input`);
-            return field ? field.getBoundingClientRect() : null;
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.getSelectionCellRect.call(this, type, index);
     }
 
     ensureHoverSelectionOverlay(type) {
-        if (!this.hoverSelectionOverlay[type]) {
-            const el = document.createElement('div');
-            el.className = 'selection-overlay hover-selection-overlay';
-            el.dataset.type = type;
-            document.body.appendChild(el);
-            this.hoverSelectionOverlay[type] = el;
-        }
-        return this.hoverSelectionOverlay[type];
+        return globalThis.TimeTrackerSelectionOverlayController.ensureHoverSelectionOverlay.call(this, type);
     }
 
     removeHoverSelectionOverlay(type) {
-        const el = this.hoverSelectionOverlay[type];
-        if (el && el.parentNode) el.parentNode.removeChild(el);
-        this.hoverSelectionOverlay[type] = null;
+        return globalThis.TimeTrackerSelectionOverlayController.removeHoverSelectionOverlay.call(this, type);
     }
 
     updateHoverSelectionOverlay(type, startIndex, endIndex) {
-        const startField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
-        const endField = document.querySelector(`[data-index="${endIndex}"] .${type}-input`);
-        if (!startField || !endField) {
-            this.removeHoverSelectionOverlay(type);
-            return;
-        }
-
-        const startRect = this.getSelectionCellRect(type, startIndex);
-        if (!startRect) {
-            this.removeHoverSelectionOverlay(type);
-            return;
-        }
-
-        let endBottom;
-        if (type === 'actual') {
-            const endRect = this.getSelectionCellRect(type, endIndex) || endField.getBoundingClientRect();
-            endBottom = endRect.bottom;
-        } else {
-            const endRow = endField.closest('.time-entry');
-            const endRowRect = endRow ? endRow.getBoundingClientRect() : endField.getBoundingClientRect();
-            endBottom = endRowRect.bottom;
-        }
-
-        const overlay = this.ensureHoverSelectionOverlay(type);
-        overlay.style.left = `${startRect.left + window.scrollX}px`;
-        overlay.style.top = `${startRect.top + window.scrollY}px`;
-        overlay.style.width = `${startRect.width}px`;
-        overlay.style.height = `${Math.max(0, (endBottom - startRect.top))}px`;
+        return globalThis.TimeTrackerSelectionOverlayController.updateHoverSelectionOverlay.call(this, type, startIndex, endIndex);
     }
 
     isMergeRangeSelected(type, mergeKey) {
-        const [, startStr, endStr] = mergeKey.split('-');
-        const start = parseInt(startStr, 10);
-        const end   = parseInt(endStr, 10);
-        const set   = (type === 'planned') ? this.selectedPlannedFields : this.selectedActualFields;
-
-        if (set.size !== (end - start + 1)) return false;
-        for (let i = start; i <= end; i++) {
-            if (!set.has(i)) return false;
-        }
-        return true;
+        return globalThis.TimeTrackerSelectionOverlayController.isMergeRangeSelected.call(this, type, mergeKey);
     }
 
     attachRowWideClickTargets(entryDiv, index) {
@@ -8835,169 +6048,20 @@ class TimeTracker {
     }
 
     hideScheduleButton() {
-        if (this.scheduleButton) {
-            if (this.scheduleButton.parentNode) {
-                this.scheduleButton.parentNode.removeChild(this.scheduleButton);
-            }
-            this.scheduleButton = null;
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.hideScheduleButton.call(this);
     }
 
     showScheduleButtonForSelection(type) {
-        this.hideScheduleButton();
-        return;
-
-        // 스케줄 입력 버튼은 계획(planned) 컬럼에서만 표시
-        if (type !== 'planned') return;
-
-        const overlay = this.selectionOverlay[type];
-        if (!overlay) return;
-
-        const selectedSet = type === 'planned' ? this.selectedPlannedFields : this.selectedActualFields;
-        if (selectedSet.size === 0) return;
-
-        // 병합 버튼과 동시 표시는 하지 않음: 멀티 선택(병합 후보)에서는 스케줄 버튼 숨김
-        // 단, 이미 병합된 범위를 선택한 경우(Undo 가능)는 예외로 스케줄 버튼 표시
-        if (selectedSet.size > 1) {
-            const indices = Array.from(selectedSet).sort((a,b)=>a-b);
-            const firstIndex = indices[0];
-            const mk = this.findMergeKey('planned', firstIndex);
-            const isMergedSelection = mk ? this.isMergeRangeSelected('planned', mk) : false;
-            if (!isMergedSelection) {
-                // 멀티 선택이지만 병합 범위가 아닌 경우 → 병합 버튼만 필요
-                return;
-            }
-        }
-
-        const rect = overlay.getBoundingClientRect();
-
-        this.scheduleButton = document.createElement('button');
-        this.scheduleButton.className = 'schedule-button';
-        this.scheduleButton.textContent = '📅';
-        this.scheduleButton.title = '스케줄 입력';
-        this.scheduleButton.setAttribute('aria-label', '스케줄 입력');
-        // 위치는 CSS로 오버레이 정중앙에 표시 (hover 시 노출)
-
-            this.scheduleButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-                const firstIndex = selectedIndices[0];
-                const lastIndex = selectedIndices[selectedIndices.length - 1];
-                const anchor = document.querySelector(`[data-index="${firstIndex}"] .planned-input`) || document.querySelector(`[data-index="${firstIndex}"]`);
-                this.openInlinePlanDropdown(firstIndex, anchor, lastIndex);
-            });
-
-        // 스케줄 버튼은 오버레이 내부에 배치
-        overlay.appendChild(this.scheduleButton);
-        // 되돌리기 버튼(병합된 범위 선택 시)이 있으면 스케줄 버튼 우측으로 정렬
-        this.repositionButtonsNextToSchedule();
-
-        // 클릭 시 현재 선택 범위에 대해 모달 오픈
-        this.scheduleButton.onclick = (e) => {
-            e.stopPropagation();
-            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const firstIndex = selectedIndices[0];
-            const lastIndex = selectedIndices[selectedIndices.length - 1];
-            this.openScheduleModal(type, firstIndex, lastIndex);
-        };
+        return globalThis.TimeTrackerSelectionOverlayController.showScheduleButtonForSelection.call(this, type);
     }
 
     // 좌측 열 셀에 마우스를 올렸을 때 단일/병합 대상의 스케줄 버튼을 표시
     showScheduleButtonOnHover(index) {
-        this.hideHoverScheduleButton();
-        return;
-        // 멀티 선택 중(병합 후보)에는 스케줄 버튼을 표시하지 않음
-        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 1) {
-            const indices = Array.from(this.selectedPlannedFields).sort((a,b)=>a-b);
-            const firstIndex = indices[0];
-            const mk = this.findMergeKey('planned', firstIndex);
-            const isMergedSelection = mk ? this.isMergeRangeSelected('planned', mk) : false;
-            if (!isMergedSelection) return; // 병합 후보(아직 병합 아님)일 때만 차단
-        }
-        // 선택 중인 셀 자체에는 오버레이 내부 버튼이 있으므로 중복 표시하지 않음
-        if (this.selectedPlannedFields && this.selectedPlannedFields.size > 0) {
-            this.hideHoverScheduleButton();
-            return;
-        }
-
-        const field = document.querySelector(`[data-index="${index}"] .planned-input`);
-        if (!field) {
-            this.removeHoverSelectionOverlay('planned');
-            return;
-        }
-        const rect = field.getBoundingClientRect();
-        const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-        const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-
-        // 생성/표시
-        this.hideHoverScheduleButton();
-        const btn = document.createElement('button');
-        btn.className = 'schedule-button';
-        btn.textContent = '📅';
-        btn.title = '스케줄 입력';
-        btn.setAttribute('aria-label', '스케줄 입력');
-        // 셀 정중앙에 배치
-        const btnW = 28, btnH = 28;
-        const centerX = rect.left + scrollX + (rect.width / 2);
-        const centerY = rect.top  + scrollY + (rect.height / 2);
-        btn.style.left = `${Math.round(centerX - (btnW/2))}px`;
-        btn.style.top  = `${Math.round(centerY - (btnH/2))}px`;
-
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            const mk = this.findMergeKey('planned', index);
-            if (mk) {
-                const [, s, eIdx] = mk.split('-');
-                const anchor = document.querySelector(`[data-index="${s}"] .planned-input`) || document.querySelector(`[data-index="${s}"]`);
-                this.openInlinePlanDropdown(parseInt(s,10), anchor, parseInt(eIdx,10));
-            } else {
-                const anchor = document.querySelector(`[data-index="${index}"] .planned-input`) || document.querySelector(`[data-index="${index}"]`);
-                this.openInlinePlanDropdown(index, anchor, index);
-            }
-        };
-
-        // 호버 유지: 버튼 위로 올리면 유지, 버튼에서 벗어나면 숨김
-        let hideTimer = null;
-        const requestHide = () => {
-            hideTimer = setTimeout(() => {
-                // 되돌리기 버튼 위에 있을 땐 숨기지 않음
-                if (this.undoButton && this.undoButton.matches(':hover')) return;
-                this.hideHoverScheduleButton();
-            }, 150);
-        };
-        btn.addEventListener('mouseleave', requestHide);
-        btn.addEventListener('mouseenter', () => { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } });
-
-        document.body.appendChild(btn);
-        this.scheduleHoverButton = btn;
-
-        const mergeKey = this.findMergeKey('planned', index);
-        const mkParts = mergeKey ? mergeKey.split('-') : null;
-        const startIndex = mkParts ? parseInt(mkParts[1], 10) : index;
-        const endIndex = mkParts ? parseInt(mkParts[2], 10) : index;
-        this.updateHoverSelectionOverlay('planned', startIndex, endIndex);
-        if (mergeKey) {
-            this.hoveredMergeKey = mergeKey;
-            this.showUndoButton('planned', mergeKey);
-        } else {
-            this.hoveredMergeKey = null;
-            this.hideUndoButton();
-        }
-
-        this.repositionButtonsNextToSchedule();
+        return globalThis.TimeTrackerSelectionOverlayController.showScheduleButtonOnHover.call(this, index);
     }
 
-    showActivityLogButtonOnHover(index) {
-        const wrapper = document.querySelector(`.time-entry[data-index="${index}"] .split-cell-wrapper.split-type-actual.split-has-data`);
-        if (!wrapper) return;
-
-        const inlineBtn = wrapper.querySelector('.activity-log-btn');
-        if (!inlineBtn) return;
-
-        this.hideHoverActivityLogButton();
-        inlineBtn.style.opacity = '1';
-        inlineBtn.style.pointerEvents = 'auto';
-        this.activityHoverButton = inlineBtn;
+        showActivityLogButtonOnHover(index) {
+        return globalThis.TimeTrackerSchedulePreviewController.showActivityLogButtonOnHover.call(this, index);
     }
 
     hideHoverActivityLogButton() {
@@ -9019,285 +6083,24 @@ class TimeTracker {
     }
 
     hideHoverScheduleButton() {
-        // 되돌리기 버튼에 커서가 있으면 유지
-        if (this.undoButton && this.undoButton.matches(':hover')) return;
-        if (this.scheduleHoverButton && this.scheduleHoverButton.parentNode) {
-            this.scheduleHoverButton.parentNode.removeChild(this.scheduleHoverButton);
-            this.scheduleHoverButton = null;
-        }
-        this.removeHoverSelectionOverlay('planned');
-        if (this.hoveredMergeKey && (!this.selectedPlannedFields || this.selectedPlannedFields.size === 0)) {
-            this.hideUndoButton();
-        }
-        this.hoveredMergeKey = null;
+        return globalThis.TimeTrackerSelectionOverlayController.hideHoverScheduleButton.call(this);
     }
 
     // 스케줄 버튼 우측으로 병합/되돌리기 버튼 정렬
     repositionButtonsNextToSchedule() {
-        const anchor = this.scheduleButton || this.scheduleHoverButton;
-        if (!anchor) return;
-        const spacing = 8;
-        const sbRect = anchor.getBoundingClientRect();
-        const baseLeft = window.scrollX + sbRect.left + sbRect.width + spacing;
-        const baseTop  = window.scrollY + sbRect.top;
-
-        if (this.mergeButton) {
-            this.mergeButton.style.left = `${Math.round(baseLeft)}px`;
-            this.mergeButton.style.top  = `${Math.round(baseTop)}px`;
-        }
-        if (this.undoButton) {
-            this.undoButton.style.left = `${Math.round(baseLeft)}px`;
-            this.undoButton.style.top  = `${Math.round(baseTop)}px`;
-        }
+        return globalThis.TimeTrackerSelectionOverlayController.repositionButtonsNextToSchedule.call(this);
     }
 
-    getSchedulePreviewData() {
-        const modal = document.getElementById('scheduleModal');
-        if (!modal) return null;
-        const type = modal.dataset.type || 'planned';
-        const activity = (this.modalSelectedActivities || []).join(', ').trim();
-        if (type !== 'planned') {
-            return {
-                text: activity,
-                title: '',
-                titleBand: false,
-                planActivities: [],
-                planTitle: '',
-                planTitleBandOn: false,
-                hasInvalid: false,
-                hasMismatch: false
-            };
-        }
-
-        const rawPlanActivities = Array.isArray(this.modalPlanActivities) ? this.modalPlanActivities : [];
-        const sanitizedPlanActivities = rawPlanActivities
-            .filter(item => item && !item.invalid && (String(item.label || '').trim() !== ''
-                || (Number.isFinite(item.seconds) && item.seconds > 0)))
-            .map(item => {
-                const label = this.normalizeActivityText
-                    ? this.normalizeActivityText(item.label || '')
-                    : String(item.label || '').trim();
-                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-                return { label, seconds };
-            });
-        const planSummary = sanitizedPlanActivities.length > 0 ? this.formatActivitiesSummary(sanitizedPlanActivities) : '';
-        const planText = planSummary || activity;
-        const planTitleText = this.normalizeActivityText
-            ? this.normalizeActivityText(this.modalPlanTitle || '')
-            : String(this.modalPlanTitle || '').trim();
-        const planTitleBandEnabled = Boolean(this.modalPlanTitleBandOn && planTitleText);
-        const planTotalSeconds = Math.max(0, Number(this.modalPlanTotalSeconds) || 0);
-        const planUsedSeconds = sanitizedPlanActivities.reduce((sum, item) => sum + item.seconds, 0);
-        const hasPlanInvalid = rawPlanActivities.some(item => item && item.invalid);
-        const hasPlanMismatch = sanitizedPlanActivities.length > 0 && planTotalSeconds > 0 && planUsedSeconds !== planTotalSeconds;
-
-        return {
-            text: planText,
-            title: planTitleText,
-            titleBand: Boolean(this.modalPlanTitleBandOn && planTitleText),
-            planActivities: sanitizedPlanActivities,
-            planTitle: planTitleText,
-            planTitleBandOn: planTitleBandEnabled,
-            hasInvalid: hasPlanInvalid,
-            hasMismatch: hasPlanMismatch
-        };
+        getSchedulePreviewData() {
+        return globalThis.TimeTrackerSchedulePreviewController.getSchedulePreviewData.call(this);
     }
 
-    resetSchedulePreview() {
-        const list = document.getElementById('schedulePreviewList');
-        const meta = document.getElementById('schedulePreviewMeta');
-        const note = document.getElementById('schedulePreviewNote');
-        if (list) list.innerHTML = '';
-        if (meta) meta.textContent = '';
-        if (note) note.textContent = '';
+        resetSchedulePreview() {
+        return globalThis.TimeTrackerSchedulePreviewController.resetSchedulePreview.call(this);
     }
 
-    updateSchedulePreview() {
-        const modal = document.getElementById('scheduleModal');
-        if (!modal || modal.style.display !== 'flex') return;
-        const list = document.getElementById('schedulePreviewList');
-        const meta = document.getElementById('schedulePreviewMeta');
-        const note = document.getElementById('schedulePreviewNote');
-        if (!list || !meta || !note) return;
-
-        const startIndex = parseInt(modal.dataset.startIndex, 10);
-        const endIndex = parseInt(modal.dataset.endIndex, 10);
-        if (!Number.isFinite(startIndex) || !Number.isFinite(endIndex)) {
-            this.resetSchedulePreview();
-            return;
-        }
-
-        const count = Math.max(1, (endIndex - startIndex + 1));
-        const timeField = document.getElementById('scheduleTime');
-        const totalLabel = this.formatDurationSummary(count * 3600);
-        const timeLabel = timeField ? timeField.value : '';
-        meta.textContent = timeLabel ? `${totalLabel} · ${timeLabel}` : totalLabel;
-
-        const preview = this.getSchedulePreviewData();
-        const type = modal.dataset.type || 'planned';
-        note.textContent = '';
-        if (preview) {
-            if (preview.hasInvalid) {
-                note.textContent = '계획 분해에 잘못된 시간 형식이 있습니다.';
-            } else if (preview.hasMismatch) {
-                note.textContent = '분해 합계가 총 시간과 일치하지 않습니다.';
-            }
-        }
-
-        const originalSlots = this.timeSlots;
-        const originalMerged = this.mergedFields;
-        const previewSlots = (this.timeSlots || []).map((slot) => {
-            const timer = slot && typeof slot.timer === 'object'
-                ? { ...slot.timer }
-                : { running: false, elapsed: 0, startTime: null, method: 'manual' };
-            const activityLog = slot && typeof slot.activityLog === 'object'
-                ? {
-                    ...slot.activityLog,
-                    subActivities: Array.isArray(slot.activityLog.subActivities)
-                        ? slot.activityLog.subActivities.map(item => ({ ...item }))
-                        : [],
-                    actualGridUnits: Array.isArray(slot.activityLog.actualGridUnits)
-                        ? slot.activityLog.actualGridUnits.slice()
-                        : [],
-                    actualExtraGridUnits: Array.isArray(slot.activityLog.actualExtraGridUnits)
-                        ? slot.activityLog.actualExtraGridUnits.slice()
-                        : [],
-                    actualFailedGridUnits: Array.isArray(slot.activityLog.actualFailedGridUnits)
-                        ? slot.activityLog.actualFailedGridUnits.slice()
-                        : []
-                }
-                : { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-            const planActivities = Array.isArray(slot.planActivities)
-                ? slot.planActivities.map(item => ({ ...item }))
-                : [];
-            return {
-                ...slot,
-                timer,
-                activityLog,
-                planActivities
-            };
-        });
-        const previewMerged = new Map(this.mergedFields);
-
-        if (type === 'planned' && preview) {
-            const planActivities = (preview.planActivities || []).map(item => ({ ...item }));
-            const planTitle = preview.planTitle || '';
-            const planTitleBandOn = Boolean(preview.planTitleBandOn && planTitle);
-            const planText = preview.text || '';
-
-            if (startIndex === endIndex) {
-                if (previewSlots[startIndex]) {
-                    previewSlots[startIndex].planned = planText;
-                    previewSlots[startIndex].planActivities = planActivities;
-                    previewSlots[startIndex].planTitle = planTitle;
-                    previewSlots[startIndex].planTitleBandOn = planTitleBandOn;
-                }
-            } else {
-                const mergeKey = `planned-${startIndex}-${endIndex}`;
-                previewMerged.set(mergeKey, planText);
-                for (let i = startIndex; i <= endIndex; i++) {
-                    if (!previewSlots[i]) continue;
-                    previewSlots[i].planned = i === startIndex ? planText : '';
-                    previewSlots[i].planActivities = i === startIndex ? planActivities.map(item => ({ ...item })) : [];
-                    previewSlots[i].planTitle = i === startIndex ? planTitle : '';
-                    previewSlots[i].planTitleBandOn = i === startIndex ? planTitleBandOn : false;
-                }
-            }
-        }
-
-        list.innerHTML = '';
-        try {
-            this.timeSlots = previewSlots;
-            this.mergedFields = previewMerged;
-
-            const sheet = document.createElement('div');
-            sheet.className = 'timesheet schedule-preview-sheet';
-
-            const header = document.createElement('div');
-            header.className = 'header-row';
-            header.innerHTML = `
-                <div class="planned-label">계획된 활동</div>
-                <div class="time-label">시간</div>
-                <div class="actual-label">실제 활동</div>
-            `;
-            sheet.appendChild(header);
-
-            const entries = document.createElement('div');
-            entries.className = 'time-entries schedule-preview-entries';
-
-            for (let index = startIndex; index <= endIndex; index++) {
-                const slot = previewSlots[index];
-                if (!slot) continue;
-                const entryDiv = document.createElement('div');
-                entryDiv.className = 'time-entry';
-                entryDiv.dataset.index = String(index);
-
-                const plannedMergeKey = this.findMergeKey('planned', index);
-                const actualMergeKey = this.findMergeKey('actual', index);
-
-                let plannedContent = plannedMergeKey
-                    ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
-                    : `<input type="text" class="input-field planned-input"
-                            data-index="${index}"
-                            data-type="planned"
-                            value="${this.escapeAttribute(slot.planned)}"
-                            placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
-
-                plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
-
-                let actualContent = actualMergeKey
-                    ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
-                : this.createActualSlotField(index, slot);
-
-                actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
-
-                const timeMergeKey = this.findMergeKey('time', index);
-                const timerControls = this.createTimerControls(index, slot);
-                let timeContent;
-                if (timeMergeKey) {
-                    timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
-                } else {
-                    timeContent = `<div class="time-slot-container">
-                        <div class="time-label">${slot.time}</div>
-                        ${timerControls}
-                    </div>`;
-                }
-
-                entryDiv.innerHTML = `
-                    ${plannedContent}
-                    ${timeContent}
-                    ${actualContent}
-                `;
-
-                if (plannedMergeKey) {
-                    const plannedStart = parseInt(plannedMergeKey.split('-')[1], 10);
-                    const plannedEnd = parseInt(plannedMergeKey.split('-')[2], 10);
-                    if (index >= plannedStart && index < plannedEnd) {
-                        entryDiv.classList.add('has-planned-merge');
-                    }
-                }
-
-                if (actualMergeKey) {
-                    const actualStart = parseInt(actualMergeKey.split('-')[1], 10);
-                    const actualEnd = parseInt(actualMergeKey.split('-')[2], 10);
-                    if (index >= actualStart && index < actualEnd) {
-                        entryDiv.classList.add('has-actual-merge');
-                    }
-                }
-
-                entries.appendChild(entryDiv);
-            }
-
-            sheet.appendChild(entries);
-            list.appendChild(sheet);
-
-            this.centerMergedTimeContent(entries);
-            this.resizeMergedActualContent(entries);
-            this.resizeMergedPlannedContent(entries);
-        } finally {
-            this.timeSlots = originalSlots;
-            this.mergedFields = originalMerged;
-        }
+        updateSchedulePreview() {
+        return globalThis.TimeTrackerSchedulePreviewController.updateSchedulePreview.call(this);
     }
 
     openScheduleModal(type, startIndex, endIndex = null) {
@@ -10242,207 +7045,32 @@ class TimeTracker {
     }
 
     // 타이머 관련 메서드들 추가
-    attachTimerListeners(entryDiv, index) {
-        const timerBtns = entryDiv.querySelectorAll('.timer-btn');
-
-        timerBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const action = btn.dataset.action;
-                const btnIndex = parseInt(btn.dataset.index);
-
-                switch(action) {
-                    case 'start':
-                        this.startTimer(btnIndex);
-                        break;
-                    case 'pause':
-                        this.pauseTimer(btnIndex);
-                        break;
-                    case 'resume':
-                        this.resumeTimer(btnIndex);
-                        break;
-                    case 'stop':
-                        this.stopTimer(btnIndex);
-                        break;
-                }
-            });
-        });
+        attachTimerListeners(entryDiv, index) {
+        return globalThis.TimerController.attachTimerListeners.call(this, entryDiv, index);
     }
 
-    startTimer(index) {
-        const reason = this.getTimerStartBlockReason(index);
-        if (reason) {
-            this.showNotification(reason, 'warn');
-            if (reason.includes('계획된 활동')) {
-                const plannedInput = document.querySelector(`.planned-input[data-index="${index}"]`);
-                if (plannedInput && typeof plannedInput.focus === 'function') plannedInput.focus();
-            }
-            return;
-        }
-
-        // 다른 모든 타이머 정지
-        this.stopAllTimers();
-
-        const slot = this.timeSlots[index];
-        slot.timer.rawElapsed = 0;
-        slot.timer.running = true;
-        slot.timer.startTime = Date.now();
-        slot.timer.method = 'timer';
-        slot.timer.status = 'running';
-
-        this.startTimerInterval();
-        this.renderTimeEntries();
-        this.autoSave();
+        startTimer(index) {
+        return globalThis.TimerController.startTimer.call(this, index);
     }
 
-    pauseTimer(index) {
-        const slot = this.timeSlots[index];
-        const nextElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
-        slot.timer.running = false;
-        slot.timer.elapsed = Math.max(0, nextElapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000));
-        slot.timer.rawElapsed = slot.timer.elapsed;
-        slot.timer.startTime = null;
-        slot.timer.status = slot.timer.elapsed > 0 ? 'paused' : 'idle';
-
-        this.stopTimerInterval();
-        this.renderTimeEntries();
-        this.autoSave();
+        pauseTimer(index) {
+        return globalThis.TimerController.pauseTimer.call(this, index);
     }
 
-    resumeTimer(index) {
-        const reason = this.getTimerStartBlockReason(index);
-        if (reason) {
-            this.showNotification(reason, 'warn');
-            if (reason.includes('계획된 활동')) {
-                const plannedInput = document.querySelector(`.planned-input[data-index="${index}"]`);
-                if (plannedInput && typeof plannedInput.focus === 'function') plannedInput.focus();
-            }
-            return;
-        }
-
-        // 다른 모든 타이머 정지
-        this.stopAllTimers();
-
-        const slot = this.timeSlots[index];
-        const resumeBase = Math.max(
-            Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0,
-            Number.isFinite(slot.timer.rawElapsed) ? Math.floor(slot.timer.rawElapsed) : 0
-        );
-        slot.timer.elapsed = Math.max(0, resumeBase);
-        slot.timer.rawElapsed = Math.max(0, resumeBase);
-        slot.timer.running = true;
-        slot.timer.startTime = Date.now();
-        slot.timer.status = 'running';
-
-        this.startTimerInterval();
-        this.renderTimeEntries();
-        this.autoSave();
+        resumeTimer(index) {
+        return globalThis.TimerController.resumeTimer.call(this, index);
     }
 
-    stopTimer(index) {
-        const slot = this.timeSlots[index];
-        const roundedBefore = this.normalizeActualRecordedTimerSeconds(slot.timer.elapsed);
-        let additionalSeconds = 0;
-        const elapsedBefore = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
-
-        if (slot.timer.running) {
-            additionalSeconds = Math.max(0, Math.floor((Date.now() - slot.timer.startTime) / 1000));
-            slot.timer.elapsed = elapsedBefore + additionalSeconds;
-        }
-
-        slot.timer.running = false;
-        slot.timer.startTime = null;
-        const rawElapsed = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
-        slot.timer.rawElapsed = rawElapsed;
-        const recordedElapsed = this.normalizeActualRecordedTimerSeconds(rawElapsed);
-        slot.timer.elapsed = recordedElapsed;
-        slot.timer.status = rawElapsed > 0 ? 'completed' : 'idle';
-        const roundedAdded = Math.max(0, recordedElapsed - roundedBefore);
-
-        let recordedWithPlan = false;
-
-        // 자동 기록: 타이머 시간을 실제 활동의 10분 그리드로 반영
-        if (roundedAdded > 0) {
-            const actualMergeKey = this.findMergeKey('actual', index);
-            const actualBaseIndex = actualMergeKey ? parseInt(actualMergeKey.split('-')[1], 10) : index;
-            if (this.isActualGridMode(actualBaseIndex)) {
-                const range = this.getSplitRange('actual', actualBaseIndex);
-                const currentTimeIndex = this.getCurrentTimeIndex ? this.getCurrentTimeIndex() : -1;
-                const targetIndex = (Number.isInteger(currentTimeIndex)
-                    && currentTimeIndex >= range.start
-                    && currentTimeIndex <= range.end)
-                    ? currentTimeIndex
-                    : index;
-                const startRow = Math.max(0, targetIndex - range.start);
-                this.applyActualGridSeconds(actualBaseIndex, roundedAdded, startRow);
-                recordedWithPlan = true;
-            }
-        }
-
-        // 계획 분배에 실패했을 때의 기본 동작(기존 텍스트 기록 유지)
-        if (!recordedWithPlan && roundedAdded > 0) {
-            const timeStr = this.formatTime(slot.timer.elapsed);
-
-            // 병합된 계획 값이 있으면 그 값을 우선 사용하여 라벨 구성
-            let plannedLabel = '';
-            const plannedMergeKey = this.findMergeKey('planned', index);
-            if (plannedMergeKey) {
-                plannedLabel = (this.mergedFields.get(plannedMergeKey) || '').trim();
-            } else {
-                plannedLabel = (slot.planned || '').trim();
-            }
-            const resultText = plannedLabel ? `${plannedLabel} (${timeStr})` : timeStr;
-
-            // 실제(우측) 열이 병합 상태라면 병합 키 기준으로 값 업데이트
-            const actualMergeKey = this.findMergeKey('actual', index);
-            if (actualMergeKey) {
-                const [, startStr, endStr] = actualMergeKey.split('-');
-                const start = parseInt(startStr, 10);
-                const end = parseInt(endStr, 10);
-                this.mergedFields.set(actualMergeKey, resultText);
-                for (let i = start; i <= end; i++) {
-                    this.timeSlots[i].actual = (i === start) ? resultText : '';
-                }
-            } else {
-                // 단일 셀인 경우 해당 인덱스만 기록
-                slot.actual = resultText;
-            }
-        }
-
-        this.stopTimerInterval();
-        this.renderTimeEntries();
-        this.calculateTotals();
-        this.autoSave();
+        stopTimer(index) {
+        return globalThis.TimerController.stopTimer.call(this, index);
     }
 
     stopAllTimers() {
         this.commitRunningTimers({ render: false, calculate: false, autoSave: false });
     }
 
-    commitRunningTimers(options = {}) {
-        const shouldRender = Boolean(options.render);
-        const shouldCalculate = Boolean(options.calculate);
-        const shouldAutoSave = Boolean(options.autoSave);
-        const nowMs = Date.now();
-        let changed = false;
-        this.timeSlots.forEach((slot) => {
-            if (slot.timer.running) {
-                const current = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
-                const elapsed = Math.max(0, current + Math.floor((nowMs - slot.timer.startTime) / 1000));
-                slot.timer.elapsed = elapsed;
-                slot.timer.rawElapsed = elapsed;
-                slot.timer.running = false;
-                slot.timer.startTime = null;
-                slot.timer.status = elapsed > 0 ? 'paused' : 'idle';
-                changed = true;
-            }
-        });
-        this.stopTimerInterval();
-        if (!changed) return false;
-        if (shouldRender) this.renderTimeEntries();
-        if (shouldCalculate) this.calculateTotals();
-        if (shouldAutoSave) this.autoSave();
-        return true;
+        commitRunningTimers(options = {}) {
+        return globalThis.TimerController.commitRunningTimers.call(this, options);
     }
 
     startTimerInterval() {
@@ -10460,33 +7088,8 @@ class TimeTracker {
         }
     }
 
-    updateRunningTimers() {
-        const today = this.getTodayLocalDateString();
-        if (this.lastKnownTodayDate !== today) {
-            this.lastKnownTodayDate = today;
-            const hasRunningBeforeRollover = this.timeSlots.some((slot) => slot && slot.timer && slot.timer.running);
-            if (hasRunningBeforeRollover && this.currentDate !== today) {
-                this.transitionToDate(today);
-                return;
-            }
-        }
-
-        let hasRunningTimer = false;
-
-        this.timeSlots.forEach((slot, index) => {
-            if (slot.timer.running) {
-                hasRunningTimer = true;
-                const currentElapsed = slot.timer.elapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000);
-                const displayElement = document.querySelector(`[data-index="${index}"] .timer-display`);
-                if (displayElement) {
-                    displayElement.textContent = this.formatTime(currentElapsed);
-                }
-            }
-        });
-
-        if (!hasRunningTimer) {
-            this.stopTimerInterval();
-        }
+        updateRunningTimers() {
+        return globalThis.TimerController.updateRunningTimers.call(this);
     }
 
     // 활동 로그 관련 메서드들
@@ -11480,229 +8083,20 @@ class TimeTracker {
         return globalThis.TimeTrackerActualModalController.closeActualActivityMenu.call(this);
     }
 
-    openActivityLogModal(index) {
-        const modal = document.getElementById('activityLogModal');
-        const slot = this.timeSlots[index];
-        const actualMergeKey = this.findMergeKey('actual', index);
-        let baseIndex = index;
-        if (actualMergeKey) {
-            const [, startStr] = actualMergeKey.split('-');
-            const start = parseInt(startStr, 10);
-            if (Number.isFinite(start)) baseIndex = start;
-        }
-        const baseSlot = this.timeSlots[baseIndex] || slot;
-
-        const range = this.getSplitRange('actual', baseIndex);
-        const startSlot = this.timeSlots[range.start] || baseSlot;
-        const endSlot = this.timeSlots[range.end] || baseSlot;
-        const startLabel = startSlot && startSlot.time ? this.formatSlotTimeLabel(startSlot.time) : '';
-        const endLabel = endSlot && endSlot.time ? this.formatSlotTimeLabel(endSlot.time) : '';
-        const timeLabel = (range.start === range.end || !endLabel) ? startLabel : `${startLabel} ~ ${endLabel}`;
-        document.getElementById('activityTime').value = timeLabel;
-        // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
-        // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
-        document.getElementById('activityDetails').value = (baseSlot.activityLog && baseSlot.activityLog.details) || '';
-
-        this.modalActualBaseIndex = baseIndex;
-        this.modalActualTotalSeconds = Math.max(0, this.getBlockLength('actual', baseIndex) * 3600);
-        const planContext = this.getActualPlanLabelContext(baseIndex);
-        this.modalActualHasPlanUnits = planContext.hasLabels;
-        this.modalActualPlanUnits = Array.isArray(planContext.units) ? planContext.units.slice() : [];
-        this.modalActualPlanLabelSet = planContext.labelSet ? new Set(planContext.labelSet) : new Set();
-        if (this.modalActualHasPlanUnits) {
-            const existing = this.normalizeActualActivitiesList(baseSlot.activityLog && baseSlot.activityLog.subActivities);
-            const actualUnits = this.getActualGridUnitsForBase(
-                baseIndex,
-                this.modalActualPlanUnits.length,
-                this.modalActualPlanUnits
-            );
-            this.modalActualGridUnits = Array.isArray(actualUnits) ? actualUnits.slice() : [];
-            this.modalActualActivities = this.buildActualModalActivities(
-                baseIndex,
-                this.modalActualPlanUnits,
-                this.modalActualGridUnits,
-                existing,
-                planContext.planLabel
-            );
-            this.normalizeActualActivitiesToStep();
-        } else {
-            this.modalActualPlanUnits = [];
-            this.modalActualPlanLabelSet = new Set();
-            this.modalActualGridUnits = [];
-            this.modalActualActivities = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds);
-            this.normalizeActualActivitiesToTotal();
-        }
-        this.modalActualActiveRow = this.modalActualActivities.length > 0 ? 0 : -1;
-        this.modalActualDirty = false;
-        this.renderActualActivitiesList();
-
-        this.lastFocusedElementBeforeModal = document.activeElement;
-        modal.style.display = 'flex';
-        modal.dataset.index = index;
-        modal.dataset.baseIndex = String(baseIndex);
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-modal', 'true');
-
-        setTimeout(() => {
-            document.getElementById('activityDetails').focus();
-        }, 100);
+        openActivityLogModal(index) {
+        return globalThis.TimeTrackerActualModalController.openActivityLogModal.call(this, index);
     }
 
-    closeActivityLogModal(options = {}) {
-        const modal = document.getElementById('activityLogModal');
-        if (!options.force && this.modalActualDirty) {
-            const discard = confirm('저장하지 않은 실제 활동 변경사항이 있습니다. 닫을까요?');
-            if (!discard) return;
-        }
-        modal.style.display = 'none';
-
-        document.getElementById('activityDetails').value = '';
-
-        this.closeActualActivityMenu();
-        this.modalActualActivities = [];
-        this.modalActualTotalSeconds = 0;
-        this.modalActualActiveRow = -1;
-        this.modalActualBaseIndex = null;
-        this.modalActualDirty = false;
-        this.modalActualHasPlanUnits = false;
-        this.modalActualPlanUnits = [];
-        this.modalActualGridUnits = [];
-        this.modalActualPlanLabelSet = new Set();
-        const { list, totalEl, usedEl, noticeEl } = this.getActualModalElements();
-        if (list) list.innerHTML = '';
-        if (totalEl) totalEl.textContent = '0시간';
-        if (usedEl) usedEl.textContent = '0시간';
-        if (noticeEl) noticeEl.textContent = '';
-
-        delete modal.dataset.index;
-        delete modal.dataset.baseIndex;
-        if (this.lastFocusedElementBeforeModal && typeof this.lastFocusedElementBeforeModal.focus === 'function') {
-            try { this.lastFocusedElementBeforeModal.focus(); } catch (_) {}
-        }
+        closeActivityLogModal(options = {}) {
+        return globalThis.TimeTrackerActualModalController.closeActivityLogModal.call(this, options);
     }
 
-    saveActivityLogFromModal() {
-        const modal = document.getElementById('activityLogModal');
-        const index = parseInt(modal.dataset.index, 10);
-        const baseIndexRaw = parseInt(modal.dataset.baseIndex, 10);
-        const baseIndex = Number.isFinite(baseIndexRaw) ? baseIndexRaw : index;
-
-        if (Number.isFinite(baseIndex) && baseIndex >= 0) {
-            const range = this.getSplitRange('actual', baseIndex);
-            const start = range.start;
-            const end = range.end;
-            const details = document.getElementById('activityDetails').value.trim();
-
-            if (!this.modalActualDirty) {
-                for (let i = start; i <= end; i++) {
-                    const slot = this.timeSlots[i];
-                    if (!slot) continue;
-                    if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                        slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-                    }
-                    slot.activityLog.details = (i === start) ? details : '';
-                }
-            } else {
-                this.normalizeActualActivitiesToStep();
-                this.clampActualGridToAssigned();
-                const activities = this.finalizeActualActivitiesForSave();
-                const split = this.splitActualActivitiesByPlan(baseIndex, activities);
-                const mergedActivities = activities.map(item => ({ ...item }));
-                const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
-                const actualUnits = split.hasLabels
-                    ? this.getModalActualGridUnitsForSave(split.units.length)
-                    : [];
-                const actualMergeKey = this.findMergeKey('actual', start);
-                if (actualMergeKey) {
-                    this.mergedFields.set(actualMergeKey, summary);
-                }
-
-                  for (let i = start; i <= end; i++) {
-                      const slot = this.timeSlots[i];
-                      if (!slot) continue;
-                      if (!slot.activityLog || typeof slot.activityLog !== 'object') {
-                          slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-                      }
-                      slot.actual = (i === start) ? summary : '';
-                      slot.activityLog.details = (i === start) ? details : '';
-                      if (i === start) {
-                          slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
-                          if (split.hasLabels) {
-                              slot.activityLog.actualGridUnits = actualUnits.slice();
-                              slot.activityLog.actualExtraGridUnits = [];
-                              slot.activityLog.actualFailedGridUnits = [];
-                              slot.activityLog.actualOverride = (split.extraActivities && split.extraActivities.length > 0);
-                          } else {
-                              slot.activityLog.actualGridUnits = [];
-                              slot.activityLog.actualExtraGridUnits = [];
-                              slot.activityLog.actualFailedGridUnits = [];
-                              slot.activityLog.actualOverride = mergedActivities.length > 0;
-                          }
-                      } else {
-                        slot.activityLog.subActivities = [];
-                        slot.activityLog.actualGridUnits = [];
-                        slot.activityLog.actualExtraGridUnits = [];
-                        slot.activityLog.actualFailedGridUnits = [];
-                        slot.activityLog.actualOverride = false;
-                    }
-                }
-            }
-
-            this.renderTimeEntries();
-            this.calculateTotals();
-            this.autoSave();
-        }
-
-        this.closeActivityLogModal({ force: true });
+        saveActivityLogFromModal() {
+        return globalThis.TimeTrackerActualModalController.saveActivityLogFromModal.call(this);
     }
 
-    attachActivityModalEventListeners() {
-        const modal = document.getElementById('activityLogModal');
-        const closeBtn = document.getElementById('closeActivityModal');
-        const saveBtn = document.getElementById('saveActivityLog');
-        const cancelBtn = document.getElementById('cancelActivityLog');
-
-        closeBtn.addEventListener('click', () => {
-            this.closeActivityLogModal();
-        });
-
-        saveBtn.addEventListener('click', () => {
-            this.saveActivityLogFromModal();
-        });
-
-        cancelBtn.addEventListener('click', () => {
-            this.closeActivityLogModal();
-        });
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.closeActivityLogModal();
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (modal.style.display !== 'flex') return;
-            if (e.key === 'Escape') {
-                this.closeActivityLogModal();
-                return;
-            }
-            if (e.key === 'Tab') {
-                const focusable = modal.querySelectorAll('button, input, textarea, select, [tabindex]:not([tabindex="-1"])');
-                if (!focusable.length) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (e.shiftKey && document.activeElement === first) {
-                    e.preventDefault();
-                    last.focus();
-                } else if (!e.shiftKey && document.activeElement === last) {
-                    e.preventDefault();
-                    first.focus();
-                }
-            }
-        });
-
-        this.attachActualModalEventHandlers();
-
+        attachActivityModalEventListeners() {
+        return globalThis.TimeTrackerActualModalController.attachActivityModalEventListeners.call(this);
     }
 }
 

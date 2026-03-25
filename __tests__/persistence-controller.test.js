@@ -2,15 +2,53 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const controller = require('../controllers/persistence-controller');
+const { buildMethod } = require('./helpers/script-method-builder');
+
+const buildSlotsJsonWrapper = buildMethod('buildSlotsJson()', '()');
+const applySlotsJsonWrapper = buildMethod('applySlotsJson(slotsJson)', '(slotsJson)');
 
 test('persistence-controller exports and global attach are available', () => {
     assert.ok(controller);
+    assert.equal(typeof controller.buildSlotsJson, 'function');
+    assert.equal(typeof controller.applySlotsJson, 'function');
     assert.equal(typeof controller.saveData, 'function');
     assert.equal(typeof controller.persistLocalSnapshotNow, 'function');
     assert.equal(typeof controller.createStateSnapshot, 'function');
     assert.equal(typeof controller.loadData, 'function');
     assert.equal(typeof controller.autoSave, 'function');
     assert.equal(globalThis.TimeTrackerPersistenceController.saveData, controller.saveData);
+});
+
+test('script persistence wrapper methods delegate build/apply slot helpers to controller', () => {
+    const original = globalThis.TimeTrackerPersistenceController;
+    const calls = [];
+
+    globalThis.TimeTrackerPersistenceController = {
+        ...original,
+        buildSlotsJson() {
+            calls.push(['build', this]);
+            return { ok: 'build' };
+        },
+        applySlotsJson(slotsJson) {
+            calls.push(['apply', this, slotsJson]);
+            return true;
+        },
+    };
+
+    const ctx = { id: 'tracker' };
+    const payload = { 4: { planned: 'Focus' } };
+
+    try {
+        assert.deepEqual(buildSlotsJsonWrapper.call(ctx), { ok: 'build' });
+        assert.equal(applySlotsJsonWrapper.call(ctx, payload), true);
+    } finally {
+        globalThis.TimeTrackerPersistenceController = original;
+    }
+
+    assert.deepEqual(calls, [
+        ['build', ctx],
+        ['apply', ctx, payload],
+    ]);
 });
 
 test('persistLocalSnapshotNow prefers storage adapter when available', () => {

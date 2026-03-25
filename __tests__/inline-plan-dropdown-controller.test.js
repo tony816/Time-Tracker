@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+require('../controllers/controller-state-access');
 const controller = require('../controllers/inline-plan-dropdown-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 
@@ -96,4 +97,27 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['close', ctx],
         ['apply', ctx, 'A', options],
     ]);
+});
+
+test('isSameInlinePlanTarget can read the current range through shared controller state access', () => {
+    const originalAccess = globalThis.TimeTrackerControllerStateAccess;
+    globalThis.TimeTrackerControllerStateAccess = {
+        ...originalAccess,
+        getInlinePlanTarget() {
+            return {
+                startIndex: 2,
+                endIndex: 4,
+                anchor: { id: 'shared-anchor' },
+            };
+        }
+    };
+
+    try {
+        assert.equal(
+            controller.isSameInlinePlanTarget.call({ inlinePlanTarget: null }, { startIndex: 2, endIndex: 4 }),
+            true
+        );
+    } finally {
+        globalThis.TimeTrackerControllerStateAccess = originalAccess;
+    }
 });

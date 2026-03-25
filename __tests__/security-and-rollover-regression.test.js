@@ -5,8 +5,12 @@ const path = require('node:path');
 
 const scriptPath = path.join(__dirname, '..', 'script.js');
 const serverPath = path.join(__dirname, '..', 'server.js');
+const timerControllerPath = path.join(__dirname, '..', 'controllers', 'timer-controller.js');
+const plannedCatalogRoutineControllerPath = path.join(__dirname, '..', 'controllers', 'planned-catalog-routine-controller.js');
 const scriptSource = fs.readFileSync(scriptPath, 'utf8');
 const serverSource = fs.readFileSync(serverPath, 'utf8');
+const timerControllerSource = fs.readFileSync(timerControllerPath, 'utf8');
+const plannedCatalogRoutineControllerSource = fs.readFileSync(plannedCatalogRoutineControllerPath, 'utf8');
 
 test('server dotenv bootstrap is guarded for MODULE_NOT_FOUND', () => {
   assert.match(serverSource, /require\('dotenv'\)\.config\(\)/);
@@ -21,10 +25,10 @@ test('script has merge-key normalization guard', () => {
   assert.match(snippet, /end >= this\.timeSlots\.length/);
 });
 
-test('updateRunningTimers handles date rollover by transitioning to today', () => {
-  const start = scriptSource.indexOf('updateRunningTimers()');
+test('timer-controller updateRunningTimers handles date rollover by transitioning to today', () => {
+  const start = timerControllerSource.indexOf('function updateRunningTimers()');
   assert.ok(start >= 0, 'updateRunningTimers() should exist');
-  const snippet = scriptSource.slice(start, start + 1200);
+  const snippet = timerControllerSource.slice(start, start + 1200);
   assert.match(snippet, /this\.lastKnownTodayDate !== today/);
   assert.match(snippet, /this\.transitionToDate\(today\)/);
 });
@@ -49,10 +53,10 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/ui\/time-entry-renderer\.js':\s*'ui\/time-entry-renderer\.js'/);
 });
 
-test('script date helpers prefer TimeTrackerDateCore when available', () => {
-  const start = scriptSource.indexOf('getLocalDateParts(date)');
+test('planned-catalog-routine-controller date helpers prefer TimeTrackerDateCore when available', () => {
+  const start = plannedCatalogRoutineControllerSource.indexOf('function getLocalDateParts(date)');
   assert.ok(start >= 0, 'getLocalDateParts() should exist');
-  const snippet = scriptSource.slice(start, start + 5200);
+  const snippet = plannedCatalogRoutineControllerSource.slice(start, start + 5200);
   assert.match(snippet, /globalThis\.TimeTrackerDateCore/);
   assert.match(snippet, /dateCore\.parseLocalDateParts/);
   assert.match(snippet, /dateCore\.getDateValue/);

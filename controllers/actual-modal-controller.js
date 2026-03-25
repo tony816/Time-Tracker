@@ -789,6 +789,212 @@
         this.actualActivityMenuContext = null;
     }
 
+function attachActivityModalEventListeners() {
+    const modal = document.getElementById('activityLogModal');
+    const closeBtn = document.getElementById('closeActivityModal');
+    const saveBtn = document.getElementById('saveActivityLog');
+    const cancelBtn = document.getElementById('cancelActivityLog');
+     closeBtn.addEventListener('click', () => {
+        this.closeActivityLogModal();
+    });
+     saveBtn.addEventListener('click', () => {
+        this.saveActivityLogFromModal();
+    });
+     cancelBtn.addEventListener('click', () => {
+        this.closeActivityLogModal();
+    });
+     modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            this.closeActivityLogModal();
+        }
+    });
+     document.addEventListener('keydown', (e) => {
+        if (modal.style.display !== 'flex') return;
+        if (e.key === 'Escape') {
+            this.closeActivityLogModal();
+            return;
+        }
+        if (e.key === 'Tab') {
+            const focusable = modal.querySelectorAll('button, input, textarea, select, [tabindex]:not([tabindex="-1"])');
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    });
+     this.attachActualModalEventHandlers();
+ }
+
+function saveActivityLogFromModal() {
+    const modal = document.getElementById('activityLogModal');
+    const index = parseInt(modal.dataset.index, 10);
+    const baseIndexRaw = parseInt(modal.dataset.baseIndex, 10);
+    const baseIndex = Number.isFinite(baseIndexRaw) ? baseIndexRaw : index;
+     if (Number.isFinite(baseIndex) && baseIndex >= 0) {
+        const range = this.getSplitRange('actual', baseIndex);
+        const start = range.start;
+        const end = range.end;
+        const details = document.getElementById('activityDetails').value.trim();
+         if (!this.modalActualDirty) {
+            for (let i = start; i <= end; i++) {
+                const slot = this.timeSlots[i];
+                if (!slot) continue;
+                if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                    slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+                }
+                slot.activityLog.details = (i === start) ? details : '';
+            }
+        } else {
+            this.normalizeActualActivitiesToStep();
+            this.clampActualGridToAssigned();
+            const activities = this.finalizeActualActivitiesForSave();
+            const split = this.splitActualActivitiesByPlan(baseIndex, activities);
+            const mergedActivities = activities.map(item => ({ ...item }));
+            const summary = mergedActivities.length > 0 ? this.formatActivitiesSummary(mergedActivities) : '';
+            const actualUnits = split.hasLabels
+                ? this.getModalActualGridUnitsForSave(split.units.length)
+                : [];
+            const actualMergeKey = this.findMergeKey('actual', start);
+            if (actualMergeKey) {
+                this.mergedFields.set(actualMergeKey, summary);
+            }
+               for (let i = start; i <= end; i++) {
+                  const slot = this.timeSlots[i];
+                  if (!slot) continue;
+                  if (!slot.activityLog || typeof slot.activityLog !== 'object') {
+                      slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
+                  }
+                  slot.actual = (i === start) ? summary : '';
+                  slot.activityLog.details = (i === start) ? details : '';
+                  if (i === start) {
+                      slot.activityLog.subActivities = mergedActivities.map(item => ({ ...item }));
+                      if (split.hasLabels) {
+                          slot.activityLog.actualGridUnits = actualUnits.slice();
+                          slot.activityLog.actualExtraGridUnits = [];
+                          slot.activityLog.actualFailedGridUnits = [];
+                          slot.activityLog.actualOverride = (split.extraActivities && split.extraActivities.length > 0);
+                      } else {
+                          slot.activityLog.actualGridUnits = [];
+                          slot.activityLog.actualExtraGridUnits = [];
+                          slot.activityLog.actualFailedGridUnits = [];
+                          slot.activityLog.actualOverride = mergedActivities.length > 0;
+                      }
+                  } else {
+                    slot.activityLog.subActivities = [];
+                    slot.activityLog.actualGridUnits = [];
+                    slot.activityLog.actualExtraGridUnits = [];
+                    slot.activityLog.actualFailedGridUnits = [];
+                    slot.activityLog.actualOverride = false;
+                }
+            }
+        }
+         this.renderTimeEntries();
+        this.calculateTotals();
+        this.autoSave();
+    }
+     this.closeActivityLogModal({ force: true });
+}
+
+function closeActivityLogModal(options = {}) {
+    const modal = document.getElementById('activityLogModal');
+    if (!options.force && this.modalActualDirty) {
+        const discard = confirm('저장하지 않은 실제 활동 변경사항이 있습니다. 닫을까요?');
+        if (!discard) return;
+    }
+    modal.style.display = 'none';
+     document.getElementById('activityDetails').value = '';
+     this.closeActualActivityMenu();
+    this.modalActualActivities = [];
+    this.modalActualTotalSeconds = 0;
+    this.modalActualActiveRow = -1;
+    this.modalActualBaseIndex = null;
+    this.modalActualDirty = false;
+    this.modalActualHasPlanUnits = false;
+    this.modalActualPlanUnits = [];
+    this.modalActualGridUnits = [];
+    this.modalActualPlanLabelSet = new Set();
+    const { list, totalEl, usedEl, noticeEl } = this.getActualModalElements();
+    if (list) list.innerHTML = '';
+    if (totalEl) totalEl.textContent = '0시간';
+    if (usedEl) usedEl.textContent = '0시간';
+    if (noticeEl) noticeEl.textContent = '';
+     delete modal.dataset.index;
+    delete modal.dataset.baseIndex;
+    if (this.lastFocusedElementBeforeModal && typeof this.lastFocusedElementBeforeModal.focus === 'function') {
+        try { this.lastFocusedElementBeforeModal.focus(); } catch (_) {}
+    }
+}
+
+function openActivityLogModal(index) {
+    const modal = document.getElementById('activityLogModal');
+    const slot = this.timeSlots[index];
+    const actualMergeKey = this.findMergeKey('actual', index);
+    let baseIndex = index;
+    if (actualMergeKey) {
+        const [, startStr] = actualMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        if (Number.isFinite(start)) baseIndex = start;
+    }
+    const baseSlot = this.timeSlots[baseIndex] || slot;
+     const range = this.getSplitRange('actual', baseIndex);
+    const startSlot = this.timeSlots[range.start] || baseSlot;
+    const endSlot = this.timeSlots[range.end] || baseSlot;
+    const startLabel = startSlot && startSlot.time ? this.formatSlotTimeLabel(startSlot.time) : '';
+    const endLabel = endSlot && endSlot.time ? this.formatSlotTimeLabel(endSlot.time) : '';
+    const timeLabel = (range.start === range.end || !endLabel) ? startLabel : `${startLabel} ~ ${endLabel}`;
+    document.getElementById('activityTime').value = timeLabel;
+    // '활동 제목' 입력은 이제 우측 실제 칸(시간 기록 표시)을 직접 편집하는 컨텍스트로 사용
+    // 병합된 실제 칸인 경우 병합 값, 아니면 개별 slot.actual을 채운다
+    document.getElementById('activityDetails').value = (baseSlot.activityLog && baseSlot.activityLog.details) || '';
+     this.modalActualBaseIndex = baseIndex;
+    this.modalActualTotalSeconds = Math.max(0, this.getBlockLength('actual', baseIndex) * 3600);
+    const planContext = this.getActualPlanLabelContext(baseIndex);
+    this.modalActualHasPlanUnits = planContext.hasLabels;
+    this.modalActualPlanUnits = Array.isArray(planContext.units) ? planContext.units.slice() : [];
+    this.modalActualPlanLabelSet = planContext.labelSet ? new Set(planContext.labelSet) : new Set();
+    if (this.modalActualHasPlanUnits) {
+        const existing = this.normalizeActualActivitiesList(baseSlot.activityLog && baseSlot.activityLog.subActivities);
+        const actualUnits = this.getActualGridUnitsForBase(
+            baseIndex,
+            this.modalActualPlanUnits.length,
+            this.modalActualPlanUnits
+        );
+        this.modalActualGridUnits = Array.isArray(actualUnits) ? actualUnits.slice() : [];
+        this.modalActualActivities = this.buildActualModalActivities(
+            baseIndex,
+            this.modalActualPlanUnits,
+            this.modalActualGridUnits,
+            existing,
+            planContext.planLabel
+        );
+        this.normalizeActualActivitiesToStep();
+    } else {
+        this.modalActualPlanUnits = [];
+        this.modalActualPlanLabelSet = new Set();
+        this.modalActualGridUnits = [];
+        this.modalActualActivities = this.buildActualActivitiesSeed(baseIndex, this.modalActualTotalSeconds);
+        this.normalizeActualActivitiesToTotal();
+    }
+    this.modalActualActiveRow = this.modalActualActivities.length > 0 ? 0 : -1;
+    this.modalActualDirty = false;
+    this.renderActualActivitiesList();
+     this.lastFocusedElementBeforeModal = document.activeElement;
+    modal.style.display = 'flex';
+    modal.dataset.index = index;
+    modal.dataset.baseIndex = String(baseIndex);
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+     setTimeout(() => {
+        document.getElementById('activityDetails').focus();
+    }, 100);
+}
+
     return Object.freeze({
         isValidActualRow,
         updateActualRowActiveStyles,
@@ -814,5 +1020,9 @@
         openActualActivityMenu,
         positionActualActivityMenu,
         closeActualActivityMenu,
+        openActivityLogModal,
+        closeActivityLogModal,
+        saveActivityLogFromModal,
+        attachActivityModalEventListeners,
     });
 });

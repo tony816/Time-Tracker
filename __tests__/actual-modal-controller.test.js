@@ -8,6 +8,10 @@ const attachActualModalEventHandlersWrapper = buildMethod('attachActualModalEven
 const handleActualModalListClickWrapper = buildMethod('handleActualModalListClick(event)', '(event)');
 const handleActualModalListChangeWrapper = buildMethod('handleActualModalListChange(event)', '(event)');
 const handleActualModalListFocusInWrapper = buildMethod('handleActualModalListFocusIn(event)', '(event)');
+const openActivityLogModalWrapper = buildMethod('openActivityLogModal(index)', '(index)');
+const closeActivityLogModalWrapper = buildMethod('closeActivityLogModal(options = {})', '(options = {})');
+const saveActivityLogFromModalWrapper = buildMethod('saveActivityLogFromModal()', '()');
+const attachActivityModalEventListenersWrapper = buildMethod('attachActivityModalEventListeners()', '()');
 
 test('actual-modal-controller exports and global attach include menu methods', () => {
     assert.ok(controller);
@@ -15,6 +19,10 @@ test('actual-modal-controller exports and global attach include menu methods', (
     assert.equal(typeof controller.handleActualModalListClick, 'function');
     assert.equal(typeof controller.handleActualModalListChange, 'function');
     assert.equal(typeof controller.handleActualModalListFocusIn, 'function');
+    assert.equal(typeof controller.openActivityLogModal, 'function');
+    assert.equal(typeof controller.closeActivityLogModal, 'function');
+    assert.equal(typeof controller.saveActivityLogFromModal, 'function');
+    assert.equal(typeof controller.attachActivityModalEventListeners, 'function');
     assert.equal(typeof controller.openActualActivityMenu, 'function');
     assert.equal(typeof controller.positionActualActivityMenu, 'function');
     assert.equal(typeof controller.closeActualActivityMenu, 'function');
@@ -33,6 +41,22 @@ test('actual-modal-controller exports and global attach include menu methods', (
     assert.equal(
         globalThis.TimeTrackerActualModalController.handleActualModalListFocusIn,
         controller.handleActualModalListFocusIn
+    );
+    assert.equal(
+        globalThis.TimeTrackerActualModalController.openActivityLogModal,
+        controller.openActivityLogModal
+    );
+    assert.equal(
+        globalThis.TimeTrackerActualModalController.closeActivityLogModal,
+        controller.closeActivityLogModal
+    );
+    assert.equal(
+        globalThis.TimeTrackerActualModalController.saveActivityLogFromModal,
+        controller.saveActivityLogFromModal
+    );
+    assert.equal(
+        globalThis.TimeTrackerActualModalController.attachActivityModalEventListeners,
+        controller.attachActivityModalEventListeners
     );
     assert.equal(
         globalThis.TimeTrackerActualModalController.openActualActivityMenu,
@@ -117,18 +141,39 @@ test('script actual modal event wrapper methods delegate to controller helpers',
             calls.push(['focusin', this, event]);
             return 'focus-result';
         },
+        openActivityLogModal(index) {
+            calls.push(['open', this, index]);
+            return 'open-result';
+        },
+        closeActivityLogModal(options) {
+            calls.push(['close', this, options]);
+            return 'close-result';
+        },
+        saveActivityLogFromModal() {
+            calls.push(['save', this]);
+            return 'save-result';
+        },
+        attachActivityModalEventListeners() {
+            calls.push(['attach-shell', this]);
+            return 'attach-shell-result';
+        },
     };
 
     const ctx = { id: 'tracker' };
     const clickEvent = { type: 'click' };
     const changeEvent = { type: 'change' };
     const focusEvent = { type: 'focusin' };
+    const closeOptions = { force: true };
 
     try {
         assert.equal(attachActualModalEventHandlersWrapper.call(ctx), 'attach-result');
         assert.equal(handleActualModalListClickWrapper.call(ctx, clickEvent), 'click-result');
         assert.equal(handleActualModalListChangeWrapper.call(ctx, changeEvent), 'change-result');
         assert.equal(handleActualModalListFocusInWrapper.call(ctx, focusEvent), 'focus-result');
+        assert.equal(openActivityLogModalWrapper.call(ctx, 3), 'open-result');
+        assert.equal(closeActivityLogModalWrapper.call(ctx, closeOptions), 'close-result');
+        assert.equal(saveActivityLogFromModalWrapper.call(ctx), 'save-result');
+        assert.equal(attachActivityModalEventListenersWrapper.call(ctx), 'attach-shell-result');
     } finally {
         globalThis.TimeTrackerActualModalController = original;
     }
@@ -138,6 +183,10 @@ test('script actual modal event wrapper methods delegate to controller helpers',
         ['click', ctx, clickEvent],
         ['change', ctx, changeEvent],
         ['focusin', ctx, focusEvent],
+        ['open', ctx, 3],
+        ['close', ctx, closeOptions],
+        ['save', ctx],
+        ['attach-shell', ctx],
     ]);
 });
 

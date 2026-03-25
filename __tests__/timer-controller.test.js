@@ -2,13 +2,92 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const timerController = require('../controllers/timer-controller');
+const { buildMethod } = require('./helpers/script-method-builder');
+
+const attachTimerListenersWrapper = buildMethod('attachTimerListeners(entryDiv, index)', '(entryDiv, index)');
+const startTimerWrapper = buildMethod('startTimer(index)', '(index)');
+const pauseTimerWrapper = buildMethod('pauseTimer(index)', '(index)');
+const resumeTimerWrapper = buildMethod('resumeTimer(index)', '(index)');
+const stopTimerWrapper = buildMethod('stopTimer(index)', '(index)');
+const commitRunningTimersWrapper = buildMethod('commitRunningTimers(options = {})', '(options = {})');
+const updateRunningTimersWrapper = buildMethod('updateRunningTimers()', '()');
 
 test('timer-controller exports and global attach are available', () => {
+    assert.equal(typeof timerController.attachTimerListeners, 'function');
+    assert.equal(typeof timerController.startTimer, 'function');
+    assert.equal(typeof timerController.pauseTimer, 'function');
+    assert.equal(typeof timerController.resumeTimer, 'function');
+    assert.equal(typeof timerController.stopTimer, 'function');
+    assert.equal(typeof timerController.commitRunningTimers, 'function');
+    assert.equal(typeof timerController.updateRunningTimers, 'function');
     assert.equal(typeof timerController.resolveTimerEligibility, 'function');
     assert.equal(typeof timerController.getStartBlockReason, 'function');
     assert.equal(typeof timerController.resolveTimerControlState, 'function');
     assert.ok(globalThis.TimerController);
     assert.equal(typeof globalThis.TimerController.resolveTimerEligibility, 'function');
+});
+
+test('script timer wrapper methods delegate to controller helpers', () => {
+    const original = globalThis.TimerController;
+    const calls = [];
+
+    globalThis.TimerController = {
+        ...original,
+        attachTimerListeners(entryDiv, index) {
+            calls.push(['attach', this, entryDiv, index]);
+            return 'attach';
+        },
+        startTimer(index) {
+            calls.push(['start', this, index]);
+            return 'start';
+        },
+        pauseTimer(index) {
+            calls.push(['pause', this, index]);
+            return 'pause';
+        },
+        resumeTimer(index) {
+            calls.push(['resume', this, index]);
+            return 'resume';
+        },
+        stopTimer(index) {
+            calls.push(['stop', this, index]);
+            return 'stop';
+        },
+        commitRunningTimers(options) {
+            calls.push(['commit', this, options]);
+            return true;
+        },
+        updateRunningTimers() {
+            calls.push(['update', this]);
+            return 'update';
+        },
+    };
+
+    const ctx = { id: 'tracker' };
+    const entryDiv = { id: 'row' };
+    const options = { render: true };
+
+    try {
+        assert.equal(attachTimerListenersWrapper.call(ctx, entryDiv, 1), 'attach');
+        assert.equal(startTimerWrapper.call(ctx, 1), 'start');
+        assert.equal(pauseTimerWrapper.call(ctx, 1), 'pause');
+        assert.equal(resumeTimerWrapper.call(ctx, 1), 'resume');
+        assert.equal(stopTimerWrapper.call(ctx, 1), 'stop');
+        assert.equal(commitRunningTimersWrapper.call(ctx, options), true);
+        assert.equal(updateRunningTimersWrapper.call(ctx), 'update');
+    } finally {
+        globalThis.TimerController = original;
+    }
+
+    assert.deepEqual(calls, [
+        ['attach', ctx, entryDiv, 1],
+        ['start', ctx, 1],
+        ['pause', ctx, 1],
+        ['resume', ctx, 1],
+        ['stop', ctx, 1],
+        ['commit', ctx, options],
+        ['update', ctx],
+    ]);
 });
 
 test('resolveTimerEligibility reflects merged ranges and merged planned text', () => {
