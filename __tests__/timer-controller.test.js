@@ -11,6 +11,13 @@ const resumeTimerWrapper = buildMethod('resumeTimer(index)', '(index)');
 const stopTimerWrapper = buildMethod('stopTimer(index)', '(index)');
 const commitRunningTimersWrapper = buildMethod('commitRunningTimers(options = {})', '(options = {})');
 const updateRunningTimersWrapper = buildMethod('updateRunningTimers()', '()');
+const normalizeTimerStatusWrapper = buildMethod('normalizeTimerStatus(rawStatus, slot = null)', '(rawStatus, slot = null)');
+const getTimerRawElapsedWrapper = buildMethod('getTimerRawElapsed(slot)', '(slot)');
+const getTimeUiHostIndexWrapper = buildMethod('getTimeUiHostIndex(index)', '(index)');
+const getMobileTimeUiStateWrapper = buildMethod('getMobileTimeUiState(index, slotOverride = null)', '(index, slotOverride = null)');
+const getTimerEligibilityWrapper = buildMethod('getTimerEligibility(index, slotOverride = null)', '(index, slotOverride = null)');
+const getTimerStartBlockReasonWrapper = buildMethod('getTimerStartBlockReason(index)', '(index)');
+const createTimerControlsWrapper = buildMethod('createTimerControls(index, slot)', '(index, slot)');
 
 test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.attachTimerListeners, 'function');
@@ -23,6 +30,13 @@ test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.resolveTimerEligibility, 'function');
     assert.equal(typeof timerController.getStartBlockReason, 'function');
     assert.equal(typeof timerController.resolveTimerControlState, 'function');
+    assert.equal(typeof timerController.normalizeTimerStatus, 'function');
+    assert.equal(typeof timerController.getTimerRawElapsed, 'function');
+    assert.equal(typeof timerController.getTimeUiHostIndex, 'function');
+    assert.equal(typeof timerController.getMobileTimeUiState, 'function');
+    assert.equal(typeof timerController.getTimerEligibility, 'function');
+    assert.equal(typeof timerController.getTimerStartBlockReason, 'function');
+    assert.equal(typeof timerController.createTimerControls, 'function');
     assert.ok(globalThis.TimerController);
     assert.equal(typeof globalThis.TimerController.resolveTimerEligibility, 'function');
 });
@@ -61,11 +75,40 @@ test('script timer wrapper methods delegate to controller helpers', () => {
             calls.push(['update', this]);
             return 'update';
         },
+        normalizeTimerStatus(rawStatus, slot) {
+            calls.push(['normalize', this, rawStatus, slot]);
+            return 'paused';
+        },
+        getTimerRawElapsed(slot) {
+            calls.push(['raw', this, slot]);
+            return 900;
+        },
+        getTimeUiHostIndex(index) {
+            calls.push(['host', this, index]);
+            return 3;
+        },
+        getMobileTimeUiState(index, slotOverride) {
+            calls.push(['mobile', this, index, slotOverride]);
+            return { mode: 'running' };
+        },
+        getTimerEligibility(index, slotOverride) {
+            calls.push(['eligibility', this, index, slotOverride]);
+            return { canStartWithoutDate: true };
+        },
+        getTimerStartBlockReason(index) {
+            calls.push(['reason', this, index]);
+            return null;
+        },
+        createTimerControls(index, slot) {
+            calls.push(['controls', this, index, slot]);
+            return '<div>timer</div>';
+        },
     };
 
     const ctx = { id: 'tracker' };
     const entryDiv = { id: 'row' };
     const options = { render: true };
+    const slot = { timer: { running: false } };
 
     try {
         assert.equal(attachTimerListenersWrapper.call(ctx, entryDiv, 1), 'attach');
@@ -75,6 +118,13 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         assert.equal(stopTimerWrapper.call(ctx, 1), 'stop');
         assert.equal(commitRunningTimersWrapper.call(ctx, options), true);
         assert.equal(updateRunningTimersWrapper.call(ctx), 'update');
+        assert.equal(normalizeTimerStatusWrapper.call(ctx, 'idle', slot), 'paused');
+        assert.equal(getTimerRawElapsedWrapper.call(ctx, slot), 900);
+        assert.equal(getTimeUiHostIndexWrapper.call(ctx, 5), 3);
+        assert.deepEqual(getMobileTimeUiStateWrapper.call(ctx, 2, slot), { mode: 'running' });
+        assert.deepEqual(getTimerEligibilityWrapper.call(ctx, 2, slot), { canStartWithoutDate: true });
+        assert.equal(getTimerStartBlockReasonWrapper.call(ctx, 2), null);
+        assert.equal(createTimerControlsWrapper.call(ctx, 2, slot), '<div>timer</div>');
     } finally {
         globalThis.TimerController = original;
     }
@@ -87,6 +137,13 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         ['stop', ctx, 1],
         ['commit', ctx, options],
         ['update', ctx],
+        ['normalize', ctx, 'idle', slot],
+        ['raw', ctx, slot],
+        ['host', ctx, 5],
+        ['mobile', ctx, 2, slot],
+        ['eligibility', ctx, 2, slot],
+        ['reason', ctx, 2],
+        ['controls', ctx, 2, slot],
     ]);
 });
 

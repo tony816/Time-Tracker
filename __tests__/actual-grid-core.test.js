@@ -10,6 +10,9 @@ test('actual-grid-core exports are available and attached to global', () => {
     assert.equal(typeof actualGridCore.buildActualActivitiesFromGrid, 'function');
     assert.equal(typeof actualGridCore.buildSplitSegmentsFromActivities, 'function');
     assert.equal(typeof actualGridCore.buildSplitGridSegmentsFromActivities, 'function');
+    assert.equal(typeof actualGridCore.buildSplitTitleSegments, 'function');
+    assert.equal(typeof actualGridCore.buildActualGridDisplaySegments, 'function');
+    assert.equal(typeof actualGridCore.buildActualOverrideGridSegments, 'function');
     assert.equal(typeof actualGridCore.normalizeActualGridBooleanUnits, 'function');
     assert.equal(typeof actualGridCore.rebuildLockedRowsFromUnitSet, 'function');
     assert.equal(typeof actualGridCore.insertLockedRowsAfterRelatedActivities, 'function');
@@ -144,6 +147,98 @@ test('buildSplitGridSegmentsFromActivities preserves extras and pads to the row 
             reservedIndices: result.gridSegments[3].reservedIndices,
             alwaysVisibleLabel: false,
             suppressHoverLabel: false,
+        },
+    ]);
+});
+
+test('buildSplitTitleSegments derives title rows for planned and actual split views', () => {
+    assert.deepEqual(actualGridCore.buildSplitTitleSegments({
+        type: 'planned',
+        showTitleBand: true,
+        unitsPerRow: 6,
+        normalizedPlanTitle: 'Deep Work',
+    }), [{ label: 'Deep Work', span: 6 }]);
+
+    assert.deepEqual(actualGridCore.buildSplitTitleSegments({
+        type: 'actual',
+        showTitleBand: true,
+        unitsPerRow: 6,
+        normalizedPlanTitle: '',
+        normalizedPlannedLabel: 'Focus',
+    }), [{ label: 'Focus', span: 6 }]);
+});
+
+test('buildActualGridDisplaySegments keeps active, locked, failed, and running-outline flags', () => {
+    const outline = new Map([[1, { runningEnd: true }]]);
+    const segments = actualGridCore.buildActualGridDisplaySegments({
+        planUnits: ['A', 'B'],
+        displayOrder: [1, 0],
+        actualUnits: [true, true],
+        failedUnits: [false, true],
+        lockedUnits: [false, true],
+        runningOutline: outline,
+    });
+
+    assert.deepEqual(segments, [
+        { label: 'B', span: 1, unitIndex: 1, active: false, locked: true, failed: true, runningEnd: true },
+        { label: 'A', span: 1, unitIndex: 0, active: true, locked: false, failed: false },
+    ]);
+});
+
+test('buildActualOverrideGridSegments renders extra labels once and preserves reserved indices', () => {
+    const reservedIndices = new Set([1, 2]);
+    const segments = actualGridCore.buildActualOverrideGridSegments({
+        planUnits: ['A', 'B', 'C'],
+        displayOrder: [0, 1, 2],
+        actualUnits: [true, false, true],
+        failedUnits: [false, true, false],
+        lockedUnits: [false, false, false],
+        allocation: {
+            slotsByIndex: {
+                1: 'Extra',
+                2: 'Extra',
+            },
+        },
+        extraActiveUnits: [false, true, true],
+        reservedIndices,
+    });
+
+    assert.deepEqual(segments, [
+        {
+            label: 'A',
+            span: 1,
+            unitIndex: 0,
+            active: true,
+            locked: false,
+            failed: false,
+            isExtra: false,
+            reservedIndices,
+        },
+        {
+            label: 'Extra',
+            span: 1,
+            unitIndex: 1,
+            active: true,
+            locked: false,
+            failed: true,
+            isExtra: true,
+            reservedIndices,
+            extraLabel: 'Extra',
+            alwaysVisibleLabel: true,
+            suppressHoverLabel: false,
+        },
+        {
+            label: 'Extra',
+            span: 1,
+            unitIndex: 2,
+            active: true,
+            locked: false,
+            failed: false,
+            isExtra: true,
+            reservedIndices,
+            extraLabel: 'Extra',
+            alwaysVisibleLabel: false,
+            suppressHoverLabel: true,
         },
     ]);
 });

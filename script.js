@@ -74,7 +74,7 @@ class TimeTracker {
             try { return window.NOTION_ACTIVITIES_ENDPOINT || null; } catch(e){ return null; }
         })();
         this.notionActivitiesCache = null;
-        // ?�?�머 관???�성 추�?
+        // ?�?�머 관???�성 추�?
         this.timers = new Map(); // {index: {running, elapsed, startTime, intervalId}}
         this.timerInterval = null;
         // Serialize local save operations.
@@ -183,12 +183,12 @@ class TimeTracker {
         // Supabase (optional) bootstrap
         try { this.initSupabaseIntegration && this.initSupabaseIntegration(); } catch (_) {}
 
-        // ?�?�소 ?�체???�아?�을 ???�는 legacy outcome ?�드 ?�괄 ?�거
+        // ?�?�소 ?�체???�아?�을 ???�는 legacy outcome ?�드 ?�괄 ?�거
         try {
             setTimeout(() => { this.purgeOutcomeFromAllStoredData(); }, 0);
         } catch (_) {}
 
-        // Studio ???�환 ?�으�?hidden?????�?�머 ?�로?�링을 ?�하�?불필?�한 ?�리거�? 줄임
+        // Studio ???�환 ?�으�?hidden?????�?�머 ?�로?�링을 ?�하�?불필?�한 ?�리거�? 줄임
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.persistLocalSnapshotNow();
@@ -231,7 +231,7 @@ class TimeTracker {
         setText('#cancelActivityLog', UI_LABELS.cancelButton);
     }
 
-    // ?�버�?�??�의 ?�???�출 ?�퍼
+    // ?�버�?�??�의 ?�???�출 ?�퍼
     saveNow(reason = 'manual') {
         try { console.log('[saveNow]', reason); } catch (_) {}
         return this.saveData();
@@ -503,7 +503,7 @@ class TimeTracker {
         if (this.authButton) {
             this.authButton.addEventListener('click', () => {
                 if (!this.supabaseConfigured || !this.supabase) {
-                    this.showNotification('Supabase ?�정??먼�? ?�인?�주?�요.');
+                    this.showNotification('Supabase ?�정??먼�? ?�인?�주?�요.');
                     return;
                 }
                 if (this.supabaseUser) {
@@ -511,7 +511,7 @@ class TimeTracker {
                     this.saveData().finally(() => {
                         this.supabase.auth.signOut().catch((err) => {
                             console.warn('[auth] sign out failed', err);
-                            this.showNotification('로그?�웃 �??�류가 발생?�습?�다.');
+                            this.showNotification('로그?�웃 �??�류가 발생?�습?�다.');
                         });
                     });
                 } else {
@@ -540,7 +540,7 @@ class TimeTracker {
                             auth_provider: provider,
                             reason: 'oauth_start_failed'
                         });
-                        this.showNotification('Google 로그?�에 ?�패?�습?�다.');
+                        this.showNotification('Google 로그?�에 ?�패?�습?�다.');
                     });
                 }
             });
@@ -581,7 +581,7 @@ class TimeTracker {
             }
         });
 
-        // ?�동 ?�??불러?�기 ?�거(?�전 ?�동 ?�??
+        // ?�동 ?�??불러?�기 ?�거(?�전 ?�동 ?�??
 
         document.getElementById('clearBtn').addEventListener('click', () => {
             this.handleClearButtonClick();
@@ -599,15 +599,15 @@ class TimeTracker {
             this.changeDate(1);
         });
 
-        // 병합???�?� ?�전 ?�체?? ?�느 ?�치�??�릭?�도 ?�체 범위 ?�택
+        // 병합???�?� ?�전 ?�체?? ?�느 ?�치�??�릭?�도 ?�체 범위 ?�택
         const timeEntries = document.getElementById('timeEntries');
         if (timeEntries) {
-            // 캡처 ?�계?�서 먼�? 가로챔: ?�래�??�일?�택 로직보다 ?�행
+            // 캡처 ?�계?�서 먼�? 가로챔: ?�래�??�일?�택 로직보다 ?�행
             const captureHandler = (e) => this.handleMergedClickCapture(e);
             timeEntries.addEventListener('mousedown', captureHandler, true);
             timeEntries.addEventListener('click', captureHandler, true);
 
-            // 좌측???�버만으로도 ?��?�?버튼???�연?�럽�??�라?�도�?마우???�동 추적
+            // 좌측???�버만으로도 ?��?�?버튼???�연?�럽�??�라?�도�?마우???�동 추적
             timeEntries.addEventListener('mousemove', (e) => {
                 if (this.isSelectingPlanned) return; // Skip hover UI while dragging.
                 const idx = this.getIndexAtClientPosition('planned', e.clientX, e.clientY);
@@ -617,12 +617,12 @@ class TimeTracker {
             });
             timeEntries.addEventListener('mouseleave', (e) => {
                 const toEl = e.relatedTarget;
-                // ?��?�?버튼?�로 ?�동???�는 ?��?
+                // ?��?�?버튼?�로 ?�동???�는 ?��?
                 if (toEl && toEl.closest && (toEl.closest('.schedule-button') || toEl.closest('.undo-button'))) return;
                 this.hideHoverScheduleButton && this.hideHoverScheduleButton();
             });
 
-            // 계획 ?�력 ?�드 ?�릭 ???�롭?�운 바로 ?�기
+            // 계획 ?�력 ?�드 ?�릭 ???�롭?�운 바로 ?�기
             timeEntries.addEventListener('click', (e) => {
                 const planned = e.target.closest('.planned-input');
                 if (!planned || !timeEntries.contains(planned)) return;
@@ -645,7 +645,7 @@ class TimeTracker {
             });
         }
 
-        // 가?�오�??�보?�기 기능 ?�거?? 관??UI �?리스???�음
+        // 가?�오�??�보?�기 기능 ?�거?? 관??UI �?리스???�음
 
 
 
@@ -655,148 +655,25 @@ class TimeTracker {
             }
         });
 
-        // ?�?�머 결과 ?�력 ?�드 ?�벤??리스??(?�측 칸과 모달???�결: 병합 ?�함 갱신)
+        // Actual result input listeners share one normalization path.
         document.getElementById('timeEntries').addEventListener('input', (e) => {
-            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
-                try {
-                    const index = parseInt(e.target.dataset.index);
-                    const value = e.target.value;
-                    // ?�버�? ?�력 ?�벤???�신
-                    // console.log('[actual-input] input', { index, value });
-                    const actualMergeKey = this.findMergeKey('actual', index);
-                    if (actualMergeKey) {
-                        const [, startStr, endStr] = actualMergeKey.split('-');
-                        const start = parseInt(startStr, 10);
-                        const end = parseInt(endStr, 10);
-                        this.mergedFields.set(actualMergeKey, value);
-                        for (let i = start; i <= end; i++) {
-                            this.timeSlots[i].actual = (i === start) ? value : '';
-                        }
-                    } else {
-                        this.timeSlots[index].actual = value;
-                    }
-                    this.enforceActualLimit(index);
-                    this.clearSubActivitiesForIndex(index);
-                    // Keep timer elapsed in sync with parsed actual duration text.
-                    this.syncTimerElapsedFromActualInput(index, value);
-                    this.calculateTotals();
-                    this.autoSave();
-                    // Persist the serialized snapshot immediately.
-                    this.saveData().catch(() => {});
-                } catch (err) {
-                    console.error('[actual-input] input handler error:', err);
-                }
-            }
+            this.handleActualInputEvent('input', e.target, e);
         });
 
-        // ?��? IME ???�력 조합 종료 ???�??보조(?��? ?�경?�서 input ?�벤??지???�락 ?��?
         document.getElementById('timeEntries').addEventListener('compositionend', (e) => {
-            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
-                const index = parseInt(e.target.dataset.index);
-                const value = e.target.value;
-                const actualMergeKey = this.findMergeKey('actual', index);
-                if (actualMergeKey) {
-                    const [, startStr, endStr] = actualMergeKey.split('-');
-                    const start = parseInt(startStr, 10);
-                    const end = parseInt(endStr, 10);
-                    this.mergedFields.set(actualMergeKey, value);
-                    for (let i = start; i <= end; i++) {
-                        this.timeSlots[i].actual = (i === start) ? value : '';
-                    }
-                } else {
-                    this.timeSlots[index].actual = value;
-                }
-                this.enforceActualLimit(index);
-                this.clearSubActivitiesForIndex(index);
-                this.syncTimerElapsedFromActualInput(index, value);
-                this.calculateTotals();
-                this.autoSave();
-            }
+            this.handleActualInputEvent('compositionend', e.target, e);
         });
 
-        // ?�커?��? 빠질 ?�도 보조 ?�???�리�?(blur??버블�???????focusout ?�용)
         document.getElementById('timeEntries').addEventListener('focusout', (e) => {
-            if (e.target.classList && e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
-                const index = parseInt(e.target.dataset.index);
-                const value = e.target.value;
-                const actualMergeKey = this.findMergeKey('actual', index);
-                if (actualMergeKey) {
-                    const [, startStr, endStr] = actualMergeKey.split('-');
-                    const start = parseInt(startStr, 10);
-                    const end = parseInt(endStr, 10);
-                    this.mergedFields.set(actualMergeKey, value);
-                    for (let i = start; i <= end; i++) {
-                        this.timeSlots[i].actual = (i === start) ? value : '';
-                    }
-                } else {
-                    this.timeSlots[index].actual = value;
-                }
-                this.enforceActualLimit(index);
-                this.clearSubActivitiesForIndex(index);
-                this.syncTimerElapsedFromActualInput(index, value);
-                this.calculateTotals();
-                this.autoSave();
-            }
+            this.handleActualInputEvent('focusout', e.target, e);
         });
 
-        // change ?�벤??보조 ?? ?��? ?�경?�서 input ?�벤?��? ?�락?????�음
         document.getElementById('timeEntries').addEventListener('change', (e) => {
-            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
-                try {
-                    const index = parseInt(e.target.dataset.index);
-                    const value = e.target.value;
-                    // console.log('[actual-input] change', { index, value });
-                    const actualMergeKey = this.findMergeKey('actual', index);
-                    if (actualMergeKey) {
-                        const [, startStr, endStr] = actualMergeKey.split('-');
-                        const start = parseInt(startStr, 10);
-                        const end = parseInt(endStr, 10);
-                        this.mergedFields.set(actualMergeKey, value);
-                        for (let i = start; i <= end; i++) {
-                            this.timeSlots[i].actual = (i === start) ? value : '';
-                        }
-                    } else {
-                        this.timeSlots[index].actual = value;
-                    }
-                    this.enforceActualLimit(index);
-                    this.clearSubActivitiesForIndex(index);
-                    this.syncTimerElapsedFromActualInput(index, value);
-                    this.calculateTotals();
-                    this.autoSave();
-                } catch (err) {
-                    console.error('[actual-input] change handler error:', err);
-                }
-            }
+            this.handleActualInputEvent('change', e.target, e);
         });
 
-        // Fallback for environments where input/change can be delayed.
         document.getElementById('timeEntries').addEventListener('keyup', (e) => {
-            if (e.target.tagName === 'INPUT' && e.target.classList.contains('timer-result-input')) {
-                try {
-                    const index = parseInt(e.target.dataset.index);
-                    const value = e.target.value;
-                    const key = e.key || '';
-                    if (!(key.length === 1 || key === 'Backspace' || key === 'Enter' || key === 'Delete')) return;
-                    const actualMergeKey = this.findMergeKey('actual', index);
-                    if (actualMergeKey) {
-                        const [, startStr, endStr] = actualMergeKey.split('-');
-                        const start = parseInt(startStr, 10);
-                        const end = parseInt(endStr, 10);
-                        this.mergedFields.set(actualMergeKey, value);
-                        for (let i = start; i <= end; i++) {
-                            this.timeSlots[i].actual = (i === start) ? value : '';
-                        }
-                    } else {
-                        this.timeSlots[index].actual = value;
-                    }
-                    this.clearSubActivitiesForIndex(index);
-                    this.syncTimerElapsedFromActualInput(index, value);
-                    this.calculateTotals();
-                    this.autoSave();
-                } catch (err) {
-                    console.error('[actual-input] keyup handler error:', err);
-                }
-            }
+            this.handleActualInputEvent('keyup', e.target, e);
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -881,65 +758,19 @@ class TimeTracker {
     }
 
     normalizeTimerStatus(rawStatus, slot = null) {
-        const normalized = String(rawStatus || '').trim();
-        if (normalized === 'running' || normalized === 'paused' || normalized === 'completed' || normalized === 'idle') {
-            return normalized;
-        }
-        if (slot && slot.timer && slot.timer.running) {
-            return 'running';
-        }
-        return 'idle';
+        return globalThis.TimerController.normalizeTimerStatus.call(this, rawStatus, slot);
     }
 
     getTimerRawElapsed(slot) {
-        if (!slot || !slot.timer) return 0;
-        if (Number.isFinite(slot.timer.rawElapsed) && Number(slot.timer.rawElapsed) > 0) {
-            return Math.max(0, Math.floor(slot.timer.rawElapsed));
-        }
-        if (slot.timer.running || this.normalizeTimerStatus(slot.timer.status, slot) === 'paused') {
-            return Number.isFinite(slot.timer.elapsed) ? Math.max(0, Math.floor(slot.timer.elapsed)) : 0;
-        }
-        return 0;
+        return globalThis.TimerController.getTimerRawElapsed.call(this, slot);
     }
 
     getTimeUiHostIndex(index) {
-        const timeMergeKey = this.findMergeKey('time', index);
-        if (!timeMergeKey) return index;
-        const [, startStr] = timeMergeKey.split('-');
-        const start = parseInt(startStr, 10);
-        return Number.isInteger(start) ? start : index;
+        return globalThis.TimerController.getTimeUiHostIndex.call(this, index);
     }
 
     getMobileTimeUiState(index, slotOverride = null) {
-        const slot = slotOverride || this.timeSlots[index] || {};
-        const hostIndex = this.getTimeUiHostIndex(index);
-        const status = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
-        const currentIndex = this.getCurrentTimeIndex();
-        const currentHostIndex = Number.isInteger(currentIndex) && currentIndex >= 0
-            ? this.getTimeUiHostIndex(currentIndex)
-            : -1;
-        const isCurrent = currentHostIndex === hostIndex;
-        const rawElapsed = this.getTimerRawElapsed(slot);
-        let mode = 'label';
-
-        if (status === 'running') {
-            mode = 'running';
-        } else if (status === 'paused') {
-            mode = 'paused';
-        } else if (status === 'completed' && rawElapsed > 0 && isCurrent) {
-            mode = 'completed';
-        } else if (isCurrent) {
-            mode = 'current';
-        }
-
-        return {
-            hostIndex,
-            mode,
-            status,
-            rawElapsed,
-            isCurrent,
-            showControls: mode !== 'label',
-        };
+        return globalThis.TimerController.getMobileTimeUiState.call(this, index, slotOverride);
     }
 
     getMergeRangeBounds(mergeKey, fallbackIndex = null) {
@@ -992,7 +823,7 @@ class TimeTracker {
         return range;
     }
 
-    // 병합 ?� ?��? ?�디�??�릭?�도 ?�체 병합 범위�??�택?�도�?캡처 처리
+    // 병합 ?� ?��? ?�디�??�릭?�도 ?�체 병합 범위�??�택?�도�?캡처 처리
         handleMergedClickCapture(e) {
         return globalThis.TimeTrackerFieldInteractionController.handleMergedClickCapture.call(this, ...arguments);
     }
@@ -1178,7 +1009,7 @@ class TimeTracker {
         return globalThis.TimeTrackerLifecycleController.clearData.call(this);
     }
 
-    // 가?�오�??�보?�기 기능 ?�거?? 관???�수 ??��
+    // 가?�오�??�보?�기 기능 ?�거?? 관???�수 ??��
 
     // ===== Supabase integration (optional) =====
         getSupabaseIdentity() {
@@ -1197,7 +1028,7 @@ class TimeTracker {
         return globalThis.TimeTrackerSupabaseSyncController.initSupabaseAuthHandlers.call(this);
     }
 
-    // ?�간 ?�벨('00','1'..'23') <-> ?�수 ??0..23) 변???�퍼
+    // ?�간 ?�벨('00','1'..'23') <-> ?�수 ??0..23) 변???�퍼
     labelToHour(label) {
         const s = String(label).trim();
         if (s === '00' || s === '0') return 0;
@@ -1208,11 +1039,11 @@ class TimeTracker {
         const n = Number(hour) % 24;
         return n === 0 ? '00' : String(n);
     }
-    // 메모�?-> DB ?�송??slots JSON ?�성(비어?�는 ?�간?� ?�략)
+    // 메모�?-> DB ?�송??slots JSON ?�성(비어?�는 ?�간?� ?�략)
         buildSlotsJson() {
         return globalThis.TimeTrackerPersistenceController.buildSlotsJson.call(this);
     }
-    // DB slots JSON -> 메모�?반영(존재?�는 ?�만 반영)
+    // DB slots JSON -> 메모�?반영(존재?�는 ?�만 반영)
         applySlotsJson(slotsJson) {
         return globalThis.TimeTrackerPersistenceController.applySlotsJson.call(this, slotsJson);
     }
@@ -1529,7 +1360,7 @@ class TimeTracker {
         return slot;
     }
 
-    // ?�?�소 ?�체 ?�회?�여 기존 ?�이?�에??outcome ?�드 ?�거
+    // ?�?�소 ?�체 ?�회?�여 기존 ?�이?�에??outcome ?�드 ?�거
     purgeOutcomeFromAllStoredData() {
         // local storage disabled
     }
@@ -1556,27 +1387,7 @@ class TimeTracker {
 
         // No drag-selection listeners for actualField in the actual column
         if (actualField) {
-            const actualContainer = entryDiv.querySelector('.actual-field-container');
-            const actualOverlay = entryDiv.querySelector('.actual-merged-overlay');
-            const actualSplitViz = entryDiv.querySelector('.split-visualization-actual');
-
-            const bindHover = (el) => {
-                if (!el) return;
-                el.addEventListener('mouseenter', () => {
-                    const wrapper = el.closest('.split-cell-wrapper.split-type-actual.split-has-data');
-                    if (!wrapper) return;
-                    this.showActivityLogButtonOnHover(index);
-                });
-                el.addEventListener('mouseleave', (e) => {
-                    const toEl = e.relatedTarget;
-                    if (toEl && toEl.closest && toEl.closest('.activity-log-btn-floating')) return;
-                    this.hideHoverActivityLogButton();
-                });
-            };
-
-            bindHover(actualContainer);
-            bindHover(actualOverlay);
-            bindHover(actualSplitViz);
+            this.attachActualActivityHover(entryDiv, index);
 
               const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
               if (actualGrid) {
@@ -1756,7 +1567,7 @@ class TimeTracker {
     }
 
     startFieldSelection(type, index, e) {
-        if (type !== 'planned') return; // ?�측 ?�에???�작 조작 금�?
+        if (type !== 'planned') return; // ?�측 ?�에???�작 조작 금�?
         this.currentColumnType = type;
         this.dragStartIndex = index;
 
@@ -1778,7 +1589,7 @@ class TimeTracker {
             if (field) field.classList.remove('field-selected');
         } else {
             selectedSet.add(index);
-            // ?�각 ?�과???�버?�이로만 처리
+            // ?�각 ?�과???�버?�이로만 처리
         }
     }
 
@@ -1844,7 +1655,7 @@ class TimeTracker {
                 ? ['planned', 'time', 'actual']
                 : ['actual'];
 
-            // 기존 병합�??��?�?겹치??경우?�도 ?�체 병합 블록 ?�위�??�장??orphan 보조 ?�롯??방�??�다.
+            // 기존 병합�??��?�?겹치??경우?�도 ?�체 병합 블록 ?�위�??�장??orphan 보조 ?�롯??방�??�다.
             let overlappingEntries = [];
             while (true) {
                 const found = collectOverlappingMergeKeys(overlappingTypes, startIndex, endIndex);
@@ -1872,22 +1683,22 @@ class TimeTracker {
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
             this.mergedFields.set(mergeKey, mergedValue);
 
-            // 좌측 계획 ?�이 병합????모든 ?�을 ?�기??병합
+            // 좌측 계획 ?�이 병합????모든 ?�을 ?�기??병합
             if (type === 'planned') {
-                // 중앙 ?�간 ??병합 (?�간 범위 ?�시)
+                // 중앙 ?�간 ??병합 (?�간 범위 ?�시)
                 const timeRangeKey = `time-${startIndex}-${endIndex}`;
                 const startTime = this.timeSlots[startIndex].time;
                 const endTime = this.timeSlots[endIndex].time;
                 const timeRangeValue = `${startTime}-${endTime}`;
                 this.mergedFields.set(timeRangeKey, timeRangeValue);
 
-                // ?�측 ?�제 ?�동 ??병합 (기존 값이 ?�다�??��?, ?�으�?�?�?
+                // ?�측 ?�제 ?�동 ??병합 (기존 값이 ?�다�??��?, ?�으�?�?�?
                 const actualMergeKey = `actual-${startIndex}-${endIndex}`;
                 const baseSlot = this.timeSlots[startIndex] || {};
                 const actualMergedValue = String(baseSlot.actual || '').trim();
                 this.mergedFields.set(actualMergeKey, actualMergedValue);
 
-                // ?�이???�데?�트
+                // ?�이???�데?�트
                 const basePlanTitle = (this.timeSlots[startIndex] && typeof this.timeSlots[startIndex].planTitle === 'string')
                     ? this.timeSlots[startIndex].planTitle
                     : '';
@@ -1923,7 +1734,7 @@ class TimeTracker {
                     }
                 }
             } else {
-                // ?�측 ?�만 병합?�는 경우
+                // ?�측 ?�만 병합?�는 경우
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
@@ -3193,6 +3004,10 @@ class TimeTracker {
         const planSlot = (Number.isInteger(planBaseIndex) && planBaseIndex >= 0 && planBaseIndex < this.timeSlots.length)
             ? this.timeSlots[planBaseIndex]
             : slot;
+        const actualGridCore = globalThis.TimeTrackerActualGridCore;
+        const normalizeSegmentLabel = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : (typeof value === 'string' ? value.trim() : '');
 
         const normalizedPlanTitle = this.normalizeActivityText
             ? this.normalizeActivityText(planSlot.planTitle || '')
@@ -3204,23 +3019,14 @@ class TimeTracker {
             : String(mergedPlanLabel || planSlot.planTitle || planSlot.planned || '').trim();
         const planTitleBand = Boolean(planSlot.planTitleBandOn && normalizedPlanTitle);
         const showTitleBand = (index === baseIndex) && planTitleBand;
-
-        let titleSegments = [];
-        if (showTitleBand) {
-            if (type === 'planned') {
-                if (normalizedPlanTitle) {
-                    titleSegments = [{ label: normalizedPlanTitle, span: unitsPerRow }];
-                }
-            } else {
-                const rawTitle = normalizedPlanTitle || normalizedPlannedLabel;
-                const normalizedTitle = this.normalizeActivityText
-                    ? this.normalizeActivityText(rawTitle || '')
-                    : String(rawTitle || '').trim();
-                if (normalizedTitle) {
-                    titleSegments = [{ label: normalizedTitle, span: unitsPerRow }];
-                }
-            }
-        }
+        const titleSegments = actualGridCore.buildSplitTitleSegments({
+            type,
+            showTitleBand,
+            unitsPerRow,
+            normalizedPlanTitle,
+            normalizedPlannedLabel,
+            normalizeLabel: normalizeSegmentLabel,
+        });
 
         const actualActivities = (type === 'actual')
             ? this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities)
@@ -3230,10 +3036,6 @@ class TimeTracker {
         const shouldUseActualActivities = (type === 'actual')
             && actualActivities.length > 0
             && (actualOverrideActive || !this.isActualGridMode(baseIndex));
-        const actualGridCore = globalThis.TimeTrackerActualGridCore;
-        const normalizeSegmentLabel = (value) => this.normalizeActivityText
-            ? this.normalizeActivityText(value || '')
-            : (typeof value === 'string' ? value.trim() : '');
 
         const buildSegmentsFromActivities = (activities, options = {}) => {
             return actualGridCore.buildSplitSegmentsFromActivities(activities, {
@@ -3309,48 +3111,19 @@ class TimeTracker {
                     extras,
                     slot && slot.activityLog ? slot.activityLog.actualExtraGridUnits : null
                 );
-                const shownExtraLabels = new Set();
                 const runningOutline = typeof this.getRunningActualGridOutline === 'function'
                     ? this.getRunningActualGridOutline(baseIndex, planUnits.length)
                     : null;
-
-                const gridSegments = displayOrder.map((unitIndex) => {
-                    const label = planUnits[unitIndex];
-                    const extraLabel = allocation && allocation.slotsByIndex
-                        ? allocation.slotsByIndex[unitIndex]
-                        : '';
-                    if (extraLabel) {
-                        const alwaysVisibleLabel = !shownExtraLabels.has(extraLabel);
-                        const suppressHoverLabel = !alwaysVisibleLabel;
-                        if (alwaysVisibleLabel) {
-                            shownExtraLabels.add(extraLabel);
-                        }
-                        return {
-                            label: extraLabel,
-                            span: 1,
-                            unitIndex,
-                            active: Boolean(extraActiveUnits[unitIndex]),
-                            locked: false,
-                            failed: Boolean(failedUnits[unitIndex]),
-                            isExtra: true,
-                            reservedIndices,
-                            extraLabel,
-                            alwaysVisibleLabel,
-                            suppressHoverLabel,
-                            ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {})
-                        };
-                    }
-                    return {
-                        label,
-                        span: 1,
-                        unitIndex,
-                        active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
-                        locked: Boolean(lockedUnits[unitIndex]),
-                        failed: Boolean(failedUnits[unitIndex]),
-                        isExtra: false,
-                        reservedIndices,
-                        ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {})
-                    };
+                const gridSegments = actualGridCore.buildActualOverrideGridSegments({
+                    planUnits,
+                    displayOrder,
+                    actualUnits,
+                    failedUnits,
+                    lockedUnits,
+                    allocation,
+                    extraActiveUnits,
+                    reservedIndices,
+                    runningOutline,
                 });
 
                 const hasLabels = planUnits.some(label => label) || extras.length > 0;
@@ -3397,15 +3170,14 @@ class TimeTracker {
             const runningOutline = typeof this.getRunningActualGridOutline === 'function'
                 ? this.getRunningActualGridOutline(baseIndex, planUnits.length)
                 : null;
-            const gridSegments = displayOrder.map((unitIndex) => ({
-                label: planUnits[unitIndex],
-                span: 1,
-                unitIndex,
-                active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
-                locked: Boolean(lockedUnits[unitIndex]),
-                failed: Boolean(failedUnits[unitIndex]),
-                ...(runningOutline && runningOutline.get(unitIndex) ? runningOutline.get(unitIndex) : {}),
-            }));
+            const gridSegments = actualGridCore.buildActualGridDisplaySegments({
+                planUnits,
+                displayOrder,
+                actualUnits,
+                failedUnits,
+                lockedUnits,
+                runningOutline,
+            });
             const hasLabels = planUnits.some(label => label);
             if (!hasLabels && !showTitleBand) {
                 return null;
@@ -3497,7 +3269,7 @@ class TimeTracker {
               return normalizedActual;
           }
 
-        // 계획 분해가 ?�으�?계획 ?�이?�웃 그�?�??�용 (?�벨 ?�스?�만)
+        // 계획 분해가 ?�으�?계획 ?�이?�웃 그�?�??�용 (?�벨 ?�스?�만)
         if (!actualOverrideActive && planActs && planActs.length > 0) {
             const blockSeconds = Math.max(3600, this.getBlockLength('actual', baseIndex) * 3600);
             const fallbackSeconds = Math.max(600, Math.floor(blockSeconds / Math.max(1, planActs.length)));
@@ -3522,7 +3294,7 @@ class TimeTracker {
             return [{ label: planLabel, seconds: blockSeconds, source: 'plan-template' }];
         }
 
-        // 계획???�을 ?�는 ?�제 분해만으�?그리???�성
+        // 계획???�을 ?�는 ?�제 분해만으�?그리???�성
         return normalizedActual;
     }
 
@@ -3696,7 +3468,7 @@ class TimeTracker {
                          data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
                 </div>`;
     }
 
@@ -3713,7 +3485,7 @@ class TimeTracker {
                          data-type="actual"
                          data-value="${safeAttr}"
                          title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
+                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
                 </div>`;
     }
 
@@ -3749,7 +3521,7 @@ class TimeTracker {
                         </div>
                     </div>`;
         } else if (index === end) {
-            // 병합???�간 ?�드??마�?�?보조 ?� - ?�단 경계???��?
+            // 병합???�간 ?�드??마�?�?보조 ?� - ?�단 경계???��?
             return `<div class="time-slot-container merged-time-secondary merged-time-last"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
@@ -3757,7 +3529,7 @@ class TimeTracker {
                         <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         } else {
-            // 병합???�간 ?�드??중간 보조 ?� - ?�전??경계???�거
+            // 병합???�간 ?�드??중간 보조 ?� - ?�전??경계???�거
             return `<div class="time-slot-container merged-time-secondary"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
@@ -3768,88 +3540,7 @@ class TimeTracker {
     }
 
     createTimerControls(index, slot) {
-        const isRunning = slot.timer.running;
-        const rawElapsed = this.getTimerRawElapsed(slot);
-        const hasElapsed = rawElapsed > 0;
-        const eligibility = this.getTimerEligibility(index, slot);
-        const timerStatus = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
-
-        let buttonIcon = '\uC2DC\uC791';
-        let buttonAction = 'start';
-        let buttonDisabled = (!eligibility.canStartWithoutDate && !isRunning) || eligibility.disabledByDate;
-        let buttonTitle = '';
-
-        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
-            ? globalThis.TimerController
-            : null;
-        if (timerController && typeof timerController.resolveTimerControlState === 'function') {
-            const state = timerController.resolveTimerControlState(
-                eligibility,
-                { isRunning, hasElapsed },
-                {
-                    notToday: '\uC624\uB298 \uB0A0\uC9DC\uC5D0\uC11C\uB9CC \uD0C0\uC774\uBA38\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
-                    noPlanned: '\uACC4\uD68D\uC744 \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
-                    outOfRange: '\uD604\uC7AC \uC2DC\uAC04 \uBC94\uC704\uC5D0\uC11C\uB9CC \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
-                }
-            );
-            buttonIcon = state.buttonIcon;
-            buttonAction = state.buttonAction;
-            buttonDisabled = state.buttonDisabled;
-            buttonTitle = state.buttonTitle;
-        } else {
-            if (isRunning) {
-                buttonIcon = '\uC815\uC9C0';
-                buttonAction = 'stop';
-                buttonDisabled = false;
-            } else if (hasElapsed) {
-                buttonIcon = '\uC7AC\uC0DD';
-                buttonAction = 'resume';
-                buttonDisabled = eligibility.disabledByDate || !eligibility.hasPlannedActivity;
-            }
-
-            if (buttonDisabled) {
-                if (eligibility.disabledByDate) {
-                    buttonTitle = '\uC624\uB298 \uB0A0\uC9DC\uC5D0\uC11C\uB9CC \uD0C0\uC774\uBA38\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.';
-                } else if (!eligibility.hasPlannedActivity) {
-                    buttonTitle = '\uACC4\uD68D\uC744 \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.';
-                } else if (!eligibility.isCurrentTimeInRange) {
-                    buttonTitle = '\uD604\uC7AC \uC2DC\uAC04 \uBC94\uC704\uC5D0\uC11C\uB9CC \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.';
-                }
-            }
-        }
-
-        const startButtonAttributes = [];
-        if (buttonDisabled) startButtonAttributes.push('disabled');
-        if (buttonTitle) startButtonAttributes.push(`title="${buttonTitle}"`);
-        const startButtonAttrString = startButtonAttributes.length ? ' ' + startButtonAttributes.join(' ') : '';
-
-        const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
-        const timerDisplay = this.formatTime(Math.max(Number(slot.timer.elapsed) || 0, rawElapsed));
-        const rawDisplayStyle = 'display: none;';
-        const rawDisplay = '';
-        const isCompactMobileTimeUi = this.isMobileTimeExpansionEnabled();
-        const mobileStartIcon = buttonAction === 'stop' ? '\u25A0' : '\u25B6';
-        const startVisualLabel = isCompactMobileTimeUi ? mobileStartIcon : buttonIcon;
-        const statusClasses = [
-            isRunning ? 'timer-running' : '',
-            timerStatus === 'paused' ? 'timer-paused' : '',
-            timerStatus === 'completed' ? 'timer-completed' : '',
-        ].filter(Boolean).join(' ');
-
-        return `
-            <div class="timer-controls-container ${statusClasses}" data-index="${index}">
-                <div class="timer-controls">
-                    <button class="timer-btn timer-start-pause"
-                            data-index="${index}"
-                            data-action="${buttonAction}" aria-label="\uD0C0\uC774\uBA38 ${buttonIcon}"${startButtonAttrString}>
-                        <span class="timer-btn-mobile-icon" aria-hidden="true">${startVisualLabel}</span>
-                        <span class="timer-btn-label">${buttonIcon}</span>
-                    </button>
-                </div>
-                <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
-                <div class="timer-raw-display" style="${rawDisplayStyle}">${rawDisplay}</div>
-            </div>
-        `;
+        return globalThis.TimerController.createTimerControls.call(this, index, slot);
     }
 
     formatTime(seconds) {
@@ -3959,7 +3650,7 @@ class TimeTracker {
         });
         const total = normalized.reduce((sum, item) => sum + item.seconds, 0);
         const totalLabel = options.hideTotal ? '' : ` (\uCD1D ${this.formatDurationSummary(total)})`;
-        return `${parts.join(' �� ')}${totalLabel}`.trim();
+        return `${parts.join(' �� ')}${totalLabel}`.trim();
     }
 
     normalizeActivitiesArray(raw) {
@@ -4085,96 +3776,11 @@ class TimeTracker {
     }
 
     clearSubActivitiesForIndex(index) {
-        const mergeKey = this.findMergeKey('actual', index);
-        if (mergeKey) {
-            const [, startStr, endStr] = mergeKey.split('-');
-            const start = parseInt(startStr, 10);
-            const end = parseInt(endStr, 10);
-            for (let i = start; i <= end; i++) {
-                const slot = this.timeSlots[i];
-                if (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities)) {
-                    slot.activityLog.subActivities = [];
-                    slot.activityLog.titleBandOn = false;
-                    slot.activityLog.actualOverride = false;
-                    if (Array.isArray(slot.activityLog.actualGridUnits)) {
-                        slot.activityLog.actualGridUnits = [];
-                    }
-                    if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
-                        slot.activityLog.actualExtraGridUnits = [];
-                    }
-                    if (Array.isArray(slot.activityLog.actualFailedGridUnits)) {
-                        slot.activityLog.actualFailedGridUnits = [];
-                    }
-                }
-            }
-        } else {
-            const slot = this.timeSlots[index];
-            if (slot && slot.activityLog && Array.isArray(slot.activityLog.subActivities)) {
-                slot.activityLog.subActivities = [];
-                slot.activityLog.titleBandOn = false;
-                slot.activityLog.actualOverride = false;
-                if (Array.isArray(slot.activityLog.actualGridUnits)) {
-                    slot.activityLog.actualGridUnits = [];
-                }
-                if (Array.isArray(slot.activityLog.actualExtraGridUnits)) {
-                    slot.activityLog.actualExtraGridUnits = [];
-                }
-                if (Array.isArray(slot.activityLog.actualFailedGridUnits)) {
-                    slot.activityLog.actualFailedGridUnits = [];
-                }
-            }
-        }
+        return globalThis.TimeTrackerActualInputController.clearSubActivitiesForIndex.call(this, index);
     }
 
     enforceActualLimit(index) {
-        const actualMergeKey = this.findMergeKey('actual', index);
-        let baseIndex = index;
-        let rangeStart = index;
-        let rangeEnd = index;
-        if (actualMergeKey) {
-            const [, startStr, endStr] = actualMergeKey.split('-');
-            const parsedStart = parseInt(startStr, 10);
-            const parsedEnd = parseInt(endStr, 10);
-            if (Number.isFinite(parsedStart)) {
-                baseIndex = parsedStart;
-                rangeStart = parsedStart;
-            }
-            if (Number.isFinite(parsedEnd)) {
-                rangeEnd = parsedEnd;
-            }
-        }
-        const limit = this.getBlockLength('actual', baseIndex) * 3600;
-        if (!(limit > 0)) return;
-        const slot = this.timeSlots[baseIndex];
-        if (!slot) return;
-        const value = actualMergeKey
-            ? String(this.mergedFields.get(actualMergeKey) || slot.actual || '').trim()
-            : String(slot.actual || '').trim();
-        const secs = this.parseDurationFromText(value);
-        if (secs != null && Number.isFinite(secs) && secs > limit) {
-            const clamped = this.formatDurationSummary(limit);
-            if (actualMergeKey) {
-                this.mergedFields.set(actualMergeKey, clamped);
-                for (let i = rangeStart; i <= rangeEnd; i++) {
-                    if (!this.timeSlots[i]) continue;
-                    this.timeSlots[i].actual = (i === rangeStart) ? clamped : '';
-                }
-            } else {
-                if (slot.actual === clamped) return;
-                slot.actual = clamped;
-            }
-                try {
-                    const row = document.querySelector(`[data-index="${baseIndex}"]`);
-                    if (row) {
-                        const input = row.querySelector('.timer-result-input');
-                        if (input) {
-                            input.textContent = clamped;
-                            input.setAttribute('data-value', clamped);
-                        }
-                    }
-                } catch (_) {}
-            this.showNotification('기록 ?�간?� ??칸당 최�? 60분까지 ?�력?????�습?�다.');
-        }
+        return globalThis.TimeTrackerActualInputController.enforceActualLimit.call(this, index);
     }
 
         getPlanActivitiesForIndex(index) {
@@ -4247,121 +3853,35 @@ class TimeTracker {
     }
 
     createDurationSpinner({ kind, index, seconds }) {
-        const spinner = document.createElement('div');
-        spinner.className = 'time-spinner';
-        spinner.dataset.kind = kind;
-        spinner.dataset.index = String(index);
-        spinner.dataset.seconds = String(Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0);
-
-        const display = (kind === 'actual') ? document.createElement('input') : document.createElement('div');
-        if (kind === 'actual') {
-            display.type = 'text';
-            display.inputMode = 'numeric';
-            display.autocomplete = 'off';
-            display.placeholder = '\uBD84';
-            display.className = 'spinner-display actual-duration-input';
-            display.value = this.formatSpinnerValue(kind, Number(spinner.dataset.seconds));
-            display.setAttribute('aria-label', '\uBD84 \uC785\uB825');
-        } else {
-            display.className = 'spinner-display';
-            display.textContent = this.formatSpinnerValue(kind, Number(spinner.dataset.seconds));
-        }
-
-        const controls = document.createElement('div');
-        controls.className = 'spinner-controls';
-
-        const upBtn = document.createElement('button');
-        upBtn.type = 'button';
-        upBtn.className = 'spinner-btn spinner-up';
-        upBtn.dataset.direction = 'up';
-        upBtn.dataset.kind = kind;
-        upBtn.dataset.index = String(index);
-        upBtn.textContent = '\u25B2';
-
-        const downBtn = document.createElement('button');
-        downBtn.type = 'button';
-        downBtn.className = 'spinner-btn spinner-down';
-        downBtn.dataset.direction = 'down';
-        downBtn.dataset.kind = kind;
-        downBtn.dataset.index = String(index);
-        downBtn.textContent = '\u25BC';
-
-        controls.appendChild(upBtn);
-        controls.appendChild(downBtn);
-        spinner.appendChild(display);
-        spinner.appendChild(controls);
-
-        return spinner;
+        return globalThis.TimeTrackerTimeControlRenderer.createDurationSpinner({
+            document,
+            kind,
+            index,
+            seconds,
+            formatSpinnerValue: (spinnerKind, value) => this.formatSpinnerValue(spinnerKind, value),
+        });
     }
 
     createActualTimeControl({ kind, index, seconds, label, disabled = false }) {
-        const control = document.createElement('div');
-        control.className = `actual-time-control actual-time-${kind}`;
-        control.dataset.kind = kind;
-        control.dataset.index = String(index);
-        if (label) control.dataset.label = label;
-        if (disabled) control.classList.add('is-disabled');
-
-        const caption = document.createElement('div');
-        caption.className = 'actual-time-caption';
-        caption.textContent = kind === 'grid' ? '기록' : '배정';
-
-        const upBtn = document.createElement('button');
-        upBtn.type = 'button';
-        upBtn.className = 'actual-time-btn actual-time-up';
-        upBtn.dataset.kind = kind;
-        upBtn.dataset.direction = 'up';
-        upBtn.dataset.index = String(index);
-        upBtn.textContent = '\u25B2';
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.inputMode = 'numeric';
-        input.autocomplete = 'off';
-        input.className = `actual-time-input actual-${kind}-input`;
-        input.dataset.kind = kind;
-        input.dataset.index = String(index);
-        input.value = this.formatSecondsForInput(Number.isFinite(seconds) ? seconds : 0);
-        input.readOnly = true;
-        input.setAttribute('aria-label', kind === 'grid' ? '기록 ?�간' : '배정 ?�간');
-
-        const downBtn = document.createElement('button');
-        downBtn.type = 'button';
-        downBtn.className = 'actual-time-btn actual-time-down';
-        downBtn.dataset.kind = kind;
-        downBtn.dataset.direction = 'down';
-        downBtn.dataset.index = String(index);
-        downBtn.textContent = '\u25BC';
-
-        if (disabled) {
-            input.disabled = true;
-            upBtn.disabled = true;
-            downBtn.disabled = true;
-        }
-
-        control.appendChild(caption);
-        control.appendChild(upBtn);
-        control.appendChild(input);
-        control.appendChild(downBtn);
-        return control;
+        return globalThis.TimeTrackerTimeControlRenderer.createActualTimeControl({
+            document,
+            kind,
+            index,
+            seconds,
+            label,
+            disabled,
+            formatSecondsForInput: (value) => this.formatSecondsForInput(value),
+        });
     }
 
     updateSpinnerDisplay(spinner, seconds) {
-        if (!spinner) return;
-        const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-        const adjusted = this.normalizeDurationStep(safeSeconds) || 0;
-        spinner.dataset.seconds = String(adjusted);
-        const display = spinner.querySelector('.spinner-display');
-        if (display) {
-            const kind = spinner.dataset.kind;
-            const formatted = this.formatSpinnerValue(kind, adjusted);
-            if (display.tagName === 'INPUT') {
-                display.value = formatted;
-            } else {
-                display.textContent = formatted;
-            }
-        }
-        this.updateSpinnerState(spinner);
+        return globalThis.TimeTrackerTimeControlRenderer.updateSpinnerDisplay({
+            spinner,
+            seconds,
+            normalizeDurationStep: (value) => this.normalizeDurationStep(value) || 0,
+            formatSpinnerValue: (kind, value) => this.formatSpinnerValue(kind, value),
+            updateSpinnerState: (node) => this.updateSpinnerState(node),
+        });
     }
 
     updateSpinnerState(spinner) {
@@ -4509,8 +4029,12 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedEditorController.preparePlanActivitiesSection.call(this, ...arguments);
     }
 
-    // ?�스?�에???�간�?HH:MM(:SS) ?�는 1h/�?�??�기)??초로 ?�싱
-    // 규칙: 문자???�디???�든 "마�?막으�??�장?? ?�간???�선 ?�용
+    // ?�스?�에???�간�?HH:MM(:SS) ?�는 1h/�?�??�기)??초로 ?�싱
+    // 규칙: 문자???�디???�든 "마�?막으�??�장?? ?�간???�선 ?�용
+    handleActualInputEvent(eventType, target, event = null) {
+        return globalThis.TimeTrackerActualInputController.handleActualInputEvent.call(this, eventType, target, event);
+    }
+
     parseDurationFromText(text) {
         const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerCore)
             ? globalThis.TimeTrackerCore
@@ -4556,41 +4080,12 @@ class TimeTracker {
     }
 
     parseActualDurationInput(value) {
-        const text = String(value || '').trim();
-        if (!text) return 0;
-        const parsed = this.parseDurationFromText(text);
-        if (parsed != null && Number.isFinite(parsed)) {
-            return parsed;
-        }
-        if (/^\d+$/.test(text)) {
-            return parseInt(text, 10) * 60;
-        }
-        return null;
+        return globalThis.TimeTrackerActualInputController.parseActualDurationInput.call(this, value);
     }
 
-    // ?�제 ?�동 ?�력 변�??? ?�스?�에 ?�함???�간값을 timer.elapsed�?반영
+    // ?�제 ?�동 ?�력 변�??? ?�스?�에 ?�함???�간값을 timer.elapsed�?반영
     syncTimerElapsedFromActualInput(index, text) {
-        const secs = this.parseDurationFromText(text);
-        if (secs == null || isNaN(secs)) return;
-        const slot = this.timeSlots[index];
-        if (!slot || !slot.timer) return;
-        slot.timer.elapsed = Math.max(0, Math.floor(secs));
-        slot.timer.running = false;
-        slot.timer.startTime = null;
-        slot.timer.method = 'manual';
-        slot.timer.status = slot.timer.elapsed > 0 ? 'completed' : 'idle';
-
-        // ?�?�머 ?�시 즉시 갱신 (존재??경우)
-        try {
-            const row = document.querySelector(`[data-index="${index}"]`);
-            if (row) {
-                const disp = row.querySelector('.timer-display');
-                if (disp) {
-                    disp.textContent = this.formatTime(slot.timer.elapsed);
-                    if (slot.timer.elapsed > 0) disp.style.display = 'block';
-                }
-            }
-        } catch (_) {}
+        return globalThis.TimeTrackerActualInputController.syncTimerElapsedFromActualInput.call(this, index, text);
     }
 
     getCurrentTimeIndex() {
@@ -4621,62 +4116,7 @@ class TimeTracker {
     }
 
     getTimerEligibility(index, slotOverride = null) {
-        const slot = slotOverride || this.timeSlots[index] || {};
-        const currentIndex = this.getCurrentTimeIndex();
-        const isCurrentDateToday = this.isCurrentDateToday();
-
-        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
-            ? globalThis.TimerController
-            : null;
-        if (timerController && typeof timerController.resolveTimerEligibility === 'function') {
-            return timerController.resolveTimerEligibility({
-                index,
-                currentIndex,
-                isCurrentDateToday,
-                slotPlanned: slot.planned,
-                slotPlanActivities: slot.planActivities,
-                findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
-                getMergedField: (mergeKey) => this.mergedFields.get(mergeKey),
-            });
-        }
-
-        let timeStart = index;
-        let timeEnd = index;
-        const timeMergeKey = this.findMergeKey('time', index);
-        if (timeMergeKey) {
-            const parts = timeMergeKey.split('-');
-            timeStart = parseInt(parts[1], 10);
-            timeEnd = parseInt(parts[2], 10);
-        }
-
-        let plannedText = '';
-        const plannedMergeKeyForIndex = this.findMergeKey('planned', index);
-        const plannedMergeKeyForCurrent = currentIndex >= 0 ? this.findMergeKey('planned', currentIndex) : null;
-        if (plannedMergeKeyForIndex) {
-            plannedText = (this.mergedFields.get(plannedMergeKeyForIndex) || '').trim();
-        } else if (plannedMergeKeyForCurrent) {
-            plannedText = (this.mergedFields.get(plannedMergeKeyForCurrent) || '').trim();
-        } else {
-            plannedText = String(slot.planned || '').trim();
-        }
-
-        const hasPlannedActivity = plannedText !== '';
-        const isCurrentTimeInRange = currentIndex >= timeStart && currentIndex <= timeEnd;
-        const disabledByDate = !isCurrentDateToday;
-        const canStartWithoutDate = hasPlannedActivity && isCurrentTimeInRange;
-
-        return {
-            index,
-            currentIndex,
-            isCurrentDateToday,
-            timeStart,
-            timeEnd,
-            plannedText,
-            hasPlannedActivity,
-            isCurrentTimeInRange,
-            disabledByDate,
-            canStartWithoutDate,
-        };
+        return globalThis.TimerController.getTimerEligibility.call(this, index, slotOverride);
     }
 
     canStartTimer(index) {
@@ -4684,32 +4124,7 @@ class TimeTracker {
     }
 
     getTimerStartBlockReason(index) {
-        const eligibility = this.getTimerEligibility(index);
-        const timerController = (typeof globalThis !== 'undefined' && globalThis.TimerController)
-            ? globalThis.TimerController
-            : null;
-        if (timerController && typeof timerController.getStartBlockReason === 'function') {
-            return timerController.getStartBlockReason(eligibility, {
-                notToday: '?�늘 ?�짜?�서�??�?�머�??�용?????�습?�다.',
-                invalidCurrentSlot: '?�재 ?�간 ?�롯?�서�??�작?????�습?�다.',
-                noPlanned: '계획???�동???�어???�?�머�??�작?????�습?�다.',
-                outOfRange: '?�재 ?�간 범위??칸에?�만 ?�?�머�??�작?????�습?�다.',
-            });
-        }
-
-        if (!eligibility.isCurrentDateToday) {
-            return '?�늘 ?�짜?�서�??�?�머�??�용?????�습?�다.';
-        }
-        if (!Number.isFinite(eligibility.currentIndex) || eligibility.currentIndex < 0) {
-            return '?�재 ?�간 ?�롯?�서�??�작?????�습?�다.';
-        }
-        if (!eligibility.hasPlannedActivity) {
-            return '계획???�동???�어???�?�머�??�작?????�습?�다.';
-        }
-        if (!eligibility.isCurrentTimeInRange) {
-            return '?�재 ?�간 범위??칸에?�만 ?�?�머�??�작?????�습?�다.';
-        }
-        return null;
+        return globalThis.TimerController.getTimerStartBlockReason.call(this, index);
     }
 
     createMergedField(mergeKey, type, index, value) {
@@ -4722,7 +4137,7 @@ class TimeTracker {
                            data-index="${index}"
                            data-type="${type}"
                            value="${this.escapeAttribute(value || '')}"
-                           placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">`;
+                           placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">`;
         }
 
         const [, startStr, endStr] = safeMergeKey.split('-');
@@ -4731,7 +4146,7 @@ class TimeTracker {
         const safeMergeValue = this.escapeAttribute(this.mergedFields.get(safeMergeKey) || '');
 
         if (type === 'actual') {
-            // ?�측 ?�제 ?�동 ?�의 경우 ?�력 ?�드?� 버튼???�함?�는 컨테?�너�?처리
+            // ?�측 ?�제 ?�동 ?�의 경우 ?�력 ?�드?� 버튼???�함?�는 컨테?�너�?처리
             if (index === start) {
                 return `<div class="actual-field-container merged-actual-main"
                                data-merge-key="${safeMergeKey}"
@@ -4744,7 +4159,7 @@ class TimeTracker {
                                        data-merge-key="${safeMergeKey}"
                                        data-value="${safeMergeValue}"
                                        title="${safeMergeValue}">${safeMergeValue}</div>
-                                <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
+                                <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
                             </div>
                         </div>`;
             } else {
@@ -4762,7 +4177,7 @@ class TimeTracker {
                         </div>`;
             }
         } else {
-            // 좌측 계획 ?�도 ?��?배치 ?�버?�이�??�각??병합, ?�이?�웃 ?��?
+            // 좌측 계획 ?�도 ?��?배치 ?�버?�이�??�각??병합, ?�이?�웃 ?��?
             if (index === start) {
                 return `<div class="planned-merged-main-container"
                                data-merge-key="${safeMergeKey}"
@@ -4776,7 +4191,7 @@ class TimeTracker {
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
                                        value="${safeMergeValue}"
-                                       placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="병합??계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">
+                                       placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="병합??계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">
                             </div>
                         </div>`;
             } else {
@@ -4796,7 +4211,7 @@ class TimeTracker {
         }
     }
 
-    // 병합???�간?�의 컨텐�??�이�?버튼)�?병합 블록???�로 중앙?�로 ?�동
+    // 병합???�간?�의 컨텐�??�이�?버튼)�?병합 블록???�로 중앙?�로 ?�동
     centerMergedTimeContent(root = document) {
         try {
             const scope = root || document;
@@ -4807,13 +4222,13 @@ class TimeTracker {
                 const content = main.querySelector('.merged-time-content');
                 if (!content) return;
 
-                // 초기?? ?�치 ?�복
+                // 초기?? ?�치 ?�복
                 content.style.transform = '';
                 main.style.removeProperty('--merged-block-height');
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                // 블록 ?�체 ?�이�?�????�이???�으�?계산
+                // 블록 ?�체 ?�이�?�????�이???�으�?계산
                 let totalHeight = 0;
                 let firstRowTop = null;
                 for (let i = start; i <= end; i++) {
@@ -4835,7 +4250,7 @@ class TimeTracker {
                 }
             });
         } catch (e) {
-            // 무시 (?�전)
+            // 무시 (?�전)
         }
     }
 
@@ -4849,7 +4264,7 @@ class TimeTracker {
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                // �????�이???�으�?블록 ?�이 계산
+                // �????�이???�으�?블록 ?�이 계산
                 let totalHeight = 0;
                 for (let i = start; i <= end; i++) {
                     const row = scope.querySelector(`.time-entry[data-index="${i}"]`);
@@ -4858,9 +4273,9 @@ class TimeTracker {
                     totalHeight += (r.bottom - r.top);
                 }
                 if (totalHeight <= 0) return;
-                // ?�이?�웃?� 고정, ?�각???�곽???�이�?변?�로 ?�달
+                // ?�이?�웃?� 고정, ?�각???�곽???�이�?변?�로 ?�달
                 main.style.setProperty('--merged-actual-block-height', `${totalHeight}px`);
-                // ?�시 ?�아?�을 ???�는 ?�라???�이 ?�거
+                // ?�시 ?�아?�을 ???�는 ?�라???�이 ?�거
                 main.style.removeProperty('height');
                 input.style.removeProperty('height');
 
@@ -4894,7 +4309,7 @@ class TimeTracker {
 
                 const start = parseInt(main.getAttribute('data-merge-start'), 10);
                 const end = parseInt(main.getAttribute('data-merge-end'), 10);
-                // �????�이???�으�?블록 ?�이 계산
+                // �????�이???�으�?블록 ?�이 계산
                 let totalHeight = 0;
                 for (let i = start; i <= end; i++) {
                     const row = scope.querySelector(`.time-entry[data-index="${i}"]`);
@@ -4926,8 +4341,8 @@ class TimeTracker {
         }
     }
 
-    // (?�도 변�? 좌측 계획 ?�력?� 모달로만 ?�집?�며
-    // ?�풋 ?�드???�시/?�택 ?�도로만 ?�용?�니??
+    // (?�도 변�? 좌측 계획 ?�력?� 모달로만 ?�집?�며
+    // ?�풋 ?�드???�시/?�택 ?�도로만 ?�용?�니??
 
     selectMergedRange(type, mergeKey, opts = {}) {
         return globalThis.TimeTrackerSelectionOverlayController.selectMergedRange.call(this, type, mergeKey, opts);
@@ -4937,7 +4352,7 @@ class TimeTracker {
         return globalThis.TimeTrackerSelectionOverlayController.ensureSelectionOverlay.call(this, type);
     }
 
-    // ?�재 좌표 ?�치???�는 type 컬럼(.planned-input | .actual-input)???�덱?��? 반환
+    // ?�재 좌표 ?�치???�는 type 컬럼(.planned-input | .actual-input)???�덱?��? 반환
     getIndexAtClientPosition(type, clientX, clientY) {
         return globalThis.TimeTrackerSelectionOverlayController.getIndexAtClientPosition.call(this, type, clientX, clientY);
     }
@@ -4950,7 +4365,7 @@ class TimeTracker {
         return globalThis.TimeTrackerSelectionOverlayController.updateSelectionOverlay.call(this, type);
     }
 
-    // ?�택 박스??기�? ?�각?�을 컬럼/병합 ?�태??맞춰 반환
+    // ?�택 박스??기�? ?�각?�을 컬럼/병합 ?�태??맞춰 반환
     getSelectionCellRect(type, index) {
         return globalThis.TimeTrackerSelectionOverlayController.getSelectionCellRect.call(this, type, index);
     }
@@ -4987,7 +4402,7 @@ class TimeTracker {
         return globalThis.TimeTrackerSelectionOverlayController.showScheduleButtonForSelection.call(this, type);
     }
 
-    // 좌측 ???�??마우?��? ?�렸?????�일/병합 ?�?�의 ?��?�?버튼???�시
+    // 좌측 ???�??마우?��? ?�렸?????�일/병합 ?�?�의 ?��?�?버튼???�시
     showScheduleButtonOnHover(index) {
         return globalThis.TimeTrackerSelectionOverlayController.showScheduleButtonOnHover.call(this, index);
     }
@@ -4996,29 +4411,19 @@ class TimeTracker {
         return globalThis.TimeTrackerSchedulePreviewController.showActivityLogButtonOnHover.call(this, index);
     }
 
+    attachActualActivityHover(entryDiv, index) {
+        return globalThis.TimeTrackerSchedulePreviewController.attachActualActivityHover.call(this, entryDiv, index);
+    }
+
     hideHoverActivityLogButton() {
-        if (this.activityHoverHideTimer) {
-            clearTimeout(this.activityHoverHideTimer);
-            this.activityHoverHideTimer = null;
-        }
-        if (this.activityHoverButton) {
-            if (this.activityHoverButton.classList && this.activityHoverButton.classList.contains('activity-log-btn-floating')) {
-                if (this.activityHoverButton.parentNode) {
-                    this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
-                }
-            } else {
-                this.activityHoverButton.style.opacity = '';
-                this.activityHoverButton.style.pointerEvents = '';
-            }
-        }
-        this.activityHoverButton = null;
+        return globalThis.TimeTrackerSchedulePreviewController.hideHoverActivityLogButton.call(this);
     }
 
     hideHoverScheduleButton() {
         return globalThis.TimeTrackerSelectionOverlayController.hideHoverScheduleButton.call(this);
     }
 
-    // ?��?�?버튼 ?�측?�로 병합/?�돌리기 버튼 ?�렬
+    // ?��?�?버튼 ?�측?�로 병합/?�돌리기 버튼 ?�렬
     repositionButtonsNextToSchedule() {
         return globalThis.TimeTrackerSelectionOverlayController.repositionButtonsNextToSchedule.call(this);
     }
@@ -5103,7 +4508,7 @@ class TimeTracker {
         if (idx >= 0) {
             this.plannedActivities.splice(idx, 1);
             this.savePlannedActivities();
-            // ?�택?�어 ?�으�??�택???�거
+            // ?�택?�어 ?�으�??�택???�거
             const sidx = this.modalSelectedActivities.indexOf(label);
             if (sidx >= 0) this.modalSelectedActivities.splice(sidx, 1);
             this.renderPlannedActivityDropdown();
@@ -5163,7 +4568,7 @@ class TimeTracker {
                     });
                     if (idx >= 0) {
                         this.setPlanActiveRow(idx);
-                        this.showNotification('?��? ?�일???�벨???�어 ?�당 ?�으�??�동?�어??');
+                        this.showNotification('?��? ?�일???�벨???�어 ?�당 ?�으�??�동?�어??');
                     } else {
                         this.syncSelectedActivitiesFromPlan({ rerenderDropdown: true });
                     }
@@ -5190,7 +4595,7 @@ class TimeTracker {
         if (!newLabel || oldLabel === newLabel) return;
         const i = this.findPlannedActivityIndex(oldLabel);
         if (i >= 0) {
-            // rename in list (?�집 ?�에????�� 로컬 ??��?�로 취급)
+            // rename in list (?�집 ?�에????�� 로컬 ??��?�로 취급)
             const existing = this.plannedActivities[i] || {};
             this.plannedActivities[i] = {
                 label: newLabel,
@@ -5291,7 +4696,7 @@ class TimeTracker {
             return textCore.normalizeActivityText(text);
         }
         if (!text) return '';
-        // ?�거: 줄바�??? 공백 축약
+        // ?�거: 줄바�??? 공백 축약
         return String(text)
             .replace(/[\r\n\t]+/g, '')
             .replace(/\s{2,}/g, ' ')
@@ -5327,7 +4732,7 @@ class TimeTracker {
         badge.className = 'pr-badge';
         badge.dataset.pr = String(rank);
         badge.textContent = `Pr.${rank}`;
-        badge.setAttribute('aria-label', `?�선?�위 ${rank}`);
+        badge.setAttribute('aria-label', `?�선?�위 ${rank}`);
         return badge;
     }
     getPriorityRankForLabel(label) {
@@ -5376,7 +4781,7 @@ class TimeTracker {
 
         return options;
     }
-    populateActivityLabelSelect(select, optionLabels, currentLabel, placeholderText = '?��? ?�동') {
+    populateActivityLabelSelect(select, optionLabels, currentLabel, placeholderText = '?��? ?�동') {
         if (!select) return;
         select.innerHTML = '';
 
@@ -5422,7 +4827,7 @@ class TimeTracker {
             const btn = document.createElement('button');
             btn.className = 'remove-chip';
             btn.textContent = '×';
-            btn.title = '?�거';
+            btn.title = '?�거';
             btn.onclick = () => {
                 this.toggleSelectActivity(text, { fromChip: true });
             };
@@ -5453,8 +4858,8 @@ class TimeTracker {
             const empty = document.createElement('li');
             empty.className = 'empty-option';
             empty.textContent = activeSource === 'notion'
-                ? '?�션?�서 불러???�동???�습?�다.'
-                : '직접 추�????�동???�습?�다.';
+                ? '?�션?�서 불러???�동???�습?�다.'
+                : '직접 추�????�동???�습?�다.';
             empty.dataset.source = activeSource;
             list.appendChild(empty);
             this.updateSchedulePreview();
@@ -5722,7 +5127,7 @@ class TimeTracker {
         if (act === 'pass') {
             const routine = ctx.routineAtIndex || ctx.routineForWindow;
             if (!routine) {
-                this.showNotification('???�간?�???�정??루틴???�습?�다.');
+                this.showNotification('???�간?�???�정??루틴???�습?�다.');
                 this.closeRoutineMenu();
                 return;
             }
@@ -5752,7 +5157,7 @@ class TimeTracker {
         if (act === 'stop') {
             const routine = ctx.routineAtIndex || ctx.routineForWindow;
             if (!routine) {
-                this.showNotification('중단??루틴???�습?�다.');
+                this.showNotification('중단??루틴???�습?�다.');
                 this.closeRoutineMenu();
                 return;
             }
@@ -5832,7 +5237,7 @@ class TimeTracker {
             const normalized = this.normalizeNotionActivities(items);
             this.notionActivitiesCache = normalized;
             const fetchChanged = this.mergeNotionActivities(normalized);
-            this.setNotionStatus('success', `?�션 ?�기???�료 (${normalized.length}�?`);
+            this.setNotionStatus('success', `?�션 ?�기???�료 (${normalized.length}�?`);
             return changed || fetchChanged;
         } catch (e) {
             console.warn('Notion activities fetch failed:', e);
@@ -5939,7 +5344,7 @@ class TimeTracker {
             const region = document.createElement('div');
             region.className = 'notification-region';
             region.setAttribute('role', 'region');
-            region.setAttribute('aria-label', '?�림');
+            region.setAttribute('aria-label', '?�림');
             region.setAttribute('aria-live', 'polite');
             region.setAttribute('aria-atomic', 'true');
             document.body.appendChild(region);
@@ -5957,7 +5362,7 @@ class TimeTracker {
             actionBtn.type = 'button';
             actionBtn.className = 'toast-action';
             actionBtn.textContent = options.actionLabel;
-            actionBtn.setAttribute('aria-label', `${options.actionLabel} ?�행`);
+            actionBtn.setAttribute('aria-label', `${options.actionLabel} ?�행`);
             actionBtn.addEventListener('click', () => {
                 options.onAction();
                 notification.remove();
@@ -5976,7 +5381,7 @@ class TimeTracker {
         }, duration);
     }
 
-    // ?�?�머 관??메서?�들 추�?
+    // ?�?�머 관??메서?�들 추�?
         attachTimerListeners(entryDiv, index) {
         return globalThis.TimerController.attachTimerListeners.call(this, entryDiv, index);
     }
@@ -6024,7 +5429,7 @@ class TimeTracker {
         return globalThis.TimerController.updateRunningTimers.call(this);
     }
 
-    // ?�동 로그 관??메서?�들
+    // ?�동 로그 관??메서?�들
     attachActivityLogListener(entryDiv, index) {
         const activityBtn = entryDiv.querySelector('.activity-log-btn');
         if (activityBtn) {
@@ -6794,12 +6199,12 @@ class TimeTracker {
         }
         if (!Array.isArray(this.modalActualActivities) || this.modalActualActivities.length === 0) {
             if (total > 0) {
-                noticeEl.textContent = '?��? ?�동??추�??�세??';
+                noticeEl.textContent = '?��? ?�동??추�??�세??';
             }
             return;
         }
         if (total > 0 && used !== total) {
-            noticeEl.textContent = '?�계가 ?�동 맞춤?�니??';
+            noticeEl.textContent = '?�계가 ?�동 맞춤?�니??';
         }
     }
 
@@ -6929,11 +6334,11 @@ window.__ttDebug = {
         const tracker = this.ensureTracker();
         if (!tracker) return null;
         tracker.currentTimeSlotIndex = index;
-        tracker.timeSlots[index].planActivities = [{ label: '공�?', seconds: 3600 }];
+        tracker.timeSlots[index].planActivities = [{ label: '공�?', seconds: 3600 }];
         tracker.timeSlots[index].planTitleBandOn = true;
         tracker.timeSlots[index].activityLog = {
             ...(tracker.timeSlots[index].activityLog || {}),
-            title: '?�플', details: '', subActivities: [], titleBandOn: true,
+            title: '?�플', details: '', subActivities: [], titleBandOn: true,
             actualGridUnits: [true, true, false, true, false, true],
             actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
         };
@@ -6952,11 +6357,11 @@ window.__ttDebug = {
         const tracker = this.ensureTracker();
         if (!tracker) return null;
         tracker.currentTimeSlotIndex = index;
-        tracker.timeSlots[index].planActivities = [{ label: '공�?', seconds: 3600 }];
+        tracker.timeSlots[index].planActivities = [{ label: '공�?', seconds: 3600 }];
         tracker.timeSlots[index].planTitleBandOn = true;
         tracker.timeSlots[index].activityLog = {
             ...(tracker.timeSlots[index].activityLog || {}),
-            title: '?�플', details: '', subActivities: [], titleBandOn: true,
+            title: '?�플', details: '', subActivities: [], titleBandOn: true,
             actualGridUnits: [true, true, false, true, false, true],
             actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false,
         };

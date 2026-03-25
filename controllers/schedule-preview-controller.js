@@ -247,8 +247,53 @@ function showActivityLogButtonOnHover(index) {
     this.activityHoverButton = inlineBtn;
 }
 
+function hideHoverActivityLogButton() {
+    if (this.activityHoverHideTimer) {
+        clearTimeout(this.activityHoverHideTimer);
+        this.activityHoverHideTimer = null;
+    }
+    if (this.activityHoverButton) {
+        if (this.activityHoverButton.classList && this.activityHoverButton.classList.contains('activity-log-btn-floating')) {
+            if (this.activityHoverButton.parentNode) {
+                this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
+            }
+        } else {
+            this.activityHoverButton.style.opacity = '';
+            this.activityHoverButton.style.pointerEvents = '';
+        }
+    }
+    this.activityHoverButton = null;
+}
+
+function attachActualActivityHover(entryDiv, index) {
+    if (!entryDiv) return;
+    const actualContainer = entryDiv.querySelector('.actual-field-container');
+    const actualOverlay = entryDiv.querySelector('.actual-merged-overlay');
+    const actualSplitViz = entryDiv.querySelector('.split-visualization-actual');
+
+    const bindHover = (el) => {
+        if (!el) return;
+        el.addEventListener('mouseenter', () => {
+            const wrapper = el.closest('.split-cell-wrapper.split-type-actual.split-has-data');
+            if (!wrapper) return;
+            this.showActivityLogButtonOnHover(index);
+        });
+        el.addEventListener('mouseleave', (e) => {
+            const toEl = e.relatedTarget;
+            if (toEl && toEl.closest && toEl.closest('.activity-log-btn-floating')) return;
+            this.hideHoverActivityLogButton();
+        });
+    };
+
+    bindHover(actualContainer);
+    bindHover(actualOverlay);
+    bindHover(actualSplitViz);
+}
+
     return Object.freeze({
+        attachActualActivityHover,
         showActivityLogButtonOnHover,
+        hideHoverActivityLogButton,
         getSchedulePreviewData,
         resetSchedulePreview,
         updateSchedulePreview,

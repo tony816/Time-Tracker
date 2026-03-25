@@ -49,7 +49,9 @@ test('server serves split bootstrap/core/infra/css static files', () => {
   assert.match(serverSource, /'\/core\/text-core\.js':\s*'core\/text-core\.js'/);
   assert.match(serverSource, /'\/core\/time-core\.js':\s*'core\/time-core\.js'/);
   assert.match(serverSource, /'\/infra\/storage-adapter\.js':\s*'infra\/storage-adapter\.js'/);
+  assert.match(serverSource, /'\/controllers\/actual-input-controller\.js':\s*'controllers\/actual-input-controller\.js'/);
   assert.match(serverSource, /'\/controllers\/timer-controller\.js':\s*'controllers\/timer-controller\.js'/);
+  assert.match(serverSource, /'\/ui\/time-control-renderer\.js':\s*'ui\/time-control-renderer\.js'/);
   assert.match(serverSource, /'\/ui\/time-entry-renderer\.js':\s*'ui\/time-entry-renderer\.js'/);
 });
 

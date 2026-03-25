@@ -33,7 +33,9 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     const textCoreIdx = scriptTagIndex('core/text-core.js');
     const timeCoreIdx = scriptTagIndex('core/time-core.js');
     const actualActivityRendererIdx = scriptTagIndex('ui/actual-activity-list-renderer.js');
+    const timeControlRendererIdx = scriptTagIndex('ui/time-control-renderer.js');
     const controllerStateAccessIdx = scriptTagIndex('controllers/controller-state-access.js');
+    const actualInputControllerIdx = scriptTagIndex('controllers/actual-input-controller.js');
     const actualModalControllerIdx = scriptTagIndex('controllers/actual-modal-controller.js');
     const inlinePlanDropdownControllerIdx = scriptTagIndex('controllers/inline-plan-dropdown-controller.js');
     const plannedCatalogRoutineControllerIdx = scriptTagIndex('controllers/planned-catalog-routine-controller.js');
@@ -57,7 +59,9 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(actualGridCoreIdx >= 0, 'core/actual-grid-core.js include should exist');
     assert.ok(gridMetricsCoreIdx >= 0, 'core/grid-metrics-core.js include should exist');
     assert.ok(actualActivityRendererIdx >= 0, 'ui/actual-activity-list-renderer.js include should exist');
+    assert.ok(timeControlRendererIdx >= 0, 'ui/time-control-renderer.js include should exist');
     assert.ok(controllerStateAccessIdx >= 0, 'controllers/controller-state-access.js include should exist');
+    assert.ok(actualInputControllerIdx >= 0, 'controllers/actual-input-controller.js include should exist');
     assert.ok(actualModalControllerIdx >= 0, 'controllers/actual-modal-controller.js include should exist');
     assert.ok(inlinePlanDropdownControllerIdx >= 0, 'controllers/inline-plan-dropdown-controller.js include should exist');
     assert.ok(plannedCatalogRoutineControllerIdx >= 0, 'controllers/planned-catalog-routine-controller.js include should exist');
@@ -79,8 +83,10 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(activityCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after activity-core.js');
     assert.ok(actualGridCoreIdx < gridMetricsCoreIdx, 'grid-metrics-core.js should load after actual-grid-core.js');
     assert.ok(gridMetricsCoreIdx < actualActivityRendererIdx, 'ui/actual-activity-list-renderer.js should load after grid-metrics-core.js');
-    assert.ok(actualActivityRendererIdx < controllerStateAccessIdx, 'controllers/controller-state-access.js should load after ui/actual-activity-list-renderer.js');
-    assert.ok(controllerStateAccessIdx < actualModalControllerIdx, 'controllers/actual-modal-controller.js should load after controllers/controller-state-access.js');
+    assert.ok(actualActivityRendererIdx < timeControlRendererIdx, 'ui/time-control-renderer.js should load after ui/actual-activity-list-renderer.js');
+    assert.ok(timeControlRendererIdx < controllerStateAccessIdx, 'controllers/controller-state-access.js should load after ui/time-control-renderer.js');
+    assert.ok(controllerStateAccessIdx < actualInputControllerIdx, 'controllers/actual-input-controller.js should load after controllers/controller-state-access.js');
+    assert.ok(actualInputControllerIdx < actualModalControllerIdx, 'controllers/actual-modal-controller.js should load after controllers/actual-input-controller.js');
     assert.ok(actualModalControllerIdx < inlinePlanDropdownControllerIdx, 'controllers/inline-plan-dropdown-controller.js should load after controllers/actual-modal-controller.js');
     assert.ok(inlinePlanDropdownControllerIdx < plannedCatalogRoutineControllerIdx, 'controllers/planned-catalog-routine-controller.js should load after controllers/inline-plan-dropdown-controller.js');
     assert.ok(plannedCatalogRoutineControllerIdx < plannedEditorControllerIdx, 'controllers/planned-editor-controller.js should load after controllers/planned-catalog-routine-controller.js');
@@ -100,9 +106,11 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(plannedCatalogRoutineControllerIdx < scriptIdx, 'controllers/planned-catalog-routine-controller.js should load before script.js');
     assert.ok(plannedEditorControllerIdx < scriptIdx, 'controllers/planned-editor-controller.js should load before script.js');
     assert.ok(controllerStateAccessIdx < scriptIdx, 'controllers/controller-state-access.js should load before script.js');
+    assert.ok(actualInputControllerIdx < scriptIdx, 'controllers/actual-input-controller.js should load before script.js');
     assert.ok(actualModalControllerIdx < scriptIdx, 'controllers/actual-modal-controller.js should load before script.js');
     assert.ok(inlinePlanDropdownControllerIdx < scriptIdx, 'controllers/inline-plan-dropdown-controller.js should load before script.js');
     assert.ok(actualActivityRendererIdx < scriptIdx, 'ui/actual-activity-list-renderer.js should load before script.js');
+    assert.ok(timeControlRendererIdx < scriptIdx, 'ui/time-control-renderer.js should load before script.js');
     assert.ok(schedulePreviewControllerIdx < scriptIdx, 'controllers/schedule-preview-controller.js should load before script.js');
     assert.ok(scriptIdx < mainIdx, 'main.js should load after script.js');
 });

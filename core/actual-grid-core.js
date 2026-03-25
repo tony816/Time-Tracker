@@ -312,6 +312,106 @@
         return { gridSegments, titleSegments, showTitleBand, ...options };
     }
 
+    function buildSplitTitleSegments(options = {}) {
+        if (!options.showTitleBand) return [];
+        const unitsPerRow = Number.isFinite(options.unitsPerRow) && options.unitsPerRow > 0
+            ? Math.floor(options.unitsPerRow)
+            : 6;
+        const normalizeLabel = typeof options.normalizeLabel === 'function'
+            ? options.normalizeLabel
+            : (value) => String(value || '').trim();
+        const type = options.type === 'planned' ? 'planned' : 'actual';
+        const normalizedPlanTitle = normalizeLabel(options.normalizedPlanTitle || '');
+        if (type === 'planned') {
+            return normalizedPlanTitle ? [{ label: normalizedPlanTitle, span: unitsPerRow }] : [];
+        }
+        const normalizedPlannedLabel = normalizeLabel(options.normalizedPlannedLabel || '');
+        const normalizedTitle = normalizeLabel(normalizedPlanTitle || normalizedPlannedLabel);
+        return normalizedTitle ? [{ label: normalizedTitle, span: unitsPerRow }] : [];
+    }
+
+    function resolveRunningOutlineProps(runningOutline, unitIndex) {
+        if (!runningOutline || typeof runningOutline.get !== 'function') return null;
+        return runningOutline.get(unitIndex) || null;
+    }
+
+    function buildActualGridDisplaySegments(options = {}) {
+        const planUnits = Array.isArray(options.planUnits) ? options.planUnits : [];
+        const displayOrder = Array.isArray(options.displayOrder)
+            ? options.displayOrder
+            : planUnits.map((_, index) => index);
+        const actualUnits = Array.isArray(options.actualUnits) ? options.actualUnits : [];
+        const lockedUnits = Array.isArray(options.lockedUnits) ? options.lockedUnits : [];
+        const failedUnits = Array.isArray(options.failedUnits) ? options.failedUnits : [];
+        const runningOutline = options.runningOutline;
+
+        return displayOrder.map((unitIndex) => {
+            const outline = resolveRunningOutlineProps(runningOutline, unitIndex);
+            return {
+                label: planUnits[unitIndex],
+                span: 1,
+                unitIndex,
+                active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
+                locked: Boolean(lockedUnits[unitIndex]),
+                failed: Boolean(failedUnits[unitIndex]),
+                ...(outline || {}),
+            };
+        });
+    }
+
+    function buildActualOverrideGridSegments(options = {}) {
+        const planUnits = Array.isArray(options.planUnits) ? options.planUnits : [];
+        const displayOrder = Array.isArray(options.displayOrder)
+            ? options.displayOrder
+            : planUnits.map((_, index) => index);
+        const actualUnits = Array.isArray(options.actualUnits) ? options.actualUnits : [];
+        const lockedUnits = Array.isArray(options.lockedUnits) ? options.lockedUnits : [];
+        const failedUnits = Array.isArray(options.failedUnits) ? options.failedUnits : [];
+        const extraActiveUnits = Array.isArray(options.extraActiveUnits) ? options.extraActiveUnits : [];
+        const allocation = options.allocation && typeof options.allocation === 'object' ? options.allocation : null;
+        const runningOutline = options.runningOutline;
+        const reservedIndices = options.reservedIndices instanceof Set ? options.reservedIndices : new Set();
+        const shownExtraLabels = new Set();
+
+        return displayOrder.map((unitIndex) => {
+            const label = planUnits[unitIndex];
+            const extraLabel = allocation && allocation.slotsByIndex ? allocation.slotsByIndex[unitIndex] : '';
+            const outline = resolveRunningOutlineProps(runningOutline, unitIndex);
+            if (extraLabel) {
+                const alwaysVisibleLabel = !shownExtraLabels.has(extraLabel);
+                const suppressHoverLabel = !alwaysVisibleLabel;
+                if (alwaysVisibleLabel) {
+                    shownExtraLabels.add(extraLabel);
+                }
+                return {
+                    label: extraLabel,
+                    span: 1,
+                    unitIndex,
+                    active: Boolean(extraActiveUnits[unitIndex]),
+                    locked: false,
+                    failed: Boolean(failedUnits[unitIndex]),
+                    isExtra: true,
+                    reservedIndices,
+                    extraLabel,
+                    alwaysVisibleLabel,
+                    suppressHoverLabel,
+                    ...(outline || {}),
+                };
+            }
+            return {
+                label,
+                span: 1,
+                unitIndex,
+                active: Boolean(actualUnits[unitIndex]) && !Boolean(lockedUnits[unitIndex]),
+                locked: Boolean(lockedUnits[unitIndex]),
+                failed: Boolean(failedUnits[unitIndex]),
+                isExtra: false,
+                reservedIndices,
+                ...(outline || {}),
+            };
+        });
+    }
+
     function normalizeActualGridBooleanUnits(units, totalUnits) {
         if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
         let safe = Array.isArray(units) ? units.map((value) => Boolean(value)) : [];
@@ -923,6 +1023,9 @@
         buildActualActivitiesFromGrid,
         buildSplitSegmentsFromActivities,
         buildSplitGridSegmentsFromActivities,
+        buildSplitTitleSegments,
+        buildActualGridDisplaySegments,
+        buildActualOverrideGridSegments,
         normalizeActualGridBooleanUnits,
         rebuildLockedRowsFromUnitSet,
         insertLockedRowsAfterRelatedActivities,

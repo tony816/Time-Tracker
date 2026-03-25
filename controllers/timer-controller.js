@@ -149,6 +149,161 @@
         };
     }
 
+    function normalizeTimerStatus(rawStatus, slot = null) {
+        const normalized = String(rawStatus || '').trim();
+        if (normalized === 'running' || normalized === 'paused' || normalized === 'completed' || normalized === 'idle') {
+            return normalized;
+        }
+        if (slot && slot.timer && slot.timer.running) {
+            return 'running';
+        }
+        return 'idle';
+    }
+
+    function getTimerRawElapsed(slot) {
+        if (!slot || !slot.timer) return 0;
+        if (Number.isFinite(slot.timer.rawElapsed) && Number(slot.timer.rawElapsed) > 0) {
+            return Math.max(0, Math.floor(slot.timer.rawElapsed));
+        }
+        if (slot.timer.running || normalizeTimerStatus(slot.timer.status, slot) === 'paused') {
+            return Number.isFinite(slot.timer.elapsed) ? Math.max(0, Math.floor(slot.timer.elapsed)) : 0;
+        }
+        return 0;
+    }
+
+    function getTimeUiHostIndex(index) {
+        const timeMergeKey = this.findMergeKey('time', index);
+        if (!timeMergeKey) return index;
+        const [, startStr] = timeMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        return Number.isInteger(start) ? start : index;
+    }
+
+    function getMobileTimeUiState(index, slotOverride = null) {
+        const slot = slotOverride || this.timeSlots[index] || {};
+        const resolveHostIndex = (rowIndex) => (
+            typeof this.getTimeUiHostIndex === 'function'
+                ? this.getTimeUiHostIndex(rowIndex)
+                : getTimeUiHostIndex.call(this, rowIndex)
+        );
+        const hostIndex = resolveHostIndex(index);
+        const status = typeof this.normalizeTimerStatus === 'function'
+            ? this.normalizeTimerStatus(slot.timer && slot.timer.status, slot)
+            : normalizeTimerStatus(slot.timer && slot.timer.status, slot);
+        const currentIndex = this.getCurrentTimeIndex();
+        const currentHostIndex = Number.isInteger(currentIndex) && currentIndex >= 0
+            ? resolveHostIndex(currentIndex)
+            : -1;
+        const isCurrent = currentHostIndex === hostIndex;
+        const rawElapsed = typeof this.getTimerRawElapsed === 'function'
+            ? this.getTimerRawElapsed(slot)
+            : getTimerRawElapsed(slot);
+        let mode = 'label';
+
+        if (status === 'running') {
+            mode = 'running';
+        } else if (status === 'paused') {
+            mode = 'paused';
+        } else if (status === 'completed' && rawElapsed > 0 && isCurrent) {
+            mode = 'completed';
+        } else if (isCurrent) {
+            mode = 'current';
+        }
+
+        return {
+            hostIndex,
+            mode,
+            status,
+            rawElapsed,
+            isCurrent,
+            showControls: mode !== 'label',
+        };
+    }
+
+    function getTimerEligibility(index, slotOverride = null) {
+        const slot = slotOverride || this.timeSlots[index] || {};
+        return resolveTimerEligibility({
+            index,
+            currentIndex: this.getCurrentTimeIndex(),
+            isCurrentDateToday: this.isCurrentDateToday(),
+            slotPlanned: slot.planned,
+            slotPlanActivities: slot.planActivities,
+            findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
+            getMergedField: (mergeKey) => this.mergedFields.get(mergeKey),
+        });
+    }
+
+    function getTimerStartBlockReason(index) {
+        const eligibility = typeof this.getTimerEligibility === 'function'
+            ? this.getTimerEligibility(index)
+            : getTimerEligibility.call(this, index);
+        return getStartBlockReason(eligibility, {
+            notToday: '\uC624\uB298 \uB0A0\uC9DC\uC5D0\uC11C\uB9CC \uD0C0\uC774\uBA38\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+            invalidCurrentSlot: '\uD604\uC7AC \uC2DC\uAC04 \uC2AC\uB86F\uC5D0\uC11C\uB9CC \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+            noPlanned: '\uACC4\uD68D\uB41C \uD65C\uB3D9\uC774 \uC5C6\uC5B4 \uD0C0\uC774\uBA38\uB97C \uC2DC\uC791\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
+            outOfRange: '\uD604\uC7AC \uC2DC\uAC04 \uBC94\uC704 \uCE78\uC5D0\uC11C\uB9CC \uD0C0\uC774\uBA38\uB97C \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+        });
+    }
+
+    function createTimerControls(index, slot) {
+        const safeSlot = slot || {};
+        const timer = safeSlot.timer || {};
+        const isRunning = Boolean(timer.running);
+        const rawElapsed = typeof this.getTimerRawElapsed === 'function'
+            ? this.getTimerRawElapsed(safeSlot)
+            : getTimerRawElapsed(safeSlot);
+        const hasElapsed = rawElapsed > 0;
+        const eligibility = typeof this.getTimerEligibility === 'function'
+            ? this.getTimerEligibility(index, safeSlot)
+            : getTimerEligibility.call(this, index, safeSlot);
+        const timerStatus = typeof this.normalizeTimerStatus === 'function'
+            ? this.normalizeTimerStatus(timer.status, safeSlot)
+            : normalizeTimerStatus(timer.status, safeSlot);
+
+        const state = resolveTimerControlState(
+            eligibility,
+            { isRunning, hasElapsed },
+            {
+                notToday: '\uC624\uB298 \uB0A0\uC9DC\uC5D0\uC11C\uB9CC \uD0C0\uC774\uBA38\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+                noPlanned: '\uACC4\uD68D\uC744 \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
+                outOfRange: '\uD604\uC7AC \uC2DC\uAC04 \uBC94\uC704\uC5D0\uC11C\uB9CC \uC2DC\uC791\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.',
+            }
+        );
+
+        const startButtonAttributes = [];
+        if (state.buttonDisabled) startButtonAttributes.push('disabled');
+        if (state.buttonTitle) startButtonAttributes.push(`title="${state.buttonTitle}"`);
+        const startButtonAttrString = startButtonAttributes.length ? ' ' + startButtonAttributes.join(' ') : '';
+
+        const timerDisplayStyle = isRunning || hasElapsed ? 'display: block;' : 'display: none;';
+        const timerDisplay = this.formatTime(Math.max(Number(timer.elapsed) || 0, rawElapsed));
+        const rawDisplayStyle = 'display: none;';
+        const rawDisplay = '';
+        const isCompactMobileTimeUi = this.isMobileTimeExpansionEnabled();
+        const mobileStartIcon = state.buttonAction === 'stop' ? '\u25A0' : '\u25B6';
+        const startVisualLabel = isCompactMobileTimeUi ? mobileStartIcon : state.buttonIcon;
+        const statusClasses = [
+            isRunning ? 'timer-running' : '',
+            timerStatus === 'paused' ? 'timer-paused' : '',
+            timerStatus === 'completed' ? 'timer-completed' : '',
+        ].filter(Boolean).join(' ');
+
+        return `
+            <div class="timer-controls-container ${statusClasses}" data-index="${index}">
+                <div class="timer-controls">
+                    <button class="timer-btn timer-start-pause"
+                            data-index="${index}"
+                            data-action="${state.buttonAction}" aria-label="\uD0C0\uC774\uBA38 ${state.buttonIcon}"${startButtonAttrString}>
+                        <span class="timer-btn-mobile-icon" aria-hidden="true">${startVisualLabel}</span>
+                        <span class="timer-btn-label">${state.buttonIcon}</span>
+                    </button>
+                </div>
+                <div class="timer-display" style="${timerDisplayStyle}">${timerDisplay}</div>
+                <div class="timer-raw-display" style="${rawDisplayStyle}">${rawDisplay}</div>
+            </div>
+        `;
+    }
+
 function updateRunningTimers() {
     const today = this.getTodayLocalDateString();
     if (this.lastKnownTodayDate !== today) {
@@ -362,6 +517,13 @@ function attachTimerListeners(entryDiv, index) {
         resolveTimerEligibility,
         getStartBlockReason,
         resolveTimerControlState,
+        normalizeTimerStatus,
+        getTimerRawElapsed,
+        getTimeUiHostIndex,
+        getMobileTimeUiState,
+        getTimerEligibility,
+        getTimerStartBlockReason,
+        createTimerControls,
         attachTimerListeners,
         startTimer,
         pauseTimer,
