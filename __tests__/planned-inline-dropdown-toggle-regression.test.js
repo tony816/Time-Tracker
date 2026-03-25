@@ -7,6 +7,7 @@ const controller = require('../controllers/inline-plan-dropdown-controller');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
 const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
 const selectionControllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'selection-overlay-controller.js'), 'utf8');
+const fieldInteractionControllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'field-interaction-controller.js'), 'utf8');
 
 const { isSameInlinePlanTarget } = controller;
 
@@ -68,27 +69,29 @@ test('inline plan outside close runs on click phase so same-slot toggle can clos
 });
 
 test('attachCellClickListeners binds direct planned-input click handler for same-slot toggle', () => {
-    assert.match(scriptSource, /plannedField\.addEventListener\('mousedown', \(e\) => \{/);
-    assert.match(scriptSource, /plannedField\.addEventListener\('click', \(e\) => \{/);
-    assert.match(scriptSource, /this\.suppressInlinePlanClickOnce = index;/);
-    assert.match(scriptSource, /if \(this\.inlinePlanDropdown && this\.isSameInlinePlanTarget\(range\)\) \{/);
+    assert.match(fieldInteractionControllerSource, /function attachCellClickListeners\(entryDiv, index\) \{/);
+    assert.match(fieldInteractionControllerSource, /plannedField\.addEventListener\('mousedown', \(e\) => \{/);
+    assert.match(fieldInteractionControllerSource, /plannedField\.addEventListener\('click', \(e\) => \{/);
+    assert.match(fieldInteractionControllerSource, /this\.suppressInlinePlanClickOnce = index;/);
+    assert.match(fieldInteractionControllerSource, /if \(this\.inlinePlanDropdown && this\.isSameInlinePlanTarget\(range\)\) \{/);
 });
 
 test('same-slot toggle clears planned selection before closing dropdown', () => {
-    assert.match(scriptSource, /this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;/);
+    assert.match(fieldInteractionControllerSource, /this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;/);
 });
 
 test('merged click capture closes same planned target before bubble reopen', () => {
-    assert.match(scriptSource, /const plannedInput = target\.closest && target\.closest\('\.planned-input'\);/);
-    assert.match(scriptSource, /if \(this\.suppressInlinePlanClickOnce === plannedIndex\) \{/);
-    assert.match(scriptSource, /if \(this\.inlinePlanDropdown && this\.isSameInlinePlanTarget\(plannedRange\)\) \{/);
-    assert.match(scriptSource, /this\.closeInlinePlanDropdown\(\);\s+return;/);
+    assert.match(fieldInteractionControllerSource, /function handleMergedClickCapture\(e\) \{/);
+    assert.match(fieldInteractionControllerSource, /const plannedInput = target\.closest && target\.closest\('\.planned-input'\);/);
+    assert.match(fieldInteractionControllerSource, /if \(this\.suppressInlinePlanClickOnce === plannedIndex\) \{/);
+    assert.match(fieldInteractionControllerSource, /if \(this\.inlinePlanDropdown && this\.isSameInlinePlanTarget\(plannedRange\)\) \{/);
+    assert.match(fieldInteractionControllerSource, /this\.closeInlinePlanDropdown\(\);\s+return;/);
 });
 
 test('merged click capture closes dropdown when clicking planned column inside current range', () => {
-    assert.match(scriptSource, /const currentRow = target\.closest && target\.closest\('\.time-entry\[data-index\]'\);/);
-    assert.match(scriptSource, /const inPlannedColumn = e\.clientX >= plannedRect\.left/);
-    assert.match(scriptSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+(?:this\.clearSelection\('planned'\);\s+)?this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
+    assert.match(fieldInteractionControllerSource, /const currentRow = target\.closest && target\.closest\('\.time-entry\[data-index\]'\);/);
+    assert.match(fieldInteractionControllerSource, /const inPlannedColumn = e\.clientX >= plannedRect\.left/);
+    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+(?:this\.clearSelection\('planned'\);\s+)?this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
 });
 
 test('inline add auto-apply on empty slots forces dropdown close', () => {
@@ -102,9 +105,9 @@ test('planned selection overlay click closes same-range inline dropdown on mouse
 });
 
 test('planned mouseup path suppresses reopen when same-slot toggle close is armed', () => {
-    assert.match(scriptSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
-    assert.match(scriptSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
-    assert.match(scriptSource, /if \(!e\.ctrlKey && !e\.metaKey\) \{\s+const anchor = plannedField\.closest\('\.split-cell-wrapper\.split-type-planned'\) \|\| plannedField;\s+this\.openInlinePlanDropdown\(base\.start, anchor\);\s+\}/);
+    assert.match(fieldInteractionControllerSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
+    assert.match(fieldInteractionControllerSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
+    assert.match(fieldInteractionControllerSource, /if \(!e\.ctrlKey && !e\.metaKey\) \{\s+const anchor = plannedField\.closest\('\.split-cell-wrapper\.split-type-planned'\) \|\| plannedField;\s+this\.openInlinePlanDropdown\(base\.start, anchor\);\s+\}/);
 });
 
 test('external page scroll closes inline plan dropdown while visual viewport scroll only repositions it', () => {
