@@ -104,6 +104,214 @@
         return activities;
     }
 
+    function buildActivityLabelUnits(activities, options = {}) {
+        const normalizeLabel = typeof options.normalizeLabel === 'function'
+            ? options.normalizeLabel
+            : (value) => String(value || '').trim();
+        const step = resolveStepSeconds(options.stepSeconds);
+        let units = [];
+
+        if (Array.isArray(activities)) {
+            activities.forEach((item) => {
+                if (!item) return;
+                const label = normalizeLabel(item.label || '');
+                const seconds = Number(item.seconds || 0);
+                const unitsCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / step)) : 0;
+                for (let i = 0; i < unitsCount; i++) {
+                    units.push(label);
+                }
+            });
+        }
+
+        if (Number.isFinite(options.totalUnits) && options.totalUnits > 0) {
+            const totalUnits = Math.floor(options.totalUnits);
+            if (units.length > totalUnits) units = units.slice(0, totalUnits);
+            if (units.length < totalUnits) {
+                units = units.concat(new Array(totalUnits - units.length).fill(''));
+            }
+        }
+
+        return units;
+    }
+
+    function resolveSplitUnitSlice(units, options = {}) {
+        const safeUnits = Array.isArray(units) ? units.slice() : [];
+        const index = Number.isFinite(options.index) ? Math.floor(options.index) : 0;
+        const baseIndex = Number.isFinite(options.baseIndex) ? Math.floor(options.baseIndex) : 0;
+        const unitsPerRow = Number.isFinite(options.unitsPerRow) && options.unitsPerRow > 0
+            ? Math.floor(options.unitsPerRow)
+            : 6;
+        const isMergedRange = options.isMergedRange === true;
+
+        const offset = index - baseIndex;
+        if (offset < 0) return null;
+
+        const maxOffset = Math.ceil(safeUnits.length / unitsPerRow) - 1;
+        if (safeUnits.length === 0 && index !== baseIndex) {
+            return null;
+        }
+        if (safeUnits.length > 0 && offset > maxOffset) return null;
+
+        const useFullUnits = isMergedRange && index === baseIndex;
+        const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
+        const endUnit = useFullUnits ? safeUnits.length : startUnit + unitsPerRow;
+        const slice = safeUnits.length > 0 ? safeUnits.slice(startUnit, endUnit) : [];
+
+        return {
+            units: safeUnits,
+            slice,
+            offset,
+            unitsPerRow,
+            useFullUnits,
+        };
+    }
+
+    function buildConnectedSplitSegments(slice, options = {}) {
+        const safeSlice = Array.isArray(slice) ? slice : [];
+        const unitsPerRow = Number.isFinite(options.unitsPerRow) && options.unitsPerRow > 0
+            ? Math.floor(options.unitsPerRow)
+            : 6;
+        const segments = [];
+
+        if (safeSlice.length > 0) {
+            let segmentStartIdx = 0;
+
+            for (let i = 0; i < safeSlice.length; i++) {
+                const label = safeSlice[i];
+                const isLastItem = (i === safeSlice.length - 1);
+                const nextIsRowStart = ((i + 1) % unitsPerRow === 0);
+                const nextLabel = isLastItem ? null : safeSlice[i + 1];
+
+                const needsBreak = isLastItem || label !== nextLabel || nextIsRowStart;
+                if (!needsBreak) continue;
+
+                const span = i - segmentStartIdx + 1;
+                const connectTop = (
+                    segmentStartIdx > 0 &&
+                    segmentStartIdx % unitsPerRow === 0 &&
+                    safeSlice[segmentStartIdx - 1] === label
+                );
+                const connectBottom = (
+                    nextIsRowStart &&
+                    !isLastItem &&
+                    safeSlice[i + 1] === label
+                );
+
+                segments.push({ label, span, connectTop, connectBottom });
+                segmentStartIdx = i + 1;
+            }
+        }
+
+        const filledUnits = safeSlice.length;
+        const remainder = filledUnits % unitsPerRow;
+        if (filledUnits === 0) {
+            segments.push({ label: '', span: unitsPerRow, connectTop: false, connectBottom: false });
+        } else if (remainder !== 0) {
+            const remaining = unitsPerRow - remainder;
+            if (segments.length && segments[segments.length - 1].label === '') {
+                segments[segments.length - 1].span += remaining;
+            } else {
+                segments.push({ label: '', span: remaining, connectTop: false, connectBottom: false });
+            }
+        }
+
+        return segments;
+    }
+
+    function buildFlatSplitGridSegments(slice, options = {}) {
+        const safeSlice = Array.isArray(slice) ? slice : [];
+        const unitsPerRow = Number.isFinite(options.unitsPerRow) && options.unitsPerRow > 0
+            ? Math.floor(options.unitsPerRow)
+            : 6;
+        const planLabelSet = options.planLabelSet instanceof Set ? options.planLabelSet : null;
+        const reservedIndices = options.reservedIndices instanceof Set ? options.reservedIndices : null;
+        const persistExtraFirstLabel = Boolean(options.persistExtraFirstLabel);
+        const gridSegments = [];
+        const firstExtraSeen = new Set();
+
+        if (safeSlice.length === 0) {
+            for (let i = 0; i < unitsPerRow; i++) {
+                gridSegments.push({ label: '', span: 1 });
+            }
+            return gridSegments;
+        }
+
+        safeSlice.forEach((label) => {
+            const isExtra = planLabelSet && label ? !planLabelSet.has(label) : false;
+            const alwaysVisibleLabel = Boolean(
+                persistExtraFirstLabel
+                && label
+                && isExtra
+                && !firstExtraSeen.has(label)
+            );
+            const suppressHoverLabel = Boolean(
+                persistExtraFirstLabel
+                && label
+                && isExtra
+                && !alwaysVisibleLabel
+            );
+            if (alwaysVisibleLabel) {
+                firstExtraSeen.add(label);
+            }
+            gridSegments.push({
+                label,
+                span: 1,
+                isExtra,
+                reservedIndices,
+                alwaysVisibleLabel,
+                suppressHoverLabel
+            });
+        });
+
+        const remainder = safeSlice.length % unitsPerRow;
+        if (remainder !== 0) {
+            const remaining = unitsPerRow - remainder;
+            for (let i = 0; i < remaining; i++) {
+                gridSegments.push({ label: '', span: 1 });
+            }
+        }
+
+        return gridSegments;
+    }
+
+    function buildSplitSegmentsFromActivities(activities, options = {}) {
+        const units = buildActivityLabelUnits(activities, options);
+        const sliceData = resolveSplitUnitSlice(units, options);
+        if (!sliceData) return null;
+
+        const titleSegments = Array.isArray(options.titleSegments) ? options.titleSegments : [];
+        const showTitleBand = Boolean(options.showTitleBand);
+        const gridSegments = buildConnectedSplitSegments(sliceData.slice, options);
+        const hasLabels = gridSegments.some((segment) => segment && segment.label);
+
+        if (!hasLabels && !showTitleBand) {
+            return null;
+        }
+        if (!hasLabels && showTitleBand) {
+            return { gridSegments: [], titleSegments, showTitleBand, ...options };
+        }
+        return { gridSegments, titleSegments, showTitleBand, ...options };
+    }
+
+    function buildSplitGridSegmentsFromActivities(activities, options = {}) {
+        const units = buildActivityLabelUnits(activities, options);
+        const sliceData = resolveSplitUnitSlice(units, options);
+        if (!sliceData) return null;
+
+        const titleSegments = Array.isArray(options.titleSegments) ? options.titleSegments : [];
+        const showTitleBand = Boolean(options.showTitleBand);
+        const gridSegments = buildFlatSplitGridSegments(sliceData.slice, options);
+        const hasLabels = units.some((label) => label);
+
+        if (!hasLabels && !showTitleBand) {
+            return null;
+        }
+        if (!hasLabels && showTitleBand) {
+            return { gridSegments: [], titleSegments, showTitleBand, ...options };
+        }
+        return { gridSegments, titleSegments, showTitleBand, ...options };
+    }
+
     function normalizeActualGridBooleanUnits(units, totalUnits) {
         if (!Number.isFinite(totalUnits) || totalUnits <= 0) return [];
         let safe = Array.isArray(units) ? units.map((value) => Boolean(value)) : [];
@@ -713,6 +921,8 @@
         getActualGridBlockRange,
         buildActualUnitsFromActivities,
         buildActualActivitiesFromGrid,
+        buildSplitSegmentsFromActivities,
+        buildSplitGridSegmentsFromActivities,
         normalizeActualGridBooleanUnits,
         rebuildLockedRowsFromUnitSet,
         insertLockedRowsAfterRelatedActivities,

@@ -8,6 +8,8 @@ test('actual-grid-core exports are available and attached to global', () => {
     assert.equal(typeof actualGridCore.getActualGridBlockRange, 'function');
     assert.equal(typeof actualGridCore.buildActualUnitsFromActivities, 'function');
     assert.equal(typeof actualGridCore.buildActualActivitiesFromGrid, 'function');
+    assert.equal(typeof actualGridCore.buildSplitSegmentsFromActivities, 'function');
+    assert.equal(typeof actualGridCore.buildSplitGridSegmentsFromActivities, 'function');
     assert.equal(typeof actualGridCore.normalizeActualGridBooleanUnits, 'function');
     assert.equal(typeof actualGridCore.rebuildLockedRowsFromUnitSet, 'function');
     assert.equal(typeof actualGridCore.insertLockedRowsAfterRelatedActivities, 'function');
@@ -65,6 +67,84 @@ test('buildActualActivitiesFromGrid keeps plan order and aggregates active label
     assert.deepEqual(activitiesBy300, [
         { label: 'A', seconds: 300, source: 'grid' },
         { label: 'B', seconds: 600, source: 'grid' },
+    ]);
+});
+
+test('buildSplitSegmentsFromActivities builds connected row segments with padding', () => {
+    const result = actualGridCore.buildSplitSegmentsFromActivities([
+        { label: 'A', seconds: 4200 },
+    ], {
+        index: 0,
+        baseIndex: 0,
+        isMergedRange: true,
+        unitsPerRow: 6,
+        showTitleBand: false,
+        titleSegments: [],
+        normalizeLabel: (value) => String(value || '').trim(),
+    });
+
+    assert.equal(result.showTitleBand, false);
+    assert.deepEqual(result.titleSegments, []);
+    assert.deepEqual(result.gridSegments, [
+        { label: 'A', span: 6, connectTop: false, connectBottom: true },
+        { label: 'A', span: 1, connectTop: true, connectBottom: false },
+        { label: '', span: 5, connectTop: false, connectBottom: false },
+    ]);
+});
+
+test('buildSplitGridSegmentsFromActivities preserves extras and pads to the row size', () => {
+    const result = actualGridCore.buildSplitGridSegmentsFromActivities([
+        { label: 'A', seconds: 600 },
+        { label: 'X', seconds: 600 },
+        { label: 'X', seconds: 600 },
+    ], {
+        index: 0,
+        baseIndex: 0,
+        unitsPerRow: 6,
+        totalUnits: 4,
+        showTitleBand: false,
+        titleSegments: [],
+        normalizeLabel: (value) => String(value || '').trim(),
+        planLabelSet: new Set(['A']),
+        reservedIndices: new Set([1, 2]),
+        persistExtraFirstLabel: true,
+    });
+
+    assert.equal(result.gridSegments.length, 6);
+    assert.equal(result.showTitleBand, false);
+    assert.deepEqual(result.gridSegments.slice(0, 4), [
+        {
+            label: 'A',
+            span: 1,
+            isExtra: false,
+            reservedIndices: result.gridSegments[0].reservedIndices,
+            alwaysVisibleLabel: false,
+            suppressHoverLabel: false,
+        },
+        {
+            label: 'X',
+            span: 1,
+            isExtra: true,
+            reservedIndices: result.gridSegments[1].reservedIndices,
+            alwaysVisibleLabel: true,
+            suppressHoverLabel: false,
+        },
+        {
+            label: 'X',
+            span: 1,
+            isExtra: true,
+            reservedIndices: result.gridSegments[2].reservedIndices,
+            alwaysVisibleLabel: false,
+            suppressHoverLabel: true,
+        },
+        {
+            label: '',
+            span: 1,
+            isExtra: false,
+            reservedIndices: result.gridSegments[3].reservedIndices,
+            alwaysVisibleLabel: false,
+            suppressHoverLabel: false,
+        },
     ]);
 });
 
