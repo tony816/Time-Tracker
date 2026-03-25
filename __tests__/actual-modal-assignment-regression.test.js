@@ -1,5 +1,6 @@
 ﻿const test = require('node:test');
 const assert = require('node:assert/strict');
+require('../core/actual-grid-core');
 require('../controllers/actual-modal-controller');
 
 const { buildMethod } = require('./helpers/script-method-builder');

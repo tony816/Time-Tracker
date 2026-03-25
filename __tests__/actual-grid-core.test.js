@@ -8,6 +8,11 @@ test('actual-grid-core exports are available and attached to global', () => {
     assert.equal(typeof actualGridCore.getActualGridBlockRange, 'function');
     assert.equal(typeof actualGridCore.buildActualUnitsFromActivities, 'function');
     assert.equal(typeof actualGridCore.buildActualActivitiesFromGrid, 'function');
+    assert.equal(typeof actualGridCore.insertLockedRowsAfterRelatedActivities, 'function');
+    assert.equal(typeof actualGridCore.getActualGridLockedUnitsForBase, 'function');
+    assert.equal(typeof actualGridCore.getActualGridManualLockedUnitsForBase, 'function');
+    assert.equal(typeof actualGridCore.buildExtraSlotAllocation, 'function');
+    assert.equal(typeof actualGridCore.mergeActualActivitiesWithGrid, 'function');
 
     assert.ok(globalThis.TimeTrackerActualGridCore);
     assert.equal(typeof globalThis.TimeTrackerActualGridCore.getActualGridBlockRange, 'function');
