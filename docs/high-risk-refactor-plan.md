@@ -1,120 +1,95 @@
-# High-Risk Refactor Plan
+# High-Risk Refactor Record
 
-This document defines the execution plan for the two deferred high-risk refactor candidates:
+Status: completed on 2026-03-25. This file is now historical reference, not an active pending plan.
 
-1. `Field Interaction Controller`
-2. `Actual Grid Core` phase 2
+## Completed Items
 
-The primary goal is preserving current behavior while reducing `script.js` safely.
+| Item | Status | Notes |
+| --- | --- | --- |
+| `Field Interaction Controller` | Completed | Planned-field interaction routing was extracted while keeping actual-grid pointer/lock behavior guarded. |
+| `Actual Grid Core` phase 2 | Completed | Effective lock readers, locked-row reconstruction helpers, extra allocation helpers, and related pure helpers were extracted behind wrappers. |
+| `Actual Grid Core` phase 3 | Completed | Additional pure split/title/grid segment builders were moved into `core/actual-grid-core.js`. |
 
-## Candidate 1: Field Interaction Controller
+## Current Source Of Truth
 
-### Scope
-- Planned field click / drag / long-press selection wiring
-- Merged planned click capture
-- Row-wide planned click targets
-- Hover button orchestration for planned cells
-- Actual-column hover entry points only if they are strictly wiring-level
+Use these docs instead of treating this file as a to-do list:
 
-### Explicitly Out of Scope
-- Actual-grid long-press lock logic
-- Actual-grid click blocking
-- Actual-grid failed click handling
-- Assigned-duration recalculation
-- Extra-slot allocation
+1. `README.md`
+2. `docs/ai-handoff-map.md`
+3. `docs/actual-lock-guardrails.md`
 
-### Required Preconditions
-- Current controller extraction branch is green on `npm test`
-- Inline dropdown / selection overlay regressions are green
-- Existing behavior map is updated before edits begin
+## What Still Matters From This Record
 
-### Phase Plan
-1. Map event sources and current consumers
-2. Extract planned-only interaction routing into a controller
-3. Keep actual-grid pointer handlers in `script.js`
-4. Re-run planned selection and inline dropdown regressions
-5. Run browser smoke for planned selection, merge, same-slot toggle, and hover buttons
+The execution plan is complete, but the risk rules remain valid:
 
-### Required Tests
-- `npm test`
-- Targeted regressions:
-  - `__tests__/planned-inline-dropdown-toggle-regression.test.js`
-  - `__tests__/planned-merge-selection-regression.test.js`
-  - `__tests__/selection-overlay-controller.test.js`
-  - `__tests__/inline-plan-dropdown-controller.test.js`
+- preserve behavior first
+- isolate helper clusters before moving orchestration
+- validate actual-grid changes with `npm run test:actual-lock` before broader testing
+- run browser smoke whenever lock masks, rendering, click behavior, or assigned-duration changes can be affected
 
-### Required Browser Smoke
-- Single planned slot click opens inline dropdown
-- Same-slot re-click closes dropdown without reopening
-- Drag selection expands planned range correctly
-- Merged planned range click opens at the merged anchor
-- Hover schedule button shows and hides without leaving stale buttons
+## Historical Scope Summary
 
-### Stop Conditions
-- Any regression in same-slot toggle close
-- Any regression in merged planned click reopen suppression
-- Any stale floating schedule/undo/merge button after selection clear
+### Completed High-Risk Candidate 1
 
-## Candidate 2: Actual Grid Core Phase 2
+`Field Interaction Controller`
 
-### Scope
-- Additional extraction of actual-grid pure/helper logic only
-- Effective lock mask readers
-- Split segment computation helpers
-- Extra allocation helper extraction
-- Grid clamp / reconstruction helpers
+Completed scope:
 
-### Explicitly Out of Scope
+- planned field click / drag selection wiring
+- merged planned click capture
+- row-wide planned click targets
+- planned-side hover entry points
+
+Explicitly kept out of the extraction:
+
+- actual-grid long-press lock logic
+- actual-grid click blocking
+- actual-grid failed-click handling
+- assigned-duration recalculation
+- extra-slot allocation
+
+### Completed High-Risk Candidate 2
+
+`Actual Grid Core`
+
+Completed scope:
+
+- effective lock mask readers
+- locked-row reconstruction helpers
+- split/title/grid segment builders
+- extra allocation helper extraction
+- actual-grid pure/helper clusters moved under `core/actual-grid-core.js`
+
+Explicitly preserved during the extraction:
+
 - UI event rewiring
-- Modal shell / list rendering
-- Save/load schema changes
-- Supabase protocol changes
+- modal shell ownership
+- save/load schema compatibility
+- Supabase protocol behavior
 
-### Required Guardrail
-- [actual-lock-guardrails.md](/C:/Time-Tracker/docs/actual-lock-guardrails.md) is mandatory
+## Invariants That Still Apply
 
-### Impact Surfaces To Treat As One Feature
-- Locked row classification
-- Effective lock mask
-- Assigned-duration edits
-- Locked row regeneration
-- Grid graphics
-- Click blocking
-- Failed-click behavior
-- Extra-slot allocation
-
-### Phase Plan
-1. Identify pure/helper functions that can move without changing call order
-2. Extract one helper cluster at a time behind wrappers
-3. Re-run actual-lock targeted tests after each cluster
-4. Run browser smoke after any cluster that affects lock masks, rendering, or click behavior
-5. Stop on the first invariant break and repair before continuing
-
-### Required Tests
-- `npm run test:actual-lock`
-- `npm test`
-
-### Required Browser Smoke
-1. Assigned decrease only
-2. Manual lock plus assigned decrease
-3. Long-press lock / unlock
-
-### Invariants
 - `sum(non-locked assigned seconds) + sum(locked row seconds) === modalActualTotalSeconds`
-- Manual lock rows survive recalculation
-- Auto lock rows are regenerated from current deficit only
-- Locked units reject normal click and failed-click toggles
-- Extra activities never occupy locked units
+- manual lock rows survive recalculation
+- auto lock rows are rebuilt from the current deficit only
+- locked units reject normal clicks and failed-click toggles
+- extra activities never occupy locked units
 
-### Stop Conditions
-- Locked row count changes unexpectedly
-- Manual lock metadata is dropped or duplicated
-- Effective lock mask diverges between rendering and click blocking
-- Extra allocation enters any locked unit
+## Required Validation For Future Actual-Grid Work
 
-## Execution Order
+Run:
 
-1. `Field Interaction Controller`
-2. `Actual Grid Core` phase 2
+```bash
+npm run test:actual-lock
+npm test
+```
 
-Do not run both candidates in the same commit.
+Then run the documented browser smoke in `docs/actual-lock-guardrails.md`.
+
+## Use This File For
+
+- understanding why the high-risk work was staged
+- seeing which extraction classes were already completed
+- avoiding duplicate plan work on finished refactors
+
+Do not use this file as the primary description of the current architecture.
