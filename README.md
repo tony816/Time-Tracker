@@ -7,9 +7,16 @@ Static single-page timesheet app for day planning, actual activity tracking, tim
 If you are a new contributor or an AI agent, read in this order:
 
 1. `README.md`
-2. `docs/ai-handoff-map.md`
-3. `docs/actual-lock-guardrails.md` if the task touches actual-grid, locking, assigned-duration edits, locked rows, failed clicks, or extra allocation
-4. `docs/docs-index.md` if you need refactor history or older stage notes
+2. `docs/product-identity.md`
+3. `docs/ai-handoff-map.md`
+4. `docs/actual-lock-guardrails.md` if the task touches actual-grid, locking, assigned-duration edits, locked rows, failed clicks, or extra allocation
+5. `docs/docs-index.md` if you need refactor history or older stage notes
+
+## Product Identity
+
+This product should be judged first as a tool that helps a person create the best possible data for their own AI.
+
+Do not drift into shallow decisions that make the app look more AI-powered while weakening data quality, user ownership, context fidelity, or reuse outside this app.
 
 ## Current Architecture
 
@@ -100,6 +107,7 @@ Optional remote table:
 
 ## Documentation Map
 
+- `docs/product-identity.md`: product identity, anti-shallow decision checklist, and reminder principle
 - `docs/ai-handoff-map.md`: current architecture, module inventory, read order, and test mapping
 - `docs/actual-lock-guardrails.md`: non-negotiable checklist for actual-grid work
 - `docs/high-risk-refactor-plan.md`: completed high-risk refactor record

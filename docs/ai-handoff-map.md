@@ -2,21 +2,24 @@
 
 This document is the fastest way for a new AI session to build an accurate mental model of the current codebase.
 
+Before architecture decisions, read `docs/product-identity.md`. Architecture choices should serve that product identity, not replace it.
+
 ## Read Order
 
 Use this order instead of reading `script.js` top to bottom:
 
 1. `README.md`
-2. `index.html` for module load order
-3. `main.js` for bootstrap
-4. This file
-5. The folder that matches the task surface:
+2. `docs/product-identity.md`
+3. `index.html` for module load order
+4. `main.js` for bootstrap
+5. This file
+6. The folder that matches the task surface:
    - `core/` for pure calculations
    - `controllers/` for interaction/state flow
    - `ui/` for DOM/string rendering
    - `infra/` for storage/integration helpers
-6. Matching tests in `__tests__/`
-7. `docs/actual-lock-guardrails.md` before any actual-grid change
+7. Matching tests in `__tests__/`
+8. `docs/actual-lock-guardrails.md` before any actual-grid change
 
 ## Runtime Shape
 
