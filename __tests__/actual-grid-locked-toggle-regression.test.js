@@ -23,6 +23,10 @@ const toggleActualGridLockedUnit = buildMethod(
     'toggleActualGridLockedUnit(index, unitIndex)',
     '(index, unitIndex)'
 );
+const toggleActualGridUnit = buildMethod(
+    'toggleActualGridUnit(index, unitIndex)',
+    '(index, unitIndex)'
+);
 
 const STEP_SECONDS = 600;
 
@@ -628,6 +632,42 @@ test('toggleActualGridLockedUnit restores assigned seconds when unlocking the un
     assert.ok(gridRow);
     assert.equal(gridRow.seconds, 2400);
     assert.equal(lockedRows.length, 0);
+});
+
+test('toggleActualGridUnit skips locked units when calculating clicked recorded time', () => {
+    let syncedUnits = null;
+    const lockedMask = [false, false, true, false, false, false];
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 3000, source: 'grid' },
+                    { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 2, lockEnd: 2, lockUnits: [2] },
+                ],
+                actualGridUnits: [false, false, false, false, false, false],
+            },
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(6), planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, false, false, false, false, false],
+        getActualGridLockedUnitsForBase() {
+            return lockedMask.slice();
+        },
+        isActualGridUnitLocked(_baseIndex, unitIndex) {
+            return Boolean(lockedMask[unitIndex]);
+        },
+        getBlockLength: () => 1,
+        getActualGridBlockRange: () => ({ start: 0, end: 5, label: 'A' }),
+        clearActualFailedGridUnitOnNormalClick: () => {},
+        syncActualGridToSlots(_baseIndex, _planUnits, actualUnits) {
+            syncedUnits = actualUnits.slice();
+        },
+    });
+
+    toggleActualGridUnit.call(ctx, 0, 3);
+
+    assert.deepEqual(syncedUnits, [true, true, false, true, false, false]);
+    const recordedUnits = syncedUnits.filter(Boolean).length;
+    assert.equal(recordedUnits * STEP_SECONDS, 1800);
 });
 
 test('toggleActualGridLockedUnit preserves existing actualGridUnits while toggling lock', () => {

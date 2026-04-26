@@ -973,6 +973,18 @@ function openActivityLogModal(index) {
             existing,
             planContext.planLabel
         );
+        if (typeof this.getActualGridLockedUnitsForBase === 'function') {
+            const lockedUnits = this.getActualGridLockedUnitsForBase(
+                baseIndex,
+                this.modalActualPlanUnits,
+                this.modalActualActivities
+            );
+            if (Array.isArray(lockedUnits) && lockedUnits.length > 0) {
+                this.modalActualGridUnits = this.modalActualGridUnits.map((value, unitIndex) => {
+                    return Boolean(value) && !Boolean(lockedUnits[unitIndex]);
+                });
+            }
+        }
         this.normalizeActualActivitiesToStep();
     } else {
         this.modalActualPlanUnits = [];

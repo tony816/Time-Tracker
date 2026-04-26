@@ -2479,10 +2479,22 @@ class TimeTracker {
         if (!block) return;
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
         const { start, end } = block;
-        const clickedCount = unitIndex - start + 1;
-        let currentOnCount = 0;
+        const lockedUnits = typeof this.getActualGridLockedUnitsForBase === 'function'
+            ? this.getActualGridLockedUnitsForBase(baseIndex, planContext.units)
+            : [];
+        const selectableUnits = [];
         for (let i = start; i <= end; i++) {
-            if (actualUnits[i]) {
+            if (lockedUnits[i]) {
+                actualUnits[i] = false;
+                continue;
+            }
+            selectableUnits.push(i);
+        }
+        const clickedCount = selectableUnits.reduce((count, idx) => count + (idx <= unitIndex ? 1 : 0), 0);
+        if (clickedCount <= 0) return;
+        let currentOnCount = 0;
+        for (const idx of selectableUnits) {
+            if (actualUnits[idx]) {
                 currentOnCount += 1;
             } else {
                 break;
@@ -2494,9 +2506,9 @@ class TimeTracker {
             newCount = 0;
         }
 
-        for (let i = start; i <= end; i++) {
-            actualUnits[i] = i < start + newCount;
-        }
+        selectableUnits.forEach((idx, position) => {
+            actualUnits[idx] = position < newCount;
+        });
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
         this.renderTimeEntries(true);
         this.calculateTotals();
@@ -5601,21 +5613,32 @@ class TimeTracker {
     }
 
     getActualGridSecondsMap(planUnits = null, actualUnits = null) {
+        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
+        const sourceActiveUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
+        let activeUnits = Array.isArray(sourceActiveUnits)
+            ? sourceActiveUnits.map((value) => Boolean(value))
+            : sourceActiveUnits;
+        if (Array.isArray(units) && Array.isArray(activeUnits)) {
+            const baseIndex = Number.isInteger(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+            const activities = Array.isArray(this.modalActualActivities) ? this.modalActualActivities : null;
+            const lockedUnits = (baseIndex != null && typeof this.getActualGridLockedUnitsForBase === 'function')
+                ? this.getActualGridLockedUnitsForBase(baseIndex, units, activities)
+                : [];
+            if (Array.isArray(lockedUnits) && lockedUnits.length > 0) {
+                activeUnits = activeUnits.map((value, index) => Boolean(value) && !Boolean(lockedUnits[index]));
+            }
+        }
         const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
             ? globalThis.TimeTrackerGridMetricsCore
             : null;
         if (gridMetricsCore && typeof gridMetricsCore.getActualGridSecondsMap === 'function') {
-            return gridMetricsCore.getActualGridSecondsMap(planUnits, actualUnits, {
-                fallbackPlanUnits: this.modalActualPlanUnits,
-                fallbackActualUnits: this.modalActualGridUnits,
+            return gridMetricsCore.getActualGridSecondsMap(units, activeUnits, {
                 stepSeconds: this.getActualDurationStepSeconds(),
                 normalizeActivityText: (value) => this.normalizeActivityText
                     ? this.normalizeActivityText(value || '')
                     : String(value || '').trim(),
             });
         }
-        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
-        const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
         const map = new Map();
         if (!Array.isArray(units) || !Array.isArray(activeUnits)) return map;
         const step = this.getActualDurationStepSeconds();
