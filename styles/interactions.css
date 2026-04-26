@@ -2181,6 +2181,11 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   background: transparent;
 }
 
+.split-cell-wrapper.split-type-actual.split-has-data
+  .actual-field-container.merged-actual-main {
+  background-color: transparent !important;
+}
+
 .split-grid-segment.split-empty {
   background: rgba(236, 240, 241, 0.25);
   border-bottom-color: #fff !important;

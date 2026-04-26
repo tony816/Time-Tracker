@@ -3162,7 +3162,19 @@ class TimeTracker {
                 if (normalized) planLabelSet.add(normalized);
             });
             const orderedActual = this.sortActivitiesByOrder(actualActivities);
-            const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            let lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            const hasActiveActualUnits = actualUnits.some(Boolean);
+            const hasAssignedActualRows = orderedActual.some((item) => {
+                if (!item || item.source === 'locked') return false;
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return Boolean(label) && seconds > 0;
+            });
+            if (!hasActiveActualUnits && !hasAssignedActualRows) {
+                lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            }
             let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
