@@ -23,6 +23,9 @@ class TimeTracker {
         this.timeSlots = [];
         this.currentDate = this.getTodayLocalDateString();
         this.lastKnownTodayDate = this.currentDate;
+        this.actualRecordingDisabled = Boolean(
+            typeof window !== 'undefined' && window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING
+        );
         this.selectedPlannedFields = new Set();
         this.selectedActualFields = new Set();
         this.isSelectingPlanned = false;
@@ -162,6 +165,7 @@ class TimeTracker {
     init() {
         this.cacheAuthElements();
         this.cacheStatusElements();
+        this.applyRecordingMode();
         this.applyEncodingSafeLabels();
         this.generateTimeSlots();
         this.renderTimeEntries();
@@ -229,6 +233,27 @@ class TimeTracker {
         setText('#activityLogModal .actual-sub-activities-hint', UI_LABELS.actualHint);
         setText('#saveActivityLog', UI_LABELS.saveButton);
         setText('#cancelActivityLog', UI_LABELS.cancelButton);
+    }
+
+    applyRecordingMode() {
+        const disabled = Boolean(this.actualRecordingDisabled);
+        try {
+            document.documentElement.classList.toggle('actual-recording-disabled', disabled);
+            document.body.classList.toggle('actual-recording-disabled', disabled);
+        } catch (_) {}
+
+        const modeLink = document.getElementById('recordingModeLink');
+        if (!modeLink) return;
+
+        if (disabled) {
+            modeLink.href = 'index.html';
+            modeLink.textContent = '전체 기능 보기';
+            modeLink.setAttribute('aria-label', '모든 기능이 포함된 페이지로 이동');
+        } else {
+            modeLink.href = 'index.html?mode=plan-only';
+            modeLink.textContent = '실제활동 기록 제외';
+            modeLink.setAttribute('aria-label', '실제활동 기록 기능을 제외한 페이지로 이동');
+        }
     }
 
     // ?�버�?�??�의 ?�???�출 ?�퍼
@@ -5455,6 +5480,7 @@ class TimeTracker {
 
     // ?�동 로그 관??메서?�들
     attachActivityLogListener(entryDiv, index) {
+        if (this.actualRecordingDisabled) return;
         const activityBtn = entryDiv.querySelector('.activity-log-btn');
         if (activityBtn) {
             activityBtn.addEventListener('click', (e) => {
@@ -6340,6 +6366,7 @@ class TimeTracker {
     }
 
         openActivityLogModal(index) {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.openActivityLogModal.call(this, index);
     }
 
@@ -6348,10 +6375,12 @@ class TimeTracker {
     }
 
         saveActivityLogFromModal() {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.saveActivityLogFromModal.call(this);
     }
 
         attachActivityModalEventListeners() {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.attachActivityModalEventListeners.call(this);
     }
 }

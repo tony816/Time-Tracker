@@ -9,6 +9,18 @@
     <link rel="stylesheet" href="styles/modal.css" />
     <link rel="stylesheet" href="styles/interactions.css" />
     <link rel="stylesheet" href="styles/responsive.css" />
+    <script>
+      (function(){
+        try {
+          var params = new URLSearchParams(window.location.search || '');
+          var disabled = params.get('mode') === 'plan-only';
+          window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING = disabled;
+          document.documentElement.classList.toggle('actual-recording-disabled', disabled);
+        } catch (e) {
+          window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING = false;
+        }
+      })();
+    </script>
   </head>
   <body>
     <div class="container">
@@ -25,6 +37,7 @@
               <input type="date" id="date" name="date" />
             </div>
             <div class="auth-controls">
+              <a id="recordingModeLink" class="mode-link-btn" href="index.html?mode=plan-only">실제활동 기록 제외</a>
               <span id="authStatus" class="auth-status">로그인 필요</span>
               <button id="googleAuthBtn" type="button" class="auth-btn">Google 로그인</button>
             </div>
