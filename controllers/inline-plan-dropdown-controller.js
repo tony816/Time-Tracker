@@ -620,8 +620,8 @@ function renderInlinePlanDropdownOptions() {
             const label = getCatalogItemLabel.call(this, item);
             return label.toLowerCase().includes(normalizedQuery.toLowerCase());
         };
-        const allItems = (catalogGrouped.items || []).filter((item) => item && !item.archived && queryMatches(item));
-        const recentItems = (catalogGrouped.items || [])
+        const topLevelItems = (catalogGrouped.topLevel || []).filter((item) => item && !item.archived && queryMatches(item));
+        const recentItems = topLevelItems
             .filter((item) => item && !item.archived && !item.pinned && queryMatches(item))
             .sort((a, b) => {
                 const at = a.lastUsedAt || '';
@@ -632,10 +632,10 @@ function renderInlinePlanDropdownOptions() {
             .slice(0, 8);
 
         const sectionMap = {
-            pinned: allItems.filter((item) => item.pinned),
+            pinned: topLevelItems.filter((item) => item.pinned),
             recent: recentItems,
             parents: (catalogGrouped.parents || []).filter((item) => item && !item.archived && queryMatches(item)),
-            all: allItems,
+            all: topLevelItems,
         };
 
         const renderChip = (item, options = {}) => {

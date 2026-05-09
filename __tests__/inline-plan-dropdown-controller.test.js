@@ -234,3 +234,79 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
         globalThis.document = originalDocument;
     }
 });
+
+test('renderInlinePlanDropdownOptions hides child activities from top-level board sections', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        return {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            textContent: '',
+            title: '',
+            type: '',
+            appendChild(node) {
+                this.children.push(node);
+                return node;
+            },
+            addEventListener() {},
+        };
+    };
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return { value: '' };
+            return null;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        plannedActivities: [
+            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, pinned: true, archived: false },
+            { id: 'squat', name: '스쿼트', label: '스쿼트', normalizedName: '스쿼트', parentId: 'exercise', pinned: false, archived: false, usageCount: 10, lastUsedAt: '2026-05-09' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+    };
+
+    globalThis.document = {
+        createElement: createNode,
+    };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        const visibleLabels = [];
+        const collect = (node) => {
+            if (!node) return;
+            if (node.className === 'activity-chip-label') visibleLabels.push(node.textContent);
+            (node.children || []).forEach(collect);
+        };
+        board.children.forEach(collect);
+
+        assert.ok(visibleLabels.includes('운동'));
+        assert.equal(visibleLabels.includes('스쿼트'), false);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
