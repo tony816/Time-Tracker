@@ -276,6 +276,7 @@
                             const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
                             this.openInlinePlanDropdown(base.start, anchor);
                         }
+                        this.suppressInlinePlanClickOnce = index;
                     }
                 } else {
                     if (!e.ctrlKey && !e.metaKey) {

@@ -265,6 +265,11 @@ html.actual-recording-disabled .split-grid-segment.has-plan-segment-timer {
   align-items: center;
 }
 
+.plan-segment-graphic-main.has-segment-title {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.plan-segment-graphic-title,
 .plan-segment-graphic-label {
   display: block;
   min-width: 0;
@@ -273,6 +278,19 @@ html.actual-recording-disabled .split-grid-segment.has-plan-segment-timer {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 6px;
+}
+
+.plan-segment-graphic-title {
+  align-self: end;
+  padding-top: 4px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.plan-segment-graphic-label {
+  align-self: center;
 }
 
 .plan-segment-timer-button {

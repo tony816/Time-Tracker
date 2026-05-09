@@ -175,22 +175,23 @@ function buildSplitVisualization(type, index) {
         if (!context) return '';
         const { gridSegments, titleSegments, showTitleBand } = context;
         const isActual = type === 'actual';
+        const renderTitleBand = showTitleBand && !(type === 'planned' && this.actualRecordingDisabled);
         const toggleable = isActual ? (context.toggleable !== undefined ? context.toggleable : true) : false;
         const showLabels = !isActual || Boolean(context.showLabels);
         const useConnections = !isActual || !toggleable;
         const hasGrid = Array.isArray(gridSegments) && gridSegments.length > 0;
         if (!hasGrid && !showTitleBand) return '';
 
-        const classes = ['split-visualization', showTitleBand ? 'has-title' : 'no-title'];
+        const classes = ['split-visualization', renderTitleBand ? 'has-title' : 'no-title'];
         classes.push(type === 'planned' ? 'split-visualization-planned' : 'split-visualization-actual');
-        if (type === 'planned' && showTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
+        if (type === 'planned' && renderTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
             classes.push('split-visualization-single-title');
         }
         if (isActual) {
             classes.push(toggleable ? 'split-toggleable' : 'split-readonly');
         }
 
-        const titleHtml = showTitleBand
+        const titleHtml = renderTitleBand
             ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'title');
@@ -214,6 +215,9 @@ function buildSplitVisualization(type, index) {
                     && !segment.suppressHoverLabel
                     && (showLabels || Boolean(segment.alwaysVisibleLabel));
                 const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
+                const safeTitleLabel = (!isActual && segment.titleLabel)
+                    ? this.escapeHtml(segment.titleLabel)
+                    : '';
                 const labelClass = segment.alwaysVisibleLabel ? ' split-grid-label-persistent' : '';
                 let labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
@@ -246,11 +250,15 @@ function buildSplitVisualization(type, index) {
                                    data-index="${baseIndex}"
                                    data-segment-id="${escapedSegmentId}"
                                    aria-label="계획 세그먼트 타이머">${icon}</button>`;
+                    const graphicMainClass = safeTitleLabel
+                        ? 'plan-segment-graphic-main has-segment-title'
+                        : 'plan-segment-graphic-main';
                     labelHtml = `<div class="plan-segment-graphic"
                                       data-index="${baseIndex}"
                                       data-segment-id="${escapedSegmentId}">
                                     ${buttonHtml}
-                                    <div class="plan-segment-graphic-main">
+                                    <div class="${graphicMainClass}">
+                                        ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
                                         <span class="plan-segment-graphic-label" title="${safeLabel}">${safeLabel}</span>
                                         <span class="plan-segment-timer-time tone-${tone}"
                                               data-index="${baseIndex}"

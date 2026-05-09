@@ -59,9 +59,18 @@ test('activity-core normalizeActivitiesArray preserves locked metadata fields', 
     ]);
 });
 
-test('activity-core normalizePlanActivitiesArray keeps label/seconds only', () => {
+test('activity-core normalizePlanActivitiesArray keeps label/seconds and activity metadata', () => {
     const normalized = activityCore.normalizePlanActivitiesArray([
-        { label: ' 운동 ', seconds: 600.9, source: 'ignored', recordedSeconds: 300 },
+        {
+            label: ' 운동 ',
+            seconds: 600.9,
+            source: 'ignored',
+            recordedSeconds: 300,
+            titleActivityId: ' parent-1 ',
+            titleText: ' 운동 ',
+            activityId: ' child-1 ',
+            activityText: ' 스쿼트 ',
+        },
         { title: '독서', seconds: 0 },
         { label: '', seconds: 0 },
     ], {
@@ -70,7 +79,14 @@ test('activity-core normalizePlanActivitiesArray keeps label/seconds only', () =
     });
 
     assert.deepEqual(normalized, [
-        { label: '운동', seconds: 600 },
+        {
+            label: '운동',
+            seconds: 600,
+            titleActivityId: 'parent-1',
+            titleText: '운동',
+            activityId: 'child-1',
+            activityText: '스쿼트',
+        },
         { label: '독서', seconds: 0 },
     ]);
 });

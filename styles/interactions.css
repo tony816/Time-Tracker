@@ -1002,6 +1002,120 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   padding: 0 8px 8px;
 }
 
+.activity-chip-board {
+  border: 1px solid #e6ebf1;
+  border-radius: 8px;
+  max-height: 280px;
+  overflow: auto;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.activity-chip-board-section + .activity-chip-board-section {
+  margin-top: 12px;
+}
+
+.activity-chip-board-title {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #637083;
+}
+
+.activity-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.activity-chip {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2d3d;
+  overflow: hidden;
+}
+
+button.activity-chip,
+.activity-chip-main,
+.activity-chip-caret {
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.activity-chip,
+.activity-chip-main {
+  padding: 0 10px;
+}
+
+.activity-chip-main {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.activity-chip-label {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-chip-caret {
+  width: 32px;
+  border-left: 1px solid #e4ebf3;
+}
+
+.activity-chip:hover,
+.activity-chip:focus-within {
+  border-color: #9dccf4;
+  background: #f4f9ff;
+}
+
+.activity-chip-add,
+.activity-chip-self {
+  padding: 0 10px;
+}
+
+.inline-plan-subsection-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.inline-plan-sub-back {
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  background: #fff;
+  color: #526172;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.inline-plan-subsection-title {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1f2d3d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inline-plan-option.inline-plan-option-row {
   display: block;
   width: 100%;

@@ -3355,7 +3355,26 @@ class TimeTracker {
         }
 
         const activities = this.getSplitActivities(type, baseIndex);
-        return buildSegmentsFromActivities(activities);
+        const result = buildSegmentsFromActivities(activities);
+        if (type === 'planned' && result && Array.isArray(result.gridSegments)) {
+            const titleByLabel = new Map();
+            activities.forEach((item) => {
+                if (!item) return;
+                const label = normalizeSegmentLabel(item.activityText || item.label || '');
+                const title = normalizeSegmentLabel(item.titleText || '');
+                if (label && title && !titleByLabel.has(label)) {
+                    titleByLabel.set(label, title);
+                }
+            });
+            if (titleByLabel.size > 0) {
+                result.gridSegments = result.gridSegments.map((segment) => {
+                    if (!segment || !segment.label) return segment;
+                    const titleLabel = titleByLabel.get(normalizeSegmentLabel(segment.label));
+                    return titleLabel ? { ...segment, titleLabel } : segment;
+                });
+            }
+        }
+        return result;
     }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
@@ -4009,7 +4028,15 @@ class TimeTracker {
                 const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = this.normalizeDurationStep(rawSeconds) ?? 0;
-                return { label, seconds };
+                const normalized = { label, seconds };
+                ['titleActivityId', 'titleText', 'activityId', 'activityText'].forEach((key) => {
+                    if (!(key in item)) return;
+                    const rawValue = item[key];
+                    normalized[key] = rawValue == null
+                        ? null
+                        : (this.normalizeActivityText ? this.normalizeActivityText(rawValue) : String(rawValue || '').trim());
+                });
+                return normalized;
             })
             .filter(item => item.label || item.seconds > 0);
     }
@@ -5027,6 +5054,9 @@ class TimeTracker {
     }
         buildPlannedActivityOptions(extraLabels = []) {
         return globalThis.TimeTrackerInlinePlanDropdownController.buildPlannedActivityOptions.call(this, extraLabels);
+    }
+        groupActivityBoard(entries) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.groupActivityBoard.call(this, entries);
     }
         getHangulInitialSearchKey(text) {
         return globalThis.TimeTrackerInlinePlanDropdownController.getHangulInitialSearchKey.call(this, text);

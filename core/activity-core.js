@@ -128,7 +128,18 @@
                 const label = normalizeActivityText(labelSource);
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = normalizeDurationStep(rawSeconds) ?? 0;
-                return { label, seconds };
+                const normalized = { label, seconds };
+                [
+                    'titleActivityId',
+                    'titleText',
+                    'activityId',
+                    'activityText',
+                ].forEach((key) => {
+                    if (!(key in item)) return;
+                    const rawValue = item[key];
+                    normalized[key] = rawValue == null ? null : normalizeActivityText(rawValue);
+                });
+                return normalized;
             })
             .filter((item) => item.label || item.seconds > 0);
     }

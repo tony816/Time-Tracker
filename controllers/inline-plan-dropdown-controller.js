@@ -537,6 +537,72 @@ function positionInlinePlanDropdown(anchorEl) {
         dropdown.style.visibility = 'visible';
     }
 
+function getCatalogItemLabel(item) {
+        return this.normalizeActivityText
+            ? this.normalizeActivityText((item && (item.name || item.label || item.title)) || '')
+            : String((item && (item.name || item.label || item.title)) || '').trim();
+    }
+
+function getInlinePlanSelectionSeconds() {
+        const target = this.inlinePlanTarget || {};
+        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
+        const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
+        return Math.max(1, Math.abs(endIndex - startIndex) + 1) * 3600;
+    }
+
+function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
+        if (!this.inlinePlanTarget || !activityItem) return;
+        const activityText = getCatalogItemLabel.call(this, activityItem);
+        if (!activityText) return;
+        const titleText = parentItem ? getCatalogItemLabel.call(this, parentItem) : null;
+
+        const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
+        const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
+        const startIndex = Math.min(safeStart, safeEnd);
+        const endIndex = Math.max(safeStart, safeEnd);
+        const seconds = getInlinePlanSelectionSeconds.call(this);
+        const planItem = {
+            label: activityText,
+            seconds,
+            titleActivityId: parentItem ? (String(parentItem.id || '').trim() || null) : null,
+            titleText,
+            activityId: String(activityItem.id || '').trim() || null,
+            activityText,
+        };
+
+        if (this.inlinePlanTarget.mergeKey) {
+            this.mergedFields.set(this.inlinePlanTarget.mergeKey, activityText);
+        }
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (!this.timeSlots[i]) continue;
+            const isStart = i === startIndex;
+            this.timeSlots[i].planned = isStart ? activityText : '';
+            this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
+            this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
+            this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+        }
+
+        this.modalPlanActivities = [{ ...planItem, invalid: false }];
+        this.modalPlanActiveRow = 0;
+        this.modalPlanTitle = titleText || '';
+        this.modalPlanTitleBandOn = Boolean(titleText);
+
+        this.renderTimeEntries(Boolean(options.keepOpen));
+        this.calculateTotals();
+        this.autoSave();
+        if (options.keepOpen && this.inlinePlanTarget) {
+            const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
+                || document.querySelector(`[data-index="${startIndex}"]`);
+            if (anchor) {
+                setInlinePlanAnchorState.call(this, anchor);
+                this.positionInlinePlanDropdown(anchor);
+            }
+            return;
+        }
+        this.closeInlinePlanDropdown();
+    }
+
 function renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
         if (this.inlinePriorityMenu) {
@@ -545,57 +611,71 @@ function renderInlinePlanDropdownOptions() {
         const board = this.inlinePlanDropdown.querySelector('.activity-chip-board');
         if (!board) return;
 
-        const startIndex = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
-        const currentValue = this.getPlannedValueForIndex(startIndex);
-        const planActivities = this.getPlanActivitiesForIndex(startIndex);
-        const hasPlanSplit = Array.isArray(planActivities) && planActivities.length > 0;
         const catalogGrouped = this.groupActivityBoard(this.plannedActivities || []);
         const searchInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         const searchQuery = searchInput ? (searchInput.value || '') : '';
         const normalizedQuery = this.normalizeActivityText ? this.normalizeActivityText(searchQuery || '') : String(searchQuery || '').trim();
-        const topLevel = (catalogGrouped.topLevel || []).filter((item) => {
+        const queryMatches = (item) => {
             if (!normalizedQuery) return true;
-            const label = this.normalizeActivityText ? this.normalizeActivityText(item.label || item.name || '') : String(item.label || item.name || '').trim();
+            const label = getCatalogItemLabel.call(this, item);
             return label.toLowerCase().includes(normalizedQuery.toLowerCase());
-        });
+        };
+        const allItems = (catalogGrouped.items || []).filter((item) => item && !item.archived && queryMatches(item));
+        const recentItems = (catalogGrouped.items || [])
+            .filter((item) => item && !item.archived && !item.pinned && queryMatches(item))
+            .sort((a, b) => {
+                const at = a.lastUsedAt || '';
+                const bt = b.lastUsedAt || '';
+                if (at !== bt) return bt.localeCompare(at);
+                return (b.usageCount || 0) - (a.usageCount || 0);
+            })
+            .slice(0, 8);
 
         const sectionMap = {
-            pinned: (catalogGrouped.pinned || []).filter((item) => !normalizedQuery || this.normalizeActivityText(item.name || '').toLowerCase().includes(normalizedQuery.toLowerCase())),
-            recent: (catalogGrouped.recent || []).filter((item) => !normalizedQuery || this.normalizeActivityText(item.name || '').toLowerCase().includes(normalizedQuery.toLowerCase())),
-            parents: (catalogGrouped.parents || []).filter((item) => !normalizedQuery || this.normalizeActivityText(item.name || '').toLowerCase().includes(normalizedQuery.toLowerCase())),
-            all: topLevel,
+            pinned: allItems.filter((item) => item.pinned),
+            recent: recentItems,
+            parents: (catalogGrouped.parents || []).filter((item) => item && !item.archived && queryMatches(item)),
+            all: allItems,
         };
 
         const renderChip = (item, options = {}) => {
-            const label = this.normalizeActivityText ? this.normalizeActivityText(item.name || item.label || '') : String(item.name || item.label || '').trim();
+            const label = getCatalogItemLabel.call(this, item);
             if (!label) return null;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = `activity-chip${options.parent ? ' activity-chip-parent' : ''}`;
-            button.dataset.label = label;
-            if (options.parent) button.dataset.parentId = String(item.id || '');
-            if (options.selected) button.classList.add('selected');
+            const isParentCandidate = !item.parentId;
+            const canExpandChildren = Boolean(options.parent || isParentCandidate);
+            const chip = document.createElement('span');
+            chip.className = `activity-chip${canExpandChildren ? ' activity-chip-parent' : ''}`;
+            chip.dataset.label = label;
+            if (canExpandChildren) chip.dataset.parentId = String(item.id || '');
+            const labelButton = document.createElement('button');
+            labelButton.type = 'button';
+            labelButton.className = 'activity-chip-main';
             const text = document.createElement('span');
             text.className = 'activity-chip-label';
             text.textContent = label;
-            button.appendChild(text);
-            if (options.parent) {
-                const caret = document.createElement('span');
-                caret.className = 'activity-chip-caret';
-                caret.textContent = '▾';
-                button.appendChild(caret);
-            }
-            button.addEventListener('click', (event) => {
+            labelButton.appendChild(text);
+            labelButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (options.parent) {
-                    const children = (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id);
-                    this.openPlanActivityChildMenu(item, button, children);
-                    return;
-                }
-                this.applyInlinePlanSelection(label, { keepOpen: true });
+                const parent = item && item.parentId ? catalogGrouped.byId.get(item.parentId) : null;
+                applyActivityCatalogSelection.call(this, item, parent || null, { keepOpen: true });
             });
-            return button;
+            chip.appendChild(labelButton);
+            if (canExpandChildren) {
+                const caret = document.createElement('button');
+                caret.type = 'button';
+                caret.className = 'activity-chip-caret';
+                caret.textContent = '▾';
+                caret.title = '세부활동 펼치기';
+                caret.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const children = (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id);
+                    this.openPlanActivityChildMenu(item, caret, children);
+                });
+                chip.appendChild(caret);
+            }
+            return chip;
         };
 
         board.innerHTML = '';
@@ -605,9 +685,11 @@ function renderInlinePlanDropdownOptions() {
             { title: '전체 활동군', key: 'parents' },
             { title: '전체 활동', key: 'all' },
         ];
+        let renderedSectionCount = 0;
         sections.forEach((section) => {
             const items = sectionMap[section.key] || [];
             if (items.length === 0) return;
+            renderedSectionCount += 1;
             const wrap = document.createElement('section');
             wrap.className = 'activity-chip-board-section';
             const heading = document.createElement('div');
@@ -617,108 +699,106 @@ function renderInlinePlanDropdownOptions() {
             const row = document.createElement('div');
             row.className = 'activity-chip-row';
             items.forEach((item) => {
-                const chip = renderChip(item, { parent: section.key === 'parents' || (catalogGrouped.byParentId.get(item.id) || []).some((child) => child && child.parentId) });
+                const children = (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id);
+                const chip = renderChip(item, { parent: children.length > 0 });
                 if (chip) row.appendChild(chip);
             });
             wrap.appendChild(row);
             board.appendChild(wrap);
         });
+        if (renderedSectionCount === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'inline-plan-empty';
+            empty.textContent = normalizedQuery ? '검색 결과가 없습니다.' : '등록된 활동이 없습니다.';
+            board.appendChild(empty);
+        }
     }
 
 function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
-        if (!anchorEl || !anchorEl.isConnected) return;
-        if (!Array.isArray(children) || children.length === 0) return;
-        if (this.planActivityMenu) {
-            this.closePlanActivityMenu();
-        }
-        const menu = document.createElement('div');
-        menu.className = 'plan-activity-menu actual-activity-menu';
-        menu.setAttribute('role', 'menu');
+        if (!this.inlinePlanDropdown || !this.inlinePlanTarget || !parentItem) return;
+        const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
+        const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
+        const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
+        if (!section || !board) return;
 
-        const parentLabel = this.normalizeActivityText ? this.normalizeActivityText(parentItem.label || parentItem.name || '') : String(parentItem.label || parentItem.name || '').trim();
-        const parentBtn = document.createElement('button');
-        parentBtn.type = 'button';
-        parentBtn.className = 'plan-activity-menu-item';
-        parentBtn.dataset.label = parentLabel;
-        parentBtn.textContent = `${parentLabel} 자체 선택`;
-        menu.appendChild(parentBtn);
+        const parentLabel = getCatalogItemLabel.call(this, parentItem);
+        if (title) title.textContent = parentLabel || '세부활동';
+        section.hidden = false;
+        this.modalPlanSectionOpen = true;
+        board.innerHTML = '';
 
-        const divider = document.createElement('div');
-        divider.className = 'plan-activity-menu-divider';
-        menu.appendChild(divider);
+        const row = document.createElement('div');
+        row.className = 'activity-chip-row';
 
-        children.forEach((child) => {
-            const childLabel = this.normalizeActivityText ? this.normalizeActivityText(child.label || child.name || '') : String(child.label || child.name || '').trim();
+        const parentSelf = document.createElement('button');
+        parentSelf.type = 'button';
+        parentSelf.className = 'activity-chip activity-chip-self';
+        parentSelf.textContent = parentLabel ? `${parentLabel} 자체 선택` : '부모 자체 선택';
+        parentSelf.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            applyActivityCatalogSelection.call(this, parentItem, null, { keepOpen: true });
+        });
+        row.appendChild(parentSelf);
+
+        (Array.isArray(children) ? children : []).forEach((child) => {
+            const childLabel = getCatalogItemLabel.call(this, child);
             if (!childLabel) return;
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'plan-activity-menu-item';
+            btn.className = 'activity-chip';
             btn.dataset.label = childLabel;
             btn.textContent = childLabel;
-            menu.appendChild(btn);
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                applyActivityCatalogSelection.call(this, child, parentItem, { keepOpen: true });
+            });
+            row.appendChild(btn);
         });
 
         const addChildBtn = document.createElement('button');
         addChildBtn.type = 'button';
-        addChildBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
+        addChildBtn.className = 'activity-chip activity-chip-add';
         addChildBtn.textContent = '+ 세부활동 추가';
-        menu.appendChild(addChildBtn);
-
-        document.body.appendChild(menu);
-        this.planActivityMenu = menu;
-        this.planActivityMenuContext = { anchorEl, parentItem };
-
-        menu.addEventListener('click', (event) => {
-            const btn = event.target.closest('.plan-activity-menu-item');
-            if (!btn || !menu.contains(btn)) return;
+        addChildBtn.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
-            if (btn === addChildBtn) {
-                const name = prompt('세부활동 이름을 입력하세요.', '');
-                if (name && this.addPlannedActivityOption) {
-                    const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(name) : String(name || '').trim();
-                    if (!normalizedName) return;
-                    const parentId = String(parentItem.id || '').trim() || null;
-                    const child = {
-                        id: `${parentId || 'activity'}_${Date.now()}`,
-                        name: normalizedName,
-                        label: normalizedName,
-                        title: normalizedName,
-                        normalizedName,
-                        parentId,
-                        colorKey: parentItem.colorKey || null,
-                        defaultDurationMinutes: parentItem.defaultDurationMinutes || null,
-                        displayMode: parentItem.displayMode || 'chip',
-                        pinned: false,
-                        archived: false,
-                        usageCount: 0,
-                        lastUsedAt: null,
-                        source: 'local',
-                    };
-                    this.plannedActivities.push(child);
-                    this.dedupeAndSortPlannedActivities();
-                    this.savePlannedActivities();
-                    this.renderInlinePlanDropdownOptions();
-                }
-                this.closePlanActivityMenu();
-                return;
-            }
-            const label = btn.dataset.label || '';
-            if (label) {
-                this.applyInlinePlanSelection(label, { keepOpen: true });
-            }
-            this.closePlanActivityMenu();
+            const name = prompt('세부활동 이름을 입력하세요.', '');
+            const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(name) : String(name || '').trim();
+            if (!normalizedName) return;
+            const parentId = String(parentItem.id || '').trim() || null;
+            const child = {
+                id: `${parentId || 'activity'}_${Date.now()}`,
+                name: normalizedName,
+                label: normalizedName,
+                title: normalizedName,
+                normalizedName,
+                parentId,
+                colorKey: parentItem.colorKey || null,
+                defaultDurationMinutes: parentItem.defaultDurationMinutes || null,
+                displayMode: parentItem.displayMode || 'chip',
+                pinned: false,
+                archived: false,
+                usageCount: 0,
+                lastUsedAt: null,
+                source: 'local',
+            };
+            this.plannedActivities.push(child);
+            this.dedupeAndSortPlannedActivities();
+            this.savePlannedActivities();
+            this.renderInlinePlanDropdownOptions();
+            const nextChildren = (this.plannedActivities || []).filter((item) => item && item.parentId === parentId);
+            this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
         });
+        row.appendChild(addChildBtn);
 
-        this.positionPlanActivityMenu(anchorEl);
-        this.planActivityMenuOutsideHandler = (event) => {
-            if (!this.planActivityMenu) return;
-            const t = event.target;
-            if (this.planActivityMenu.contains(t)) return;
-            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
-            this.closePlanActivityMenu();
-        };
-        document.addEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
+        board.appendChild(row);
+
+        const targetAnchor = getInlinePlanAnchorState.call(this);
+        if (targetAnchor && this.positionInlinePlanDropdown) {
+            this.positionInlinePlanDropdown(targetAnchor);
+        }
     }
 
 function openRoutineMenuFromInlinePlan(label, anchorEl) {
@@ -1057,7 +1137,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                 this.closeInlinePlanDropdown();
             });
         }
-        const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
         const subSection = dropdown.querySelector('.inline-plan-subsection');
         const inlineBoard = dropdown.querySelector('.activity-chip-board');
         const inlineSubBoard = dropdown.querySelector('.inline-plan-sub-board');
@@ -1083,22 +1162,11 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
         if (subSection) subSection.hidden = true;
-        if (inlineFill) inlineFill.hidden = true;
-        // 제목 초기화
         const baseSlot = this.timeSlots[range.startIndex] || {};
         this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
             ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
             : '';
         this.modalPlanTitleBandOn = Boolean(baseSlot.planTitleBandOn && this.modalPlanTitle);
-        if (inlineTitleInput) this.setPlanTitleInputDisplay(inlineTitleInput, this.modalPlanTitle || '');
-        if (inlineTitleBand) {
-            inlineTitleBand.checked = this.modalPlanTitleBandOn;
-        }
-        if (inlineTitleField) {
-            inlineTitleField.hidden = !this.modalPlanTitleBandOn;
-        }
-        this.updatePlanActivitiesSummary();
-        this.renderPlanActivitiesList();
 
         if (inlineBack) {
             inlineBack.addEventListener('click', () => {
