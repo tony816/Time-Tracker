@@ -319,18 +319,32 @@ function updateRunningTimers() {
         if (slot.timer.running) {
             hasRunningTimer = true;
             const currentElapsed = slot.timer.elapsed + Math.floor((Date.now() - slot.timer.startTime) / 1000);
-            slot.timer.elapsedSeconds = currentElapsed;
+            slot.timer.elapsedSeconds = Number.isFinite(slot.timer.elapsed) ? Math.max(0, Math.floor(slot.timer.elapsed)) : 0;
             slot.timer.startedAt = Number.isFinite(slot.timer.startTime) ? slot.timer.startTime : null;
             const displayElement = document.querySelector(`[data-index="${index}"] .timer-display`);
             if (displayElement) {
                 displayElement.textContent = this.formatTime(currentElapsed);
             }
-            const segmentDisplay = document.querySelector(`.plan-segment-timer-time[data-index="${index}"]`);
-            if (segmentDisplay && typeof this.getPlanSegmentTimerText === 'function') {
-                segmentDisplay.textContent = this.getPlanSegmentTimerText(index);
-                segmentDisplay.classList.remove('tone-under', 'tone-match', 'tone-over');
-                segmentDisplay.classList.add(`tone-${this.getPlanSegmentTimeTone(index)}`);
-            }
+        }
+        if (slot.planSegmentTimers && typeof slot.planSegmentTimers === 'object') {
+            Object.entries(slot.planSegmentTimers).forEach(([segmentId, timer]) => {
+                if (!timer || !timer.running) return;
+                hasRunningTimer = true;
+                const currentElapsed = Number.isFinite(timer.elapsed) ? Math.floor(timer.elapsed) : 0;
+                const liveElapsed = currentElapsed + Math.floor((Date.now() - timer.startTime) / 1000);
+                timer.elapsedSeconds = currentElapsed;
+                timer.startedAt = Number.isFinite(timer.startTime) ? timer.startTime : null;
+                const segmentDisplay = document.querySelector(`.plan-segment-timer-time[data-segment-id="${segmentId}"]`);
+                if (segmentDisplay) {
+                    segmentDisplay.textContent = this.getPlanSegmentTimerText(index, segmentId);
+                    segmentDisplay.classList.remove('tone-under', 'tone-match', 'tone-over');
+                    segmentDisplay.classList.add(`tone-${this.getPlanSegmentTimeTone(index, segmentId)}`);
+                }
+                const iconButton = document.querySelector(`.plan-segment-timer-button[data-segment-id="${segmentId}"]`);
+                if (iconButton) {
+                    iconButton.textContent = this.getPlanSegmentTimerIcon(index, segmentId);
+                }
+            });
         }
     });
      if (!hasRunningTimer) {
@@ -358,6 +372,23 @@ function commitRunningTimers(options = {}) {
             slot.timer.status = elapsed > 0 ? 'paused' : 'idle';
             changed = true;
         }
+        if (slot && slot.planSegmentTimers && typeof slot.planSegmentTimers === 'object') {
+            Object.keys(slot.planSegmentTimers).forEach((segmentId) => {
+                const timer = slot.planSegmentTimers[segmentId];
+                if (!timer || !timer.running) return;
+                const current = Number.isFinite(timer.elapsed) ? Math.floor(timer.elapsed) : 0;
+                const elapsed = Math.max(0, current + Math.floor((nowMs - timer.startTime) / 1000));
+                timer.elapsed = elapsed;
+                timer.elapsedSeconds = elapsed;
+                timer.rawElapsed = elapsed;
+                timer.running = false;
+                timer.startTime = null;
+                timer.startedAt = null;
+                timer.lastPausedAt = nowMs;
+                timer.status = elapsed > 0 ? 'paused' : 'idle';
+                changed = true;
+            });
+        }
     });
     this.stopTimerInterval();
     if (!changed) return false;
@@ -373,6 +404,14 @@ function getPlanSegmentBaseIndex(index) {
     const [, startStr] = plannedMergeKey.split('-');
     const start = parseInt(startStr, 10);
     return Number.isInteger(start) ? start : index;
+}
+
+function getPlanSegmentIndexById(segmentId) {
+    if (!segmentId || typeof segmentId !== 'string') return null;
+    const match = String(segmentId).trim().match(/^planned-(\d+)-(\d+)(?:-seg(\d+))?$/);
+    if (!match) return null;
+    const start = parseInt(match[1], 10);
+    return Number.isInteger(start) ? start : null;
 }
 
 function getPlanSegmentRange(index) {
@@ -410,89 +449,153 @@ function getPlanSegmentId(index) {
     const range = typeof this.getPlanSegmentRange === 'function'
         ? this.getPlanSegmentRange(index)
         : getPlanSegmentRange.call(this, index);
-    return `planned-${range.start}-${range.end}`;
+    const segmentIndex = Number.isInteger(arguments.length > 1 ? arguments[1] : null) ? arguments[1] : null;
+    return Number.isInteger(segmentIndex)
+        ? `planned-${range.start}-${range.end}-seg${segmentIndex}`
+        : `planned-${range.start}-${range.end}`;
 }
 
-function syncPlanSegmentTimerAliases(timer) {
-    if (!timer || typeof timer !== 'object') return;
-    timer.elapsedSeconds = Number.isFinite(timer.elapsed) ? Math.max(0, Math.floor(timer.elapsed)) : 0;
-    timer.startedAt = Number.isFinite(timer.startTime) ? timer.startTime : null;
-    if (timer.status === 'paused' && !Number.isFinite(timer.lastPausedAt)) {
-        timer.lastPausedAt = Date.now();
+function resolvePlanSegmentBaseIndex(segmentRef) {
+    if (typeof segmentRef === 'number' && Number.isInteger(segmentRef)) {
+        return segmentRef;
     }
+    if (typeof segmentRef === 'string') {
+        const byId = getPlanSegmentIndexById.call(this, segmentRef);
+        if (Number.isInteger(byId)) return byId;
+        const parsedIndex = parseInt(segmentRef, 10);
+        if (Number.isInteger(parsedIndex)) return parsedIndex;
+    }
+    return null;
 }
 
-function pausePlanSegmentTimer(index) {
-    const baseIndex = typeof this.getPlanSegmentBaseIndex === 'function'
-        ? this.getPlanSegmentBaseIndex(index)
-        : getPlanSegmentBaseIndex.call(this, index);
+function getPlanSegmentTimerStore(baseIndex) {
     const slot = this.timeSlots[baseIndex];
-    if (!slot || !slot.timer || !slot.timer.running) return false;
-    const current = Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0;
-    const startedAt = Number.isFinite(slot.timer.startTime) ? slot.timer.startTime : Date.now();
+    if (!slot) return null;
+    if (!slot.planSegmentTimers || typeof slot.planSegmentTimers !== 'object') {
+        slot.planSegmentTimers = {};
+    }
+    return slot.planSegmentTimers;
+}
+
+function createPlanSegmentTimerState() {
+    return {
+        running: false,
+        elapsed: 0,
+        elapsedSeconds: 0,
+        rawElapsed: 0,
+        startTime: null,
+        startedAt: null,
+        lastPausedAt: null,
+        method: 'plan-segment',
+        status: 'idle',
+    };
+}
+
+function getPlanSegmentTimerState(segmentRef, segmentId = null) {
+    const baseIndex = typeof this.resolvePlanSegmentBaseIndex === 'function'
+        ? this.resolvePlanSegmentBaseIndex(segmentRef)
+        : resolvePlanSegmentBaseIndex.call(this, segmentRef);
+    if (!Number.isInteger(baseIndex) || baseIndex < 0) return null;
+    const slot = this.timeSlots[baseIndex];
+    if (!slot) return null;
+    const timerId = String(segmentId || (typeof segmentRef === 'string' ? segmentRef : '') || '').trim();
+    const store = getPlanSegmentTimerStore.call(this, baseIndex);
+    if (!store) return null;
+    const segmentKey = timerId || getPlanSegmentId.call(this, baseIndex);
+    if (!store[segmentKey]) {
+        const legacyTimer = slot.timer && slot.timer.method === 'plan-segment' && segmentKey === getPlanSegmentId.call(this, baseIndex)
+            ? slot.timer
+            : null;
+        store[segmentKey] = legacyTimer ? legacyTimer : createPlanSegmentTimerState();
+    }
+    return store[segmentKey];
+}
+
+function pausePlanSegmentTimer(segmentRef, segmentId = null) {
+    const baseIndex = typeof this.resolvePlanSegmentBaseIndex === 'function'
+        ? this.resolvePlanSegmentBaseIndex(segmentRef)
+        : resolvePlanSegmentBaseIndex.call(this, segmentRef);
+    if (!Number.isInteger(baseIndex) || baseIndex < 0) return false;
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId || segmentRef);
+    if (!timer || !timer.running) return false;
+    const current = Number.isFinite(timer.elapsed) ? Math.floor(timer.elapsed) : 0;
+    const startedAt = Number.isFinite(timer.startTime) ? timer.startTime : Date.now();
     const elapsed = Math.max(0, current + Math.floor((Date.now() - startedAt) / 1000));
-    slot.timer.running = false;
-    slot.timer.elapsed = elapsed;
-    slot.timer.elapsedSeconds = elapsed;
-    slot.timer.rawElapsed = elapsed;
-    slot.timer.startTime = null;
-    slot.timer.startedAt = null;
-    slot.timer.lastPausedAt = Date.now();
-    slot.timer.status = elapsed > 0 ? 'paused' : 'idle';
+    timer.running = false;
+    timer.elapsed = elapsed;
+    timer.elapsedSeconds = elapsed;
+    timer.rawElapsed = elapsed;
+    timer.startTime = null;
+    timer.startedAt = null;
+    timer.lastPausedAt = Date.now();
+    timer.status = elapsed > 0 ? 'paused' : 'idle';
     return true;
 }
 
-function startPlanSegmentTimer(index) {
-    const baseIndex = typeof this.getPlanSegmentBaseIndex === 'function'
-        ? this.getPlanSegmentBaseIndex(index)
-        : getPlanSegmentBaseIndex.call(this, index);
+function startPlanSegmentTimer(segmentRef, segmentId = null) {
+    const baseIndex = typeof this.resolvePlanSegmentBaseIndex === 'function'
+        ? this.resolvePlanSegmentBaseIndex(segmentRef)
+        : resolvePlanSegmentBaseIndex.call(this, segmentRef);
+    if (!Number.isInteger(baseIndex) || baseIndex < 0) return false;
     const slot = this.timeSlots[baseIndex];
     if (!slot) return false;
-    if (!slot.timer || typeof slot.timer !== 'object') slot.timer = {};
-
+    const timerId = String(segmentId || segmentRef || '').trim();
+    const targetKey = timerId || getPlanSegmentId.call(this, baseIndex);
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, timerId);
+    if (!timer) return false;
     this.timeSlots.forEach((_slot, rowIndex) => {
         const otherBaseIndex = typeof this.getPlanSegmentBaseIndex === 'function'
             ? this.getPlanSegmentBaseIndex(rowIndex)
             : getPlanSegmentBaseIndex.call(this, rowIndex);
-        if (otherBaseIndex !== baseIndex) {
-            pausePlanSegmentTimer.call(this, rowIndex);
-        }
+        const store = getPlanSegmentTimerStore.call(this, otherBaseIndex);
+        if (!store) return;
+        Object.keys(store).forEach((otherId) => {
+            const isTarget = otherBaseIndex === baseIndex && otherId === targetKey;
+            if (!isTarget) {
+                pausePlanSegmentTimer.call(this, otherBaseIndex, otherId);
+            }
+        });
     });
 
     const resumeBase = Math.max(
-        Number.isFinite(slot.timer.elapsed) ? Math.floor(slot.timer.elapsed) : 0,
-        Number.isFinite(slot.timer.elapsedSeconds) ? Math.floor(slot.timer.elapsedSeconds) : 0
+        Number.isFinite(timer.elapsed) ? Math.floor(timer.elapsed) : 0,
+        Number.isFinite(timer.elapsedSeconds) ? Math.floor(timer.elapsedSeconds) : 0
     );
-    slot.timer.running = true;
-    slot.timer.elapsed = Math.max(0, resumeBase);
-    slot.timer.elapsedSeconds = Math.max(0, resumeBase);
-    slot.timer.rawElapsed = Math.max(0, resumeBase);
-    slot.timer.startTime = Date.now();
-    slot.timer.startedAt = slot.timer.startTime;
-    slot.timer.lastPausedAt = null;
-    slot.timer.method = 'plan-segment';
-    slot.timer.status = 'running';
+    timer.running = true;
+    timer.elapsed = Math.max(0, resumeBase);
+    timer.elapsedSeconds = Math.max(0, resumeBase);
+    timer.rawElapsed = Math.max(0, resumeBase);
+    timer.startTime = Date.now();
+    timer.startedAt = timer.startTime;
+    timer.lastPausedAt = null;
+    timer.method = 'plan-segment';
+    timer.status = 'running';
     return true;
 }
 
-function resumePlanSegmentTimer(index) {
-    return startPlanSegmentTimer.call(this, index);
+function resumePlanSegmentTimer(segmentRef, segmentId = null) {
+    return startPlanSegmentTimer.call(this, segmentRef, segmentId);
 }
 
-function handleSegmentTimerClick(index) {
-    const baseIndex = typeof this.getPlanSegmentBaseIndex === 'function'
-        ? this.getPlanSegmentBaseIndex(index)
-        : getPlanSegmentBaseIndex.call(this, index);
+function handleSegmentTimerClick(segmentRef) {
+    const baseIndex = typeof this.resolvePlanSegmentBaseIndex === 'function'
+        ? this.resolvePlanSegmentBaseIndex(segmentRef)
+        : resolvePlanSegmentBaseIndex.call(this, segmentRef);
+    if (!Number.isInteger(baseIndex) || baseIndex < 0) return false;
+    const segmentId = typeof segmentRef === 'string'
+        ? String(segmentRef).trim()
+        : getPlanSegmentId.call(this, baseIndex);
     const slot = this.timeSlots[baseIndex];
     if (!slot) return false;
-    const status = this.normalizeTimerStatus(slot.timer && slot.timer.status, slot);
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
+    const status = this.normalizeTimerStatus(timer && timer.status, { timer });
     let changed = false;
     if (status === 'running') {
-        changed = pausePlanSegmentTimer.call(this, baseIndex);
+        changed = pausePlanSegmentTimer.call(this, baseIndex, segmentId);
     } else if (status === 'paused') {
-        changed = resumePlanSegmentTimer.call(this, baseIndex);
+        changed = resumePlanSegmentTimer.call(this, baseIndex, segmentId);
     } else {
-        changed = startPlanSegmentTimer.call(this, baseIndex);
+        changed = startPlanSegmentTimer.call(this, baseIndex, segmentId);
     }
     if (!changed) return false;
     this.startTimerInterval();
@@ -500,6 +603,38 @@ function handleSegmentTimerClick(index) {
     this.calculateTotals();
     this.autoSave();
     return true;
+}
+
+function getPlanSegmentTimerText(index, segmentId = null) {
+    const core = this.getPlanSegmentTimerCore && this.getPlanSegmentTimerCore();
+    const baseIndex = this.getPlanSegmentBaseIndex(index);
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
+    const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex);
+    if (core && typeof core.formatSegmentTimerText === 'function') {
+        return core.formatSegmentTimerText(timer || {}, plannedSeconds);
+    }
+    return `0m / ${Math.floor(plannedSeconds / 60)}m`;
+}
+
+function getPlanSegmentTimeTone(index, segmentId = null) {
+    const core = this.getPlanSegmentTimerCore && this.getPlanSegmentTimerCore();
+    if (!core || typeof core.getSegmentTimeTone !== 'function') return 'under';
+    const baseIndex = this.getPlanSegmentBaseIndex(index);
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
+    return core.getSegmentTimeTone({
+        timer: timer || {},
+        plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex),
+    });
+}
+
+function getPlanSegmentTimerIcon(index, segmentId = null) {
+    const core = this.getPlanSegmentTimerCore && this.getPlanSegmentTimerCore();
+    const baseIndex = this.getPlanSegmentBaseIndex(index);
+    const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
+    if (core && typeof core.getSegmentTimerIcon === 'function') {
+        return core.getSegmentTimerIcon(timer || {});
+    }
+    return timer && timer.running ? '❚❚' : '⏱';
 }
 
 function stopTimer(index) {
@@ -662,9 +797,34 @@ function attachTimerListeners(entryDiv, index) {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const btnIndex = parseInt(btn.dataset.index, 10);
-            if (Number.isInteger(btnIndex)) {
-                handleSegmentTimerClick.call(this, btnIndex);
+            const segmentId = String(btn.dataset.segmentId || '').trim();
+            const targetRef = segmentId || parseInt(btn.dataset.index, 10);
+            if (targetRef !== '' && targetRef != null) {
+                handleSegmentTimerClick.call(this, targetRef);
+            }
+        });
+    });
+
+    const planSegmentGraphics = entryDiv.querySelectorAll('.plan-segment-graphic');
+    planSegmentGraphics.forEach((graphic) => {
+        graphic.addEventListener('click', (e) => {
+            if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIndex = parseInt(graphic.dataset.index, 10);
+            if (!Number.isInteger(baseIndex)) return;
+            const plannedInput = entryDiv.querySelector(`.planned-input[data-index="${baseIndex}"]`)
+                || entryDiv.querySelector('.planned-input');
+            if (plannedInput && typeof plannedInput.click === 'function') {
+                plannedInput.click();
+                return;
+            }
+            if (typeof this.openInlinePlanDropdown === 'function') {
+                const anchor = entryDiv.querySelector(`[data-index="${baseIndex}"] .planned-input`)
+                    || entryDiv.querySelector(`[data-index="${baseIndex}"]`);
+                if (anchor) {
+                    this.openInlinePlanDropdown(baseIndex, anchor, baseIndex);
+                }
             }
         });
     });
@@ -683,10 +843,21 @@ function attachTimerListeners(entryDiv, index) {
         getTimerStartBlockReason,
         createTimerControls,
         getPlanSegmentBaseIndex,
+        getPlanSegmentIndexById,
         getPlanSegmentRange,
         getPlanSegmentPlannedSeconds,
         getPlanSegmentId,
+        resolvePlanSegmentBaseIndex,
+        getPlanSegmentTimerStore,
+        createPlanSegmentTimerState,
+        getPlanSegmentTimerState,
+        getPlanSegmentTimerText,
+        getPlanSegmentTimeTone,
+        getPlanSegmentTimerIcon,
         handleSegmentTimerClick,
+        startSegmentTimer: startPlanSegmentTimer,
+        pauseSegmentTimer: pausePlanSegmentTimer,
+        resumeSegmentTimer: resumePlanSegmentTimer,
         startPlanSegmentTimer,
         pausePlanSegmentTimer,
         resumePlanSegmentTimer,

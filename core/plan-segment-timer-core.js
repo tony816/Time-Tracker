@@ -88,9 +88,11 @@
 
     function getSegmentTimeTone(segment = {}, nowMs = Date.now()) {
         const plannedSeconds = Number.isFinite(segment.plannedSeconds) ? Math.max(0, Math.floor(segment.plannedSeconds)) : 0;
-        const elapsedSeconds = Number.isFinite(segment.elapsedSeconds)
-            ? Math.max(0, Math.floor(segment.elapsedSeconds))
-            : getLiveElapsedSeconds(segment.timer, nowMs);
+        const elapsedSeconds = segment.timer && segment.timer.status === 'running'
+            ? getLiveElapsedSeconds(segment.timer, nowMs)
+            : (Number.isFinite(segment.elapsedSeconds)
+                ? Math.max(0, Math.floor(segment.elapsedSeconds))
+                : getLiveElapsedSeconds(segment.timer, nowMs));
         const elapsedMinutes = displayMinutes(elapsedSeconds);
         const plannedMinutes = displayMinutes(plannedSeconds);
         if (plannedMinutes <= 0 || elapsedMinutes < plannedMinutes) return 'under';

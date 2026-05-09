@@ -175,6 +175,9 @@
                                     : ((sourceSlot.timer && String(sourceSlot.timer.method || '') === 'plan-segment') ? 'plan-segment' : 'manual'),
                                 status: this.normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
                             };
+                            targetSlot.planSegmentTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
+                                ? JSON.parse(JSON.stringify(sourceSlot.planSegmentTimers))
+                                : {};
                             targetSlot.activityLog = {
                                 title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
                                 details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),
