@@ -199,11 +199,47 @@
         return normalized;
     }
 
+    function groupActivityCatalogEntries(entries, options = {}) {
+        const items = normalizeActivityCatalogArray(entries, options);
+        const byParentId = new Map();
+        const byId = new Map();
+        items.forEach((item) => {
+            byId.set(item.id, item);
+            const parentKey = item.parentId || '';
+            if (!byParentId.has(parentKey)) byParentId.set(parentKey, []);
+            byParentId.get(parentKey).push(item);
+        });
+        const topLevel = items.filter((item) => !item.parentId);
+        const pinned = topLevel.filter((item) => item.pinned && !item.archived);
+        const recent = topLevel
+            .filter((item) => !item.pinned && !item.archived)
+            .sort((a, b) => {
+                const at = a.lastUsedAt || '';
+                const bt = b.lastUsedAt || '';
+                if (at !== bt) return bt.localeCompare(at);
+                return (b.usageCount || 0) - (a.usageCount || 0);
+            })
+            .slice(0, 8);
+        const parents = topLevel.filter((item) => (byParentId.get(item.id) || []).some((child) => child.id !== item.id));
+        const children = items.filter((item) => item.parentId && byId.has(item.parentId));
+        return {
+            items,
+            byId,
+            byParentId,
+            pinned,
+            recent,
+            parents,
+            children,
+            topLevel,
+        };
+    }
+
     return Object.freeze({
         formatActivitiesSummary,
         createActivityCatalogId,
         normalizeActivityCatalogEntry,
         normalizeActivityCatalogArray,
+        groupActivityCatalogEntries,
         normalizeActivitiesArray,
         normalizePlanActivitiesArray,
     });

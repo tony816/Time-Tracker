@@ -1181,6 +1181,38 @@ class TimeTracker {
         });
         return normalized;
     }
+    groupActivityCatalogEntries(entries) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.groupActivityCatalogEntries === 'function') {
+            return activityCore.groupActivityCatalogEntries(entries, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
+        const items = this.normalizeActivityCatalogArray(entries);
+        const byId = new Map(items.map((item) => [item.id, item]));
+        const byParentId = new Map();
+        items.forEach((item) => {
+            const key = item.parentId || '';
+            if (!byParentId.has(key)) byParentId.set(key, []);
+            byParentId.get(key).push(item);
+        });
+        const topLevel = items.filter((item) => !item.parentId);
+        return {
+            items,
+            byId,
+            byParentId,
+            pinned: topLevel.filter((item) => item.pinned && !item.archived),
+            recent: topLevel.filter((item) => !item.pinned && !item.archived).slice(0, 8),
+            parents: topLevel.filter((item) => (byParentId.get(item.id) || []).length > 0),
+            children: items.filter((item) => item.parentId),
+            topLevel,
+        };
+    }
     normalizeLocalPlannedCatalogEntries(entries) {
         if (!Array.isArray(entries)) return [];
         const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
@@ -5285,6 +5317,9 @@ class TimeTracker {
 
         openRoutineMenuFromInlinePlan(label, anchorEl) {
         return globalThis.TimeTrackerInlinePlanDropdownController.openRoutineMenuFromInlinePlan.call(this, label, anchorEl);
+    }
+        openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
     }
     positionRoutineMenu(anchorEl) {
         if (!this.routineMenu) return;

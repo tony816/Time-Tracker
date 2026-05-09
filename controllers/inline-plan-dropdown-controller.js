@@ -73,6 +73,35 @@ function buildPlannedActivityOptions(extraLabels = []) {
         return grouped;
     }
 
+function groupActivityBoard(entries) {
+        if (typeof this.groupActivityCatalogEntries === 'function') {
+            return this.groupActivityCatalogEntries(entries);
+        }
+        const safe = Array.isArray(entries) ? entries.slice() : [];
+        const byId = new Map();
+        const byParentId = new Map();
+        safe.forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            const id = String(item.id || item.label || '').trim();
+            if (id) byId.set(id, item);
+            const parentId = String(item.parentId || '').trim();
+            const key = parentId || '';
+            if (!byParentId.has(key)) byParentId.set(key, []);
+            byParentId.get(key).push(item);
+        });
+        const topLevel = safe.filter((item) => !item || !item.parentId);
+        return {
+            items: safe,
+            byId,
+            byParentId,
+            pinned: topLevel.filter((item) => item && item.pinned && !item.archived),
+            recent: topLevel.filter((item) => item && !item.pinned && !item.archived).slice(0, 8),
+            parents: topLevel.filter((item) => item && (byParentId.get(String(item.id || '').trim()) || []).length > 0),
+            children: safe.filter((item) => item && item.parentId),
+            topLevel,
+        };
+    }
+
 function getHangulInitialSearchKey(text) {
         const value = this.normalizeActivityText ? this.normalizeActivityText(text || '') : String(text || '').trim();
         if (!value) return '';
@@ -521,6 +550,7 @@ function renderInlinePlanDropdownOptions() {
         const currentValue = this.getPlannedValueForIndex(startIndex);
         const planActivities = this.getPlanActivitiesForIndex(startIndex);
         const hasPlanSplit = Array.isArray(planActivities) && planActivities.length > 0;
+        const catalogGrouped = this.groupActivityBoard(this.plannedActivities || []);
         const grouped = this.buildPlannedActivityOptions(!hasPlanSplit && currentValue ? [currentValue] : []);
         const searchInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         const searchQuery = searchInput ? (searchInput.value || '') : '';
@@ -545,6 +575,16 @@ function renderInlinePlanDropdownOptions() {
             list.appendChild(empty);
             return;
         }
+
+        const childLookup = (label) => {
+            const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label || '') : String(label || '').trim();
+            const parent = (catalogGrouped.topLevel || []).find((entry) => {
+                const name = this.normalizeActivityText ? this.normalizeActivityText(entry.name || entry.label || '') : String(entry.name || entry.label || '').trim();
+                return name === normalizedLabel;
+            });
+            if (!parent) return [];
+            return (catalogGrouped.byParentId.get(parent.id) || []).filter((child) => child && child.id !== parent.id);
+        };
 
         visibleItems.forEach((item) => {
             const { label, source } = item;
@@ -586,6 +626,20 @@ function renderInlinePlanDropdownOptions() {
                 });
             }
             titleWrap.appendChild(priorityButton);
+            const childToggle = document.createElement('button');
+            childToggle.type = 'button';
+            childToggle.className = 'inline-plan-child-toggle';
+            const children = childLookup(label);
+            childToggle.textContent = children.length > 0 ? '▾' : '·';
+            childToggle.disabled = children.length === 0;
+            childToggle.title = children.length > 0 ? '세부활동 펼치기' : '세부활동 없음';
+            childToggle.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!children.length) return;
+                this.openPlanActivityChildMenu(item, childToggle, children);
+            });
+            titleWrap.appendChild(childToggle);
             const text = document.createElement('span');
             text.className = 'inline-plan-option-label';
             text.textContent = label;
@@ -649,6 +703,102 @@ function renderInlinePlanDropdownOptions() {
             content.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
             list.appendChild(li);
         });
+    }
+
+function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
+        if (!anchorEl || !anchorEl.isConnected) return;
+        if (!Array.isArray(children) || children.length === 0) return;
+        if (this.planActivityMenu) {
+            this.closePlanActivityMenu();
+        }
+        const menu = document.createElement('div');
+        menu.className = 'plan-activity-menu actual-activity-menu';
+        menu.setAttribute('role', 'menu');
+
+        const parentLabel = this.normalizeActivityText ? this.normalizeActivityText(parentItem.label || parentItem.name || '') : String(parentItem.label || parentItem.name || '').trim();
+        const parentBtn = document.createElement('button');
+        parentBtn.type = 'button';
+        parentBtn.className = 'plan-activity-menu-item';
+        parentBtn.dataset.label = parentLabel;
+        parentBtn.textContent = `${parentLabel} 자체 선택`;
+        menu.appendChild(parentBtn);
+
+        const divider = document.createElement('div');
+        divider.className = 'plan-activity-menu-divider';
+        menu.appendChild(divider);
+
+        children.forEach((child) => {
+            const childLabel = this.normalizeActivityText ? this.normalizeActivityText(child.label || child.name || '') : String(child.label || child.name || '').trim();
+            if (!childLabel) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'plan-activity-menu-item';
+            btn.dataset.label = childLabel;
+            btn.textContent = childLabel;
+            menu.appendChild(btn);
+        });
+
+        const addChildBtn = document.createElement('button');
+        addChildBtn.type = 'button';
+        addChildBtn.className = 'plan-activity-menu-item plan-activity-menu-clear';
+        addChildBtn.textContent = '+ 세부활동 추가';
+        menu.appendChild(addChildBtn);
+
+        document.body.appendChild(menu);
+        this.planActivityMenu = menu;
+        this.planActivityMenuContext = { anchorEl, parentItem };
+
+        menu.addEventListener('click', (event) => {
+            const btn = event.target.closest('.plan-activity-menu-item');
+            if (!btn || !menu.contains(btn)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (btn === addChildBtn) {
+                const name = prompt('세부활동 이름을 입력하세요.', '');
+                if (name && this.addPlannedActivityOption) {
+                    const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(name) : String(name || '').trim();
+                    if (!normalizedName) return;
+                    const parentId = String(parentItem.id || '').trim() || null;
+                    const child = {
+                        id: `${parentId || 'activity'}_${Date.now()}`,
+                        name: normalizedName,
+                        label: normalizedName,
+                        title: normalizedName,
+                        normalizedName,
+                        parentId,
+                        colorKey: parentItem.colorKey || null,
+                        defaultDurationMinutes: parentItem.defaultDurationMinutes || null,
+                        displayMode: parentItem.displayMode || 'chip',
+                        pinned: false,
+                        archived: false,
+                        usageCount: 0,
+                        lastUsedAt: null,
+                        source: 'local',
+                    };
+                    this.plannedActivities.push(child);
+                    this.dedupeAndSortPlannedActivities();
+                    this.savePlannedActivities();
+                    this.renderInlinePlanDropdownOptions();
+                }
+                this.closePlanActivityMenu();
+                return;
+            }
+            const label = btn.dataset.label || '';
+            if (label) {
+                this.applyInlinePlanSelection(label, { keepOpen: true });
+            }
+            this.closePlanActivityMenu();
+        });
+
+        this.positionPlanActivityMenu(anchorEl);
+        this.planActivityMenuOutsideHandler = (event) => {
+            if (!this.planActivityMenu) return;
+            const t = event.target;
+            if (this.planActivityMenu.contains(t)) return;
+            if (anchorEl && (t === anchorEl || (anchorEl.contains && anchorEl.contains(t)))) return;
+            this.closePlanActivityMenu();
+        };
+        document.addEventListener('mousedown', this.planActivityMenuOutsideHandler, true);
     }
 
 function openRoutineMenuFromInlinePlan(label, anchorEl) {
@@ -1432,6 +1582,8 @@ function applyInlinePlanSelection(label, options = {}) {
         hasRecentInlinePlanInputIntent,
         positionInlinePlanDropdown,
         renderInlinePlanDropdownOptions,
+        groupActivityBoard,
+        openPlanActivityChildMenu,
         openRoutineMenuFromInlinePlan,
         isSameInlinePlanTarget,
         isEventWithinCurrentInlinePlanRange,
