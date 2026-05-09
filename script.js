@@ -507,7 +507,7 @@ class TimeTracker {
             planActivities: [],
             planTitle: '',
             planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' },
+            timer: { running: false, elapsed: 0, elapsedSeconds: 0, rawElapsed: 0, startTime: null, startedAt: null, lastPausedAt: null, method: 'manual', status: 'idle' },
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         }));
     }
@@ -3590,6 +3590,96 @@ class TimeTracker {
 
     createTimerControls(index, slot) {
         return globalThis.TimerController.createTimerControls.call(this, index, slot);
+    }
+
+    getPlanSegmentBaseIndex(index) {
+        return globalThis.TimerController.getPlanSegmentBaseIndex.call(this, index);
+    }
+
+    getPlanSegmentRange(index) {
+        return globalThis.TimerController.getPlanSegmentRange.call(this, index);
+    }
+
+    getPlanSegmentPlannedSeconds(index) {
+        return globalThis.TimerController.getPlanSegmentPlannedSeconds.call(this, index);
+    }
+
+    getPlanSegmentId(index) {
+        return globalThis.TimerController.getPlanSegmentId.call(this, index);
+    }
+
+    handleSegmentTimerClick(index) {
+        return globalThis.TimerController.handleSegmentTimerClick.call(this, index);
+    }
+
+    startPlanSegmentTimer(index) {
+        return globalThis.TimerController.startPlanSegmentTimer.call(this, index);
+    }
+
+    pausePlanSegmentTimer(index) {
+        return globalThis.TimerController.pausePlanSegmentTimer.call(this, index);
+    }
+
+    resumePlanSegmentTimer(index) {
+        return globalThis.TimerController.resumePlanSegmentTimer.call(this, index);
+    }
+
+    getPlanSegmentTimerCore() {
+        return (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentTimerCore)
+            ? globalThis.TimeTrackerPlanSegmentTimerCore
+            : null;
+    }
+
+    buildPlanSegmentViewModel(index) {
+        const core = this.getPlanSegmentTimerCore();
+        const baseIndex = this.getPlanSegmentBaseIndex(index);
+        const slot = this.timeSlots[baseIndex] || {};
+        const segment = {
+            id: this.getPlanSegmentId(baseIndex),
+            title: this.getPlannedLabelForIndex(baseIndex) || slot.planned || '',
+            plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex),
+            timer: slot.timer || {},
+        };
+        if (core && typeof core.buildPlanSegmentViewModel === 'function') {
+            return core.buildPlanSegmentViewModel(segment);
+        }
+        return {
+            id: segment.id,
+            title: segment.title,
+            plannedSeconds: segment.plannedSeconds,
+            timer: {
+                status: segment.timer.status || (segment.timer.running ? 'running' : 'idle'),
+                elapsedSeconds: Number.isFinite(segment.timer.elapsedSeconds) ? Math.max(0, Math.floor(segment.timer.elapsedSeconds)) : 0,
+                startedAt: Number.isFinite(segment.timer.startedAt) ? Math.floor(segment.timer.startedAt) : null,
+                lastPausedAt: Number.isFinite(segment.timer.lastPausedAt) ? Math.floor(segment.timer.lastPausedAt) : null,
+            },
+            display: {
+                icon: segment.timer && segment.timer.running ? '❚❚' : '⏱',
+                action: segment.timer && segment.timer.running ? 'pause' : 'start',
+                timeText: `0m / ${Math.ceil(segment.plannedSeconds / 60)}m`,
+                tone: 'under',
+            },
+        };
+    }
+
+    getPlanSegmentTimerText(index) {
+        const model = this.buildPlanSegmentViewModel(index);
+        if (model.display && typeof model.display.timeText === 'string') {
+            return model.display.timeText;
+        }
+        const baseIndex = this.getPlanSegmentBaseIndex(index);
+        const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex);
+        return `0m / ${Math.ceil(plannedSeconds / 60)}m`;
+    }
+
+    getPlanSegmentTimeTone(index) {
+        const model = this.buildPlanSegmentViewModel(index);
+        return (model.display && model.display.tone) || 'under';
+    }
+
+    getPlanSegmentTimerIcon(index) {
+        const model = this.buildPlanSegmentViewModel(index);
+        return (model.display && model.display.icon) || '⏱';
     }
 
     formatTime(seconds) {

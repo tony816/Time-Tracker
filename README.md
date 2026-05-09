@@ -101,7 +101,7 @@ Optional remote table:
 
 ## Known Repository Facts
 
-- `server.js` still imports Telegram bridge modules that are not present in the current repository state. Until that mismatch is reconciled, `npm start` and the full `npm test` suite can fail on bridge-related paths.
+- `server.js` includes optional Telegram/Codex bridge routes. They require `TELEGRAM_BOT_TOKEN` and `CODEX_APP_URL` to be configured before webhook use.
 - Some legacy Korean literals and comments in `index.html`, `server.js`, and older files are mojibake. When tracing behavior, trust element ids, data attributes, controller names, and tests more than raw displayed text.
 - Historical refactor stage notes in `docs/refactor-stage*.md` are useful for rationale, but they are not the current source of truth.
 

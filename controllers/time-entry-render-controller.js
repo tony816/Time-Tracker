@@ -213,9 +213,45 @@ function buildSplitVisualization(type, index) {
                     && (showLabels || Boolean(segment.alwaysVisibleLabel));
                 const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
                 const labelClass = segment.alwaysVisibleLabel ? ' split-grid-label-persistent' : '';
-                const labelHtml = safeLabel
+                let labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
+                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label) ? ' has-plan-segment-timer' : '';
+                if (!isActual && this.actualRecordingDisabled && segment.label) {
+                    const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                    const model = this.buildPlanSegmentViewModel
+                        ? this.buildPlanSegmentViewModel(baseIndex)
+                        : {
+                            id: this.getPlanSegmentId ? this.getPlanSegmentId(baseIndex) : `planned-${baseIndex}`,
+                            display: {
+                                icon: this.getPlanSegmentTimerIcon ? this.getPlanSegmentTimerIcon(baseIndex) : '⏱',
+                                timeText: this.getPlanSegmentTimerText ? this.getPlanSegmentTimerText(baseIndex) : '',
+                                tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex) : 'under',
+                            },
+                        };
+                    const segmentId = this.escapeAttribute(model.id);
+                    const icon = model.display.icon;
+                    const timerText = this.escapeHtml(model.display.timeText);
+                    const tone = model.display.tone;
+                    const buttonHtml = segment.connectTop
+                        ? '<span class="plan-segment-timer-spacer" aria-hidden="true"></span>'
+                        : `<button type="button"
+                                   class="plan-segment-timer-button"
+                                   data-index="${baseIndex}"
+                                   data-segment-id="${segmentId}"
+                                   aria-label="계획 세그먼트 타이머">${icon}</button>`;
+                    labelHtml = `<div class="plan-segment-graphic"
+                                      data-index="${baseIndex}"
+                                      data-segment-id="${segmentId}">
+                                    ${buttonHtml}
+                                    <div class="plan-segment-graphic-main">
+                                        <span class="plan-segment-graphic-label" title="${safeLabel}">${safeLabel}</span>
+                                        <span class="plan-segment-timer-time tone-${tone}"
+                                              data-index="${baseIndex}"
+                                              data-segment-id="${segmentId}">${timerText}</span>
+                                    </div>
+                                </div>`;
+                }
                 const failedIconHtml = failedClass
                     ? '<span class="split-grid-failed-mark" aria-hidden="true">X</span>'
                     : '';
@@ -229,11 +265,11 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${planOnlyTimerClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
             }).join('')}</div>`
             : '';
 
-        return `<div class="${classes.join(' ')}" aria-hidden="true">
+        return `<div class="${classes.join(' ')}">
                     ${titleHtml}
                     ${gridHtml}
                 </div>`;

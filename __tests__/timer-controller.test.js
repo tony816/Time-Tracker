@@ -18,6 +18,7 @@ const getMobileTimeUiStateWrapper = buildMethod('getMobileTimeUiState(index, slo
 const getTimerEligibilityWrapper = buildMethod('getTimerEligibility(index, slotOverride = null)', '(index, slotOverride = null)');
 const getTimerStartBlockReasonWrapper = buildMethod('getTimerStartBlockReason(index)', '(index)');
 const createTimerControlsWrapper = buildMethod('createTimerControls(index, slot)', '(index, slot)');
+const handleSegmentTimerClickWrapper = buildMethod('handleSegmentTimerClick(index)', '(index)');
 
 test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.attachTimerListeners, 'function');
@@ -37,6 +38,10 @@ test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.getTimerEligibility, 'function');
     assert.equal(typeof timerController.getTimerStartBlockReason, 'function');
     assert.equal(typeof timerController.createTimerControls, 'function');
+    assert.equal(typeof timerController.handleSegmentTimerClick, 'function');
+    assert.equal(typeof timerController.startPlanSegmentTimer, 'function');
+    assert.equal(typeof timerController.pausePlanSegmentTimer, 'function');
+    assert.equal(typeof timerController.resumePlanSegmentTimer, 'function');
     assert.ok(globalThis.TimerController);
     assert.equal(typeof globalThis.TimerController.resolveTimerEligibility, 'function');
 });
@@ -103,6 +108,10 @@ test('script timer wrapper methods delegate to controller helpers', () => {
             calls.push(['controls', this, index, slot]);
             return '<div>timer</div>';
         },
+        handleSegmentTimerClick(index) {
+            calls.push(['segment-click', this, index]);
+            return true;
+        },
     };
 
     const ctx = { id: 'tracker' };
@@ -125,6 +134,7 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         assert.deepEqual(getTimerEligibilityWrapper.call(ctx, 2, slot), { canStartWithoutDate: true });
         assert.equal(getTimerStartBlockReasonWrapper.call(ctx, 2), null);
         assert.equal(createTimerControlsWrapper.call(ctx, 2, slot), '<div>timer</div>');
+        assert.equal(handleSegmentTimerClickWrapper.call(ctx, 2), true);
     } finally {
         globalThis.TimerController = original;
     }
@@ -144,7 +154,44 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         ['eligibility', ctx, 2, slot],
         ['reason', ctx, 2],
         ['controls', ctx, 2, slot],
+        ['segment-click', ctx, 2],
     ]);
+});
+
+test('handleSegmentTimerClick runs one plan segment timer without writing actual text', () => {
+    const nowValues = [100_000, 130_000, 160_000];
+    const originalNow = Date.now;
+    Date.now = () => nowValues[0];
+
+    const ctx = {
+        timeSlots: [
+            { planned: 'A', timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null } },
+            { planned: 'B', timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null } },
+        ],
+        mergedFields: new Map(),
+        findMergeKey: () => null,
+        normalizeTimerStatus: timerController.normalizeTimerStatus,
+        normalizePlanActivitiesArray: () => [],
+        startTimerInterval() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    try {
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 0), true);
+        assert.equal(ctx.timeSlots[0].timer.status, 'running');
+        assert.equal(ctx.timeSlots[0].timer.method, 'plan-segment');
+
+        nowValues[0] = nowValues[1];
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 1), true);
+        assert.equal(ctx.timeSlots[0].timer.status, 'paused');
+        assert.equal(ctx.timeSlots[0].timer.elapsed, 30);
+        assert.equal(ctx.timeSlots[1].timer.status, 'running');
+        assert.equal(ctx.timeSlots[0].actual, undefined);
+    } finally {
+        Date.now = originalNow;
+    }
 });
 
 test('resolveTimerEligibility reflects merged ranges and merged planned text', () => {

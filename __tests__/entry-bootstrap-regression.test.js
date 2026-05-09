@@ -30,6 +30,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     const durationCoreIdx = scriptTagIndex('core/duration-core.js');
     const gridMetricsCoreIdx = scriptTagIndex('core/grid-metrics-core.js');
     const inputFormatCoreIdx = scriptTagIndex('core/input-format-core.js');
+    const planSegmentTimerCoreIdx = scriptTagIndex('core/plan-segment-timer-core.js');
     const textCoreIdx = scriptTagIndex('core/text-core.js');
     const timeCoreIdx = scriptTagIndex('core/time-core.js');
     const actualActivityRendererIdx = scriptTagIndex('ui/actual-activity-list-renderer.js');
@@ -56,6 +57,7 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(dateCoreIdx >= 0, 'core/date-core.js include should exist');
     assert.ok(textCoreIdx >= 0, 'core/text-core.js include should exist');
     assert.ok(activityCoreIdx >= 0, 'core/activity-core.js include should exist');
+    assert.ok(planSegmentTimerCoreIdx >= 0, 'core/plan-segment-timer-core.js include should exist');
     assert.ok(actualGridCoreIdx >= 0, 'core/actual-grid-core.js include should exist');
     assert.ok(gridMetricsCoreIdx >= 0, 'core/grid-metrics-core.js include should exist');
     assert.ok(actualActivityRendererIdx >= 0, 'ui/actual-activity-list-renderer.js include should exist');
@@ -80,7 +82,8 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(inputFormatCoreIdx < dateCoreIdx, 'date-core.js should load after input-format-core.js');
     assert.ok(dateCoreIdx < textCoreIdx, 'text-core.js should load after date-core.js');
     assert.ok(textCoreIdx < activityCoreIdx, 'activity-core.js should load after text-core.js');
-    assert.ok(activityCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after activity-core.js');
+    assert.ok(activityCoreIdx < planSegmentTimerCoreIdx, 'plan-segment-timer-core.js should load after activity-core.js');
+    assert.ok(planSegmentTimerCoreIdx < actualGridCoreIdx, 'actual-grid-core.js should load after plan-segment-timer-core.js');
     assert.ok(actualGridCoreIdx < gridMetricsCoreIdx, 'grid-metrics-core.js should load after actual-grid-core.js');
     assert.ok(gridMetricsCoreIdx < actualActivityRendererIdx, 'ui/actual-activity-list-renderer.js should load after grid-metrics-core.js');
     assert.ok(actualActivityRendererIdx < timeControlRendererIdx, 'ui/time-control-renderer.js should load after ui/actual-activity-list-renderer.js');

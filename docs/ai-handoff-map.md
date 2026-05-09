@@ -189,7 +189,7 @@ Read in this order:
 
 ## Known Repository Facts
 
-- `server.js` still imports Telegram bridge modules that are not present in the current repository state. This is a known mismatch. Expect bridge-related tests or `npm start` to fail until that path is reconciled.
+- `server.js` includes optional Telegram/Codex bridge routes. They require `TELEGRAM_BOT_TOKEN` and `CODEX_APP_URL` to be configured before webhook use.
 - Some legacy Korean literals and comments are mojibake. For behavior tracing, rely on ids, classes, data attributes, and tests instead of raw visible strings.
 - Historical stage docs in `docs/refactor-stage*.md` explain why earlier extractions happened, but they are not the current source of truth.
 
