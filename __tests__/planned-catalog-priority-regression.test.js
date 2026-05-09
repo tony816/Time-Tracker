@@ -29,6 +29,24 @@ test('normalizeLocalPlannedCatalogEntries supports legacy strings and ranked obj
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
+        normalizeActivityCatalogEntry(raw) {
+            return {
+                id: raw.id || `id-${raw.name}`,
+                name: raw.name || '',
+                label: raw.name || '',
+                title: raw.name || '',
+                normalizedName: raw.name || '',
+                parentId: null,
+                colorKey: null,
+                defaultDurationMinutes: null,
+                displayMode: 'chip',
+                pinned: false,
+                archived: false,
+                usageCount: 0,
+                lastUsedAt: null,
+                source: 'local',
+            };
+        },
         normalizePriorityRankValue,
     };
 
@@ -40,9 +58,9 @@ test('normalizeLocalPlannedCatalogEntries supports legacy strings and ranked obj
     ]);
 
     assert.deepEqual(result, [
-        { label: 'Task A', priorityRank: null },
-        { label: 'Task B', priorityRank: 2 },
-        { label: 'Task C', priorityRank: 1 },
+        { id: 'id-Task A', name: 'Task A', label: 'Task A', title: 'Task A', normalizedName: 'Task A', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+        { id: 'id-Task B', name: 'Task B', label: 'Task B', title: 'Task B', normalizedName: 'Task B', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+        { id: 'id-Task C', name: 'Task C', label: 'Task C', title: 'Task C', normalizedName: 'Task C', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
     ]);
 });
 

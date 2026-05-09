@@ -1138,38 +1138,114 @@ class TimeTracker {
         if (!Number.isFinite(parsed)) return null;
         return Math.max(1, Math.floor(parsed));
     }
+    normalizeActivityCatalogEntry(raw) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.normalizeActivityCatalogEntry === 'function') {
+            return activityCore.normalizeActivityCatalogEntry(raw, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
+        const item = raw && typeof raw === 'object' ? raw : {};
+        const name = this.normalizeActivityText(item.name ?? item.label ?? item.title ?? '');
+        return {
+            id: String(item.id || '').trim() || `activity_${Date.now()}`,
+            name,
+            label: name,
+            title: name,
+            normalizedName: name,
+            parentId: String(item.parentId || '').trim() || null,
+            colorKey: String(item.colorKey || '').trim() || null,
+            defaultDurationMinutes: Number.isFinite(item.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(item.defaultDurationMinutes))) : null,
+            displayMode: String(item.displayMode || '').trim() || 'chip',
+            pinned: Boolean(item.pinned),
+            archived: Boolean(item.archived),
+            usageCount: Number.isFinite(item.usageCount) ? Math.max(0, Math.floor(Number(item.usageCount))) : 0,
+            lastUsedAt: typeof item.lastUsedAt === 'string' && item.lastUsedAt.trim() ? item.lastUsedAt : null,
+            source: typeof item.source === 'string' ? item.source : 'local',
+        };
+    }
+    normalizeActivityCatalogArray(raw) {
+        if (!Array.isArray(raw)) return [];
+        const seen = new Set();
+        const normalized = [];
+        raw.forEach((item) => {
+            const entry = this.normalizeActivityCatalogEntry(item);
+            if (!entry.normalizedName || seen.has(entry.normalizedName)) return;
+            seen.add(entry.normalizedName);
+            normalized.push(entry);
+        });
+        return normalized;
+    }
     normalizeLocalPlannedCatalogEntries(entries) {
         if (!Array.isArray(entries)) return [];
+        const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
+            ? (value) => this.normalizeActivityCatalogEntry(value)
+            : (value) => {
+                const raw = value && typeof value === 'object' ? value : {};
+                const label = this.normalizeActivityText(raw.name ?? raw.label ?? raw.title ?? '');
+                return {
+                    id: String(raw.id || '').trim() || `activity_${Date.now()}`,
+                    name: label,
+                    label,
+                    title: label,
+                    normalizedName: label,
+                    parentId: String(raw.parentId || '').trim() || null,
+                    colorKey: String(raw.colorKey || '').trim() || null,
+                    defaultDurationMinutes: Number.isFinite(raw.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(raw.defaultDurationMinutes))) : null,
+                    displayMode: String(raw.displayMode || '').trim() || 'chip',
+                    pinned: Boolean(raw.pinned),
+                    archived: Boolean(raw.archived),
+                    usageCount: Number.isFinite(raw.usageCount) ? Math.max(0, Math.floor(Number(raw.usageCount))) : 0,
+                    lastUsedAt: typeof raw.lastUsedAt === 'string' && raw.lastUsedAt.trim() ? raw.lastUsedAt : null,
+                    source: typeof raw.source === 'string' ? raw.source : 'local',
+                };
+            };
         const normalized = [];
         entries.forEach((entry) => {
             if (typeof entry === 'string') {
                 const label = this.normalizeActivityText(entry);
                 if (label) {
-                    normalized.push({ label, priorityRank: null });
+                    normalized.push(normalizeCatalogEntry({ name: label, priorityRank: null }));
                 }
                 return;
             }
             if (!entry || typeof entry !== 'object') return;
             const label = this.normalizeActivityText(entry.label || entry.title || '');
             if (!label) return;
-            normalized.push({
-                label,
+            normalized.push(normalizeCatalogEntry({
+                id: entry.id,
+                name: label,
+                normalizedName: label,
+                parentId: entry.parentId,
+                colorKey: entry.colorKey,
+                defaultDurationMinutes: entry.defaultDurationMinutes,
+                displayMode: entry.displayMode,
+                pinned: entry.pinned,
+                archived: entry.archived,
+                usageCount: entry.usageCount,
+                lastUsedAt: entry.lastUsedAt,
+                source: entry.source,
                 priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
-            });
+            }));
         });
         return normalized;
     }
     getLocalPlannedEntries() {
         const entries = [];
+        const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
+            ? (value) => this.normalizeActivityCatalogEntry(value)
+            : (value) => this.normalizeLocalPlannedCatalogEntries([value])[0] || null;
         (this.plannedActivities || []).forEach((item) => {
             if (!item || item.source === 'notion') return;
-            const label = this.normalizeActivityText(item.label || '');
-            if (!label) return;
-            if (entries.some((entry) => entry.label === label)) return;
-            entries.push({
-                label,
-                priorityRank: this.normalizePriorityRankValue(item.priorityRank),
-            });
+            const normalized = normalizeCatalogEntry(item);
+            if (!normalized.normalizedName) return;
+            if (entries.some((entry) => entry.normalizedName === normalized.normalizedName)) return;
+            entries.push(normalized);
         });
         return entries;
     }
@@ -1177,14 +1253,22 @@ class TimeTracker {
         if (!Array.isArray(entries)) return '';
         const normalized = this.normalizeLocalPlannedCatalogEntries(entries)
             .map((entry) => ({
-                label: entry.label,
-                priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
+                id: entry.id,
+                name: entry.name,
+                normalizedName: entry.normalizedName,
+                parentId: entry.parentId,
+                colorKey: entry.colorKey,
+                defaultDurationMinutes: entry.defaultDurationMinutes,
+                displayMode: entry.displayMode,
+                pinned: Boolean(entry.pinned),
+                archived: Boolean(entry.archived),
+                usageCount: Number.isFinite(entry.usageCount) ? Math.max(0, Math.floor(Number(entry.usageCount))) : 0,
+                lastUsedAt: entry.lastUsedAt || null,
+                source: entry.source || 'local',
             }))
             .sort((a, b) => {
-                if (a.label !== b.label) return a.label.localeCompare(b.label);
-                const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
-                const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
-                return ra - rb;
+                if (a.normalizedName !== b.normalizedName) return a.normalizedName.localeCompare(b.normalizedName);
+                return (a.id || '').localeCompare(b.id || '');
             });
         return JSON.stringify(normalized);
     }
