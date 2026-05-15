@@ -990,24 +990,8 @@ test('activity selection updates usage metadata and recent ordering', () => {
         renderInlinePlanDropdownOptions() {
             renderCalls.push('render');
         },
-        touchPlannedActivityUsage(activityItem, parentItem = null) {
-            const activityId = String(activityItem && activityItem.id || '').trim();
-            const parentId = parentItem ? String(parentItem.id || '').trim() || null : null;
-            const idx = this.plannedActivities.findIndex((item) => {
-                if (!item) return false;
-                if (activityId && String(item.id || '').trim() === activityId) return true;
-                return String(item.parentId || '').trim() === (parentId || null);
-            });
-            if (idx < 0) return null;
-            const next = new Date('2026-05-15T12:34:56.000Z').toISOString();
-            this.plannedActivities[idx] = {
-                ...this.plannedActivities[idx],
-                usageCount: (Number(this.plannedActivities[idx].usageCount) || 0) + 1,
-                lastUsedAt: next,
-            };
-            return this.plannedActivities[idx];
-        },
     };
+    ctx.touchPlannedActivityUsage = controller.touchPlannedActivityUsage;
 
     globalThis.document = documentStub;
 

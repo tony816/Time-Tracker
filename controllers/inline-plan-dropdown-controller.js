@@ -1571,6 +1571,7 @@ function applyInlinePlanSelection(label, options = {}) {
         hasRecentInlinePlanInputIntent,
         positionInlinePlanDropdown,
         renderInlinePlanDropdownOptions,
+        touchPlannedActivityUsage,
         groupActivityBoard,
         openPlanActivityChildMenu,
         openRoutineMenuFromInlinePlan,

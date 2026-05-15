@@ -5452,8 +5452,11 @@ class TimeTracker {
         positionInlinePlanDropdown(anchorEl) {
         return globalThis.TimeTrackerInlinePlanDropdownController.positionInlinePlanDropdown.call(this, anchorEl);
     }
-        renderInlinePlanDropdownOptions() {
+    renderInlinePlanDropdownOptions() {
         return globalThis.TimeTrackerInlinePlanDropdownController.renderInlinePlanDropdownOptions.call(this);
+    }
+        touchPlannedActivityUsage(activityItem, parentItem = null) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.touchPlannedActivityUsage.call(this, activityItem, parentItem);
     }
 
         openRoutineMenuFromInlinePlan(label, anchorEl) {
