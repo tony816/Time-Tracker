@@ -23,182 +23,113 @@ Use this order instead of reading `script.js` top to bottom:
 
 ## Runtime Shape
 
-```mermaid
-flowchart LR
-    A["index.html"] --> B["core/*.js"]
-    B --> C["infra/storage-adapter.js"]
-    C --> D["ui/*.js"]
-    D --> E["controllers/*.js"]
-    E --> F["script.js (TimeTracker)"]
-    F --> G["main.js bootstrap"]
-    G --> H["window.tracker"]
+```text
+core/*.js -> infra/storage-adapter.js -> ui/*.js -> controllers/*.js -> script.js -> main.js -> window.tracker
 ```
 
-## Responsibility Map
+`script.js` still owns `TimeTracker`, app state, DOM lookup, wrappers, and remaining orchestration. A large method there does not mean the fix belongs there; check extracted helpers first.
 
-| Area | Role | Read This First |
+## Inventory
+
+| Area | Files | Role |
 | --- | --- | --- |
-| Root SPA shell | DOM shell, module order, bootstrap | `index.html`, `main.js` |
-| `script.js` | `TimeTracker` class, state owner, wrappers, remaining orchestration | task-specific section below, then relevant methods |
-| `core/` | pure calculations and data normalization | relevant core file + matching tests |
-| `controllers/` | event routing, state transitions, cross-module orchestration | relevant controller + matching regression tests |
-| `ui/` | renderer helpers, markup builders, DOM model formatting | relevant renderer + matching tests |
-| `infra/` | local storage adapter and external infra glue | `infra/storage-adapter.js` and server-related tests |
+| Root | `index.html`, `main.js`, `script.js` | shell/load order, bootstrap, state hub |
+| Core | `time-core`, `duration-core`, `input-format-core`, `date-core`, `text-core`, `activity-core`, `timesheet-state-core`, `actual-grid-core`, `grid-metrics-core` | pure helpers and snapshot/grid calculations |
+| Controllers | `actual-input`, `actual-modal`, `controller-state-access`, `field-interaction`, `inline-plan-dropdown`, `lifecycle`, `persistence`, `planned-catalog-routine`, `planned-editor`, `schedule-preview`, `selection-overlay`, `supabase-sync`, `time-entry-render`, `timer` | user interactions, state transitions, persistence/sync orchestration |
+| UI | `time-entry-renderer`, `actual-activity-list-renderer`, `time-control-renderer` | row/activity/control markup helpers |
+| Infra | `storage-adapter.js`, `telegram-codex-bridge.js` | local key rules, storage calls, optional bridge integration |
 
-## Current Core Inventory
+## Task Read Paths
 
-| File | Responsibility |
-| --- | --- |
-| `core/time-core.js` | generic time helpers |
-| `core/duration-core.js` | duration parsing and formatting |
-| `core/input-format-core.js` | input normalization helpers |
-| `core/date-core.js` | date math and date-key handling |
-| `core/text-core.js` | text escaping and normalization |
-| `core/activity-core.js` | activity text/list normalization helpers |
-| `core/timesheet-state-core.js` | snapshot serialization / restoration helpers |
-| `core/actual-grid-core.js` | actual-grid masks, locked rows, split segments, extra allocation, pure actual-grid builders |
-| `core/grid-metrics-core.js` | grid metrics helpers |
+### Planned Editing / Selection
 
-## Current Controller Inventory
-
-| File | Responsibility |
-| --- | --- |
-| `controllers/actual-input-controller.js` | actual input event normalization, parsing, timer sync, actual limit enforcement |
-| `controllers/actual-modal-controller.js` | actual modal row state, rendering delegation, row add/remove/reorder, assigned/grid edits, save-finalization |
-| `controllers/controller-state-access.js` | shared state accessor helpers used by multiple controllers |
-| `controllers/field-interaction-controller.js` | planned-field click/drag/selection routing and merged click capture |
-| `controllers/inline-plan-dropdown-controller.js` | inline planned dropdown open/close/search/select |
-| `controllers/lifecycle-controller.js` | clear/reset, undo-adjacent lifecycle glue, date transitions |
-| `controllers/persistence-controller.js` | local snapshot save/load, watchers, autosave orchestration |
-| `controllers/planned-catalog-routine-controller.js` | planned catalog application and routine/date helpers |
-| `controllers/planned-editor-controller.js` | planned title/activity/priority menus and inline plan synchronization |
-| `controllers/schedule-preview-controller.js` | schedule preview data, hover button, actual hover glue |
-| `controllers/selection-overlay-controller.js` | merge/undo overlay buttons and selection-adjacent floating UI |
-| `controllers/supabase-sync-controller.js` | auth/session/realtime/save/fetch orchestration |
-| `controllers/time-entry-render-controller.js` | time-entry row render orchestration |
-| `controllers/timer-controller.js` | timer eligibility, status normalization, UI state, running-timer updates |
-
-## Current UI Inventory
-
-| File | Responsibility |
-| --- | --- |
-| `ui/time-entry-renderer.js` | time-entry row markup helpers |
-| `ui/actual-activity-list-renderer.js` | actual modal activity row rendering |
-| `ui/time-control-renderer.js` | spinner and actual-time control rendering |
-
-## What Still Lives In `script.js`
-
-`script.js` is still the app hub. Expect these categories there:
-
-- `TimeTracker` construction and DOM lookup
-- in-memory state ownership
-- wrapper methods that delegate to globals loaded from `core/`, `controllers/`, and `ui/`
-- app-wide orchestration where multiple subsystems meet
-- remaining high-coupling logic that has not been safely extracted yet
-
-Do not assume a large `script.js` method means the correct fix belongs there. Many surfaces already have extracted helpers behind wrappers.
-
-## Task-Oriented Read Paths
-
-### Planned editing / selection
-
-Read in this order:
+Read:
 
 1. `controllers/field-interaction-controller.js`
 2. `controllers/selection-overlay-controller.js`
 3. `controllers/inline-plan-dropdown-controller.js`
 4. `controllers/planned-editor-controller.js`
 5. `controllers/time-entry-render-controller.js`
-6. Relevant tests:
-   - `__tests__/planned-inline-dropdown-toggle-regression.test.js`
-   - `__tests__/planned-merge-selection-regression.test.js`
-   - `__tests__/selection-overlay-controller.test.js`
-   - `__tests__/inline-plan-dropdown-controller.test.js`
 
-### Actual modal and actual input
+Tests:
 
-Read in this order:
+- `__tests__/planned-inline-dropdown-toggle-regression.test.js`
+- `__tests__/planned-merge-selection-regression.test.js`
+- `__tests__/selection-overlay-controller.test.js`
+- `__tests__/inline-plan-dropdown-controller.test.js`
+
+### Actual Modal / Actual Input
+
+Read:
 
 1. `controllers/actual-modal-controller.js`
 2. `controllers/actual-input-controller.js`
 3. `ui/actual-activity-list-renderer.js`
 4. `ui/time-control-renderer.js`
-5. Relevant tests:
-   - `__tests__/actual-modal-assignment-regression.test.js`
-   - `__tests__/actual-input-controller.test.js`
-   - `__tests__/time-control-renderer.test.js`
 
-### Actual-grid / locking / extra allocation
+Tests:
 
-Read in this order:
+- `__tests__/actual-modal-assignment-regression.test.js`
+- `__tests__/actual-input-controller.test.js`
+- `__tests__/time-control-renderer.test.js`
+
+### Actual Grid / Locking / Extra Allocation
+
+Read:
 
 1. `docs/actual-lock-guardrails.md`
 2. `core/actual-grid-core.js`
 3. `controllers/actual-modal-controller.js`
 4. `controllers/time-entry-render-controller.js`
-5. Relevant tests:
-   - `__tests__/actual-grid-locked-toggle-regression.test.js`
-   - `__tests__/actual-grid-failed-click-regression.test.js`
-   - `__tests__/actual-modal-assignment-regression.test.js`
-   - `__tests__/actual-grid-core.test.js`
 
-Treat these as one feature surface:
+Tests:
 
-- locked row classification
-- effective lock mask
-- assigned-duration edits
-- locked row regeneration
-- grid graphics
-- click blocking
-- failed-click behavior
-- extra-slot allocation
+- `npm run test:actual-lock`
+- `npm test`
+- Browser smoke from `docs/actual-lock-guardrails.md`
 
-### Timer behavior
+Treat as one surface: locked row classification, effective lock mask, assigned-duration edits, locked row regeneration, grid graphics, click blocking, failed-click behavior, and extra-slot allocation.
 
-Read in this order:
+### Timer
+
+Read:
 
 1. `controllers/timer-controller.js`
 2. `controllers/actual-input-controller.js`
 3. `ui/time-control-renderer.js`
-4. Relevant tests:
-   - `__tests__/timer-controller.test.js`
-   - `__tests__/actual-input-controller.test.js`
 
-### Persistence / sync
+Tests:
 
-Read in this order:
+- `__tests__/timer-controller.test.js`
+- `__tests__/actual-input-controller.test.js`
+
+### Persistence / Sync
+
+Read:
 
 1. `core/timesheet-state-core.js`
 2. `controllers/persistence-controller.js`
 3. `infra/storage-adapter.js`
 4. `controllers/supabase-sync-controller.js`
-5. Relevant tests:
-   - `__tests__/refactor-baseline-stage1.test.js`
-   - persistence-related tests
-   - bootstrap regression tests
+
+Tests:
+
+- `__tests__/refactor-baseline-stage1.test.js`
+- persistence-related tests
+- bootstrap regression tests
 
 ## Test Mapping
 
-| Surface | Minimum command | Extra requirement |
+| Surface | Minimum | Extra |
 | --- | --- | --- |
-| Actual-grid / locking / extra allocation | `npm run test:actual-lock` | Then run `npm test`, plus browser smoke |
-| Planned selection / merge / dropdown | targeted `node --test` for planned regressions | Browser smoke required |
-| Timer and actual input | targeted `node --test` for timer/input tests | Browser smoke required if UI behavior changes |
-| Persistence / save/load | targeted persistence tests | Browser smoke required for save/load |
-| Pure core helper changes | matching core tests | Add browser smoke if rendered behavior can change |
+| Actual-grid / locking / extra allocation | `npm run test:actual-lock`, then `npm test` | Browser smoke |
+| Planned selection / merge / dropdown | targeted planned regression tests | Browser smoke |
+| Timer / actual input | targeted timer/input tests | Browser smoke if UI changes |
+| Persistence / save/load | targeted persistence tests | Browser smoke for save/load |
+| Pure core helpers | matching core tests | Browser smoke if rendered behavior can change |
 
-## Known Repository Facts
+## Known Facts
 
 - `server.js` includes optional Telegram/Codex bridge routes. They require `TELEGRAM_BOT_TOKEN` and `CODEX_APP_URL` to be configured before webhook use.
-- Some legacy Korean literals and comments are mojibake. For behavior tracing, rely on ids, classes, data attributes, and tests instead of raw visible strings.
-- Historical stage docs in `docs/refactor-stage*.md` explain why earlier extractions happened, but they are not the current source of truth.
-
-## When To Open Historical Docs
-
-Use `docs/refactor-stage*.md` only when you need one of these:
-
-- why a helper was extracted in a specific stage
-- what a previous boundary looked like
-- whether a regression test was introduced for a past bug
-
-Otherwise, stay on the current docs and current code.
+- Some legacy Korean literals/comments are mojibake. Trace by ids, classes, data attributes, controller names, and tests.
+- `docs/refactor-stage*.md` are historical rationale only. Open them only for past boundaries, previous extraction reasons, or regression-test origin.
