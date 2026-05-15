@@ -68,6 +68,7 @@ class TimeTracker {
         this.inlinePlanViewportSyncTimer = null;
         this.inlinePlanInputIntentUntil = 0;
         this.inlinePlanContext = null;
+        this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
         this.inlinePriorityMenuOutsideHandler = null;
@@ -5458,6 +5459,9 @@ class TimeTracker {
     }
         positionInlinePlanDropdown(anchorEl) {
         return globalThis.TimeTrackerInlinePlanDropdownController.positionInlinePlanDropdown.call(this, anchorEl);
+    }
+    positionInlinePlanChildPopover(anchorEl = null) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.positionInlinePlanChildPopover.call(this, anchorEl);
     }
     renderInlinePlanDropdownOptions() {
         return globalThis.TimeTrackerInlinePlanDropdownController.renderInlinePlanDropdownOptions.call(this);

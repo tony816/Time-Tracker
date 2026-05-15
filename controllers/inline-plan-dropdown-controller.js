@@ -453,6 +453,9 @@ function positionInlinePlanDropdown(anchorEl) {
             dropdown.style.minWidth = '0px';
             dropdown.style.maxWidth = '100vw';
             dropdown.style.maxHeight = '82vh';
+            if (this.positionInlinePlanChildPopover) {
+                this.positionInlinePlanChildPopover(this.inlinePlanChildPopoverAnchorEl || anchorEl || null);
+            }
             return;
         }
         const viewport = this.getInlinePlanViewportMetrics();
@@ -535,6 +538,94 @@ function positionInlinePlanDropdown(anchorEl) {
         dropdown.style.left = `${Math.round(left)}px`;
         dropdown.style.top = `${Math.round(top)}px`;
         dropdown.style.visibility = 'visible';
+        if (this.positionInlinePlanChildPopover) {
+            this.positionInlinePlanChildPopover(this.inlinePlanChildPopoverAnchorEl || anchorEl || null);
+        }
+    }
+
+function positionInlinePlanChildPopover(anchorEl = null) {
+        if (!this.inlinePlanDropdown) return;
+        const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
+        if (!section || section.hidden) return;
+
+        const resolvedAnchor = this.resolveInlinePlanAnchor
+            ? this.resolveInlinePlanAnchor(anchorEl || this.inlinePlanChildPopoverAnchorEl || null)
+            : (anchorEl || this.inlinePlanChildPopoverAnchorEl || null);
+        if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') return;
+        if (typeof this.inlinePlanDropdown.getBoundingClientRect !== 'function') return;
+
+        const dropdown = this.inlinePlanDropdown;
+        const dropdownRect = dropdown.getBoundingClientRect();
+        const anchorRect = resolvedAnchor.getBoundingClientRect();
+        if (!dropdownRect || !anchorRect) return;
+
+        const dropdownWidth = Number.isFinite(dropdownRect.width) ? dropdownRect.width : 0;
+        const dropdownHeight = Number.isFinite(dropdownRect.height) ? dropdownRect.height : 0;
+        const anchorLeft = Number.isFinite(anchorRect.left) ? anchorRect.left : 0;
+        const anchorTop = Number.isFinite(anchorRect.top) ? anchorRect.top : 0;
+        const anchorBottom = Number.isFinite(anchorRect.bottom) ? anchorRect.bottom : (anchorTop + (Number.isFinite(anchorRect.height) ? anchorRect.height : 0));
+
+        const useFlowLayout = Boolean(
+            this.isInlinePlanMobileInputContext && this.isInlinePlanMobileInputContext()
+            || dropdown.classList.contains('inline-plan-dropdown-sheet')
+            || dropdownWidth < 320
+        );
+
+        if (useFlowLayout) {
+            section.classList.add('inline-plan-subsection-flow');
+            section.style.position = 'relative';
+            section.style.top = '';
+            section.style.left = '';
+            section.style.right = '';
+            section.style.bottom = '';
+            section.style.width = '100%';
+            section.style.maxWidth = 'none';
+            section.style.marginTop = '10px';
+            section.style.visibility = 'visible';
+            section.style.zIndex = 'auto';
+            return;
+        }
+
+        section.classList.remove('inline-plan-subsection-flow');
+        const gap = 6;
+        const margin = 8;
+        const minWidth = 300;
+        const maxWidth = 360;
+        const width = Math.max(minWidth, Math.min(maxWidth, Math.floor(dropdownWidth - (margin * 2)) || maxWidth));
+        let left = Math.round(anchorLeft - dropdownRect.left);
+        if (left + width > dropdownWidth - margin) {
+            left = Math.max(margin, Math.round(dropdownWidth - width - margin));
+        }
+        left = Math.max(margin, left);
+
+        const popoverHeight = Number.isFinite(section.offsetHeight) && section.offsetHeight > 0
+            ? section.offsetHeight
+            : Number.isFinite(section.scrollHeight) && section.scrollHeight > 0
+                ? section.scrollHeight
+                : 0;
+        const viewportHeight = Number.isFinite(dropdownHeight) && dropdownHeight > 0
+            ? dropdownHeight
+            : ((typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) ? window.innerHeight : 0);
+        const maxHeight = Math.max(160, Math.floor(viewportHeight - (margin * 2)));
+        let top = Math.round(anchorBottom - dropdownRect.top + gap);
+        if (popoverHeight > 0 && top + popoverHeight > maxHeight) {
+            top = Math.max(margin, Math.round(anchorTop - dropdownRect.top - popoverHeight - gap));
+        }
+
+        const anchorCenter = anchorLeft - dropdownRect.left + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
+        const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
+
+        section.style.position = 'absolute';
+        section.style.top = `${Math.max(margin, top)}px`;
+        section.style.left = `${left}px`;
+        section.style.width = `${width}px`;
+        section.style.maxWidth = `${width}px`;
+        section.style.marginTop = '0';
+        section.style.right = 'auto';
+        section.style.bottom = 'auto';
+        section.style.visibility = 'visible';
+        section.style.zIndex = '30';
+        section.style.setProperty('--inline-plan-subsection-notch-left', `${Math.round(notchLeft)}px`);
     }
 
 function getCatalogItemLabel(item) {
@@ -848,6 +939,10 @@ function renderInlinePlanDropdownOptions() {
             empty.textContent = normalizedQuery ? '검색 결과가 없습니다.' : '등록된 활동이 없습니다.';
             board.appendChild(empty);
         }
+        const currentAnchor = getInlinePlanAnchorState.call(this);
+        if (currentAnchor && this.positionInlinePlanDropdown) {
+            this.positionInlinePlanDropdown(currentAnchor);
+        }
     }
 
 function createChildActivityForParent(parentItem, rawName) {
@@ -907,6 +1002,7 @@ function closePlanActivityChildMenu(options = {}) {
         this.inlineChildComposerHighlightKind = null;
         this.inlineChildComposerValue = '';
         this.inlineChildComposerFocusPending = false;
+        this.inlinePlanChildPopoverAnchorEl = null;
 
         if (options.rerender !== false && typeof this.renderInlinePlanDropdownOptions === 'function') {
             this.renderInlinePlanDropdownOptions();
@@ -933,6 +1029,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         this.modalPlanSectionOpen = true;
         const parentId = String(parentItem.id || '').trim() || null;
         this.modalPlanSectionOpenParentId = parentId;
+        this.inlinePlanChildPopoverAnchorEl = anchorEl || null;
         const composerOpenParentId = String(this.inlineChildComposerOpenParentId || '').trim();
         if (composerOpenParentId && composerOpenParentId !== parentId) {
             this.inlineChildComposerOpenParentId = null;
@@ -1698,6 +1795,7 @@ function closeInlinePlanDropdown() {
         this.inlineChildComposerHighlightKind = null;
         this.inlineChildComposerValue = '';
         this.inlineChildComposerFocusPending = false;
+        this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }
@@ -1762,6 +1860,7 @@ function applyInlinePlanSelection(label, options = {}) {
         markInlinePlanInputIntent,
         hasRecentInlinePlanInputIntent,
         positionInlinePlanDropdown,
+        positionInlinePlanChildPopover,
         renderInlinePlanDropdownOptions,
         touchPlannedActivityUsage,
         groupActivityBoard,

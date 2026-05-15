@@ -21,6 +21,10 @@ const positionInlinePlanDropdownWrapper = buildMethod(
     'positionInlinePlanDropdown(anchorEl)',
     '(anchorEl)'
 );
+const positionInlinePlanChildPopoverWrapper = buildMethod(
+    'positionInlinePlanChildPopover(anchorEl = null)',
+    '(anchorEl = null)'
+);
 const openInlinePlanDropdownWrapper = buildMethod(
     'openInlinePlanDropdown(index, anchorEl, endIndex = null)',
     '(index, anchorEl, endIndex = null)'
@@ -46,8 +50,9 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
     assert.ok(controller);
     assert.equal(typeof controller.buildPlannedActivityOptions, 'function');
     assert.equal(typeof controller.groupActivityBoard, 'function');
-    assert.equal(typeof controller.renderInlinePlanDropdownOptions, 'function');
+        assert.equal(typeof controller.renderInlinePlanDropdownOptions, 'function');
         assert.equal(typeof controller.positionInlinePlanDropdown, 'function');
+        assert.equal(typeof controller.positionInlinePlanChildPopover, 'function');
         assert.equal(typeof controller.openInlinePlanDropdown, 'function');
         assert.equal(typeof controller.closeInlinePlanDropdown, 'function');
         assert.equal(typeof controller.closePlanActivityChildMenu, 'function');
@@ -77,6 +82,10 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         positionInlinePlanDropdown(anchorEl) {
             calls.push(['position', this, anchorEl]);
             return 'position-result';
+        },
+        positionInlinePlanChildPopover(anchorEl) {
+            calls.push(['positionChild', this, anchorEl]);
+            return 'position-child-result';
         },
         openInlinePlanDropdown(index, anchorEl, endIndex) {
             calls.push(['open', this, index, anchorEl, endIndex]);
@@ -111,6 +120,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         assert.equal(groupActivityBoardWrapper.call(ctx, ['A']), 'group-result');
         assert.equal(renderInlinePlanDropdownOptionsWrapper.call(ctx), 'render-result');
         assert.equal(positionInlinePlanDropdownWrapper.call(ctx, anchor), 'position-result');
+        assert.equal(positionInlinePlanChildPopoverWrapper.call(ctx, anchor), 'position-child-result');
         assert.equal(openInlinePlanDropdownWrapper.call(ctx, 3, anchor, 5), 'open-result');
         assert.equal(closeInlinePlanDropdownWrapper.call(ctx), 'close-result');
         assert.equal(closePlanActivityChildMenuWrapper.call(ctx, options), 'close-child-result');
@@ -125,6 +135,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['group', ctx, ['A']],
         ['render', ctx],
         ['position', ctx, anchor],
+        ['positionChild', ctx, anchor],
         ['open', ctx, 3, anchor, 5],
         ['close', ctx],
         ['closeChild', ctx, options],
@@ -730,6 +741,69 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         globalThis.document = originalDocument;
         globalThis.prompt = originalPrompt;
     }
+});
+
+test('positionInlinePlanChildPopover anchors the child board under the caret', () => {
+    const makeStyleBag = () => ({
+        setProperty(name, value) {
+            this[name] = String(value);
+        },
+    });
+    const section = {
+        hidden: false,
+        style: makeStyleBag(),
+        classList: {
+            add() {},
+            remove() {},
+            contains() { return false; },
+        },
+        offsetHeight: 220,
+        scrollHeight: 220,
+    };
+    const dropdown = {
+        style: makeStyleBag(),
+        classList: {
+            contains(name) {
+                return name === 'inline-plan-dropdown-sheet' ? false : false;
+            },
+        },
+        getBoundingClientRect() {
+            return { left: 100, top: 40, right: 520, bottom: 420, width: 420, height: 380 };
+        },
+        querySelector(selector) {
+            if (selector === '.inline-plan-subsection') return section;
+            return null;
+        },
+    };
+    const anchor = {
+        isConnected: true,
+        getBoundingClientRect() {
+            return { left: 240, top: 90, right: 276, bottom: 120, width: 36, height: 30 };
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanChildPopoverAnchorEl: anchor,
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        getInlinePlanViewportMetrics() {
+            return { left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 };
+        },
+    };
+
+    controller.positionInlinePlanChildPopover.call(ctx, anchor);
+
+    assert.equal(section.style.position, 'absolute');
+    assert.equal(section.style.left, '52px');
+    assert.equal(section.style.top, '86px');
+    assert.equal(section.style.width, '360px');
+    assert.equal(section.style.maxWidth, '360px');
+    assert.equal(section.style.visibility, 'visible');
+    assert.equal(section.style.zIndex, '30');
 });
 
 test('caret toggles child board open, close, and switch parent', () => {
