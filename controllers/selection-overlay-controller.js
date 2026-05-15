@@ -742,6 +742,7 @@
 
     function showScheduleButtonOnHover(index) {
         this.hideHoverScheduleButton();
+        if (this.actualRecordingDisabled) return;
         // 멀티 선택 중(병합 후보)에는 스케줄 버튼을 표시하지 않음
         if (this.selectedPlannedFields && this.selectedPlannedFields.size > 1) {
             const indices = Array.from(this.selectedPlannedFields).sort((a,b)=>a-b);

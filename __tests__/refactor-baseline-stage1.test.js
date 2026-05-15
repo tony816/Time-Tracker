@@ -49,7 +49,17 @@ test('createEmptyTimeSlots keeps 24-slot order and default shape', () => {
         assert.deepEqual(slot.planActivities, []);
         assert.equal(slot.planTitle, '');
         assert.equal(slot.planTitleBandOn, false);
-        assert.deepEqual(slot.timer, { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' });
+        assert.deepEqual(slot.timer, {
+            running: false,
+            elapsed: 0,
+            elapsedSeconds: 0,
+            rawElapsed: 0,
+            startTime: null,
+            startedAt: null,
+            lastPausedAt: null,
+            method: 'manual',
+            status: 'idle',
+        });
         assert.deepEqual(slot.activityLog, {
             title: '',
             details: '',

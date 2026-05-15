@@ -23,6 +23,10 @@ const toggleActualGridLockedUnit = buildMethod(
     'toggleActualGridLockedUnit(index, unitIndex)',
     '(index, unitIndex)'
 );
+const toggleActualGridUnit = buildMethod(
+    'toggleActualGridUnit(index, unitIndex)',
+    '(index, unitIndex)'
+);
 
 const STEP_SECONDS = 600;
 
@@ -419,6 +423,92 @@ test('computeSplitSegments uses full locked mask for plain actual grid graphics'
     assert.equal(manualCalls, 0);
 });
 
+test('computeSplitSegments renders planned-only merged actual grid as off instead of auto locked', () => {
+    let lockedCalls = 0;
+    let manualCalls = 0;
+    const staleAutoLockedMask = [
+        false, false, false, false, false, false,
+        true, true, true, true, true, true,
+        true, true, true, true, true, true,
+    ];
+    const ctx = {
+        timeSlots: [{
+            planTitle: '',
+            planned: 'A',
+            planTitleBandOn: false,
+            activityLog: {
+                actualOverride: false,
+                actualGridUnits: [],
+                actualFailedGridUnits: [],
+                subActivities: [{
+                    label: '',
+                    seconds: 7200,
+                    recordedSeconds: 7200,
+                    source: 'locked',
+                    isAutoLocked: true,
+                    lockStart: 6,
+                    lockEnd: 17,
+                    lockUnits: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+                    order: 0,
+                }],
+            },
+        }],
+        mergedFields: new Map([['planned-0-2', 'A'], ['actual-0-2', '']]),
+        getSplitBaseIndex(type, index) {
+            const mergeKey = this.findMergeKey(type, index);
+            if (!mergeKey) return index;
+            return Number(mergeKey.split('-')[1]);
+        },
+        getSplitRange(type, index) {
+            const mergeKey = this.findMergeKey(type, index);
+            if (!mergeKey) return { start: index, end: index };
+            const [, start, end] = mergeKey.split('-');
+            return { start: Number(start), end: Number(end) };
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        findMergeKey(type, index) {
+            for (const [key] of this.mergedFields) {
+                if (!key.startsWith(`${type}-`)) continue;
+                const [, start, end] = key.split('-');
+                if (index >= Number(start) && index <= Number(end)) return key;
+            }
+            return null;
+        },
+        normalizeActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        isActualGridMode: () => true,
+        buildPlanUnitsForActualGrid: () => ({ units: new Array(18).fill('A') }),
+        getActualGridUnitsForBase: () => new Array(18).fill(false),
+        getActualFailedGridUnitsForBase: () => new Array(18).fill(false),
+        sortActivitiesByOrder(rows) {
+            return Array.isArray(rows) ? rows.slice() : [];
+        },
+        getActualGridLockedUnitsForBase() {
+            lockedCalls += 1;
+            return staleAutoLockedMask.slice();
+        },
+        getActualGridManualLockedUnitsForBase() {
+            manualCalls += 1;
+            return new Array(18).fill(false);
+        },
+        getActualGridDisplayOrderIndices(planUnits) {
+            return planUnits.map((_label, idx) => idx);
+        },
+    };
+
+    const result = computeSplitSegments.call(ctx, 'actual', 0);
+
+    assert.equal(result.gridSegments.length, 18);
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.locked)), new Array(18).fill(false));
+    assert.deepEqual(result.gridSegments.map((segment) => Boolean(segment.active)), new Array(18).fill(false));
+    assert.deepEqual(result.gridSegments.map((segment) => segment.unitIndex), Array.from({ length: 18 }, (_v, idx) => idx));
+    assert.equal(lockedCalls, 1);
+    assert.equal(manualCalls, 1);
+});
+
 test('toggleActualGridLockedUnit preserves existing manual lock units when adding another unit', () => {
     const ctx = makeCtx({
         timeSlots: [{
@@ -542,6 +632,42 @@ test('toggleActualGridLockedUnit restores assigned seconds when unlocking the un
     assert.ok(gridRow);
     assert.equal(gridRow.seconds, 2400);
     assert.equal(lockedRows.length, 0);
+});
+
+test('toggleActualGridUnit skips locked units when calculating clicked recorded time', () => {
+    let syncedUnits = null;
+    const lockedMask = [false, false, true, false, false, false];
+    const ctx = makeCtx({
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 3000, source: 'grid' },
+                    { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 2, lockEnd: 2, lockUnits: [2] },
+                ],
+                actualGridUnits: [false, false, false, false, false, false],
+            },
+        }],
+        buildPlanUnitsForActualGrid: () => ({ units: mkBasePlanUnits(6), planLabel: 'A' }),
+        getActualGridUnitsForBase: () => [false, false, false, false, false, false],
+        getActualGridLockedUnitsForBase() {
+            return lockedMask.slice();
+        },
+        isActualGridUnitLocked(_baseIndex, unitIndex) {
+            return Boolean(lockedMask[unitIndex]);
+        },
+        getBlockLength: () => 1,
+        getActualGridBlockRange: () => ({ start: 0, end: 5, label: 'A' }),
+        clearActualFailedGridUnitOnNormalClick: () => {},
+        syncActualGridToSlots(_baseIndex, _planUnits, actualUnits) {
+            syncedUnits = actualUnits.slice();
+        },
+    });
+
+    toggleActualGridUnit.call(ctx, 0, 3);
+
+    assert.deepEqual(syncedUnits, [true, true, false, true, false, false]);
+    const recordedUnits = syncedUnits.filter(Boolean).length;
+    assert.equal(recordedUnits * STEP_SECONDS, 1800);
 });
 
 test('toggleActualGridLockedUnit preserves existing actualGridUnits while toggling lock', () => {

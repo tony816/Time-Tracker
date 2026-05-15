@@ -73,6 +73,35 @@ function buildPlannedActivityOptions(extraLabels = []) {
         return grouped;
     }
 
+function groupActivityBoard(entries) {
+        if (typeof this.groupActivityCatalogEntries === 'function') {
+            return this.groupActivityCatalogEntries(entries);
+        }
+        const safe = Array.isArray(entries) ? entries.slice() : [];
+        const byId = new Map();
+        const byParentId = new Map();
+        safe.forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            const id = String(item.id || item.label || '').trim();
+            if (id) byId.set(id, item);
+            const parentId = String(item.parentId || '').trim();
+            const key = parentId || '';
+            if (!byParentId.has(key)) byParentId.set(key, []);
+            byParentId.get(key).push(item);
+        });
+        const topLevel = safe.filter((item) => !item || !item.parentId);
+        return {
+            items: safe,
+            byId,
+            byParentId,
+            pinned: topLevel.filter((item) => item && item.pinned && !item.archived),
+            recent: topLevel.filter((item) => item && !item.pinned && !item.archived).slice(0, 8),
+            parents: topLevel.filter((item) => item && (byParentId.get(String(item.id || '').trim()) || []).length > 0),
+            children: safe.filter((item) => item && item.parentId),
+            topLevel,
+        };
+    }
+
 function getHangulInitialSearchKey(text) {
         const value = this.normalizeActivityText ? this.normalizeActivityText(text || '') : String(text || '').trim();
         if (!value) return '';
@@ -508,147 +537,268 @@ function positionInlinePlanDropdown(anchorEl) {
         dropdown.style.visibility = 'visible';
     }
 
+function getCatalogItemLabel(item) {
+        return this.normalizeActivityText
+            ? this.normalizeActivityText((item && (item.name || item.label || item.title)) || '')
+            : String((item && (item.name || item.label || item.title)) || '').trim();
+    }
+
+function getInlinePlanSelectionSeconds() {
+        const target = this.inlinePlanTarget || {};
+        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
+        const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
+        return Math.max(1, Math.abs(endIndex - startIndex) + 1) * 3600;
+    }
+
+function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
+        if (!this.inlinePlanTarget || !activityItem) return;
+        const activityText = getCatalogItemLabel.call(this, activityItem);
+        if (!activityText) return;
+        const titleText = parentItem ? getCatalogItemLabel.call(this, parentItem) : null;
+
+        const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
+        const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
+        const startIndex = Math.min(safeStart, safeEnd);
+        const endIndex = Math.max(safeStart, safeEnd);
+        const seconds = getInlinePlanSelectionSeconds.call(this);
+        const planItem = {
+            label: activityText,
+            seconds,
+            titleActivityId: parentItem ? (String(parentItem.id || '').trim() || null) : null,
+            titleText,
+            activityId: String(activityItem.id || '').trim() || null,
+            activityText,
+        };
+
+        if (this.inlinePlanTarget.mergeKey) {
+            this.mergedFields.set(this.inlinePlanTarget.mergeKey, activityText);
+        }
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            if (!this.timeSlots[i]) continue;
+            const isStart = i === startIndex;
+            this.timeSlots[i].planned = isStart ? activityText : '';
+            this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
+            this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
+            this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+        }
+
+        this.modalPlanActivities = [{ ...planItem, invalid: false }];
+        this.modalPlanActiveRow = 0;
+        this.modalPlanTitle = titleText || '';
+        this.modalPlanTitleBandOn = Boolean(titleText);
+
+        this.renderTimeEntries(Boolean(options.keepOpen));
+        this.calculateTotals();
+        this.autoSave();
+        if (options.keepOpen && this.inlinePlanTarget) {
+            const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
+                || document.querySelector(`[data-index="${startIndex}"]`);
+            if (anchor) {
+                setInlinePlanAnchorState.call(this, anchor);
+                this.positionInlinePlanDropdown(anchor);
+            }
+            return;
+        }
+        this.closeInlinePlanDropdown();
+    }
+
 function renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
         if (this.inlinePriorityMenu) {
             this.closeInlinePriorityMenu();
         }
-        const list = this.inlinePlanDropdown.querySelector('.inline-plan-options-list');
-        const tabs = this.inlinePlanDropdown.querySelector('.inline-plan-tabs');
-        if (!list) return;
+        const board = this.inlinePlanDropdown.querySelector('.activity-chip-board');
+        if (!board) return;
 
-        const startIndex = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
-        const currentValue = this.getPlannedValueForIndex(startIndex);
-        const planActivities = this.getPlanActivitiesForIndex(startIndex);
-        const hasPlanSplit = Array.isArray(planActivities) && planActivities.length > 0;
-        const grouped = this.buildPlannedActivityOptions(!hasPlanSplit && currentValue ? [currentValue] : []);
+        const catalogGrouped = this.groupActivityBoard(this.plannedActivities || []);
         const searchInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         const searchQuery = searchInput ? (searchInput.value || '') : '';
-        const filteredGrouped = {
-            local: this.filterInlinePlanSearchItems(grouped.local || [], searchQuery),
-            notion: this.filterInlinePlanSearchItems(grouped.notion || [], searchQuery)
+        const normalizedQuery = this.normalizeActivityText ? this.normalizeActivityText(searchQuery || '') : String(searchQuery || '').trim();
+        const queryMatches = (item) => {
+            if (!normalizedQuery) return true;
+            const label = getCatalogItemLabel.call(this, item);
+            return label.toLowerCase().includes(normalizedQuery.toLowerCase());
         };
-        const counts = { local: (filteredGrouped.local || []).length, notion: (filteredGrouped.notion || []).length };
-        this.updatePlanSourceTabs(counts, tabs);
+        const topLevelItems = (catalogGrouped.topLevel || []).filter((item) => item && !item.archived && queryMatches(item));
+        const recentItems = topLevelItems
+            .filter((item) => item && !item.archived && !item.pinned && queryMatches(item))
+            .sort((a, b) => {
+                const at = a.lastUsedAt || '';
+                const bt = b.lastUsedAt || '';
+                if (at !== bt) return bt.localeCompare(at);
+                return (b.usageCount || 0) - (a.usageCount || 0);
+            })
+            .slice(0, 8);
 
-        const activeSource = this.getActivePlanSource();
-        const visibleItems = filteredGrouped[activeSource] || [];
-        const normalizedCurrent = this.normalizeActivityText ? this.normalizeActivityText(currentValue) : String(currentValue || '').trim();
+        const sectionMap = {
+            pinned: topLevelItems.filter((item) => item.pinned),
+            recent: recentItems,
+            parents: (catalogGrouped.parents || []).filter((item) => item && !item.archived && queryMatches(item)),
+            all: topLevelItems,
+        };
 
-        list.innerHTML = '';
-        if (visibleItems.length === 0) {
-            const empty = document.createElement('li');
-            empty.className = 'inline-plan-empty';
-            empty.textContent = activeSource === 'notion'
-                ? '노션에서 불러온 활동이 없습니다.'
-                : '등록된 활동이 없습니다.';
-            list.appendChild(empty);
-            return;
-        }
-
-        visibleItems.forEach((item) => {
-            const { label, source } = item;
-            const priorityRank = this.normalizePriorityRankValue(item.priorityRank);
-            const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Math.floor(item.recommendedSeconds)) : null;
-            const normalizedLabel = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
-            const li = document.createElement('li');
-            li.className = 'inline-plan-option inline-plan-option-row';
-            li.dataset.source = source;
-            if (normalizedCurrent && normalizedLabel === normalizedCurrent) {
-                li.classList.add('selected');
-            }
-
-            const content = document.createElement('div');
-            content.className = 'inline-plan-task-cell';
-            const titleWrap = document.createElement('div');
-            titleWrap.className = 'inline-plan-task-main';
-            const priorityButton = document.createElement('button');
-            priorityButton.type = 'button';
-            priorityButton.className = 'inline-plan-priority-chip';
-            priorityButton.setAttribute('aria-haspopup', 'menu');
-            priorityButton.setAttribute('aria-expanded', 'false');
-            if (Number.isFinite(priorityRank)) {
-                priorityButton.dataset.pr = String(priorityRank);
-                priorityButton.textContent = `Pr.${priorityRank}`;
-            } else {
-                priorityButton.dataset.empty = 'true';
-                priorityButton.textContent = 'Pr.-';
-            }
-            if (source === 'notion') {
-                priorityButton.disabled = true;
-                priorityButton.title = 'Notion priority';
-            } else {
-                priorityButton.title = 'Priority options';
-                priorityButton.addEventListener('click', (event) => {
+        const renderChip = (item, options = {}) => {
+            const label = getCatalogItemLabel.call(this, item);
+            if (!label) return null;
+            const isParentCandidate = !item.parentId;
+            const canExpandChildren = Boolean(options.parent || isParentCandidate);
+            const chip = document.createElement('span');
+            chip.className = `activity-chip${canExpandChildren ? ' activity-chip-parent' : ''}`;
+            chip.dataset.label = label;
+            if (canExpandChildren) chip.dataset.parentId = String(item.id || '');
+            const labelButton = document.createElement('button');
+            labelButton.type = 'button';
+            labelButton.className = 'activity-chip-main';
+            const text = document.createElement('span');
+            text.className = 'activity-chip-label';
+            text.textContent = label;
+            labelButton.appendChild(text);
+            labelButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const parent = item && item.parentId ? catalogGrouped.byId.get(item.parentId) : null;
+                applyActivityCatalogSelection.call(this, item, parent || null, { keepOpen: true });
+            });
+            chip.appendChild(labelButton);
+            if (canExpandChildren) {
+                const caret = document.createElement('button');
+                caret.type = 'button';
+                caret.className = 'activity-chip-caret';
+                caret.textContent = '▾';
+                caret.title = '세부활동 펼치기';
+                caret.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    this.openInlinePriorityMenu(priorityButton, { label, source, priorityRank });
+                    const children = (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id);
+                    this.openPlanActivityChildMenu(item, caret, children);
                 });
+                chip.appendChild(caret);
             }
-            titleWrap.appendChild(priorityButton);
-            const text = document.createElement('span');
-            text.className = 'inline-plan-option-label';
-            text.textContent = label;
-            titleWrap.appendChild(text);
+            return chip;
+        };
 
-            const right = document.createElement('div');
-            right.className = 'inline-plan-option-meta';
-            if (source === 'notion') {
-                const sourceTag = document.createElement('span');
-                sourceTag.className = 'inline-plan-option-source';
-                sourceTag.textContent = '노션';
-                right.appendChild(sourceTag);
-            }
-
-            const routineBtn = document.createElement('button');
-            routineBtn.type = 'button';
-            routineBtn.className = 'inline-plan-option-routine';
-            routineBtn.textContent = '루틴';
-            const ctxIndex = this.inlinePlanTarget && Number.isInteger(this.inlinePlanTarget.startIndex)
-                ? this.inlinePlanTarget.startIndex
-                : null;
-            const activeRoutine = Number.isInteger(ctxIndex)
-                ? this.findActiveRoutineForLabelAtIndex(normalizedLabel, ctxIndex, this.currentDate)
-                : null;
-            if (activeRoutine) {
-                routineBtn.classList.add('active');
-                routineBtn.title = `루틴: ${this.getRoutinePatternLabel(activeRoutine.pattern)}`;
-            } else {
-                routineBtn.title = '루틴 설정';
-            }
-            routineBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                this.openRoutineMenuFromInlinePlan(label, routineBtn);
+        board.innerHTML = '';
+        const sections = [
+            { title: '고정', key: 'pinned' },
+            { title: '최근 사용', key: 'recent' },
+            { title: '전체 활동군', key: 'parents' },
+            { title: '전체 활동', key: 'all' },
+        ];
+        let renderedSectionCount = 0;
+        sections.forEach((section) => {
+            const items = sectionMap[section.key] || [];
+            if (items.length === 0) return;
+            renderedSectionCount += 1;
+            const wrap = document.createElement('section');
+            wrap.className = 'activity-chip-board-section';
+            const heading = document.createElement('div');
+            heading.className = 'activity-chip-board-title';
+            heading.textContent = section.title;
+            wrap.appendChild(heading);
+            const row = document.createElement('div');
+            row.className = 'activity-chip-row';
+            items.forEach((item) => {
+                const children = (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id);
+                const chip = renderChip(item, { parent: children.length > 0 });
+                if (chip) row.appendChild(chip);
             });
-            right.appendChild(routineBtn);
-            if (source !== 'notion') {
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'inline-plan-option-remove';
-                removeBtn.textContent = '삭제';
-                removeBtn.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    this.removePlannedActivityOption(label);
-                    this.renderInlinePlanDropdownOptions();
-                });
-                right.appendChild(removeBtn);
-            }
-            if (recommendedSeconds && recommendedSeconds > 0) {
-                const displaySeconds = this.normalizeDurationStep
-                    ? (this.normalizeDurationStep(recommendedSeconds) || recommendedSeconds)
-                    : recommendedSeconds;
-                const time = document.createElement('span');
-                time.className = 'inline-plan-option-time';
-                time.textContent = this.formatDurationSummary(displaySeconds);
-                right.appendChild(time);
-            }
-
-            content.appendChild(titleWrap);
-            content.appendChild(right);
-            li.appendChild(content);
-            content.addEventListener('click', () => this.applyInlinePlanSelection(label, { keepOpen: true }));
-            list.appendChild(li);
+            wrap.appendChild(row);
+            board.appendChild(wrap);
         });
+        if (renderedSectionCount === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'inline-plan-empty';
+            empty.textContent = normalizedQuery ? '검색 결과가 없습니다.' : '등록된 활동이 없습니다.';
+            board.appendChild(empty);
+        }
+    }
+
+function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
+        if (!this.inlinePlanDropdown || !this.inlinePlanTarget || !parentItem) return;
+        const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
+        const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
+        const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
+        if (!section || !board) return;
+
+        const parentLabel = getCatalogItemLabel.call(this, parentItem);
+        if (title) title.textContent = parentLabel || '세부활동';
+        section.hidden = false;
+        this.modalPlanSectionOpen = true;
+        board.innerHTML = '';
+
+        const row = document.createElement('div');
+        row.className = 'activity-chip-row';
+
+        const parentSelf = document.createElement('button');
+        parentSelf.type = 'button';
+        parentSelf.className = 'activity-chip activity-chip-self';
+        parentSelf.textContent = parentLabel ? `${parentLabel} 자체 선택` : '부모 자체 선택';
+        parentSelf.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            applyActivityCatalogSelection.call(this, parentItem, null, { keepOpen: true });
+        });
+        row.appendChild(parentSelf);
+
+        (Array.isArray(children) ? children : []).forEach((child) => {
+            const childLabel = getCatalogItemLabel.call(this, child);
+            if (!childLabel) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'activity-chip';
+            btn.dataset.label = childLabel;
+            btn.textContent = childLabel;
+            btn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                applyActivityCatalogSelection.call(this, child, parentItem, { keepOpen: true });
+            });
+            row.appendChild(btn);
+        });
+
+        const addChildBtn = document.createElement('button');
+        addChildBtn.type = 'button';
+        addChildBtn.className = 'activity-chip activity-chip-add';
+        addChildBtn.textContent = '+ 세부활동 추가';
+        addChildBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const name = prompt('세부활동 이름을 입력하세요.', '');
+            const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(name) : String(name || '').trim();
+            if (!normalizedName) return;
+            const parentId = String(parentItem.id || '').trim() || null;
+            const child = {
+                id: `${parentId || 'activity'}_${Date.now()}`,
+                name: normalizedName,
+                label: normalizedName,
+                title: normalizedName,
+                normalizedName,
+                parentId,
+                colorKey: parentItem.colorKey || null,
+                defaultDurationMinutes: parentItem.defaultDurationMinutes || null,
+                displayMode: parentItem.displayMode || 'chip',
+                pinned: false,
+                archived: false,
+                usageCount: 0,
+                lastUsedAt: null,
+                source: 'local',
+            };
+            this.plannedActivities.push(child);
+            this.dedupeAndSortPlannedActivities();
+            this.savePlannedActivities();
+            this.renderInlinePlanDropdownOptions();
+            const nextChildren = (this.plannedActivities || []).filter((item) => item && item.parentId === parentId);
+            this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
+        });
+        row.appendChild(addChildBtn);
+
+        board.appendChild(row);
+
+        const targetAnchor = getInlinePlanAnchorState.call(this);
+        if (targetAnchor && this.positionInlinePlanDropdown) {
+            this.positionInlinePlanDropdown(targetAnchor);
+        }
     }
 
 function openRoutineMenuFromInlinePlan(label, anchorEl) {
@@ -802,44 +952,18 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         const dropdown = document.createElement('div');
         dropdown.className = `inline-plan-dropdown${isMobileInputContext ? ' inline-plan-dropdown-sheet' : ''}`;
         dropdown.innerHTML = `
-            <div class="inline-plan-tabs plan-tabs">
-                <button type="button" class="plan-tab" data-source="local" role="tab" aria-selected="false">Clear</button>
-                ${this.isNotionUIVisible() ? '<button type="button" class="plan-tab" data-source="notion" role="tab" aria-selected="false">노션</button>' : ''}
-            </div>
             <div class="inline-plan-input-row${isMobileInputContext ? ' inline-plan-input-row-mobile-close' : ''}">
                 ${isMobileInputContext ? '<button type="button" class="inline-plan-close-btn" aria-label="드롭다운 닫기">‹</button>' : ''}
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn" aria-label="활동 추가" title="활동 추가">＋</button>
             </div>
-            <div class="inline-plan-options dropdown">
-                <ul class="inline-plan-options-list"></ul>
-            </div>
-            <button type="button" class="inline-plan-split-btn" aria-label="세부 활동 분해">세부 활동 분해</button>
+            <div class="activity-chip-board"></div>
             <div class="inline-plan-subsection" hidden>
-                <div class="inline-plan-title-area">
-                    <div class="title-band-toggle inline-plan-title-toggle">
-                        <label>
-                            <input type="checkbox" class="inline-plan-title-band">
-                            활동 제목 밴드 표시
-                        </label>
-                    </div>
-                    <div class="inline-plan-title-field">
-                        <div class="title-input-wrapper">
-                            <button type="button" class="inline-plan-title-input plan-title-input" aria-haspopup="menu" aria-expanded="false">활동 제목</button>
-                            <button type="button" class="title-clear-btn inline-plan-title-clear">지우기</button>
-                        </div>
-                    </div>
+                <div class="inline-plan-subsection-head">
+                    <button type="button" class="inline-plan-sub-back">← 뒤로</button>
+                    <div class="inline-plan-subsection-title">세부활동</div>
                 </div>
-                <div class="sub-activities-summary">
-                    <div>총 시간: <span class="inline-plan-sub-total">0시간</span></div>
-                    <div>분해 합계: <span class="inline-plan-sub-used">0시간</span></div>
-                </div>
-                <div class="sub-activities-list inline-plan-sub-list"></div>
-                <div class="sub-activities-actions">
-                    <button type="button" class="sub-activity-action-btn inline-plan-sub-add">행 추가</button>
-                    <button type="button" class="sub-activity-action-btn inline-plan-sub-fill" title="잔여 시간 추가">잔여+</button>
-                    <span class="sub-activities-notice inline-plan-sub-note"></span>
-                </div>
+                <div class="activity-chip-board inline-plan-sub-board"></div>
             </div>
         `;
         dropdown.style.visibility = 'hidden';
@@ -875,26 +999,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                 return false;
             }
         };
-
-        const tabs = dropdown.querySelector('.inline-plan-tabs');
-        if (tabs) {
-            tabs.addEventListener('click', (event) => {
-                const btn = event.target.closest('.plan-tab');
-                if (!btn || !tabs.contains(btn)) return;
-                const source = this.isNotionUIVisible() && btn.dataset.source === 'notion' ? 'notion' : 'local';
-
-                // "직접 추가" 탭은 휴지통 버튼과 동일하게 입력/슬롯 내용을 비우는 액션 버튼으로 동작
-                if (source === 'local') {
-                    clearHandler();
-                    return;
-                }
-
-                if (this.currentPlanSource === source) return;
-                this.currentPlanSource = source;
-                this.renderInlinePlanDropdownOptions();
-                if (source === 'notion' && this.isNotionUIVisible()) runInlineNotionSync();
-            });
-        }
 
         const addHandler = (options = {}) => {
             const val = this.normalizeActivityText ? this.normalizeActivityText(input.value) : String(input.value || '').trim();
@@ -1033,33 +1137,18 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                 this.closeInlinePlanDropdown();
             });
         }
-        const splitBtn = dropdown.querySelector('.inline-plan-split-btn');
         const subSection = dropdown.querySelector('.inline-plan-subsection');
-        const inlineList = dropdown.querySelector('.inline-plan-sub-list');
-        const inlineAdd = dropdown.querySelector('.inline-plan-sub-add');
-        const inlineFill = dropdown.querySelector('.inline-plan-sub-fill');
-        const inlineNotice = dropdown.querySelector('.inline-plan-sub-note');
-        const inlineTotal = dropdown.querySelector('.inline-plan-sub-total');
-        const inlineUsed = dropdown.querySelector('.inline-plan-sub-used');
-        const inlineTitleInput = dropdown.querySelector('.inline-plan-title-input');
-        const inlineTitleClear = dropdown.querySelector('.inline-plan-title-clear');
-        const inlineTitleBand = dropdown.querySelector('.inline-plan-title-band');
-        const inlineTitleField = dropdown.querySelector('.inline-plan-title-field');
+        const inlineBoard = dropdown.querySelector('.activity-chip-board');
+        const inlineSubBoard = dropdown.querySelector('.inline-plan-sub-board');
+        const inlineBack = dropdown.querySelector('.inline-plan-sub-back');
 
         // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
         this.inlinePlanContext = {
             root: dropdown,
-            list: inlineList,
-            totalEl: inlineTotal,
-            usedEl: inlineUsed,
-            noticeEl: inlineNotice,
-            fillBtn: inlineFill,
-            addBtn: inlineAdd,
+            list: inlineBoard,
             section: subSection,
-            titleInput: inlineTitleInput,
-            titleClear: inlineTitleClear,
-            titleToggle: inlineTitleBand,
-            titleField: inlineTitleField
+            subBoard: inlineSubBoard,
+            backBtn: inlineBack
         };
 
         // 현재 슬롯 범위 기준 기본 총시간 및 기존 세부활동 불러오기
@@ -1073,123 +1162,16 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
         if (subSection) subSection.hidden = true;
-        if (inlineFill) inlineFill.hidden = true;
-        // 제목 초기화
         const baseSlot = this.timeSlots[range.startIndex] || {};
         this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
             ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
             : '';
         this.modalPlanTitleBandOn = Boolean(baseSlot.planTitleBandOn && this.modalPlanTitle);
-        if (inlineTitleInput) this.setPlanTitleInputDisplay(inlineTitleInput, this.modalPlanTitle || '');
-        if (inlineTitleBand) {
-            inlineTitleBand.checked = this.modalPlanTitleBandOn;
-        }
-        if (inlineTitleField) {
-            inlineTitleField.hidden = !this.modalPlanTitleBandOn;
-        }
-        this.updatePlanActivitiesSummary();
-        this.renderPlanActivitiesList();
 
-        if (splitBtn && subSection) {
-            splitBtn.addEventListener('click', () => {
-                const willShow = subSection.hidden;
-                subSection.hidden = !willShow;
-                this.modalPlanSectionOpen = willShow;
-                if (inlineFill) inlineFill.hidden = !willShow;
-                splitBtn.classList.toggle('open', willShow);
-                splitBtn.textContent = willShow ? '세부 활동 분해 닫기' : '세부 활동 분해';
-                if (willShow && this.modalPlanActivities.length === 0) {
-                    this.addPlanActivityRow();
-                } else if (willShow) {
-                    this.renderPlanActivitiesList();
-                }
-                this.updatePlanActivitiesSummary();
-            });
-        }
-
-        if (inlineAdd) {
-            inlineAdd.addEventListener('click', () => {
-                this.openPlanActivitiesSection();
-                this.addPlanActivityRow();
-            });
-        }
-
-        if (inlineFill) {
-            inlineFill.addEventListener('click', () => {
-                this.fillRemainingPlanActivity();
-            });
-        }
-
-        if (inlineList) {
-            inlineList.addEventListener('input', (event) => {
-                if (event.target.classList.contains('plan-activity-label')) {
-                    this.handlePlanActivitiesInput(event);
-                }
-            });
-            inlineList.addEventListener('change', (event) => {
-                if (event.target.classList.contains('plan-activity-label')) {
-                    this.handlePlanActivitiesInput(event);
-                }
-            });
-            inlineList.addEventListener('click', (event) => {
-                const spinnerBtn = event.target.closest('.spinner-btn');
-                if (spinnerBtn) {
-                    const direction = spinnerBtn.dataset.direction === 'up' ? 1 : -1;
-                    const idx = parseInt(spinnerBtn.dataset.index, 10);
-                    if (Number.isFinite(idx)) {
-                        this.adjustActivityDuration('plan', idx, direction);
-                    }
-                    return;
-                }
-                const removeBtn = event.target.closest('.remove-sub-activity');
-                if (removeBtn) {
-                    this.handlePlanActivitiesRemoval(event);
-                    return;
-                }
-                const row = event.target.closest('.sub-activity-row');
-                if (row && inlineList.contains(row)) {
-                    const idx = parseInt(row.dataset.index, 10);
-                    if (Number.isFinite(idx)) this.setPlanActiveRow(idx);
-                }
-            });
-        }
-
-        if (inlineTitleInput) {
-            if (inlineTitleInput.tagName === 'BUTTON') {
-                inlineTitleInput.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.openPlanTitleMenu(inlineTitleInput, { inline: true });
-                });
-            } else {
-                inlineTitleInput.addEventListener('input', () => {
-                    this.modalPlanTitle = this.normalizeActivityText
-                        ? this.normalizeActivityText(inlineTitleInput.value || '')
-                        : (inlineTitleInput.value || '').trim();
-                    this.syncPlanTitleBandToggleState();
-                    this.syncInlinePlanToSlots();
-                });
-            }
-        }
-
-        if (inlineTitleClear && inlineTitleInput) {
-            inlineTitleClear.addEventListener('click', () => {
-                this.setPlanTitleInputDisplay(inlineTitleInput, '');
-                this.modalPlanTitle = '';
-                this.modalPlanTitleBandOn = false;
-                if (inlineTitleBand) inlineTitleBand.checked = false;
-                if (inlineTitleField) inlineTitleField.hidden = true;
-                this.syncPlanTitleBandToggleState();
-                this.syncInlinePlanToSlots();
-            });
-        }
-
-        if (inlineTitleBand) {
-            inlineTitleBand.addEventListener('change', () => {
-                this.modalPlanTitleBandOn = inlineTitleBand.checked;
-                if (inlineTitleField) inlineTitleField.hidden = !inlineTitleBand.checked;
-                this.syncPlanTitleBandToggleState();
-                this.syncInlinePlanToSlots();
+        if (inlineBack) {
+            inlineBack.addEventListener('click', () => {
+                if (subSection) subSection.hidden = true;
+                this.modalPlanSectionOpen = false;
             });
         }
 
@@ -1432,6 +1414,8 @@ function applyInlinePlanSelection(label, options = {}) {
         hasRecentInlinePlanInputIntent,
         positionInlinePlanDropdown,
         renderInlinePlanDropdownOptions,
+        groupActivityBoard,
+        openPlanActivityChildMenu,
         openRoutineMenuFromInlinePlan,
         isSameInlinePlanTarget,
         isEventWithinCurrentInlinePlanRange,

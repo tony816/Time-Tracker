@@ -128,13 +128,129 @@
                 const label = normalizeActivityText(labelSource);
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = normalizeDurationStep(rawSeconds) ?? 0;
-                return { label, seconds };
+                const normalized = { label, seconds };
+                [
+                    'titleActivityId',
+                    'titleText',
+                    'activityId',
+                    'activityText',
+                ].forEach((key) => {
+                    if (!(key in item)) return;
+                    const rawValue = item[key];
+                    normalized[key] = rawValue == null ? null : normalizeActivityText(rawValue);
+                });
+                return normalized;
             })
             .filter((item) => item.label || item.seconds > 0);
     }
 
+    function createActivityCatalogId(seed = '') {
+        const base = String(seed || '').trim();
+        if (base) {
+            return `activity_${base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'item'}`;
+        }
+        try {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return `activity_${crypto.randomUUID()}`;
+            }
+        } catch (_) {}
+        return `activity_${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
+    }
+
+    function normalizeActivityCatalogEntry(raw, options = {}) {
+        const normalizeActivityText = resolveNormalizeActivityText(options.normalizeActivityText);
+        const normalizeDurationStep = resolveNormalizeDurationStep(options.normalizeDurationStep);
+        const item = raw && typeof raw === 'object' ? raw : {};
+        const name = normalizeActivityText(item.name ?? item.label ?? item.title ?? '');
+        const normalizedName = normalizeActivityText(item.normalizedName ?? name);
+        const id = String(item.id || '').trim() || createActivityCatalogId(normalizedName || name);
+        const parentId = String(item.parentId || '').trim() || null;
+        const colorKey = String(item.colorKey || '').trim() || null;
+        const defaultDurationMinutes = Number.isFinite(item.defaultDurationMinutes)
+            ? Math.max(0, Math.floor(Number(item.defaultDurationMinutes)))
+            : (Number.isFinite(item.recommendedSeconds)
+                ? Math.max(0, Math.floor(normalizeDurationStep(Number(item.recommendedSeconds)) / 60))
+                : null);
+        const displayMode = String(item.displayMode || '').trim() || 'chip';
+        const pinned = Boolean(item.pinned);
+        const archived = Boolean(item.archived);
+        const usageCount = Number.isFinite(item.usageCount) ? Math.max(0, Math.floor(Number(item.usageCount))) : 0;
+        const lastUsedAt = typeof item.lastUsedAt === 'string' && item.lastUsedAt.trim() ? item.lastUsedAt : null;
+        const source = typeof item.source === 'string' ? item.source : 'local';
+        const entry = {
+            id,
+            name,
+            label: name,
+            title: name,
+            normalizedName,
+            parentId,
+            colorKey,
+            defaultDurationMinutes,
+            displayMode,
+            pinned,
+            archived,
+            usageCount,
+            lastUsedAt,
+            source,
+        };
+        return entry;
+    }
+
+    function normalizeActivityCatalogArray(raw, options = {}) {
+        if (!Array.isArray(raw)) return [];
+        const seen = new Set();
+        const normalized = [];
+        raw.forEach((item) => {
+            const entry = normalizeActivityCatalogEntry(item, options);
+            if (!entry.normalizedName) return;
+            if (seen.has(entry.normalizedName)) return;
+            seen.add(entry.normalizedName);
+            normalized.push(entry);
+        });
+        return normalized;
+    }
+
+    function groupActivityCatalogEntries(entries, options = {}) {
+        const items = normalizeActivityCatalogArray(entries, options);
+        const byParentId = new Map();
+        const byId = new Map();
+        items.forEach((item) => {
+            byId.set(item.id, item);
+            const parentKey = item.parentId || '';
+            if (!byParentId.has(parentKey)) byParentId.set(parentKey, []);
+            byParentId.get(parentKey).push(item);
+        });
+        const topLevel = items.filter((item) => !item.parentId);
+        const pinned = topLevel.filter((item) => item.pinned && !item.archived);
+        const recent = topLevel
+            .filter((item) => !item.pinned && !item.archived)
+            .sort((a, b) => {
+                const at = a.lastUsedAt || '';
+                const bt = b.lastUsedAt || '';
+                if (at !== bt) return bt.localeCompare(at);
+                return (b.usageCount || 0) - (a.usageCount || 0);
+            })
+            .slice(0, 8);
+        const parents = topLevel.filter((item) => (byParentId.get(item.id) || []).some((child) => child.id !== item.id));
+        const children = items.filter((item) => item.parentId && byId.has(item.parentId));
+        return {
+            items,
+            byId,
+            byParentId,
+            pinned,
+            recent,
+            parents,
+            children,
+            topLevel,
+        };
+    }
+
     return Object.freeze({
         formatActivitiesSummary,
+        createActivityCatalogId,
+        normalizeActivityCatalogEntry,
+        normalizeActivityCatalogArray,
+        groupActivityCatalogEntries,
         normalizeActivitiesArray,
         normalizePlanActivitiesArray,
     });

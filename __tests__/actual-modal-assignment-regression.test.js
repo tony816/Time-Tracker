@@ -55,6 +55,10 @@ const getActualGridUnitsForBase = buildMethod(
     'getActualGridUnitsForBase(baseIndex, totalUnits, planUnits = null)',
     '(baseIndex, totalUnits, planUnits = null)'
 );
+const getActualGridSecondsMap = buildMethod(
+    'getActualGridSecondsMap(planUnits = null, actualUnits = null)',
+    '(planUnits = null, actualUnits = null)'
+);
 const buildExtraSlotAllocation = buildMethod(
     'buildExtraSlotAllocation(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null)',
     '(planUnits, actualUnits, extraActivities, orderIndices = null, lockedUnits = null)'
@@ -564,6 +568,42 @@ test('buildActualModalActivities does not reseed missing planned labels when exi
     );
 
     assert.deepEqual(result.map((item) => item.label), ['A']);
+});
+
+test('getActualGridSecondsMap excludes locked modal grid units from recorded time', () => {
+    const ctx = {
+        timeSlots: [{
+            activityLog: {
+                subActivities: [
+                    { label: 'A', seconds: 3000, source: 'grid' },
+                    { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 2, lockEnd: 2, lockUnits: [2] },
+                ],
+            },
+        }],
+        modalActualBaseIndex: 0,
+        modalActualPlanUnits: ['A', 'A', 'A', 'A', 'A', 'A'],
+        modalActualGridUnits: [true, true, true, true, false, false],
+        modalActualActivities: [
+            { label: 'A', seconds: 3000, source: 'grid' },
+            { label: '', seconds: 600, recordedSeconds: 600, source: 'locked', isAutoLocked: false, lockStart: 2, lockEnd: 2, lockUnits: [2] },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getActualDurationStepSeconds() {
+            return STEP_SECONDS;
+        },
+        getActualGridLockedUnitsForBase(baseIndex, planUnits, activities) {
+            return getActualGridLockedUnitsForBase.call(this, baseIndex, planUnits, activities);
+        },
+        extractLockedRowsFromActivities(activities, totalUnits) {
+            return extractLockedRowsFromActivities(activities, totalUnits);
+        },
+    };
+
+    const result = getActualGridSecondsMap.call(ctx);
+
+    assert.equal(result.get('A'), 1800);
 });
 
 test('insertLockedRowsAfterRelatedActivities places locked row after matching activity label row', () => {

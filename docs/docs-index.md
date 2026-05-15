@@ -1,6 +1,6 @@
 # Docs Index
 
-현재 문서와 과거 리팩터 기록을 구분하는 색인이다. 토큰 절약을 위해 필요한 문서만 연다.
+This index separates current source-of-truth docs from historical stage logs. To save tokens, open only the document needed for the task.
 
 ## Current Source Of Truth
 
@@ -11,14 +11,14 @@
 
 ## Supporting Docs
 
-- `docs/codex-token-efficient-prompts.md`: Codex 프롬프트/AI 설정 가이드
-- `docs/vibe-coding-protocol-v1.md`: 작업 루프와 보고 템플릿
-- `docs/high-risk-refactor-plan.md`: 완료된 고위험 리팩터 기록
+- `docs/codex-token-efficient-prompts.md`: Codex prompt / AI settings guide
+- `docs/vibe-coding-protocol-v1.md`: work loop and reporting template
+- `docs/high-risk-refactor-plan.md`: completed high-risk refactor record
 - `docs/templates/`: `task-brief.md`, `done-report.md`
 
 ## Historical Refactor Logs
 
-`docs/refactor-stage*.md`는 과거 경계와 회귀 테스트 기원을 확인할 때만 읽는다.
+`docs/refactor-stage*.md` should be read only when checking historical boundaries or regression-test origins.
 
 - Stage 1: baseline freeze
 - Stage 2: entry/bootstrap split

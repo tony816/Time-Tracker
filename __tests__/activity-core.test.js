@@ -7,6 +7,7 @@ test('activity-core exports are available and attached to global', () => {
     assert.equal(typeof activityCore.formatActivitiesSummary, 'function');
     assert.equal(typeof activityCore.normalizeActivitiesArray, 'function');
     assert.equal(typeof activityCore.normalizePlanActivitiesArray, 'function');
+    assert.equal(typeof activityCore.normalizeActivityCatalogEntry, 'function');
 
     assert.ok(globalThis.TimeTrackerActivityCore);
     assert.equal(typeof globalThis.TimeTrackerActivityCore.normalizeActivitiesArray, 'function');
@@ -58,9 +59,18 @@ test('activity-core normalizeActivitiesArray preserves locked metadata fields', 
     ]);
 });
 
-test('activity-core normalizePlanActivitiesArray keeps label/seconds only', () => {
+test('activity-core normalizePlanActivitiesArray keeps label/seconds and activity metadata', () => {
     const normalized = activityCore.normalizePlanActivitiesArray([
-        { label: ' 운동 ', seconds: 600.9, source: 'ignored', recordedSeconds: 300 },
+        {
+            label: ' 운동 ',
+            seconds: 600.9,
+            source: 'ignored',
+            recordedSeconds: 300,
+            titleActivityId: ' parent-1 ',
+            titleText: ' 운동 ',
+            activityId: ' child-1 ',
+            activityText: ' 스쿼트 ',
+        },
         { title: '독서', seconds: 0 },
         { label: '', seconds: 0 },
     ], {
@@ -69,9 +79,52 @@ test('activity-core normalizePlanActivitiesArray keeps label/seconds only', () =
     });
 
     assert.deepEqual(normalized, [
-        { label: '운동', seconds: 600 },
+        {
+            label: '운동',
+            seconds: 600,
+            titleActivityId: 'parent-1',
+            titleText: '운동',
+            activityId: 'child-1',
+            activityText: '스쿼트',
+        },
         { label: '독서', seconds: 0 },
     ]);
+});
+
+test('activity-core normalizeActivityCatalogEntry fills canonical catalog fields', () => {
+    const entry = activityCore.normalizeActivityCatalogEntry({
+        id: 'a1',
+        label: ' 운동 ',
+        parentId: 'p1',
+        colorKey: 'blue',
+        defaultDurationMinutes: 30.9,
+        displayMode: 'chip',
+        pinned: 1,
+        archived: 0,
+        usageCount: 4.7,
+        lastUsedAt: '2026-05-09T00:00:00Z',
+        source: 'local',
+    }, {
+        normalizeActivityText: (value) => String(value || '').trim(),
+        normalizeDurationStep: (seconds) => Math.max(0, Math.floor(seconds)),
+    });
+
+    assert.deepEqual(entry, {
+        id: 'a1',
+        name: '운동',
+        label: '운동',
+        title: '운동',
+        normalizedName: '운동',
+        parentId: 'p1',
+        colorKey: 'blue',
+        defaultDurationMinutes: 30,
+        displayMode: 'chip',
+        pinned: true,
+        archived: false,
+        usageCount: 4,
+        lastUsedAt: '2026-05-09T00:00:00Z',
+        source: 'local',
+    });
 });
 
 test('activity-core formatActivitiesSummary renders list and total', () => {

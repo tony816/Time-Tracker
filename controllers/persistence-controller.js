@@ -155,17 +155,29 @@
                                 elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
                                     ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
                                     : 0,
+                                elapsedSeconds: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsedSeconds)
+                                    ? Math.max(0, Math.floor(sourceSlot.timer.elapsedSeconds))
+                                    : (Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed) ? Math.max(0, Math.floor(sourceSlot.timer.elapsed)) : 0),
                                 rawElapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.rawElapsed)
                                     ? Math.max(0, Math.floor(sourceSlot.timer.rawElapsed))
                                     : 0,
                                 startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
                                     ? sourceSlot.timer.startTime
                                     : null,
+                                startedAt: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startedAt)
+                                    ? sourceSlot.timer.startedAt
+                                    : (Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime) ? sourceSlot.timer.startTime : null),
+                                lastPausedAt: Number.isFinite(sourceSlot.timer && sourceSlot.timer.lastPausedAt)
+                                    ? sourceSlot.timer.lastPausedAt
+                                    : null,
                                 method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
                                     ? 'pomodoro'
-                                    : 'manual',
+                                    : ((sourceSlot.timer && String(sourceSlot.timer.method || '') === 'plan-segment') ? 'plan-segment' : 'manual'),
                                 status: this.normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
                             };
+                            targetSlot.planSegmentTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
+                                ? JSON.parse(JSON.stringify(sourceSlot.planSegmentTimers))
+                                : {};
                             targetSlot.activityLog = {
                                 title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
                                 details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),
@@ -327,9 +339,18 @@
             const normalizedTimer = {
                 running: Boolean(timerRow && timerRow.running),
                 elapsed: Number.isFinite(timerRow && timerRow.elapsed) ? Math.max(0, Math.floor(timerRow.elapsed)) : 0,
+                elapsedSeconds: Number.isFinite(timerRow && timerRow.elapsedSeconds)
+                    ? Math.max(0, Math.floor(timerRow.elapsedSeconds))
+                    : (Number.isFinite(timerRow && timerRow.elapsed) ? Math.max(0, Math.floor(timerRow.elapsed)) : 0),
                 rawElapsed: Number.isFinite(timerRow && timerRow.rawElapsed) ? Math.max(0, Math.floor(timerRow.rawElapsed)) : 0,
                 startTime: Number.isFinite(timerRow && timerRow.startTime) ? timerRow.startTime : null,
-                method: (timerRow && String(timerRow.method || 'manual') === 'pomodoro') ? 'pomodoro' : 'manual',
+                startedAt: Number.isFinite(timerRow && timerRow.startedAt)
+                    ? timerRow.startedAt
+                    : (Number.isFinite(timerRow && timerRow.startTime) ? timerRow.startTime : null),
+                lastPausedAt: Number.isFinite(timerRow && timerRow.lastPausedAt) ? timerRow.lastPausedAt : null,
+                method: (timerRow && String(timerRow.method || 'manual') === 'pomodoro')
+                    ? 'pomodoro'
+                    : ((timerRow && String(timerRow.method || '') === 'plan-segment') ? 'plan-segment' : 'manual'),
                 status: this.normalizeTimerStatus(timerRow && timerRow.status, { timer: timerRow || {} }),
             };
 
@@ -372,7 +393,7 @@
                             }
                             const desiredTimer = (i === startIdx)
                                 ? normalizedTimer
-                                : { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' };
+                                : { running: false, elapsed: 0, elapsedSeconds: 0, rawElapsed: 0, startTime: null, startedAt: null, lastPausedAt: null, method: 'manual', status: 'idle' };
                             const currentTimerSig = JSON.stringify(slot.timer || {});
                             const desiredTimerSig = JSON.stringify(desiredTimer);
                             if (currentTimerSig !== desiredTimerSig) {
@@ -525,9 +546,18 @@
                 const timerEntry = {
                     running: Boolean(timerInfo.running),
                     elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
+                    elapsedSeconds: Number.isFinite(timerInfo.elapsedSeconds)
+                        ? Math.max(0, Math.floor(timerInfo.elapsedSeconds))
+                        : (Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0),
                     rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
                     startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
-                    method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
+                    startedAt: Number.isFinite(timerInfo.startedAt)
+                        ? timerInfo.startedAt
+                        : (Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null),
+                    lastPausedAt: Number.isFinite(timerInfo.lastPausedAt) ? timerInfo.lastPausedAt : null,
+                    method: String(timerInfo.method || 'manual') === 'pomodoro'
+                        ? 'pomodoro'
+                        : (String(timerInfo.method || '') === 'plan-segment' ? 'plan-segment' : 'manual'),
                     status: this.normalizeTimerStatus(timerInfo.status, startSlot),
                 };
                 const hasTimerEntry = timerEntry.running
@@ -612,9 +642,18 @@
             const timerEntry = {
                 running: Boolean(timerInfo.running),
                 elapsed: Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0,
+                elapsedSeconds: Number.isFinite(timerInfo.elapsedSeconds)
+                    ? Math.max(0, Math.floor(timerInfo.elapsedSeconds))
+                    : (Number.isFinite(timerInfo.elapsed) ? Math.max(0, Math.floor(timerInfo.elapsed)) : 0),
                 rawElapsed: Number.isFinite(timerInfo.rawElapsed) ? Math.max(0, Math.floor(timerInfo.rawElapsed)) : 0,
                 startTime: Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null,
-                method: String(timerInfo.method || 'manual') === 'pomodoro' ? 'pomodoro' : 'manual',
+                startedAt: Number.isFinite(timerInfo.startedAt)
+                    ? timerInfo.startedAt
+                    : (Number.isFinite(timerInfo.startTime) ? timerInfo.startTime : null),
+                lastPausedAt: Number.isFinite(timerInfo.lastPausedAt) ? timerInfo.lastPausedAt : null,
+                method: String(timerInfo.method || 'manual') === 'pomodoro'
+                    ? 'pomodoro'
+                    : (String(timerInfo.method || '') === 'plan-segment' ? 'plan-segment' : 'manual'),
                 status: this.normalizeTimerStatus(timerInfo.status, slot),
             };
             const hasTimerEntry = timerEntry.running

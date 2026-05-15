@@ -1,27 +1,27 @@
 # AI Handoff Map
 
-새 AI 세션이 현재 구조를 빠르게 잡기 위한 지도다. 제품/UX 판단은 먼저 `docs/product-identity.md`를 따른다.
+This document is the fastest way for a new AI session to build an accurate mental model of the current codebase.
+
+Before architecture decisions, read `docs/product-identity.md`. Architecture choices should serve that product identity, not replace it.
 
 ## Read Order
 
-`script.js`를 처음부터 끝까지 읽지 말고 아래 순서로 좁혀 읽는다.
+Use this order instead of reading `script.js` top to bottom:
 
 1. `README.md`
 2. `docs/product-identity.md`
 3. `index.html` for load order
 4. `main.js` for bootstrap
-5. 이 문서
-6. 작업 표면별 폴더:
+5. This file
+6. Task surface folder:
    - `core/`: pure calculations
    - `controllers/`: interaction/state flow
    - `ui/`: DOM/string rendering
    - `infra/`: storage/integration helpers
-7. 관련 `__tests__/`
-8. actual-grid 작업이면 `docs/actual-lock-guardrails.md`
+7. Relevant `__tests__/`
+8. `docs/actual-lock-guardrails.md` for actual-grid work
 
 ## Runtime Shape
-
-`index.html` loads:
 
 ```text
 core/*.js -> infra/storage-adapter.js -> ui/*.js -> controllers/*.js -> script.js -> main.js -> window.tracker
@@ -37,7 +37,7 @@ core/*.js -> infra/storage-adapter.js -> ui/*.js -> controllers/*.js -> script.j
 | Core | `time-core`, `duration-core`, `input-format-core`, `date-core`, `text-core`, `activity-core`, `timesheet-state-core`, `actual-grid-core`, `grid-metrics-core` | pure helpers and snapshot/grid calculations |
 | Controllers | `actual-input`, `actual-modal`, `controller-state-access`, `field-interaction`, `inline-plan-dropdown`, `lifecycle`, `persistence`, `planned-catalog-routine`, `planned-editor`, `schedule-preview`, `selection-overlay`, `supabase-sync`, `time-entry-render`, `timer` | user interactions, state transitions, persistence/sync orchestration |
 | UI | `time-entry-renderer`, `actual-activity-list-renderer`, `time-control-renderer` | row/activity/control markup helpers |
-| Infra | `storage-adapter.js` | local key rules and storage calls |
+| Infra | `storage-adapter.js`, `telegram-codex-bridge.js` | local key rules, storage calls, optional bridge integration |
 
 ## Task Read Paths
 
@@ -126,10 +126,10 @@ Tests:
 | Planned selection / merge / dropdown | targeted planned regression tests | Browser smoke |
 | Timer / actual input | targeted timer/input tests | Browser smoke if UI changes |
 | Persistence / save/load | targeted persistence tests | Browser smoke for save/load |
-| Pure core helpers | matching core tests | Browser smoke if rendered behavior changes |
+| Pure core helpers | matching core tests | Browser smoke if rendered behavior can change |
 
 ## Known Facts
 
-- `server.js` still imports missing Telegram bridge modules; `npm start` or bridge-related tests may fail until reconciled.
+- `server.js` includes optional Telegram/Codex bridge routes. They require `TELEGRAM_BOT_TOKEN` and `CODEX_APP_URL` to be configured before webhook use.
 - Some legacy Korean literals/comments are mojibake. Trace by ids, classes, data attributes, controller names, and tests.
 - `docs/refactor-stage*.md` are historical rationale only. Open them only for past boundaries, previous extraction reasons, or regression-test origin.

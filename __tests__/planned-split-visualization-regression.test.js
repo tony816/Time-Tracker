@@ -52,3 +52,43 @@ test('planned split keeps explicit planActivities when available', () => {
     assert.notEqual(result[0], ctx.timeSlots[0].planActivities[0]);
 });
 
+test('planned split preserves child activity display metadata', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [
+                    {
+                        label: '스쿼트',
+                        seconds: 1800,
+                        titleActivityId: 'exercise',
+                        titleText: '운동',
+                        activityId: 'squat',
+                        activityText: '스쿼트',
+                    },
+                ],
+            },
+        ],
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value : [];
+        },
+        getPlannedLabelForIndex() {
+            return '무시되어야 함';
+        },
+        getBlockLength() {
+            return 1;
+        },
+    };
+
+    const result = getSplitActivities.call(ctx, 'planned', 0);
+
+    assert.deepEqual(result, [
+        {
+            label: '스쿼트',
+            seconds: 1800,
+            titleActivityId: 'exercise',
+            titleText: '운동',
+            activityId: 'squat',
+            activityText: '스쿼트',
+        },
+    ]);
+});

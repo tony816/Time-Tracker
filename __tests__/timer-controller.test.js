@@ -18,6 +18,12 @@ const getMobileTimeUiStateWrapper = buildMethod('getMobileTimeUiState(index, slo
 const getTimerEligibilityWrapper = buildMethod('getTimerEligibility(index, slotOverride = null)', '(index, slotOverride = null)');
 const getTimerStartBlockReasonWrapper = buildMethod('getTimerStartBlockReason(index)', '(index)');
 const createTimerControlsWrapper = buildMethod('createTimerControls(index, slot)', '(index, slot)');
+const handleSegmentTimerClickWrapper = buildMethod('handleSegmentTimerClick(segmentRef, segmentId = null)', '(segmentRef, segmentId = null)');
+const startSegmentTimerWrapper = buildMethod('startSegmentTimer(segmentRef, segmentId = null)', '(segmentRef, segmentId = null)');
+const pauseSegmentTimerWrapper = buildMethod('pauseSegmentTimer(segmentRef, segmentId = null)', '(segmentRef, segmentId = null)');
+const resumeSegmentTimerWrapper = buildMethod('resumeSegmentTimer(segmentRef, segmentId = null)', '(segmentRef, segmentId = null)');
+const resolvePlanSegmentBaseIndexWrapper = buildMethod('resolvePlanSegmentBaseIndex(segmentRef)', '(segmentRef)');
+const getPlanSegmentIndexByIdWrapper = buildMethod('getPlanSegmentIndexById(segmentId)', '(segmentId)');
 
 test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.attachTimerListeners, 'function');
@@ -37,6 +43,15 @@ test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.getTimerEligibility, 'function');
     assert.equal(typeof timerController.getTimerStartBlockReason, 'function');
     assert.equal(typeof timerController.createTimerControls, 'function');
+    assert.equal(typeof timerController.handleSegmentTimerClick, 'function');
+    assert.equal(typeof timerController.startSegmentTimer, 'function');
+    assert.equal(typeof timerController.pauseSegmentTimer, 'function');
+    assert.equal(typeof timerController.resumeSegmentTimer, 'function');
+    assert.equal(typeof timerController.startPlanSegmentTimer, 'function');
+    assert.equal(typeof timerController.pausePlanSegmentTimer, 'function');
+    assert.equal(typeof timerController.resumePlanSegmentTimer, 'function');
+    assert.equal(typeof timerController.getPlanSegmentIndexById, 'function');
+    assert.equal(typeof timerController.resolvePlanSegmentBaseIndex, 'function');
     assert.ok(globalThis.TimerController);
     assert.equal(typeof globalThis.TimerController.resolveTimerEligibility, 'function');
 });
@@ -103,6 +118,30 @@ test('script timer wrapper methods delegate to controller helpers', () => {
             calls.push(['controls', this, index, slot]);
             return '<div>timer</div>';
         },
+        handleSegmentTimerClick(index) {
+            calls.push(['segment-click', this, index]);
+            return true;
+        },
+        startSegmentTimer(segmentRef) {
+            calls.push(['segment-start', this, segmentRef]);
+            return 'segment-start';
+        },
+        pauseSegmentTimer(segmentRef) {
+            calls.push(['segment-pause', this, segmentRef]);
+            return 'segment-pause';
+        },
+        resumeSegmentTimer(segmentRef) {
+            calls.push(['segment-resume', this, segmentRef]);
+            return 'segment-resume';
+        },
+        getPlanSegmentIndexById(segmentId) {
+            calls.push(['segment-id', this, segmentId]);
+            return 7;
+        },
+        resolvePlanSegmentBaseIndex(segmentRef) {
+            calls.push(['segment-resolve', this, segmentRef]);
+            return 7;
+        },
     };
 
     const ctx = { id: 'tracker' };
@@ -125,6 +164,12 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         assert.deepEqual(getTimerEligibilityWrapper.call(ctx, 2, slot), { canStartWithoutDate: true });
         assert.equal(getTimerStartBlockReasonWrapper.call(ctx, 2), null);
         assert.equal(createTimerControlsWrapper.call(ctx, 2, slot), '<div>timer</div>');
+        assert.equal(handleSegmentTimerClickWrapper.call(ctx, 2), true);
+        assert.equal(startSegmentTimerWrapper.call(ctx, 'planned-7-8'), 'segment-start');
+        assert.equal(pauseSegmentTimerWrapper.call(ctx, 'planned-7-8'), 'segment-pause');
+        assert.equal(resumeSegmentTimerWrapper.call(ctx, 'planned-7-8'), 'segment-resume');
+        assert.equal(getPlanSegmentIndexByIdWrapper.call(ctx, 'planned-7-8'), 7);
+        assert.equal(resolvePlanSegmentBaseIndexWrapper.call(ctx, 'planned-7-8'), 7);
     } finally {
         globalThis.TimerController = original;
     }
@@ -144,7 +189,286 @@ test('script timer wrapper methods delegate to controller helpers', () => {
         ['eligibility', ctx, 2, slot],
         ['reason', ctx, 2],
         ['controls', ctx, 2, slot],
+        ['segment-click', ctx, 2],
+        ['segment-start', ctx, 'planned-7-8'],
+        ['segment-pause', ctx, 'planned-7-8'],
+        ['segment-resume', ctx, 'planned-7-8'],
+        ['segment-id', ctx, 'planned-7-8'],
+        ['segment-resolve', ctx, 'planned-7-8'],
     ]);
+});
+
+test('handleSegmentTimerClick runs one plan segment timer without writing actual text', () => {
+    const nowValues = [100_000, 130_000, 160_000];
+    const originalNow = Date.now;
+    Date.now = () => nowValues[0];
+
+    const ctx = {
+        timeSlots: [
+            {
+                planned: 'A',
+                planSegmentTimers: {
+                    'planned-0-0': { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null, startedAt: null, method: 'plan-segment' },
+                },
+                timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null },
+            },
+            {
+                planned: 'B',
+                planSegmentTimers: {
+                    'planned-1-1': { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null, startedAt: null, method: 'plan-segment' },
+                },
+                timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null },
+            },
+        ],
+        mergedFields: new Map(),
+        findMergeKey: () => null,
+        normalizeTimerStatus: timerController.normalizeTimerStatus,
+        normalizePlanActivitiesArray: () => [],
+        startTimerInterval() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    try {
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 0), true);
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].status, 'running');
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].method, 'plan-segment');
+
+        nowValues[0] = nowValues[1];
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 1), true);
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].status, 'paused');
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].elapsed, 30);
+        assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1'].status, 'running');
+        assert.equal(ctx.timeSlots[0].actual, undefined);
+    } finally {
+        Date.now = originalNow;
+    }
+});
+
+test('handleSegmentTimerClick accepts a plan segment id and pauses other running segments', () => {
+    const originalNow = Date.now;
+    Date.now = () => 200_000;
+
+    const ctx = {
+        timeSlots: [
+            {
+                planned: 'A',
+                planSegmentTimers: {
+                    'planned-0-0': { status: 'running', running: true, elapsed: 10, rawElapsed: 10, startTime: 190_000, startedAt: 190_000, method: 'plan-segment' },
+                },
+            },
+            {
+                planned: 'B',
+                planSegmentTimers: {
+                    'planned-1-1': { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null, startedAt: null, method: 'plan-segment' },
+                },
+            },
+        ],
+        mergedFields: new Map(),
+        findMergeKey(type, idx) {
+            if (type === 'planned' && idx === 0) return 'planned-0-0';
+            if (type === 'planned' && idx === 1) return 'planned-1-1';
+            return null;
+        },
+        normalizeTimerStatus: timerController.normalizeTimerStatus,
+        normalizePlanActivitiesArray: () => [],
+        startTimerInterval() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        resolvePlanSegmentBaseIndex: timerController.resolvePlanSegmentBaseIndex,
+    };
+
+    try {
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 'planned-1-1'), true);
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].status, 'paused');
+        assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1'].status, 'running');
+    } finally {
+        Date.now = originalNow;
+    }
+});
+
+test('plan segment timers stay isolated within a merged slot', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planSegmentTimers: {
+                    'planned-0-0-seg0': {
+                        running: false,
+                        elapsed: 5,
+                        elapsedSeconds: 5,
+                        rawElapsed: 5,
+                        startTime: null,
+                        startedAt: null,
+                        lastPausedAt: null,
+                        method: 'plan-segment',
+                        status: 'idle',
+                    },
+                    'planned-0-0-seg1': {
+                        running: false,
+                        elapsed: 12,
+                        elapsedSeconds: 12,
+                        rawElapsed: 12,
+                        startTime: null,
+                        startedAt: null,
+                        lastPausedAt: null,
+                        method: 'plan-segment',
+                        status: 'idle',
+                    },
+                },
+                timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null },
+            },
+        ],
+        mergedFields: new Map(),
+        findMergeKey: () => 'planned-0-0',
+        normalizeTimerStatus: timerController.normalizeTimerStatus,
+        normalizePlanActivitiesArray: () => [],
+        startTimerInterval() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        resolvePlanSegmentBaseIndex: timerController.resolvePlanSegmentBaseIndex,
+    };
+
+    assert.equal(timerController.startSegmentTimer.call(ctx, 'planned-0-0-seg0'), true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].running, true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].running, false);
+});
+
+test('plan segment graphic clicks route to the inline plan dropdown anchor', () => {
+    const calls = [];
+    const plannedInput = {
+        click() {
+            calls.push('planned-input-click');
+        },
+    };
+    const graphic = {
+        dataset: { index: '4', segmentId: 'planned-4-4' },
+        addEventListener(type, handler) {
+            this[type] = handler;
+        },
+    };
+    const entryDiv = {
+        querySelector(selector) {
+            if (selector === '.planned-input[data-index="4"]' || selector === '.planned-input') return plannedInput;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.plan-segment-graphic') return [graphic];
+            if (selector === '.plan-segment-timer-button') return [];
+            return [];
+        },
+    };
+    const ctx = {
+        openInlinePlanDropdown(index, anchor, endIndex) {
+            calls.push(['dropdown', index, anchor === plannedInput, endIndex]);
+        },
+    };
+
+    timerController.attachTimerListeners.call(ctx, entryDiv, 4);
+    assert.equal(typeof graphic.click, 'function');
+    graphic.click({
+        preventDefault() {},
+        stopPropagation() {},
+        target: {
+            closest(selector) {
+                if (selector === '.plan-segment-timer-button') return null;
+                return null;
+            },
+        },
+    });
+
+    assert.deepEqual(calls, ['planned-input-click']);
+});
+
+test('updateRunningTimers keeps plan segment elapsed base stable while rendering live text', () => {
+    const originalNow = Date.now;
+    const originalDocument = globalThis.document;
+    Date.now = () => 15_000;
+
+    const timerDisplay = { textContent: '' };
+    const segmentDisplay = {
+        textContent: '',
+        classList: {
+            removed: [],
+            added: [],
+            remove(...classes) {
+                this.removed.push(...classes);
+            },
+            add(className) {
+                this.added.push(className);
+            },
+        },
+    };
+
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="0"] .timer-display') return timerDisplay;
+            if (selector === '.plan-segment-timer-time[data-segment-id="planned-0-0"]') return segmentDisplay;
+            return null;
+        },
+    };
+
+    const ctx = {
+        lastKnownTodayDate: '2026-05-09',
+        currentDate: '2026-05-09',
+        timeSlots: [
+            {
+                planSegmentTimers: {
+                    'planned-0-0': {
+                        running: true,
+                        elapsed: 10,
+                        elapsedSeconds: 10,
+                        startTime: 10_000,
+                        startedAt: 10_000,
+                        status: 'running',
+                        method: 'plan-segment',
+                    },
+                },
+                timer: {
+                    running: false,
+                    elapsed: 0,
+                    elapsedSeconds: 0,
+                    startTime: null,
+                    startedAt: null,
+                    status: 'idle',
+                },
+            },
+        ],
+        getTodayLocalDateString() {
+            return '2026-05-09';
+        },
+        formatTime(seconds) {
+            return `${seconds}s`;
+        },
+        getPlanSegmentTimerText(index, segmentId) {
+            assert.equal(index, 0);
+            assert.equal(segmentId, 'planned-0-0');
+            return '0:15 / 40m';
+        },
+        getPlanSegmentTimeTone(index, segmentId) {
+            assert.equal(index, 0);
+            assert.equal(segmentId, 'planned-0-0');
+            return 'under';
+        },
+        stopTimerInterval() {
+            assert.fail('running timer should keep interval active');
+        },
+    };
+
+    try {
+        timerController.updateRunningTimers.call(ctx);
+    } finally {
+        Date.now = originalNow;
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].elapsedSeconds, 10);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0'].startedAt, 10_000);
+    assert.equal(timerDisplay.textContent, '');
+    assert.equal(segmentDisplay.textContent, '0:15 / 40m');
+    assert.deepEqual(segmentDisplay.classList.added, ['tone-under']);
 });
 
 test('resolveTimerEligibility reflects merged ranges and merged planned text', () => {

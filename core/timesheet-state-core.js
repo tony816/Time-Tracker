@@ -154,17 +154,29 @@
                     elapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed)
                         ? Math.max(0, Math.floor(sourceSlot.timer.elapsed))
                         : 0,
+                    elapsedSeconds: Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsedSeconds)
+                        ? Math.max(0, Math.floor(sourceSlot.timer.elapsedSeconds))
+                        : (Number.isFinite(sourceSlot.timer && sourceSlot.timer.elapsed) ? Math.max(0, Math.floor(sourceSlot.timer.elapsed)) : 0),
                     rawElapsed: Number.isFinite(sourceSlot.timer && sourceSlot.timer.rawElapsed)
                         ? Math.max(0, Math.floor(sourceSlot.timer.rawElapsed))
                         : 0,
                     startTime: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime)
                         ? sourceSlot.timer.startTime
                         : null,
+                    startedAt: Number.isFinite(sourceSlot.timer && sourceSlot.timer.startedAt)
+                        ? sourceSlot.timer.startedAt
+                        : (Number.isFinite(sourceSlot.timer && sourceSlot.timer.startTime) ? sourceSlot.timer.startTime : null),
+                    lastPausedAt: Number.isFinite(sourceSlot.timer && sourceSlot.timer.lastPausedAt)
+                        ? sourceSlot.timer.lastPausedAt
+                        : null,
                     method: (sourceSlot.timer && String(sourceSlot.timer.method || 'manual') === 'pomodoro')
                         ? 'pomodoro'
-                        : 'manual',
+                        : ((sourceSlot.timer && String(sourceSlot.timer.method || '') === 'plan-segment') ? 'plan-segment' : 'manual'),
                     status: normalizeTimerStatus(sourceSlot.timer && sourceSlot.timer.status, sourceSlot),
                 };
+                targetSlot.planSegmentTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
+                    ? JSON.parse(JSON.stringify(sourceSlot.planSegmentTimers))
+                    : {};
                 targetSlot.activityLog = normalizeActivityLog(sourceSlot.activityLog, {
                     normalizeActivitiesArray,
                 });

@@ -46,6 +46,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.split-visualization-actual\s*\{[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.activity-log-btn/);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.actual-field-container\s*\{[^}]*pointer-events:\s*none;/s);
+    assert.match(interactionsSource, /\.actual-field-container\.merged-actual-main\s*\{[^}]*background-color:\s*transparent\s*!important;/s);
     assert.match(interactionsSource, /\.activity-log-btn\s*\{[^}]*bottom:\s*2px;[^}]*min-width:\s*44px;[^}]*height:\s*18px;[^}]*padding:\s*0 10px;[^}]*font-size:\s*9px;/s);
     assert.match(interactionsSource, /pointer-events:\s*none;/);
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*flex-direction:\s*column;/s);

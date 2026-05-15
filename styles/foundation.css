@@ -57,6 +57,29 @@ header {
   margin-left: auto;
 }
 
+.mode-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background-color: #f8fafc;
+  color: #2c3e50;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.mode-link-btn:hover {
+  background-color: #eef6ff;
+  border-color: #94a3b8;
+}
+
 .auth-status {
   font-size: 0.9em;
   color: #555;
@@ -188,6 +211,130 @@ h1 {
   background-color: white;
   user-select: none;
   position: relative;
+}
+
+html.actual-recording-disabled .header-row,
+html.actual-recording-disabled .time-entry,
+html.actual-recording-disabled .summary-row {
+  grid-template-columns: 1fr 80px;
+}
+
+html.actual-recording-disabled .actual-label,
+html.actual-recording-disabled .summary-actual,
+html.actual-recording-disabled .actual-field-container,
+html.actual-recording-disabled .split-cell-wrapper.split-type-actual,
+html.actual-recording-disabled #activityLogModal {
+  display: none !important;
+}
+
+html.actual-recording-disabled .time-slot-container {
+  border-right: none;
+}
+
+html.actual-recording-disabled .time-slot-container .timer-controls-container {
+  display: none;
+}
+
+html.actual-recording-disabled .planned-input:hover,
+html.actual-recording-disabled .split-cell-wrapper.split-type-planned:hover .planned-input {
+  background-color: white;
+}
+
+html.actual-recording-disabled .split-cell-wrapper .split-visualization-planned {
+  pointer-events: auto;
+}
+
+html.actual-recording-disabled .split-grid-segment.has-plan-segment-timer {
+  padding: 0;
+  overflow: hidden;
+}
+
+.plan-segment-graphic {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 38px;
+}
+
+.plan-segment-graphic-main {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.plan-segment-graphic-main.has-segment-title {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.plan-segment-graphic-title,
+.plan-segment-graphic-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
+.plan-segment-graphic-title {
+  align-self: end;
+  padding-top: 4px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.plan-segment-graphic-label {
+  align-self: center;
+}
+
+.plan-segment-timer-button {
+  align-self: stretch;
+  border: 0;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.36);
+  color: #1f2937;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+}
+
+.plan-segment-timer-spacer {
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.plan-segment-timer-button:hover,
+.plan-segment-timer-button:focus-visible {
+  background: rgba(255, 255, 255, 0.9);
+  outline: 2px solid rgba(31, 41, 55, 0.24);
+  outline-offset: -2px;
+}
+
+.plan-segment-timer-time {
+  min-height: 16px;
+  padding: 0 8px 4px;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.plan-segment-timer-time.tone-match {
+  color: #b7791f;
+}
+
+.plan-segment-timer-time.tone-over {
+  color: #c2410c;
 }
 
 .time-entry:nth-child(even) .time-slot {
@@ -414,6 +561,12 @@ h1 {
   .time-entry,
   .summary-row {
     grid-template-columns: 1fr 60px 1fr;
+  }
+
+  html.actual-recording-disabled .header-row,
+  html.actual-recording-disabled .time-entry,
+  html.actual-recording-disabled .summary-row {
+    grid-template-columns: 1fr 60px;
   }
 
   .time-slot,

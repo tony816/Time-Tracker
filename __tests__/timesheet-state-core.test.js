@@ -148,8 +148,11 @@ test('restoreStateSnapshot hydrates slots with normalized actual-grid state and 
     assert.deepEqual(restored.timeSlots[0].timer, {
         running: true,
         elapsed: 125,
+        elapsedSeconds: 125,
         rawElapsed: 130,
         startTime: 456,
+        startedAt: 456,
+        lastPausedAt: null,
         method: 'pomodoro',
         status: 'running',
     });

@@ -74,7 +74,7 @@ Optional Supabase table: `timesheet_days`.
 
 ## Known Facts
 
-- `server.js` still imports missing Telegram bridge modules; `npm start` or full tests can fail on bridge-related paths until reconciled.
+- `server.js` includes optional Telegram/Codex bridge routes. They require `TELEGRAM_BOT_TOKEN` and `CODEX_APP_URL` to be configured before webhook use.
 - Some legacy Korean literals/comments are mojibake. Trust ids, data attributes, controller names, and tests over raw displayed text.
 - `docs/refactor-stage*.md` are historical rationale, not current source of truth.
 

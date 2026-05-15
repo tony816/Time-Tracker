@@ -175,22 +175,23 @@ function buildSplitVisualization(type, index) {
         if (!context) return '';
         const { gridSegments, titleSegments, showTitleBand } = context;
         const isActual = type === 'actual';
+        const renderTitleBand = showTitleBand && !(type === 'planned' && this.actualRecordingDisabled);
         const toggleable = isActual ? (context.toggleable !== undefined ? context.toggleable : true) : false;
         const showLabels = !isActual || Boolean(context.showLabels);
         const useConnections = !isActual || !toggleable;
         const hasGrid = Array.isArray(gridSegments) && gridSegments.length > 0;
         if (!hasGrid && !showTitleBand) return '';
 
-        const classes = ['split-visualization', showTitleBand ? 'has-title' : 'no-title'];
+        const classes = ['split-visualization', renderTitleBand ? 'has-title' : 'no-title'];
         classes.push(type === 'planned' ? 'split-visualization-planned' : 'split-visualization-actual');
-        if (type === 'planned' && showTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
+        if (type === 'planned' && renderTitleBand && Array.isArray(titleSegments) && titleSegments.length === 1) {
             classes.push('split-visualization-single-title');
         }
         if (isActual) {
             classes.push(toggleable ? 'split-toggleable' : 'split-readonly');
         }
 
-        const titleHtml = showTitleBand
+        const titleHtml = renderTitleBand
             ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'title');
@@ -200,7 +201,9 @@ function buildSplitVisualization(type, index) {
             : '';
 
         const gridHtml = hasGrid
-            ? `<div class="split-grid">${gridSegments.map((segment, idx) => {
+            ? `<div class="split-grid">${(() => {
+                const labeledSegmentCount = gridSegments.reduce((count, segment) => count + (segment && segment.label ? 1 : 0), 0);
+                return gridSegments.map((segment, idx) => {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
@@ -212,10 +215,57 @@ function buildSplitVisualization(type, index) {
                     && !segment.suppressHoverLabel
                     && (showLabels || Boolean(segment.alwaysVisibleLabel));
                 const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
+                const safeTitleLabel = (!isActual && segment.titleLabel)
+                    ? this.escapeHtml(segment.titleLabel)
+                    : '';
                 const labelClass = segment.alwaysVisibleLabel ? ' split-grid-label-persistent' : '';
-                const labelHtml = safeLabel
+                let labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
+                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label) ? ' has-plan-segment-timer' : '';
+                if (!isActual && this.actualRecordingDisabled && segment.label) {
+                    const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                    const segmentIndex = labeledSegmentCount > 1 ? idx : null;
+                    const segmentId = this.getPlanSegmentId
+                        ? this.getPlanSegmentId(baseIndex, segmentIndex != null ? segmentIndex : null)
+                        : `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`;
+                    const model = this.buildPlanSegmentViewModel
+                        ? this.buildPlanSegmentViewModel(baseIndex, segmentId)
+                        : {
+                            id: segmentId,
+                            display: {
+                                icon: this.getPlanSegmentTimerIcon ? this.getPlanSegmentTimerIcon(baseIndex, segmentId) : '⏱',
+                                timeText: this.getPlanSegmentTimerText ? this.getPlanSegmentTimerText(baseIndex, segmentId) : '',
+                                tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex, segmentId) : 'under',
+                            },
+                        };
+                    const escapedSegmentId = this.escapeAttribute(model.id);
+                    const icon = model.display.icon;
+                    const timerText = this.escapeHtml(model.display.timeText);
+                    const tone = model.display.tone;
+                    const buttonHtml = segment.connectTop
+                        ? '<span class="plan-segment-timer-spacer" aria-hidden="true"></span>'
+                        : `<button type="button"
+                                   class="plan-segment-timer-button"
+                                   data-index="${baseIndex}"
+                                   data-segment-id="${escapedSegmentId}"
+                                   aria-label="계획 세그먼트 타이머">${icon}</button>`;
+                    const graphicMainClass = safeTitleLabel
+                        ? 'plan-segment-graphic-main has-segment-title'
+                        : 'plan-segment-graphic-main';
+                    labelHtml = `<div class="plan-segment-graphic"
+                                      data-index="${baseIndex}"
+                                      data-segment-id="${escapedSegmentId}">
+                                    ${buttonHtml}
+                                    <div class="${graphicMainClass}">
+                                        ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
+                                        <span class="plan-segment-graphic-label" title="${safeLabel}">${safeLabel}</span>
+                                        <span class="plan-segment-timer-time tone-${tone}"
+                                              data-index="${baseIndex}"
+                                              data-segment-id="${escapedSegmentId}">${timerText}</span>
+                                    </div>
+                                </div>`;
+                }
                 const failedIconHtml = failedClass
                     ? '<span class="split-grid-failed-mark" aria-hidden="true">X</span>'
                     : '';
@@ -229,11 +279,12 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
-            }).join('')}</div>`
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${planOnlyTimerClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                }).join('');
+            })()}</div>`
             : '';
 
-        return `<div class="${classes.join(' ')}" aria-hidden="true">
+        return `<div class="${classes.join(' ')}">
                     ${titleHtml}
                     ${gridHtml}
                 </div>`;

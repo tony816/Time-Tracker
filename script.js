@@ -23,6 +23,9 @@ class TimeTracker {
         this.timeSlots = [];
         this.currentDate = this.getTodayLocalDateString();
         this.lastKnownTodayDate = this.currentDate;
+        this.actualRecordingDisabled = Boolean(
+            typeof window !== 'undefined' && window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING
+        );
         this.selectedPlannedFields = new Set();
         this.selectedActualFields = new Set();
         this.isSelectingPlanned = false;
@@ -162,6 +165,7 @@ class TimeTracker {
     init() {
         this.cacheAuthElements();
         this.cacheStatusElements();
+        this.applyRecordingMode();
         this.applyEncodingSafeLabels();
         this.generateTimeSlots();
         this.renderTimeEntries();
@@ -229,6 +233,27 @@ class TimeTracker {
         setText('#activityLogModal .actual-sub-activities-hint', UI_LABELS.actualHint);
         setText('#saveActivityLog', UI_LABELS.saveButton);
         setText('#cancelActivityLog', UI_LABELS.cancelButton);
+    }
+
+    applyRecordingMode() {
+        const disabled = Boolean(this.actualRecordingDisabled);
+        try {
+            document.documentElement.classList.toggle('actual-recording-disabled', disabled);
+            document.body.classList.toggle('actual-recording-disabled', disabled);
+        } catch (_) {}
+
+        const modeLink = document.getElementById('recordingModeLink');
+        if (!modeLink) return;
+
+        if (disabled) {
+            modeLink.href = 'index.html';
+            modeLink.textContent = '전체 기능 보기';
+            modeLink.setAttribute('aria-label', '모든 기능이 포함된 페이지로 이동');
+        } else {
+            modeLink.href = 'index.html?mode=plan-only';
+            modeLink.textContent = '실제활동 기록 제외';
+            modeLink.setAttribute('aria-label', '실제활동 기록 기능을 제외한 페이지로 이동');
+        }
     }
 
     // ?�버�?�??�의 ?�???�출 ?�퍼
@@ -482,7 +507,8 @@ class TimeTracker {
             planActivities: [],
             planTitle: '',
             planTitleBandOn: false,
-            timer: { running: false, elapsed: 0, rawElapsed: 0, startTime: null, method: 'manual', status: 'idle' },
+            timer: { running: false, elapsed: 0, elapsedSeconds: 0, rawElapsed: 0, startTime: null, startedAt: null, lastPausedAt: null, method: 'manual', status: 'idle' },
+            planSegmentTimers: {},
             activityLog: { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualOverride: false }
         }));
     }
@@ -1112,38 +1138,146 @@ class TimeTracker {
         if (!Number.isFinite(parsed)) return null;
         return Math.max(1, Math.floor(parsed));
     }
+    normalizeActivityCatalogEntry(raw) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.normalizeActivityCatalogEntry === 'function') {
+            return activityCore.normalizeActivityCatalogEntry(raw, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
+        const item = raw && typeof raw === 'object' ? raw : {};
+        const name = this.normalizeActivityText(item.name ?? item.label ?? item.title ?? '');
+        return {
+            id: String(item.id || '').trim() || `activity_${Date.now()}`,
+            name,
+            label: name,
+            title: name,
+            normalizedName: name,
+            parentId: String(item.parentId || '').trim() || null,
+            colorKey: String(item.colorKey || '').trim() || null,
+            defaultDurationMinutes: Number.isFinite(item.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(item.defaultDurationMinutes))) : null,
+            displayMode: String(item.displayMode || '').trim() || 'chip',
+            pinned: Boolean(item.pinned),
+            archived: Boolean(item.archived),
+            usageCount: Number.isFinite(item.usageCount) ? Math.max(0, Math.floor(Number(item.usageCount))) : 0,
+            lastUsedAt: typeof item.lastUsedAt === 'string' && item.lastUsedAt.trim() ? item.lastUsedAt : null,
+            source: typeof item.source === 'string' ? item.source : 'local',
+        };
+    }
+    normalizeActivityCatalogArray(raw) {
+        if (!Array.isArray(raw)) return [];
+        const seen = new Set();
+        const normalized = [];
+        raw.forEach((item) => {
+            const entry = this.normalizeActivityCatalogEntry(item);
+            if (!entry.normalizedName || seen.has(entry.normalizedName)) return;
+            seen.add(entry.normalizedName);
+            normalized.push(entry);
+        });
+        return normalized;
+    }
+    groupActivityCatalogEntries(entries) {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.groupActivityCatalogEntries === 'function') {
+            return activityCore.groupActivityCatalogEntries(entries, {
+                normalizeActivityText: (value) => this.normalizeActivityText
+                    ? this.normalizeActivityText(value || '')
+                    : String(value || '').trim(),
+                normalizeDurationStep: (seconds) => this.normalizeDurationStep(seconds),
+            });
+        }
+        const items = this.normalizeActivityCatalogArray(entries);
+        const byId = new Map(items.map((item) => [item.id, item]));
+        const byParentId = new Map();
+        items.forEach((item) => {
+            const key = item.parentId || '';
+            if (!byParentId.has(key)) byParentId.set(key, []);
+            byParentId.get(key).push(item);
+        });
+        const topLevel = items.filter((item) => !item.parentId);
+        return {
+            items,
+            byId,
+            byParentId,
+            pinned: topLevel.filter((item) => item.pinned && !item.archived),
+            recent: topLevel.filter((item) => !item.pinned && !item.archived).slice(0, 8),
+            parents: topLevel.filter((item) => (byParentId.get(item.id) || []).length > 0),
+            children: items.filter((item) => item.parentId),
+            topLevel,
+        };
+    }
     normalizeLocalPlannedCatalogEntries(entries) {
         if (!Array.isArray(entries)) return [];
+        const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
+            ? (value) => this.normalizeActivityCatalogEntry(value)
+            : (value) => {
+                const raw = value && typeof value === 'object' ? value : {};
+                const label = this.normalizeActivityText(raw.name ?? raw.label ?? raw.title ?? '');
+                return {
+                    id: String(raw.id || '').trim() || `activity_${Date.now()}`,
+                    name: label,
+                    label,
+                    title: label,
+                    normalizedName: label,
+                    parentId: String(raw.parentId || '').trim() || null,
+                    colorKey: String(raw.colorKey || '').trim() || null,
+                    defaultDurationMinutes: Number.isFinite(raw.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(raw.defaultDurationMinutes))) : null,
+                    displayMode: String(raw.displayMode || '').trim() || 'chip',
+                    pinned: Boolean(raw.pinned),
+                    archived: Boolean(raw.archived),
+                    usageCount: Number.isFinite(raw.usageCount) ? Math.max(0, Math.floor(Number(raw.usageCount))) : 0,
+                    lastUsedAt: typeof raw.lastUsedAt === 'string' && raw.lastUsedAt.trim() ? raw.lastUsedAt : null,
+                    source: typeof raw.source === 'string' ? raw.source : 'local',
+                };
+            };
         const normalized = [];
         entries.forEach((entry) => {
             if (typeof entry === 'string') {
                 const label = this.normalizeActivityText(entry);
                 if (label) {
-                    normalized.push({ label, priorityRank: null });
+                    normalized.push(normalizeCatalogEntry({ name: label, priorityRank: null }));
                 }
                 return;
             }
             if (!entry || typeof entry !== 'object') return;
             const label = this.normalizeActivityText(entry.label || entry.title || '');
             if (!label) return;
-            normalized.push({
-                label,
+            normalized.push(normalizeCatalogEntry({
+                id: entry.id,
+                name: label,
+                normalizedName: label,
+                parentId: entry.parentId,
+                colorKey: entry.colorKey,
+                defaultDurationMinutes: entry.defaultDurationMinutes,
+                displayMode: entry.displayMode,
+                pinned: entry.pinned,
+                archived: entry.archived,
+                usageCount: entry.usageCount,
+                lastUsedAt: entry.lastUsedAt,
+                source: entry.source,
                 priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
-            });
+            }));
         });
         return normalized;
     }
     getLocalPlannedEntries() {
         const entries = [];
+        const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
+            ? (value) => this.normalizeActivityCatalogEntry(value)
+            : (value) => this.normalizeLocalPlannedCatalogEntries([value])[0] || null;
         (this.plannedActivities || []).forEach((item) => {
             if (!item || item.source === 'notion') return;
-            const label = this.normalizeActivityText(item.label || '');
-            if (!label) return;
-            if (entries.some((entry) => entry.label === label)) return;
-            entries.push({
-                label,
-                priorityRank: this.normalizePriorityRankValue(item.priorityRank),
-            });
+            const normalized = normalizeCatalogEntry(item);
+            if (!normalized.normalizedName) return;
+            if (entries.some((entry) => entry.normalizedName === normalized.normalizedName)) return;
+            entries.push(normalized);
         });
         return entries;
     }
@@ -1151,14 +1285,22 @@ class TimeTracker {
         if (!Array.isArray(entries)) return '';
         const normalized = this.normalizeLocalPlannedCatalogEntries(entries)
             .map((entry) => ({
-                label: entry.label,
-                priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
+                id: entry.id,
+                name: entry.name,
+                normalizedName: entry.normalizedName,
+                parentId: entry.parentId,
+                colorKey: entry.colorKey,
+                defaultDurationMinutes: entry.defaultDurationMinutes,
+                displayMode: entry.displayMode,
+                pinned: Boolean(entry.pinned),
+                archived: Boolean(entry.archived),
+                usageCount: Number.isFinite(entry.usageCount) ? Math.max(0, Math.floor(Number(entry.usageCount))) : 0,
+                lastUsedAt: entry.lastUsedAt || null,
+                source: entry.source || 'local',
             }))
             .sort((a, b) => {
-                if (a.label !== b.label) return a.label.localeCompare(b.label);
-                const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
-                const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
-                return ra - rb;
+                if (a.normalizedName !== b.normalizedName) return a.normalizedName.localeCompare(b.normalizedName);
+                return (a.id || '').localeCompare(b.id || '');
             });
         return JSON.stringify(normalized);
     }
@@ -2479,10 +2621,22 @@ class TimeTracker {
         if (!block) return;
         const actualUnits = this.getActualGridUnitsForBase(baseIndex, planContext.units.length, planContext.units);
         const { start, end } = block;
-        const clickedCount = unitIndex - start + 1;
-        let currentOnCount = 0;
+        const lockedUnits = typeof this.getActualGridLockedUnitsForBase === 'function'
+            ? this.getActualGridLockedUnitsForBase(baseIndex, planContext.units)
+            : [];
+        const selectableUnits = [];
         for (let i = start; i <= end; i++) {
-            if (actualUnits[i]) {
+            if (lockedUnits[i]) {
+                actualUnits[i] = false;
+                continue;
+            }
+            selectableUnits.push(i);
+        }
+        const clickedCount = selectableUnits.reduce((count, idx) => count + (idx <= unitIndex ? 1 : 0), 0);
+        if (clickedCount <= 0) return;
+        let currentOnCount = 0;
+        for (const idx of selectableUnits) {
+            if (actualUnits[idx]) {
                 currentOnCount += 1;
             } else {
                 break;
@@ -2494,9 +2648,9 @@ class TimeTracker {
             newCount = 0;
         }
 
-        for (let i = start; i <= end; i++) {
-            actualUnits[i] = i < start + newCount;
-        }
+        selectableUnits.forEach((idx, position) => {
+            actualUnits[idx] = position < newCount;
+        });
         this.syncActualGridToSlots(baseIndex, planContext.units, actualUnits);
         this.renderTimeEntries(true);
         this.calculateTotals();
@@ -3162,7 +3316,19 @@ class TimeTracker {
                 if (normalized) planLabelSet.add(normalized);
             });
             const orderedActual = this.sortActivitiesByOrder(actualActivities);
-            const lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            let lockedUnits = this.getActualGridLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            const hasActiveActualUnits = actualUnits.some(Boolean);
+            const hasAssignedActualRows = orderedActual.some((item) => {
+                if (!item || item.source === 'locked') return false;
+                const label = this.normalizeActivityText
+                    ? this.normalizeActivityText(item.label || '')
+                    : String(item.label || '').trim();
+                const seconds = Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                return Boolean(label) && seconds > 0;
+            });
+            if (!hasActiveActualUnits && !hasAssignedActualRows) {
+                lockedUnits = this.getActualGridManualLockedUnitsForBase(baseIndex, planUnits, orderedActual);
+            }
             let displayOrder = this.getActualGridDisplayOrderIndices(planUnits, orderedActual, planLabelSet);
             if (displayOrder.length !== planUnits.length) {
                 displayOrder = planUnits.map((_, idx) => idx);
@@ -3189,7 +3355,26 @@ class TimeTracker {
         }
 
         const activities = this.getSplitActivities(type, baseIndex);
-        return buildSegmentsFromActivities(activities);
+        const result = buildSegmentsFromActivities(activities);
+        if (type === 'planned' && result && Array.isArray(result.gridSegments)) {
+            const titleByLabel = new Map();
+            activities.forEach((item) => {
+                if (!item) return;
+                const label = normalizeSegmentLabel(item.activityText || item.label || '');
+                const title = normalizeSegmentLabel(item.titleText || '');
+                if (label && title && !titleByLabel.has(label)) {
+                    titleByLabel.set(label, title);
+                }
+            });
+            if (titleByLabel.size > 0) {
+                result.gridSegments = result.gridSegments.map((segment) => {
+                    if (!segment || !segment.label) return segment;
+                    const titleLabel = titleByLabel.get(normalizeSegmentLabel(segment.label));
+                    return titleLabel ? { ...segment, titleLabel } : segment;
+                });
+            }
+        }
+        return result;
     }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
@@ -3543,6 +3728,120 @@ class TimeTracker {
         return globalThis.TimerController.createTimerControls.call(this, index, slot);
     }
 
+    getPlanSegmentBaseIndex(index) {
+        return globalThis.TimerController.getPlanSegmentBaseIndex.call(this, index);
+    }
+
+    getPlanSegmentRange(index) {
+        return globalThis.TimerController.getPlanSegmentRange.call(this, index);
+    }
+
+    getPlanSegmentPlannedSeconds(index) {
+        return globalThis.TimerController.getPlanSegmentPlannedSeconds.call(this, index);
+    }
+
+    getPlanSegmentId(index, segmentIndex = null) {
+        return globalThis.TimerController.getPlanSegmentId.call(this, index, segmentIndex);
+    }
+
+    getPlanSegmentIndexById(segmentId) {
+        return globalThis.TimerController.getPlanSegmentIndexById.call(this, segmentId);
+    }
+
+    resolvePlanSegmentBaseIndex(segmentRef) {
+        return globalThis.TimerController.resolvePlanSegmentBaseIndex.call(this, segmentRef);
+    }
+
+    handleSegmentTimerClick(segmentRef, segmentId = null) {
+        return globalThis.TimerController.handleSegmentTimerClick.call(this, segmentRef, segmentId);
+    }
+
+    startSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.startSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    pauseSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.pauseSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    resumeSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.resumeSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    startPlanSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.startSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    pausePlanSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.pauseSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    resumePlanSegmentTimer(segmentRef, segmentId = null) {
+        return globalThis.TimerController.resumeSegmentTimer.call(this, segmentRef, segmentId);
+    }
+
+    getPlanSegmentTimerCore() {
+        return (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentTimerCore)
+            ? globalThis.TimeTrackerPlanSegmentTimerCore
+            : null;
+    }
+
+    buildPlanSegmentViewModel(index, segmentId = null) {
+        const core = this.getPlanSegmentTimerCore();
+        const baseIndex = this.getPlanSegmentBaseIndex(index);
+        const slot = this.timeSlots[baseIndex] || {};
+        const resolvedSegmentId = String(segmentId || this.getPlanSegmentId(baseIndex) || '').trim();
+        const timer = (globalThis.TimerController && typeof globalThis.TimerController.getPlanSegmentTimerState === 'function')
+            ? globalThis.TimerController.getPlanSegmentTimerState.call(this, baseIndex, resolvedSegmentId)
+            : (slot.planSegmentTimers && slot.planSegmentTimers[resolvedSegmentId]) || slot.timer || {};
+        const segment = {
+            id: resolvedSegmentId,
+            title: this.getPlannedLabelForIndex(baseIndex) || slot.planned || '',
+            plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex),
+            timer,
+        };
+        if (core && typeof core.buildPlanSegmentViewModel === 'function') {
+            return core.buildPlanSegmentViewModel(segment);
+        }
+        return {
+            id: segment.id,
+            title: segment.title,
+            plannedSeconds: segment.plannedSeconds,
+            timer: {
+                status: segment.timer.status || (segment.timer.running ? 'running' : 'idle'),
+                elapsedSeconds: Number.isFinite(segment.timer.elapsedSeconds) ? Math.max(0, Math.floor(segment.timer.elapsedSeconds)) : 0,
+                startedAt: Number.isFinite(segment.timer.startedAt) ? Math.floor(segment.timer.startedAt) : null,
+                lastPausedAt: Number.isFinite(segment.timer.lastPausedAt) ? Math.floor(segment.timer.lastPausedAt) : null,
+            },
+            display: {
+                icon: segment.timer && segment.timer.running ? '❚❚' : '⏱',
+                action: segment.timer && segment.timer.running ? 'pause' : 'start',
+                timeText: `0m / ${Math.ceil(segment.plannedSeconds / 60)}m`,
+                tone: 'under',
+            },
+        };
+    }
+
+    getPlanSegmentTimerText(index, segmentId = null) {
+        const model = this.buildPlanSegmentViewModel(index, segmentId);
+        if (model.display && typeof model.display.timeText === 'string') {
+            return model.display.timeText;
+        }
+        const baseIndex = this.getPlanSegmentBaseIndex(index);
+        const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex);
+        return `0m / ${Math.ceil(plannedSeconds / 60)}m`;
+    }
+
+    getPlanSegmentTimeTone(index, segmentId = null) {
+        const model = this.buildPlanSegmentViewModel(index, segmentId);
+        return (model.display && model.display.tone) || 'under';
+    }
+
+    getPlanSegmentTimerIcon(index, segmentId = null) {
+        const model = this.buildPlanSegmentViewModel(index, segmentId);
+        return (model.display && model.display.icon) || '⏱';
+    }
+
     formatTime(seconds) {
         const durationCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerDurationCore)
             ? globalThis.TimeTrackerDurationCore
@@ -3729,7 +4028,15 @@ class TimeTracker {
                 const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
                 const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
                 const seconds = this.normalizeDurationStep(rawSeconds) ?? 0;
-                return { label, seconds };
+                const normalized = { label, seconds };
+                ['titleActivityId', 'titleText', 'activityId', 'activityText'].forEach((key) => {
+                    if (!(key in item)) return;
+                    const rawValue = item[key];
+                    normalized[key] = rawValue == null
+                        ? null
+                        : (this.normalizeActivityText ? this.normalizeActivityText(rawValue) : String(rawValue || '').trim());
+                });
+                return normalized;
             })
             .filter(item => item.label || item.seconds > 0);
     }
@@ -4748,6 +5055,9 @@ class TimeTracker {
         buildPlannedActivityOptions(extraLabels = []) {
         return globalThis.TimeTrackerInlinePlanDropdownController.buildPlannedActivityOptions.call(this, extraLabels);
     }
+        groupActivityBoard(entries) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.groupActivityBoard.call(this, entries);
+    }
         getHangulInitialSearchKey(text) {
         return globalThis.TimeTrackerInlinePlanDropdownController.getHangulInitialSearchKey.call(this, text);
     }
@@ -5037,6 +5347,9 @@ class TimeTracker {
 
         openRoutineMenuFromInlinePlan(label, anchorEl) {
         return globalThis.TimeTrackerInlinePlanDropdownController.openRoutineMenuFromInlinePlan.call(this, label, anchorEl);
+    }
+        openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
     }
     positionRoutineMenu(anchorEl) {
         if (!this.routineMenu) return;
@@ -5431,6 +5744,7 @@ class TimeTracker {
 
     // ?�동 로그 관??메서?�들
     attachActivityLogListener(entryDiv, index) {
+        if (this.actualRecordingDisabled) return;
         const activityBtn = entryDiv.querySelector('.activity-log-btn');
         if (activityBtn) {
             activityBtn.addEventListener('click', (e) => {
@@ -5589,21 +5903,32 @@ class TimeTracker {
     }
 
     getActualGridSecondsMap(planUnits = null, actualUnits = null) {
+        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
+        const sourceActiveUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
+        let activeUnits = Array.isArray(sourceActiveUnits)
+            ? sourceActiveUnits.map((value) => Boolean(value))
+            : sourceActiveUnits;
+        if (Array.isArray(units) && Array.isArray(activeUnits)) {
+            const baseIndex = Number.isInteger(this.modalActualBaseIndex) ? this.modalActualBaseIndex : null;
+            const activities = Array.isArray(this.modalActualActivities) ? this.modalActualActivities : null;
+            const lockedUnits = (baseIndex != null && typeof this.getActualGridLockedUnitsForBase === 'function')
+                ? this.getActualGridLockedUnitsForBase(baseIndex, units, activities)
+                : [];
+            if (Array.isArray(lockedUnits) && lockedUnits.length > 0) {
+                activeUnits = activeUnits.map((value, index) => Boolean(value) && !Boolean(lockedUnits[index]));
+            }
+        }
         const gridMetricsCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerGridMetricsCore)
             ? globalThis.TimeTrackerGridMetricsCore
             : null;
         if (gridMetricsCore && typeof gridMetricsCore.getActualGridSecondsMap === 'function') {
-            return gridMetricsCore.getActualGridSecondsMap(planUnits, actualUnits, {
-                fallbackPlanUnits: this.modalActualPlanUnits,
-                fallbackActualUnits: this.modalActualGridUnits,
+            return gridMetricsCore.getActualGridSecondsMap(units, activeUnits, {
                 stepSeconds: this.getActualDurationStepSeconds(),
                 normalizeActivityText: (value) => this.normalizeActivityText
                     ? this.normalizeActivityText(value || '')
                     : String(value || '').trim(),
             });
         }
-        const units = Array.isArray(planUnits) ? planUnits : this.modalActualPlanUnits;
-        const activeUnits = Array.isArray(actualUnits) ? actualUnits : this.modalActualGridUnits;
         const map = new Map();
         if (!Array.isArray(units) || !Array.isArray(activeUnits)) return map;
         const step = this.getActualDurationStepSeconds();
@@ -6305,6 +6630,7 @@ class TimeTracker {
     }
 
         openActivityLogModal(index) {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.openActivityLogModal.call(this, index);
     }
 
@@ -6313,10 +6639,12 @@ class TimeTracker {
     }
 
         saveActivityLogFromModal() {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.saveActivityLogFromModal.call(this);
     }
 
         attachActivityModalEventListeners() {
+        if (this.actualRecordingDisabled) return false;
         return globalThis.TimeTrackerActualModalController.attachActivityModalEventListeners.call(this);
     }
 }
