@@ -746,7 +746,21 @@ function renderInlinePlanDropdownOptions() {
                 const caret = document.createElement('button');
                 caret.type = 'button';
                 caret.className = 'activity-chip-caret';
-                caret.textContent = '›';
+                caret.innerHTML = `
+                    <svg
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <path
+                            d="M7.5 5L12.5 10L7.5 15"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                `;
                 caret.setAttribute('aria-label', `${label} 세부활동 추가 또는 보기`);
                 caret.title = `${label} 세부활동 추가 또는 보기`;
                 caret.addEventListener('click', (event) => {
