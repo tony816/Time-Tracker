@@ -114,6 +114,7 @@ class TimeTracker {
         this.modalPlanActivities = [];
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
+        this.modalPlanSectionOpenParentId = null;
         this.modalPlanActiveRow = -1;
         this.modalPlanTitle = '';
         this.modalPlanTitleBandOn = false;
@@ -5457,6 +5458,9 @@ class TimeTracker {
     }
         touchPlannedActivityUsage(activityItem, parentItem = null) {
         return globalThis.TimeTrackerInlinePlanDropdownController.touchPlannedActivityUsage.call(this, activityItem, parentItem);
+    }
+        closePlanActivityChildMenu(options = {}) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.closePlanActivityChildMenu.call(this, options);
     }
 
         openRoutineMenuFromInlinePlan(label, anchorEl) {

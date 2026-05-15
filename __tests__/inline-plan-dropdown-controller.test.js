@@ -29,6 +29,10 @@ const closeInlinePlanDropdownWrapper = buildMethod(
     'closeInlinePlanDropdown()',
     '()'
 );
+const closePlanActivityChildMenuWrapper = buildMethod(
+    'closePlanActivityChildMenu(options = {})',
+    '(options = {})'
+);
 const applyInlinePlanSelectionWrapper = buildMethod(
     'applyInlinePlanSelection(label, options = {})',
     '(label, options = {})'
@@ -43,14 +47,15 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
     assert.equal(typeof controller.buildPlannedActivityOptions, 'function');
     assert.equal(typeof controller.groupActivityBoard, 'function');
     assert.equal(typeof controller.renderInlinePlanDropdownOptions, 'function');
-    assert.equal(typeof controller.positionInlinePlanDropdown, 'function');
-    assert.equal(typeof controller.openInlinePlanDropdown, 'function');
-    assert.equal(typeof controller.closeInlinePlanDropdown, 'function');
-    assert.equal(typeof controller.applyInlinePlanSelection, 'function');
-    assert.equal(
-        globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown,
-        controller.openInlinePlanDropdown
-    );
+        assert.equal(typeof controller.positionInlinePlanDropdown, 'function');
+        assert.equal(typeof controller.openInlinePlanDropdown, 'function');
+        assert.equal(typeof controller.closeInlinePlanDropdown, 'function');
+        assert.equal(typeof controller.closePlanActivityChildMenu, 'function');
+        assert.equal(typeof controller.applyInlinePlanSelection, 'function');
+        assert.equal(
+            globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown,
+            controller.openInlinePlanDropdown
+        );
 });
 
 test('script inline plan wrapper methods delegate to controller helpers', () => {
@@ -81,6 +86,10 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
             calls.push(['close', this]);
             return 'close-result';
         },
+        closePlanActivityChildMenu(options) {
+            calls.push(['closeChild', this, options]);
+            return 'close-child-result';
+        },
         applyInlinePlanSelection(label, options) {
             calls.push(['apply', this, label, options]);
             return 'apply-result';
@@ -104,6 +113,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         assert.equal(positionInlinePlanDropdownWrapper.call(ctx, anchor), 'position-result');
         assert.equal(openInlinePlanDropdownWrapper.call(ctx, 3, anchor, 5), 'open-result');
         assert.equal(closeInlinePlanDropdownWrapper.call(ctx), 'close-result');
+        assert.equal(closePlanActivityChildMenuWrapper.call(ctx, options), 'close-child-result');
         assert.equal(applyInlinePlanSelectionWrapper.call(ctx, 'A', options), 'apply-result');
         assert.equal(touchPlannedActivityUsageWrapper.call(ctx, activityItem, parentItem), 'touch-result');
     } finally {
@@ -117,6 +127,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['position', ctx, anchor],
         ['open', ctx, 3, anchor, 5],
         ['close', ctx],
+        ['closeChild', ctx, options],
         ['apply', ctx, 'A', options],
         ['touchUsage', ctx, activityItem, parentItem],
     ]);
@@ -150,11 +161,25 @@ test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessib
     const createNode = (tagName) => {
         const listeners = {};
         const attributes = {};
-        return {
+        const node = {
             tagName,
             children: [],
             dataset: {},
             className: '',
+            classList: {
+                owner: null,
+                add(...classes) {
+                    const target = this.owner;
+                    if (!target) return;
+                    classes.forEach((cls) => {
+                        if (!cls) return;
+                        const tokens = target.className.split(/\s+/).filter(Boolean);
+                        if (!tokens.includes(cls)) {
+                            target.className = (target.className ? target.className + ' ' : '') + cls;
+                        }
+                    });
+                },
+            },
             textContent: '',
             title: '',
             type: '',
@@ -175,6 +200,8 @@ test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessib
                 return attributes[name];
             },
         };
+        node.classList.owner = node;
+        return node;
     };
     const board = {
         children: [],
@@ -652,12 +679,198 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, []);
 
         assert.equal(subSection.hidden, false);
-        assert.equal(title.textContent, '활동군: Work');
-        assert.equal(backBtn.textContent, '← 전체 활동으로');
+        assert.ok(title.textContent.endsWith('Work'));
+        assert.equal(backBtn.hidden, true);
+        assert.equal(backBtn.getAttribute('aria-hidden'), 'true');
         assert.equal(subBoard.children[0].children[0].textContent, 'Work 자체 선택');
         assert.equal(subBoard.children[1].textContent, '세부활동');
         assert.equal(subBoard.children[2].textContent, '아직 세부활동이 없습니다.');
         assert.equal(subBoard.children[3].textContent, '+ 세부활동 추가');
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('caret toggles child board open, close, and switch parent', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        const listeners = {};
+        const attributes = {};
+        const node = {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            classList: {
+                owner: null,
+                add(...classes) {
+                    const target = this.owner;
+                    if (!target) return;
+                    classes.forEach((cls) => {
+                        if (!cls) return;
+                        const tokens = target.className.split(/\s+/).filter(Boolean);
+                        if (!tokens.includes(cls)) {
+                            target.className = (target.className ? target.className + ' ' : '') + cls;
+                        }
+                    });
+                },
+            },
+            textContent: '',
+            title: '',
+            type: '',
+            hidden: false,
+            appendChild(node) {
+                this.children.push(node);
+                return node;
+            },
+            addEventListener(type, handler) {
+                listeners[type] = handler;
+            },
+            dispatchEvent(event) {
+                if (listeners[event.type]) listeners[event.type](event);
+            },
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
+        };
+        node.classList.owner = node;
+        return node;
+    };
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const subSection = createNode('div');
+    subSection.className = 'inline-plan-subsection';
+    subSection.hidden = true;
+    const subBoard = createNode('div');
+    subBoard.className = 'activity-chip-board inline-plan-sub-board';
+    subBoard._innerHTML = '';
+    Object.defineProperty(subBoard, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const title = createNode('div');
+    title.className = 'inline-plan-subsection-title';
+    const backBtn = createNode('button');
+    backBtn.className = 'inline-plan-sub-back';
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-subsection') return subSection;
+            if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-subsection-title') return title;
+            if (selector === '.inline-plan-sub-back') return backBtn;
+            return null;
+        },
+    };
+    const anchor = { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 10, height: 10 }; } };
+    const documentStub = {
+        createElement: createNode,
+        querySelector() {
+            return anchor;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, anchor },
+        plannedActivities: [
+            { id: 'work', name: 'Work', label: 'Work', normalizedName: 'Work', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'study', name: 'Study', label: 'Study', normalizedName: 'Study', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        renderInlinePlanDropdownOptions() {
+            return controller.renderInlinePlanDropdownOptions.call(this);
+        },
+        positionInlinePlanDropdown() {},
+        openPlanActivityChildMenu: controller.openPlanActivityChildMenu,
+        closePlanActivityChildMenu: controller.closePlanActivityChildMenu,
+    };
+
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        let parentSection = board.children[0];
+        assert.ok(parentSection);
+        let row = parentSection.children[1];
+        let workChip = row.children[0];
+        let studyChip = row.children[1];
+        let workCaret = workChip.children[1];
+        let studyCaret = studyChip.children[1];
+        assert.equal(workCaret.getAttribute('aria-expanded'), 'false');
+        assert.equal(studyCaret.getAttribute('aria-expanded'), 'false');
+
+        workCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(subSection.hidden, false);
+        assert.equal(ctx.modalPlanSectionOpen, true);
+        assert.equal(ctx.modalPlanSectionOpenParentId, 'work');
+
+        parentSection = board.children[0];
+        row = parentSection.children[1];
+        workChip = row.children[0];
+        studyChip = row.children[1];
+        workCaret = workChip.children[1];
+        studyCaret = studyChip.children[1];
+        assert.equal(workChip.className.includes('activity-chip-open'), true);
+        assert.equal(workCaret.getAttribute('aria-expanded'), 'true');
+        assert.equal(studyCaret.getAttribute('aria-expanded'), 'false');
+
+        workCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(subSection.hidden, true);
+        assert.equal(ctx.modalPlanSectionOpen, false);
+        assert.equal(ctx.modalPlanSectionOpenParentId, null);
+
+        parentSection = board.children[0];
+        row = parentSection.children[1];
+        workChip = row.children[0];
+        studyChip = row.children[1];
+        studyCaret = studyChip.children[1];
+
+        studyCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(subSection.hidden, false);
+        assert.equal(ctx.modalPlanSectionOpen, true);
+        assert.equal(ctx.modalPlanSectionOpenParentId, 'study');
+        assert.ok(title.textContent.endsWith('Study'));
     } finally {
         globalThis.document = originalDocument;
     }
@@ -1009,7 +1222,7 @@ test('activity selection updates usage metadata and recent ordering', () => {
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
-        const parentSection = board.children.find((node) => node.children && node.children[0] && node.children[0].textContent === '전체 활동군');
+        parentSection = board.children[0];
         assert.ok(parentSection);
         const parentButton = parentSection.children[1].children[0].children[0];
         parentButton.dispatchEvent({

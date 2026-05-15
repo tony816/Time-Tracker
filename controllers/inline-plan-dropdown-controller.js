@@ -724,6 +724,10 @@ function renderInlinePlanDropdownOptions() {
             chip.className = `activity-chip${canOpenChildBoard ? ' activity-chip-parent activity-chip-split' : ''}`;
             chip.dataset.label = label;
             if (canOpenChildBoard) chip.dataset.parentId = String(item.id || '');
+            const itemId = String(item.id || '').trim();
+            const currentOpenParentId = String(this.modalPlanSectionOpenParentId || '').trim();
+            const isOpenParent = canOpenChildBoard && this.modalPlanSectionOpen && currentOpenParentId === itemId;
+            if (isOpenParent) chip.classList.add('activity-chip-open');
 
             const labelButton = document.createElement('button');
             labelButton.type = 'button';
@@ -763,9 +767,17 @@ function renderInlinePlanDropdownOptions() {
                 `;
                 caret.setAttribute('aria-label', `${label} 세부활동 추가 또는 보기`);
                 caret.title = `${label} 세부활동 추가 또는 보기`;
+                caret.setAttribute('aria-expanded', isOpenParent ? 'true' : 'false');
+                caret.setAttribute('aria-controls', 'inline-plan-subsection');
                 caret.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    const parentId = String(item.id || '').trim();
+                    const currentlyOpenParentId = String(this.modalPlanSectionOpenParentId || '').trim();
+                    if (this.modalPlanSectionOpen && currentlyOpenParentId === parentId) {
+                        this.closePlanActivityChildMenu();
+                        return;
+                    }
                     this.openPlanActivityChildMenu(item, caret, childItemsForParent);
                 });
                 chip.appendChild(caret);
@@ -838,6 +850,24 @@ function renderInlinePlanDropdownOptions() {
         }
     }
 
+function closePlanActivityChildMenu(options = {}) {
+        const section = this.inlinePlanDropdown
+            ? this.inlinePlanDropdown.querySelector('.inline-plan-subsection')
+            : null;
+        if (section) section.hidden = true;
+        this.modalPlanSectionOpen = false;
+        this.modalPlanSectionOpenParentId = null;
+
+        if (options.rerender !== false && typeof this.renderInlinePlanDropdownOptions === 'function') {
+            this.renderInlinePlanDropdownOptions();
+        }
+
+        const targetAnchor = getInlinePlanAnchorState.call(this);
+        if (targetAnchor && this.positionInlinePlanDropdown) {
+            this.positionInlinePlanDropdown(targetAnchor);
+        }
+    }
+
 function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget || !parentItem) return;
         const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
@@ -849,13 +879,17 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
         if (title) title.textContent = parentLabel ? `활동군: ${parentLabel}` : '활동군';
         section.hidden = false;
+        if (!section.id) section.id = 'inline-plan-subsection';
         this.modalPlanSectionOpen = true;
+        this.modalPlanSectionOpenParentId = String(parentItem.id || '').trim() || null;
         board.innerHTML = '';
         if (backBtn) {
             backBtn.setAttribute('aria-label', '전체 활동으로');
             backBtn.title = '전체 활동으로';
             backBtn.textContent = '← 전체 활동으로';
             backBtn.onclick = null;
+            backBtn.hidden = true;
+            backBtn.setAttribute('aria-hidden', 'true');
             backBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -967,6 +1001,10 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
         });
         board.appendChild(addChildBtn);
+
+        if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+            this.renderInlinePlanDropdownOptions();
+        }
 
         const targetAnchor = getInlinePlanAnchorState.call(this);
         if (targetAnchor && this.positionInlinePlanDropdown) {
@@ -1309,9 +1347,14 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             });
         }
         const subSection = dropdown.querySelector('.inline-plan-subsection');
+        if (subSection && !subSection.id) subSection.id = 'inline-plan-subsection';
         const inlineBoard = dropdown.querySelector('.activity-chip-board');
         const inlineSubBoard = dropdown.querySelector('.inline-plan-sub-board');
         const inlineBack = dropdown.querySelector('.inline-plan-sub-back');
+        if (inlineBack) {
+            inlineBack.hidden = true;
+            inlineBack.setAttribute('aria-hidden', 'true');
+        }
 
         // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
         this.inlinePlanContext = {
@@ -1332,6 +1375,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         }));
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
+        this.modalPlanSectionOpenParentId = null;
         if (subSection) subSection.hidden = true;
         const baseSlot = this.timeSlots[range.startIndex] || {};
         this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
@@ -1520,6 +1564,8 @@ function closeInlinePlanDropdown() {
         this.inlinePlanDropdown = null;
         this.inlinePlanTarget = null;
         this.inlinePlanHighlightRange = null;
+        this.modalPlanSectionOpen = false;
+        this.modalPlanSectionOpenParentId = null;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }
@@ -1587,6 +1633,7 @@ function applyInlinePlanSelection(label, options = {}) {
         renderInlinePlanDropdownOptions,
         touchPlannedActivityUsage,
         groupActivityBoard,
+        closePlanActivityChildMenu,
         openPlanActivityChildMenu,
         openRoutineMenuFromInlinePlan,
         isSameInlinePlanTarget,
