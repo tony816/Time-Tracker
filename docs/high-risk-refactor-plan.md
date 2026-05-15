@@ -1,95 +1,42 @@
 # High-Risk Refactor Record
 
-Status: completed on 2026-03-25. This file is now historical reference, not an active pending plan.
+Status: completed on 2026-03-25. Historical reference only; do not treat as an active plan.
 
-## Completed Items
+## Completed Work
 
-| Item | Status | Notes |
-| --- | --- | --- |
-| `Field Interaction Controller` | Completed | Planned-field interaction routing was extracted while keeping actual-grid pointer/lock behavior guarded. |
-| `Actual Grid Core` phase 2 | Completed | Effective lock readers, locked-row reconstruction helpers, extra allocation helpers, and related pure helpers were extracted behind wrappers. |
-| `Actual Grid Core` phase 3 | Completed | Additional pure split/title/grid segment builders were moved into `core/actual-grid-core.js`. |
+| Item | Result |
+| --- | --- |
+| Field Interaction Controller | Planned click/drag/merge/hover routing extracted while keeping actual-grid pointer/lock behavior guarded. |
+| Actual Grid Core phase 2 | Effective lock readers, locked-row reconstruction, extra allocation helpers, and related pure helpers extracted behind wrappers. |
+| Actual Grid Core phase 3 | Additional pure split/title/grid segment builders moved into `core/actual-grid-core.js`. |
 
 ## Current Source Of Truth
 
-Use these docs instead of treating this file as a to-do list:
+Use:
 
 1. `README.md`
 2. `docs/ai-handoff-map.md`
 3. `docs/actual-lock-guardrails.md`
 
-## What Still Matters From This Record
+## Still-Relevant Rules
 
-The execution plan is complete, but the risk rules remain valid:
+- Preserve behavior first.
+- Isolate helper clusters before moving orchestration.
+- For actual-grid changes, run `npm run test:actual-lock` before `npm test`.
+- Run browser smoke when lock masks, rendering, click behavior, assigned-duration, or extra allocation can change.
 
-- preserve behavior first
-- isolate helper clusters before moving orchestration
-- validate actual-grid changes with `npm run test:actual-lock` before broader testing
-- run browser smoke whenever lock masks, rendering, click behavior, or assigned-duration changes can be affected
+## Historical Scope
 
-## Historical Scope Summary
+Field interaction extraction included planned field click/drag selection, merged planned click capture, row-wide planned targets, and planned-side hover entry points. It intentionally excluded actual-grid long-press lock, click blocking, failed-click handling, assigned-duration recalculation, and extra-slot allocation.
 
-### Completed High-Risk Candidate 1
+Actual Grid Core extraction included effective lock mask readers, locked-row reconstruction, split/title/grid segment builders, extra allocation helpers, and pure/helper clusters under `core/actual-grid-core.js`. It preserved UI event wiring, modal shell ownership, save/load schema compatibility, and Supabase protocol behavior.
 
-`Field Interaction Controller`
-
-Completed scope:
-
-- planned field click / drag selection wiring
-- merged planned click capture
-- row-wide planned click targets
-- planned-side hover entry points
-
-Explicitly kept out of the extraction:
-
-- actual-grid long-press lock logic
-- actual-grid click blocking
-- actual-grid failed-click handling
-- assigned-duration recalculation
-- extra-slot allocation
-
-### Completed High-Risk Candidate 2
-
-`Actual Grid Core`
-
-Completed scope:
-
-- effective lock mask readers
-- locked-row reconstruction helpers
-- split/title/grid segment builders
-- extra allocation helper extraction
-- actual-grid pure/helper clusters moved under `core/actual-grid-core.js`
-
-Explicitly preserved during the extraction:
-
-- UI event rewiring
-- modal shell ownership
-- save/load schema compatibility
-- Supabase protocol behavior
-
-## Invariants That Still Apply
+## Invariants
 
 - `sum(non-locked assigned seconds) + sum(locked row seconds) === modalActualTotalSeconds`
 - manual lock rows survive recalculation
-- auto lock rows are rebuilt from the current deficit only
+- auto lock rows are rebuilt from current deficit only
 - locked units reject normal clicks and failed-click toggles
 - extra activities never occupy locked units
 
-## Required Validation For Future Actual-Grid Work
-
-Run:
-
-```bash
-npm run test:actual-lock
-npm test
-```
-
-Then run the documented browser smoke in `docs/actual-lock-guardrails.md`.
-
-## Use This File For
-
-- understanding why the high-risk work was staged
-- seeing which extraction classes were already completed
-- avoiding duplicate plan work on finished refactors
-
-Do not use this file as the primary description of the current architecture.
+Use this file only to understand staging rationale, completed extraction scope, or historical boundaries.
