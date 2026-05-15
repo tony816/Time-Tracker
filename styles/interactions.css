@@ -1041,6 +1041,14 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   overflow: hidden;
 }
 
+.activity-chip-parent {
+  padding: 0;
+}
+
+.activity-chip-split {
+  overflow: hidden;
+}
+
 button.activity-chip,
 .activity-chip-main,
 .activity-chip-caret {
@@ -1064,6 +1072,12 @@ button.activity-chip,
   min-width: 0;
 }
 
+.activity-chip-split .activity-chip-main {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  padding-inline-end: 12px;
+}
+
 .activity-chip-label {
   min-width: 0;
   max-width: 180px;
@@ -1073,8 +1087,17 @@ button.activity-chip,
 }
 
 .activity-chip-caret {
-  width: 32px;
+  width: 34px;
   border-left: 1px solid #e4ebf3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+}
+
+.activity-chip-split .activity-chip-caret {
+  border-left-color: #dbe4ee;
 }
 
 .activity-chip:hover,
@@ -1088,11 +1111,31 @@ button.activity-chip,
   padding: 0 10px;
 }
 
+.activity-chip-self {
+  background: #f4f8fc;
+  border-style: solid;
+  border-color: #d6e0eb;
+}
+
+.activity-chip-add {
+  background: #f7fbff;
+  border-style: dashed;
+  border-color: #b8d9ff;
+  color: #29659d;
+}
+
+.activity-chip-add:hover,
+.activity-chip-add:focus-within {
+  background: #edf6ff;
+  border-color: #7fb8eb;
+}
+
 .inline-plan-subsection-head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+  justify-content: space-between;
 }
 
 .inline-plan-sub-back {
@@ -1114,6 +1157,18 @@ button.activity-chip,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.inline-plan-sub-board .activity-chip-row + .activity-chip-board-title,
+.inline-plan-sub-board .inline-plan-empty {
+  margin-top: 10px;
+}
+
+.inline-plan-empty {
+  padding: 10px 8px 6px;
+  color: #6b7a89;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .inline-plan-option.inline-plan-option-row {

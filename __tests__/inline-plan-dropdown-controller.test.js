@@ -133,10 +133,11 @@ test('isSameInlinePlanTarget can read the current range through shared controlle
     }
 });
 
-test('renderInlinePlanDropdownOptions lets parent chips without children open child board', () => {
+test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessible labels', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
         const listeners = {};
+        const attributes = {};
         return {
             tagName,
             children: [],
@@ -155,6 +156,12 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
             dispatchEvent(event) {
                 if (listeners[event.type]) listeners[event.type](event);
             },
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
         };
     };
     const board = {
@@ -172,11 +179,10 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
             return node;
         },
     };
-    const input = { value: '' };
     const dropdown = {
         querySelector(selector) {
             if (selector === '.activity-chip-board') return board;
-            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-input') return { value: '' };
             return null;
         },
     };
@@ -185,15 +191,8 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
         inlinePlanDropdown: dropdown,
         inlinePlanTarget: { startIndex: 0, endIndex: 0 },
         plannedActivities: [
-            {
-                id: 'work',
-                name: '회사 업무',
-                label: '회사 업무',
-                normalizedName: '회사 업무',
-                parentId: null,
-                pinned: true,
-                archived: false,
-            },
+            { id: 'work', name: 'Work', label: 'Work', normalizedName: 'Work', parentId: null, pinned: true, archived: false },
+            { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work', pinned: false, archived: false },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -206,22 +205,20 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
         },
     };
 
-    globalThis.document = {
-        createElement: createNode,
-    };
+    globalThis.document = { createElement: createNode };
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
 
-        const pinnedSection = board.children.find((node) => {
-            return node.children && node.children[0] && node.children[0].textContent === '고정';
-        });
+        const pinnedSection = board.children.find((node) => node.children && node.children[0] && node.children[0].textContent === '고정');
         assert.ok(pinnedSection);
         const row = pinnedSection.children[1];
         const chip = row.children[0];
-        assert.equal(chip.className, 'activity-chip activity-chip-parent');
+        assert.equal(chip.className, 'activity-chip activity-chip-parent activity-chip-split');
+        const labelButton = chip.children[0];
         const caret = chip.children[1];
-        assert.equal(caret.className, 'activity-chip-caret');
+        assert.equal(labelButton.getAttribute('aria-label'), 'Work 선택');
+        assert.equal(caret.getAttribute('aria-label'), 'Work 세부활동 보기');
 
         caret.dispatchEvent({
             type: 'click',
@@ -235,7 +232,7 @@ test('renderInlinePlanDropdownOptions lets parent chips without children open ch
     }
 });
 
-test('renderInlinePlanDropdownOptions hides child activities from top-level board sections', () => {
+test('renderInlinePlanDropdownOptions hides recent when it duplicates the visible top-level list without history', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
         return {
@@ -251,6 +248,8 @@ test('renderInlinePlanDropdownOptions hides child activities from top-level boar
                 return node;
             },
             addEventListener() {},
+            setAttribute() {},
+            getAttribute() { return null; },
         };
     };
     const board = {
@@ -279,8 +278,9 @@ test('renderInlinePlanDropdownOptions hides child activities from top-level boar
         inlinePlanDropdown: dropdown,
         inlinePlanTarget: { startIndex: 0, endIndex: 0 },
         plannedActivities: [
-            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, pinned: true, archived: false },
-            { id: 'squat', name: '스쿼트', label: '스쿼트', normalizedName: '스쿼트', parentId: 'exercise', pinned: false, archived: false, usageCount: 10, lastUsedAt: '2026-05-09' },
+            { id: 'exercise', name: 'Exercise', label: 'Exercise', normalizedName: 'Exercise', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null },
+            { id: 'stretch', name: 'Stretch', label: 'Stretch', normalizedName: 'Stretch', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null },
+            { id: 'exercise-child', name: 'Child', label: 'Child', normalizedName: 'Child', parentId: 'exercise', pinned: false, archived: false },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -290,22 +290,157 @@ test('renderInlinePlanDropdownOptions hides child activities from top-level boar
         },
     };
 
-    globalThis.document = {
-        createElement: createNode,
-    };
+    globalThis.document = { createElement: createNode };
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
-        const visibleLabels = [];
+        const headings = [];
         const collect = (node) => {
             if (!node) return;
-            if (node.className === 'activity-chip-label') visibleLabels.push(node.textContent);
+            if (node.className === 'activity-chip-board-title') headings.push(node.textContent);
             (node.children || []).forEach(collect);
         };
         board.children.forEach(collect);
 
-        assert.ok(visibleLabels.includes('운동'));
-        assert.equal(visibleLabels.includes('스쿼트'), false);
+        assert.equal(headings.includes('최근 사용'), false);
+        assert.ok(headings.includes('전체 활동'));
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('openPlanActivityChildMenu renders parent self selection and child selection into the segment model', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        const listeners = {};
+        const attributes = {};
+        return {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            textContent: '',
+            title: '',
+            type: '',
+            hidden: false,
+            appendChild(node) {
+                this.children.push(node);
+                return node;
+            },
+            addEventListener(type, handler) {
+                listeners[type] = handler;
+            },
+            dispatchEvent(event) {
+                if (listeners[event.type]) listeners[event.type](event);
+            },
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
+        };
+    };
+    const subSection = createNode('div');
+    subSection.className = 'inline-plan-subsection';
+    const subBoard = createNode('div');
+    subBoard.className = 'activity-chip-board inline-plan-sub-board';
+    subBoard._innerHTML = '';
+    Object.defineProperty(subBoard, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const title = createNode('div');
+    title.className = 'inline-plan-subsection-title';
+    const backBtn = createNode('button');
+    backBtn.className = 'inline-plan-sub-back';
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.inline-plan-subsection') return subSection;
+            if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-subsection-title') return title;
+            if (selector === '.inline-plan-sub-back') return backBtn;
+            return null;
+        },
+    };
+    const anchor = { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 10, height: 10 }; } };
+    const documentStub = {
+        createElement: createNode,
+        querySelector() {
+            return anchor;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, anchor },
+        timeSlots: [{}],
+        mergedFields: new Map(),
+        plannedActivities: [],
+        modalPlanActivities: [],
+        modalPlanActiveRow: -1,
+        modalPlanTitle: '',
+        modalPlanTitleBandOn: false,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        positionInlinePlanDropdown() {},
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() {},
+    };
+
+    globalThis.document = documentStub;
+
+    try {
+        controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, [
+            { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work' },
+        ]);
+
+        const selfRow = subBoard.children[0];
+        const selfButton = selfRow.children[0];
+        assert.equal(selfButton.textContent.endsWith('자체 선택'), true);
+        selfButton.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.deepEqual(ctx.timeSlots[0].planActivities[0], {
+            label: 'Work',
+            seconds: 3600,
+            titleActivityId: null,
+            titleText: null,
+            activityId: 'work',
+            activityText: 'Work',
+        });
+        assert.equal(ctx.timeSlots[0].planTitle, '');
+        assert.equal(ctx.timeSlots[0].planned, 'Work');
+
+        controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, [
+            { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work' },
+        ]);
+        const childRow = subBoard.children[2];
+        const childButton = childRow.children[0];
+        childButton.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.deepEqual(ctx.timeSlots[0].planActivities[0], {
+            label: 'Focus',
+            seconds: 3600,
+            titleActivityId: 'work',
+            titleText: 'Work',
+            activityId: 'work-focus',
+            activityText: 'Focus',
+        });
+        assert.equal(ctx.timeSlots[0].planTitle, 'Work');
     } finally {
         globalThis.document = originalDocument;
     }
