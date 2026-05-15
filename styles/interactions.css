@@ -1267,6 +1267,70 @@ button.activity-chip,
   margin-top: 2px;
 }
 
+.activity-child-composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.activity-child-composer-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 34px;
+  border: 1px solid #d5dee8;
+  border-radius: 9px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+}
+
+.activity-child-composer-input:focus {
+  outline: none;
+  border-color: #9ac5ef;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.14);
+}
+
+.activity-child-composer-submit,
+.activity-child-composer-cancel {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid #d5dee8;
+  background: #fff;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activity-child-composer-submit {
+  color: #2563eb;
+  border-color: #b8d9ff;
+  background: #f7fbff;
+}
+
+.activity-child-composer-cancel {
+  color: #526172;
+}
+
+.activity-child-composer-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #b45309;
+}
+
+.activity-chip-new-highlight {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.activity-chip-duplicate-highlight {
+  border-color: #f59e0b;
+  background: #fff7ed;
+}
+
 .inline-plan-option.inline-plan-option-row {
   display: block;
   width: 100%;

@@ -435,6 +435,12 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
         positionInlinePlanDropdown() {},
         dedupeAndSortPlannedActivities() {},
         savePlannedActivities() {},
+        openPlanActivityChildMenu(parentItem, anchorEl, children) {
+            return controller.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
+        },
+        closePlanActivityChildMenu(options = {}) {
+            return controller.closePlanActivityChildMenu.call(this, options);
+        },
     };
 
     globalThis.document = documentStub;
@@ -446,7 +452,7 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
 
         const selfRow = subBoard.children[0];
         const selfButton = selfRow.children[0];
-        assert.equal(selfButton.textContent.endsWith('자체 선택'), true);
+        assert.ok(selfButton.className.includes('activity-chip-self'));
         selfButton.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -588,6 +594,8 @@ test('renderInlinePlanDropdownOptions keeps the child-board affordance for child
 
 test('openPlanActivityChildMenu renders an empty child board with parent self selection and add action', () => {
     const originalDocument = globalThis.document;
+    const originalPrompt = globalThis.prompt;
+    let promptCalled = false;
     const createNode = (tagName) => {
         const listeners = {};
         const attributes = {};
@@ -596,6 +604,7 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
             children: [],
             dataset: {},
             className: '',
+            value: '',
             textContent: '',
             title: '',
             type: '',
@@ -616,6 +625,9 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
             getAttribute(name) {
                 return attributes[name];
             },
+            focus() {},
+            select() {},
+            setSelectionRange() {},
         };
     };
     const subSection = createNode('div');
@@ -671,9 +683,19 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         positionInlinePlanDropdown() {},
         dedupeAndSortPlannedActivities() {},
         savePlannedActivities() {},
+        openPlanActivityChildMenu(parentItem, anchorEl, children) {
+            return controller.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
+        },
+        closePlanActivityChildMenu(options = {}) {
+            return controller.closePlanActivityChildMenu.call(this, options);
+        },
     };
 
     globalThis.document = documentStub;
+    globalThis.prompt = () => {
+        promptCalled = true;
+        return '';
+    };
 
     try {
         controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, []);
@@ -682,12 +704,31 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         assert.ok(title.textContent.endsWith('Work'));
         assert.equal(backBtn.hidden, true);
         assert.equal(backBtn.getAttribute('aria-hidden'), 'true');
-        assert.equal(subBoard.children[0].children[0].textContent, 'Work 자체 선택');
-        assert.equal(subBoard.children[1].textContent, '세부활동');
-        assert.equal(subBoard.children[2].textContent, '아직 세부활동이 없습니다.');
-        assert.equal(subBoard.children[3].textContent, '+ 세부활동 추가');
+        assert.ok(subBoard.children[0].children[0].className.includes('activity-chip-self'));
+        assert.ok(subBoard.children[1].className.includes('activity-chip-board-title'));
+        assert.ok(subBoard.children[2].className.includes('inline-plan-empty'));
+        assert.ok(subBoard.children[3].className.includes('activity-chip-add'));
+
+        const addButton = subBoard.children[3];
+        addButton.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(promptCalled, false);
+        const composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        assert.ok(composer);
+        const composerInput = composer.children[0];
+        const composerSubmit = composer.children[1];
+        const composerCancel = composer.children[2];
+        assert.ok(String(composerInput.getAttribute('placeholder') || '').includes('????'));
+        assert.equal(composerSubmit.textContent, '??');
+        assert.equal(composerCancel.textContent, '??');
+        assert.equal(ctx.inlineChildComposerOpenParentId, 'work');
     } finally {
         globalThis.document = originalDocument;
+        globalThis.prompt = originalPrompt;
     }
 });
 
@@ -876,9 +917,9 @@ test('caret toggles child board open, close, and switch parent', () => {
     }
 });
 
-test('duplicate child names are blocked per parent but allowed across different parents', () => {
+test('inline child composer creates children, blocks duplicates, and allows same child name under another parent', () => {
     const originalDocument = globalThis.document;
-    const originalPrompt = globalThis.prompt;
+    const originalRAF = globalThis.requestAnimationFrame;
     const createNode = (tagName) => {
         const listeners = {};
         const attributes = {};
@@ -887,6 +928,7 @@ test('duplicate child names are blocked per parent but allowed across different 
             children: [],
             dataset: {},
             className: '',
+            value: '',
             textContent: '',
             title: '',
             type: '',
@@ -907,6 +949,214 @@ test('duplicate child names are blocked per parent but allowed across different 
             getAttribute(name) {
                 return attributes[name];
             },
+            focus() {},
+            select() {},
+            setSelectionRange() {},
+        };
+    };
+    const subSection = createNode('div');
+    subSection.className = 'inline-plan-subsection';
+    const subBoard = createNode('div');
+    subBoard.className = 'activity-chip-board inline-plan-sub-board';
+    subBoard._innerHTML = '';
+    Object.defineProperty(subBoard, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const title = createNode('div');
+    title.className = 'inline-plan-subsection-title';
+    const backBtn = createNode('button');
+    backBtn.className = 'inline-plan-sub-back';
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.inline-plan-subsection') return subSection;
+            if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-subsection-title') return title;
+            if (selector === '.inline-plan-sub-back') return backBtn;
+            return null;
+        },
+    };
+    const anchor = { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, bottom: 0, width: 10, height: 10 }; } };
+    const documentStub = {
+        createElement: createNode,
+        querySelector() {
+            return anchor;
+        },
+    };
+    const saveCalls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, anchor },
+        timeSlots: [{}],
+        mergedFields: new Map(),
+        plannedActivities: [
+            { id: 'exercise', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'study', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        positionInlinePlanDropdown() {},
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() {
+            saveCalls.push('save');
+        },
+        renderInlinePlanDropdownOptions() {},
+        openPlanActivityChildMenu(parentItem, anchorEl, children) {
+            return controller.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
+        },
+        closePlanActivityChildMenu(options = {}) {
+            return controller.closePlanActivityChildMenu.call(this, options);
+        },
+    };
+
+    globalThis.document = documentStub;
+    globalThis.requestAnimationFrame = (fn) => fn();
+
+    try {
+        controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[0], anchor, []);
+        let addBtn = subBoard.children[3];
+        addBtn.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        let composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        let input = composer.children[0];
+        let submit = composer.children[1];
+        input.value = '???';
+        input.dispatchEvent({
+            type: 'keydown',
+            key: 'Enter',
+            isComposing: false,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        let exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
+        assert.equal(exerciseChildren.length, 1);
+        assert.equal(exerciseChildren[0].label, '???');
+        assert.equal(exerciseChildren[0].source, 'local');
+        assert.equal(exerciseChildren[0].usageCount, 0);
+        assert.equal(saveCalls.length, 1);
+        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        input = composer.children[0];
+        submit = composer.children[1];
+        assert.equal(input.value, '');
+        assert.equal(ctx.inlineChildComposerOpenParentId, 'exercise');
+        const findNodeWithClass = (node, className) => {
+            if (!node) return null;
+            if (node.className && String(node.className).includes(className)) {
+                return node;
+            }
+            for (const child of Array.from(node.children || [])) {
+                const found = findNodeWithClass(child, className);
+                if (found) return found;
+            }
+            return null;
+        };
+        const createdChip = findNodeWithClass(subBoard, 'activity-chip-new-highlight');
+        assert.ok(createdChip);
+
+        input.value = '??';
+        submit.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
+        assert.equal(exerciseChildren.length, 2);
+        assert.equal(saveCalls.length, 2);
+        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        input = composer.children[0];
+        assert.equal(input.value, '');
+
+        input.value = '???';
+        input.dispatchEvent({
+            type: 'keydown',
+            key: 'Enter',
+            isComposing: false,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
+        assert.equal(exerciseChildren.length, 2);
+        assert.equal(saveCalls.length, 2);
+        assert.ok(String(subBoard.children.map((node) => node.textContent).join(' ')).includes('??'));
+        const duplicateChip = findNodeWithClass(subBoard, 'activity-chip-duplicate-highlight');
+        assert.ok(duplicateChip);
+
+        controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[1], anchor, []);
+        addBtn = subBoard.children[3];
+        addBtn.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        input = composer.children[0];
+        submit = composer.children[1];
+        input.value = '???';
+        submit.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        const studyChildren = ctx.plannedActivities.filter((item) => item.parentId === 'study');
+        assert.equal(studyChildren.length, 1);
+        assert.equal(studyChildren[0].label, '???');
+        assert.equal(saveCalls.length, 3);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('inline child composer can be cancelled with button or Escape', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        const listeners = {};
+        const attributes = {};
+        return {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            value: '',
+            textContent: '',
+            title: '',
+            type: '',
+            hidden: false,
+            appendChild(node) {
+                this.children.push(node);
+                return node;
+            },
+            addEventListener(type, handler) {
+                listeners[type] = handler;
+            },
+            dispatchEvent(event) {
+                if (listeners[event.type]) listeners[event.type](event);
+            },
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
+            focus() {},
+            select() {},
+            setSelectionRange() {},
         };
     };
     const subSection = createNode('div');
@@ -949,8 +1199,7 @@ test('duplicate child names are blocked per parent but allowed across different 
         timeSlots: [{}],
         mergedFields: new Map(),
         plannedActivities: [
-            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
-            { id: 'study', name: '공부', label: '공부', normalizedName: '공부', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'exercise', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -959,52 +1208,65 @@ test('duplicate child names are blocked per parent but allowed across different 
         calculateTotals() {},
         autoSave() {},
         positionInlinePlanDropdown() {},
-        openPlanActivityChildMenu: controller.openPlanActivityChildMenu,
         dedupeAndSortPlannedActivities() {},
         savePlannedActivities() {},
         renderInlinePlanDropdownOptions() {},
+        openPlanActivityChildMenu(parentItem, anchorEl, children) {
+            return controller.openPlanActivityChildMenu.call(this, parentItem, anchorEl, children);
+        },
+        closePlanActivityChildMenu(options = {}) {
+            return controller.closePlanActivityChildMenu.call(this, options);
+        },
     };
 
     globalThis.document = documentStub;
-    globalThis.prompt = () => '스쿼트';
 
     try {
         controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[0], anchor, []);
-        const addBtnA = subBoard.children[3];
-        addBtnA.dispatchEvent({
+        const addBtn = subBoard.children[3];
+        addBtn.dispatchEvent({
             type: 'click',
             preventDefault() {},
             stopPropagation() {},
         });
 
-        controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[0], anchor, [
-            { id: 'existing-child', name: '스쿼트', label: '스쿼트', normalizedName: '스쿼트', parentId: 'exercise' },
-        ]);
-        const addBtnDuplicate = subBoard.children[3];
-        addBtnDuplicate.dispatchEvent({
+        let composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        assert.ok(composer);
+        const input = composer.children[0];
+        const cancelBtn = composer.children[2];
+        input.value = '??';
+        cancelBtn.dispatchEvent({
             type: 'click',
             preventDefault() {},
             stopPropagation() {},
         });
 
-        controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[1], anchor, []);
-        const addBtnB = subBoard.children[3];
-        addBtnB.dispatchEvent({
+        assert.equal(subSection.hidden, false);
+        assert.equal(ctx.inlineChildComposerOpenParentId, null);
+        assert.equal(ctx.plannedActivities.filter((item) => item.parentId === 'exercise').length, 0);
+        assert.ok(subBoard.children.some((node) => node.className === 'activity-chip activity-chip-add'));
+
+        addBtn.dispatchEvent({
             type: 'click',
             preventDefault() {},
             stopPropagation() {},
         });
+        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        const escapeInput = composer.children[0];
+        escapeInput.value = '??';
+        escapeInput.dispatchEvent({
+            type: 'keydown',
+            key: 'Escape',
+            isComposing: false,
+            preventDefault() {},
+            stopPropagation() {},
+        });
 
-        const exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
-        const studyChildren = ctx.plannedActivities.filter((item) => item.parentId === 'study');
-
-        assert.equal(exerciseChildren.length, 1);
-        assert.equal(studyChildren.length, 1);
-        assert.equal(exerciseChildren[0].label, '스쿼트');
-        assert.equal(studyChildren[0].label, '스쿼트');
+        assert.equal(subSection.hidden, false);
+        assert.equal(ctx.inlineChildComposerOpenParentId, null);
+        assert.ok(subBoard.children.some((node) => node.className === 'activity-chip activity-chip-add'));
     } finally {
         globalThis.document = originalDocument;
-        globalThis.prompt = originalPrompt;
     }
 });
 

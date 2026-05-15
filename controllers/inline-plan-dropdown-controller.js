@@ -850,6 +850,50 @@ function renderInlinePlanDropdownOptions() {
         }
     }
 
+function createChildActivityForParent(parentItem, rawName) {
+        const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(rawName) : String(rawName || '').trim();
+        if (!normalizedName) return { status: 'empty' };
+
+        const parentId = String(parentItem && parentItem.id ? parentItem.id : '').trim() || null;
+        const currentItems = Array.isArray(this.plannedActivities) ? this.plannedActivities : [];
+        const existing = currentItems.find((item) => {
+            if (!item || String(item.parentId || '').trim() !== parentId) return false;
+            const currentName = this.normalizeActivityText(item.label || item.title || item.name || '');
+            return currentName === normalizedName;
+        });
+        if (existing) {
+            this.inlineChildComposerError = '?? ?? ???????.';
+            this.inlineChildComposerHighlightId = existing.id || null;
+            this.inlineChildComposerHighlightKind = 'duplicate';
+            return { status: 'duplicate', item: existing };
+        }
+
+        const child = {
+            id: `${parentId || 'activity'}_${Date.now()}`,
+            name: normalizedName,
+            label: normalizedName,
+            title: normalizedName,
+            normalizedName,
+            parentId,
+            colorKey: parentItem && parentItem.colorKey ? parentItem.colorKey : null,
+            defaultDurationMinutes: parentItem && parentItem.defaultDurationMinutes ? parentItem.defaultDurationMinutes : null,
+            displayMode: parentItem && parentItem.displayMode ? parentItem.displayMode : 'chip',
+            pinned: false,
+            archived: false,
+            usageCount: 0,
+            lastUsedAt: null,
+            source: 'local',
+        };
+        this.plannedActivities.push(child);
+        this.dedupeAndSortPlannedActivities();
+        this.savePlannedActivities();
+        this.inlineChildComposerError = '';
+        this.inlineChildComposerHighlightId = child.id || null;
+        this.inlineChildComposerHighlightKind = 'new';
+        this.inlineChildComposerValue = '';
+        return { status: 'created', item: child };
+    }
+
 function closePlanActivityChildMenu(options = {}) {
         const section = this.inlinePlanDropdown
             ? this.inlinePlanDropdown.querySelector('.inline-plan-subsection')
@@ -857,6 +901,12 @@ function closePlanActivityChildMenu(options = {}) {
         if (section) section.hidden = true;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        this.inlineChildComposerOpenParentId = null;
+        this.inlineChildComposerError = '';
+        this.inlineChildComposerHighlightId = null;
+        this.inlineChildComposerHighlightKind = null;
+        this.inlineChildComposerValue = '';
+        this.inlineChildComposerFocusPending = false;
 
         if (options.rerender !== false && typeof this.renderInlinePlanDropdownOptions === 'function') {
             this.renderInlinePlanDropdownOptions();
@@ -877,28 +927,28 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!section || !board) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
-        if (title) title.textContent = parentLabel ? `활동군: ${parentLabel}` : '활동군';
+        if (title) title.textContent = parentLabel ? `???: ${parentLabel}` : '???';
         section.hidden = false;
         if (!section.id) section.id = 'inline-plan-subsection';
         this.modalPlanSectionOpen = true;
-        this.modalPlanSectionOpenParentId = String(parentItem.id || '').trim() || null;
+        const parentId = String(parentItem.id || '').trim() || null;
+        this.modalPlanSectionOpenParentId = parentId;
+        const composerOpenParentId = String(this.inlineChildComposerOpenParentId || '').trim();
+        if (composerOpenParentId && composerOpenParentId !== parentId) {
+            this.inlineChildComposerOpenParentId = null;
+            this.inlineChildComposerError = '';
+            this.inlineChildComposerHighlightId = null;
+            this.inlineChildComposerHighlightKind = null;
+            this.inlineChildComposerValue = '';
+            this.inlineChildComposerFocusPending = false;
+        } else if (composerOpenParentId === parentId) {
+            this.inlineChildComposerOpenParentId = parentId;
+        }
         board.innerHTML = '';
         if (backBtn) {
-            backBtn.setAttribute('aria-label', '전체 활동으로');
-            backBtn.title = '전체 활동으로';
-            backBtn.textContent = '← 전체 활동으로';
-            backBtn.onclick = null;
             backBtn.hidden = true;
             backBtn.setAttribute('aria-hidden', 'true');
-            backBtn.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (section) section.hidden = true;
-                this.modalPlanSectionOpen = false;
-                if (typeof this.renderInlinePlanDropdownOptions === 'function') {
-                    this.renderInlinePlanDropdownOptions();
-                }
-            }, { once: true });
+            backBtn.onclick = null;
         }
 
         const selfRow = document.createElement('div');
@@ -907,9 +957,9 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const parentSelf = document.createElement('button');
         parentSelf.type = 'button';
         parentSelf.className = 'activity-chip activity-chip-self';
-        parentSelf.setAttribute('aria-label', parentLabel ? `${parentLabel} 자체 선택` : '부모 자체 선택');
-        parentSelf.title = parentLabel ? `${parentLabel} 자체 선택` : '부모 자체 선택';
-        parentSelf.textContent = parentLabel ? `${parentLabel} 자체 선택` : '부모 자체 선택';
+        parentSelf.setAttribute('aria-label', parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??');
+        parentSelf.title = parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??';
+        parentSelf.textContent = parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??';
         parentSelf.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -920,7 +970,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
 
         const childTitle = document.createElement('div');
         childTitle.className = 'activity-chip-board-title';
-        childTitle.textContent = '세부활동';
+        childTitle.textContent = '????';
         board.appendChild(childTitle);
 
         const childRow = document.createElement('div');
@@ -932,9 +982,13 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'activity-chip';
+            const childId = String(child.id || '').trim();
+            if (String(this.inlineChildComposerHighlightId || '').trim() === childId) {
+                btn.className += ` ${this.inlineChildComposerHighlightKind === 'duplicate' ? 'activity-chip-duplicate-highlight' : 'activity-chip-new-highlight'}`;
+            }
             btn.dataset.label = childLabel;
-            btn.setAttribute('aria-label', `${childLabel} 선택`);
-            btn.title = `${childLabel} 선택`;
+            btn.setAttribute('aria-label', `${childLabel} ??`);
+            btn.title = `${childLabel} ??`;
             btn.textContent = childLabel;
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -949,58 +1003,125 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         } else {
             const empty = document.createElement('div');
             empty.className = 'inline-plan-empty';
-            empty.textContent = '아직 세부활동이 없습니다.';
+            empty.textContent = '?? ????? ????.';
             board.appendChild(empty);
         }
 
-        const addChildBtn = document.createElement('button');
-        addChildBtn.type = 'button';
-        addChildBtn.className = 'activity-chip activity-chip-add';
-        addChildBtn.setAttribute('aria-label', '+ 세부활동 추가');
-        addChildBtn.title = '+ 세부활동 추가';
-        addChildBtn.textContent = '+ 세부활동 추가';
-        addChildBtn.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const name = prompt('세부활동 이름을 입력하세요.', '');
-            const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(name) : String(name || '').trim();
-            if (!normalizedName) return;
-            const parentId = String(parentItem.id || '').trim() || null;
-            const existing = (this.plannedActivities || []).find((item) => {
-                if (!item || String(item.parentId || '').trim() !== parentId) return false;
-                const currentName = this.normalizeActivityText(item.label || item.title || item.name || '');
-                return currentName === normalizedName;
-            });
-            if (existing) {
-                applyActivityCatalogSelection.call(this, existing, parentItem, { keepOpen: true });
+        if (String(this.inlineChildComposerOpenParentId || '').trim() === parentId) {
+            const composer = document.createElement('div');
+            composer.className = 'activity-child-composer';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'activity-child-composer-input';
+            input.setAttribute('placeholder', parentLabel && parentLabel.length <= 12 ? `${parentLabel} ???? ??` : '???? ?? ??...');
+            input.value = this.inlineChildComposerValue || '';
+
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'button';
+            submitBtn.className = 'activity-child-composer-submit';
+            submitBtn.textContent = '??';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'activity-child-composer-cancel';
+            cancelBtn.textContent = '??';
+
+            const closeComposer = () => {
+                this.inlineChildComposerOpenParentId = null;
+                this.inlineChildComposerError = '';
+                this.inlineChildComposerHighlightId = null;
+                this.inlineChildComposerHighlightKind = null;
+                this.inlineChildComposerValue = '';
+                this.inlineChildComposerFocusPending = false;
+            };
+
+            const commitValue = () => {
+                this.inlineChildComposerValue = input.value;
+                const result = createChildActivityForParent.call(this, parentItem, input.value);
+                if (result.status === 'empty') {
+                    if (typeof input.focus === 'function') input.focus();
+                    return;
+                }
+                this.inlineChildComposerFocusPending = true;
                 const nextChildren = (this.plannedActivities || []).filter((item) => item && String(item.parentId || '').trim() === parentId);
                 this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
-                return;
-            }
-            const child = {
-                id: `${parentId || 'activity'}_${Date.now()}`,
-                name: normalizedName,
-                label: normalizedName,
-                title: normalizedName,
-                normalizedName,
-                parentId,
-                colorKey: parentItem.colorKey || null,
-                defaultDurationMinutes: parentItem.defaultDurationMinutes || null,
-                displayMode: parentItem.displayMode || 'chip',
-                pinned: false,
-                archived: false,
-                usageCount: 0,
-                lastUsedAt: null,
-                source: 'local',
             };
-            this.plannedActivities.push(child);
-            this.dedupeAndSortPlannedActivities();
-            this.savePlannedActivities();
-            this.renderInlinePlanDropdownOptions();
-            const nextChildren = (this.plannedActivities || []).filter((item) => item && String(item.parentId || '').trim() === parentId);
-            this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
-        });
-        board.appendChild(addChildBtn);
+
+            input.addEventListener('input', () => {
+                this.inlineChildComposerValue = input.value;
+                this.inlineChildComposerError = '';
+                this.inlineChildComposerHighlightId = null;
+                this.inlineChildComposerHighlightKind = null;
+            });
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.isComposing) {
+                    event.preventDefault();
+                    commitValue();
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeComposer();
+                    this.openPlanActivityChildMenu(parentItem, anchorEl, children);
+                }
+            });
+            submitBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                commitValue();
+            });
+            cancelBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                closeComposer();
+                this.openPlanActivityChildMenu(parentItem, anchorEl, children);
+            });
+
+            composer.appendChild(input);
+            composer.appendChild(submitBtn);
+            composer.appendChild(cancelBtn);
+            board.appendChild(composer);
+
+            if (this.inlineChildComposerError) {
+                const error = document.createElement('div');
+                error.className = 'activity-child-composer-error';
+                error.textContent = this.inlineChildComposerError;
+                board.appendChild(error);
+            }
+
+            if (this.inlineChildComposerFocusPending) {
+                this.inlineChildComposerFocusPending = false;
+                const scheduleFocus = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
+                scheduleFocus(() => {
+                    if (!this.inlinePlanDropdown) return;
+                    const composerInput = this.inlinePlanDropdown.querySelector('.activity-child-composer-input');
+                    if (composerInput && typeof composerInput.focus === 'function') {
+                        composerInput.focus();
+                        if (String(this.inlineChildComposerHighlightKind || '') === 'duplicate' && typeof composerInput.select === 'function') {
+                            composerInput.select();
+                        }
+                    }
+                });
+            }
+        } else {
+            const addChildBtn = document.createElement('button');
+            addChildBtn.type = 'button';
+            addChildBtn.className = 'activity-chip activity-chip-add';
+            addChildBtn.setAttribute('aria-label', '+ ???? ??');
+            addChildBtn.title = '+ ???? ??';
+            addChildBtn.textContent = '+ ???? ??';
+            addChildBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.inlineChildComposerOpenParentId = parentId;
+                this.inlineChildComposerError = '';
+                this.inlineChildComposerHighlightId = null;
+                this.inlineChildComposerHighlightKind = null;
+                this.inlineChildComposerValue = '';
+                this.inlineChildComposerFocusPending = true;
+                this.openPlanActivityChildMenu(parentItem, anchorEl, children);
+            });
+            board.appendChild(addChildBtn);
+        }
 
         if (typeof this.renderInlinePlanDropdownOptions === 'function') {
             this.renderInlinePlanDropdownOptions();
@@ -1011,7 +1132,6 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             this.positionInlinePlanDropdown(targetAnchor);
         }
     }
-
 function openRoutineMenuFromInlinePlan(label, anchorEl) {
         if (!anchorEl || !anchorEl.isConnected) return;
         if (!this.inlinePlanTarget) return;
@@ -1376,6 +1496,12 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        this.inlineChildComposerOpenParentId = null;
+        this.inlineChildComposerError = '';
+        this.inlineChildComposerHighlightId = null;
+        this.inlineChildComposerHighlightKind = null;
+        this.inlineChildComposerValue = '';
+        this.inlineChildComposerFocusPending = false;
         if (subSection) subSection.hidden = true;
         const baseSlot = this.timeSlots[range.startIndex] || {};
         this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
@@ -1566,6 +1692,12 @@ function closeInlinePlanDropdown() {
         this.inlinePlanHighlightRange = null;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        this.inlineChildComposerOpenParentId = null;
+        this.inlineChildComposerError = '';
+        this.inlineChildComposerHighlightId = null;
+        this.inlineChildComposerHighlightKind = null;
+        this.inlineChildComposerValue = '';
+        this.inlineChildComposerFocusPending = false;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }

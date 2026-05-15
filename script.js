@@ -115,6 +115,12 @@ class TimeTracker {
         this.modalPlanTotalSeconds = 0;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        this.inlineChildComposerOpenParentId = null;
+        this.inlineChildComposerError = '';
+        this.inlineChildComposerHighlightId = null;
+        this.inlineChildComposerHighlightKind = null;
+        this.inlineChildComposerValue = '';
+        this.inlineChildComposerFocusPending = false;
         this.modalPlanActiveRow = -1;
         this.modalPlanTitle = '';
         this.modalPlanTitleBandOn = false;
