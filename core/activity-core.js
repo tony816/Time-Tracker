@@ -203,8 +203,9 @@
         raw.forEach((item) => {
             const entry = normalizeActivityCatalogEntry(item, options);
             if (!entry.normalizedName) return;
-            if (seen.has(entry.normalizedName)) return;
-            seen.add(entry.normalizedName);
+            const key = `${entry.parentId || ''}::${entry.normalizedName}`;
+            if (seen.has(key)) return;
+            seen.add(key);
             normalized.push(entry);
         });
         return normalized;
@@ -231,7 +232,7 @@
                 return (b.usageCount || 0) - (a.usageCount || 0);
             })
             .slice(0, 8);
-        const parents = topLevel.filter((item) => (byParentId.get(item.id) || []).some((child) => child.id !== item.id));
+        const parents = topLevel.slice();
         const children = items.filter((item) => item.parentId && byId.has(item.parentId));
         return {
             items,

@@ -25,28 +25,35 @@
             const before = JSON.stringify(this.plannedActivities || []);
             const merged = [];
             const seen = new Set();
-    
-            normalizedLocals.forEach(({ label, priorityRank }) => {
-                if (seen.has(label)) return;
-                seen.add(label);
-                merged.push({ label, source: 'local', priorityRank, recommendedSeconds: null });
-            });
-    
-            (this.plannedActivities || []).forEach((item) => {
-                if (!item) return;
-                const label = this.normalizeActivityText(item.label || '');
+            const pushEntry = (entry, fallbackSource = 'local') => {
+                if (!entry) return;
+                const normalized = this.normalizeActivityCatalogEntry ? this.normalizeActivityCatalogEntry(entry) : null;
+                const label = this.normalizeActivityText((normalized && normalized.label) || entry.label || entry.title || entry.name || '');
                 if (!label) return;
-                if (item.source === 'notion') {
-                    merged.push({
-                        label,
-                        source: 'notion',
-                        priorityRank: Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null,
-                        recommendedSeconds: Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null
-                    });
-                    seen.add(label);
-                }
+                const parentId = String((normalized && normalized.parentId) || entry.parentId || '').trim() || null;
+                const normalizedName = String((normalized && normalized.normalizedName) || label).trim();
+                const key = `${parentId || ''}::${normalizedName}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                merged.push({
+                    ...(entry && typeof entry === 'object' ? entry : {}),
+                    ...(normalized || {}),
+                    label,
+                    name: label,
+                    title: label,
+                    normalizedName,
+                    parentId,
+                    source: entry.source || fallbackSource,
+                });
+            };
+
+            normalizedLocals.forEach((entry) => pushEntry(entry, 'local'));
+
+            (this.plannedActivities || []).forEach((item) => {
+                if (!item || item.source !== 'notion') return;
+                pushEntry(item, 'notion');
             });
-    
+
             this.plannedActivities = merged;
             this.dedupeAndSortPlannedActivities();
             const after = JSON.stringify(this.plannedActivities || []);

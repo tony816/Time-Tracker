@@ -7,6 +7,10 @@ const normalizePriorityRankValue = buildMethod(
     'normalizePriorityRankValue(value)',
     '(value)'
 );
+const normalizeActivityCatalogEntry = buildMethod(
+    'normalizeActivityCatalogEntry(raw)',
+    '(raw)'
+);
 const normalizeLocalPlannedCatalogEntries = buildMethod(
     'normalizeLocalPlannedCatalogEntries(entries)',
     '(entries)'
@@ -75,6 +79,7 @@ test('updatePlannedActivityPriority applies local rank and re-sorts ascending', 
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
+        normalizeActivityCatalogEntry,
         normalizePriorityRankValue,
         findPlannedActivityIndex,
         dedupeAndSortPlannedActivities,
@@ -88,11 +93,17 @@ test('updatePlannedActivityPriority applies local rank and re-sorts ascending', 
             calls.push('refresh');
         },
     };
+    const project = (item) => ({
+        label: item.label,
+        source: item.source,
+        priorityRank: item.priorityRank,
+        recommendedSeconds: item.recommendedSeconds,
+    });
 
     const changed = updatePlannedActivityPriority.call(ctx, 'Task A', '2');
 
     assert.equal(changed, true);
-    assert.deepEqual(ctx.plannedActivities, [
+    assert.deepEqual(ctx.plannedActivities.map(project), [
         { label: 'Task C', source: 'notion', priorityRank: 1, recommendedSeconds: 600 },
         { label: 'Task A', source: 'local', priorityRank: 2, recommendedSeconds: null },
         { label: 'Task B', source: 'local', priorityRank: 3, recommendedSeconds: null },
@@ -111,6 +122,7 @@ test('updatePlannedActivityPriority clears rank and keeps unranked items after r
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
+        normalizeActivityCatalogEntry,
         normalizePriorityRankValue,
         findPlannedActivityIndex,
         dedupeAndSortPlannedActivities,
@@ -124,11 +136,17 @@ test('updatePlannedActivityPriority clears rank and keeps unranked items after r
             calls.push('refresh');
         },
     };
+    const project = (item) => ({
+        label: item.label,
+        source: item.source,
+        priorityRank: item.priorityRank,
+        recommendedSeconds: item.recommendedSeconds,
+    });
 
     const changed = updatePlannedActivityPriority.call(ctx, 'Task A', null);
 
     assert.equal(changed, true);
-    assert.deepEqual(ctx.plannedActivities, [
+    assert.deepEqual(ctx.plannedActivities.map(project), [
         { label: 'Task C', source: 'notion', priorityRank: 1, recommendedSeconds: 600 },
         { label: 'Task A', source: 'local', priorityRank: null, recommendedSeconds: null },
         { label: 'Task B', source: 'local', priorityRank: null, recommendedSeconds: null },
@@ -145,6 +163,7 @@ test('updatePlannedActivityPriority ignores notion items', () => {
         normalizeActivityText(value) {
             return String(value || '').trim();
         },
+        normalizeActivityCatalogEntry,
         normalizePriorityRankValue,
         findPlannedActivityIndex,
         dedupeAndSortPlannedActivities,

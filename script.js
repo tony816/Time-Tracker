@@ -18,6 +18,8 @@ const UI_LABELS = Object.freeze({
     cancelButton: '\ucde8\uc18c',
 });
 
+const PLANNED_ACTIVITY_CATALOG_CACHE_KEY = 'timeTracker.plannedActivityCatalog.v1';
+
 class TimeTracker {
     constructor() {
         this.timeSlots = [];
@@ -96,6 +98,7 @@ class TimeTracker {
         this.supabaseUser = null;
         this._lastSupabaseIdentity = null;
         this.PLANNED_SENTINEL_DAY = '1970-01-01';
+        this.PLANNED_ACTIVITY_CATALOG_CACHE_KEY = PLANNED_ACTIVITY_CATALOG_CACHE_KEY;
         this.ROUTINE_SENTINEL_DAY = '1970-01-02';
         this._plannedSaveTimer = null;
         this._lastSupabasePlannedSignature = '';
@@ -1175,8 +1178,10 @@ class TimeTracker {
         const normalized = [];
         raw.forEach((item) => {
             const entry = this.normalizeActivityCatalogEntry(item);
-            if (!entry.normalizedName || seen.has(entry.normalizedName)) return;
-            seen.add(entry.normalizedName);
+            if (!entry.normalizedName) return;
+            const key = `${entry.parentId || ''}::${entry.normalizedName}`;
+            if (seen.has(key)) return;
+            seen.add(key);
             normalized.push(entry);
         });
         return normalized;
@@ -1208,7 +1213,7 @@ class TimeTracker {
             byParentId,
             pinned: topLevel.filter((item) => item.pinned && !item.archived),
             recent: topLevel.filter((item) => !item.pinned && !item.archived).slice(0, 8),
-            parents: topLevel.filter((item) => (byParentId.get(item.id) || []).length > 0),
+            parents: topLevel.slice(),
             children: items.filter((item) => item.parentId),
             topLevel,
         };
@@ -1269,6 +1274,7 @@ class TimeTracker {
     }
     getLocalPlannedEntries() {
         const entries = [];
+        const seen = new Set();
         const normalizeCatalogEntry = typeof this.normalizeActivityCatalogEntry === 'function'
             ? (value) => this.normalizeActivityCatalogEntry(value)
             : (value) => this.normalizeLocalPlannedCatalogEntries([value])[0] || null;
@@ -1276,7 +1282,9 @@ class TimeTracker {
             if (!item || item.source === 'notion') return;
             const normalized = normalizeCatalogEntry(item);
             if (!normalized.normalizedName) return;
-            if (entries.some((entry) => entry.normalizedName === normalized.normalizedName)) return;
+            const key = `${normalized.parentId || ''}::${normalized.normalizedName}`;
+            if (seen.has(key)) return;
+            seen.add(key);
             entries.push(normalized);
         });
         return entries;
@@ -4772,7 +4780,9 @@ class TimeTracker {
 
     // Planned activities: load/save and render dropdown
     loadPlannedActivities() {
-        this.plannedActivities = [];
+        const cached = this.readPlannedActivityCatalogCache();
+        const entries = this.extractPlannedActivityCatalogEntries(cached);
+        this.plannedActivities = this.normalizeLocalPlannedCatalogEntries(entries);
         this.dedupeAndSortPlannedActivities();
     }
     savePlannedActivities(options = {}) {
@@ -4784,7 +4794,50 @@ class TimeTracker {
         return locals;
     }
     persistPlannedActivitiesLocally() {
+        const entries = this.getLocalPlannedEntries();
+        this.writePlannedActivityCatalogCache(entries);
+        return entries;
+    }
+    getPlannedActivityCatalogCacheKey() {
+        return this.PLANNED_ACTIVITY_CATALOG_CACHE_KEY || PLANNED_ACTIVITY_CATALOG_CACHE_KEY;
+    }
+    readPlannedActivityCatalogCache() {
+        const key = this.getPlannedActivityCatalogCacheKey();
+        if (typeof localStorage === 'undefined' || !localStorage || typeof localStorage.getItem !== 'function') return null;
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (_) {
+            return null;
+        }
+    }
+    extractPlannedActivityCatalogEntries(payload) {
+        if (Array.isArray(payload)) return payload;
+        if (!payload || typeof payload !== 'object') return [];
+        if (Array.isArray(payload.items)) return payload.items;
+        if (Array.isArray(payload.entries)) return payload.entries;
+        if (Array.isArray(payload.locals)) return payload.locals;
+        if (payload.catalog && typeof payload.catalog === 'object' && Array.isArray(payload.catalog.locals)) {
+            return payload.catalog.locals;
+        }
+        if (Array.isArray(payload.plannedActivities)) return payload.plannedActivities;
         return [];
+    }
+    writePlannedActivityCatalogCache(entries) {
+        const key = this.getPlannedActivityCatalogCacheKey();
+        if (typeof localStorage === 'undefined' || !localStorage || typeof localStorage.setItem !== 'function') return false;
+        const payload = {
+            version: 1,
+            updatedAt: new Date().toISOString(),
+            items: Array.isArray(entries) ? entries : [],
+        };
+        try {
+            localStorage.setItem(key, JSON.stringify(payload));
+            return true;
+        } catch (_) {
+            return false;
+        }
     }
     addPlannedActivityOption(text, selectAfter = false) {
         const label = this.normalizeActivityText(text);
@@ -4792,14 +4845,26 @@ class TimeTracker {
         const idx = this.findPlannedActivityIndex(label);
         if (idx >= 0) {
             const existing = this.plannedActivities[idx] || {};
-            this.plannedActivities[idx] = {
-                label,
+            const canonical = this.normalizeActivityCatalogEntry({
+                ...existing,
+                name: label,
                 source: 'local',
                 priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
-                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null,
+            });
+            this.plannedActivities[idx] = {
+                ...existing,
+                ...canonical,
+                priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null,
             };
         } else {
-            this.plannedActivities.push({ label, source: 'local', priorityRank: null, recommendedSeconds: null });
+            this.plannedActivities.push(this.normalizeActivityCatalogEntry({
+                name: label,
+                source: 'local',
+                priorityRank: null,
+                recommendedSeconds: null,
+            }));
         }
         this.dedupeAndSortPlannedActivities();
         this.savePlannedActivities();
@@ -4902,15 +4967,20 @@ class TimeTracker {
         if (!newLabel || oldLabel === newLabel) return;
         const i = this.findPlannedActivityIndex(oldLabel);
         if (i >= 0) {
-            // rename in list (?�집 ?�에????�� 로컬 ??��?�로 취급)
             const existing = this.plannedActivities[i] || {};
-            this.plannedActivities[i] = {
-                label: newLabel,
+            const canonical = this.normalizeActivityCatalogEntry({
+                ...existing,
+                name: newLabel,
                 source: 'local',
                 priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
-                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null,
+            });
+            this.plannedActivities[i] = {
+                ...existing,
+                ...canonical,
+                priorityRank: this.normalizePriorityRankValue(existing.priorityRank),
+                recommendedSeconds: Number.isFinite(existing.recommendedSeconds) ? Math.max(0, Number(existing.recommendedSeconds)) : null,
             };
-            // update selection
             const si = this.modalSelectedActivities.indexOf(oldLabel);
             if (si >= 0) this.modalSelectedActivities[si] = newLabel;
             this.dedupeAndSortPlannedActivities();
@@ -4937,8 +5007,13 @@ class TimeTracker {
         }
         this.plannedActivities[idx] = {
             ...item,
-            label: normalizedLabel,
-            source: 'local',
+            ...this.normalizeActivityCatalogEntry({
+                ...item,
+                name: normalizedLabel,
+                source: item.source === 'notion' ? 'notion' : 'local',
+                priorityRank: nextPriorityRank,
+                recommendedSeconds: Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null,
+            }),
             priorityRank: nextPriorityRank,
         };
         this.dedupeAndSortPlannedActivities();
@@ -4948,41 +5023,65 @@ class TimeTracker {
         return true;
     }
     dedupeAndSortPlannedActivities() {
-        const byLabel = new Map();
+        const byKey = new Map();
         (this.plannedActivities || []).forEach((item) => {
             if (!item) return;
-            const label = this.normalizeActivityText(item.label || '');
+            const normalized = this.normalizeActivityCatalogEntry ? this.normalizeActivityCatalogEntry(item) : null;
+            const label = this.normalizeActivityText(item.label || item.title || item.name || '');
             if (!label) return;
+            const parentId = String((normalized && normalized.parentId) || item.parentId || '').trim() || null;
+            const normalizedName = String((normalized && normalized.normalizedName) || label).trim();
+            if (!normalizedName) return;
             const source = item.source === 'notion' ? 'notion' : 'local';
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-            const entry = { label, source, priorityRank, recommendedSeconds };
-            const existing = byLabel.get(label);
-            let replace = false;
+            const entry = {
+                ...(item && typeof item === 'object' ? item : {}),
+                ...(normalized || {}),
+                id: String((normalized && normalized.id) || item.id || '').trim() || (normalized ? normalized.id : `activity_${Date.now()}`),
+                name: label,
+                label,
+                title: label,
+                normalizedName,
+                parentId,
+                source,
+                priorityRank,
+                recommendedSeconds,
+            };
+            const key = `${parentId || ''}::${normalizedName}`;
+            const existing = byKey.get(key);
             if (!existing) {
-                replace = true;
-            } else if (existing.source === 'local' && source !== 'local') {
+                byKey.set(key, entry);
+                return;
+            }
+            const existingUsage = Number.isFinite(existing.usageCount) ? Number(existing.usageCount) : 0;
+            const incomingUsage = Number.isFinite(entry.usageCount) ? Number(entry.usageCount) : 0;
+            const existingLastUsed = String(existing.lastUsedAt || '');
+            const incomingLastUsed = String(entry.lastUsedAt || '');
+            let replace = false;
+            if (existing.source === 'local' && source !== 'local') {
                 replace = false;
             } else if (source === 'local' && existing.source !== 'local') {
                 replace = true;
-            } else {
-                const existingRecommended = Number.isFinite(existing.recommendedSeconds) ? existing.recommendedSeconds : null;
-                if (existingRecommended > 0 && !(recommendedSeconds > 0)) {
-                    replace = false;
-                } else if (!(existingRecommended > 0) && recommendedSeconds > 0) {
-                    replace = true;
-                } else {
-                    replace = true;
-                }
+            } else if (incomingUsage > existingUsage) {
+                replace = true;
+            } else if (incomingUsage === existingUsage && incomingLastUsed > existingLastUsed) {
+                replace = true;
+            } else if (!existing.id && entry.id) {
+                replace = true;
             }
-            if (replace) {
-                byLabel.set(label, entry);
-            }
+            if (replace) byKey.set(key, entry);
         });
-        this.plannedActivities = Array.from(byLabel.values()).sort((a, b) => {
+        this.plannedActivities = Array.from(byKey.values()).sort((a, b) => {
+            const aParent = String(a.parentId || '');
+            const bParent = String(b.parentId || '');
+            if (aParent !== bParent) return aParent.localeCompare(bParent);
             const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
             const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
             if (ra !== rb) return ra - rb;
+            const aLast = String(a.lastUsedAt || '');
+            const bLast = String(b.lastUsedAt || '');
+            if (aLast !== bLast) return bLast.localeCompare(aLast);
             return a.label.localeCompare(b.label);
         });
     }
@@ -5020,7 +5119,19 @@ class TimeTracker {
             const recommendedSeconds = this.resolveRecommendedPlanSeconds ? this.resolveRecommendedPlanSeconds(it) : 0;
             normalized.push({
                 id: it.id,
+                name: label,
+                label,
                 title: label,
+                normalizedName: label,
+                parentId: null,
+                colorKey: null,
+                defaultDurationMinutes: null,
+                displayMode: 'chip',
+                pinned: false,
+                archived: false,
+                usageCount: 0,
+                lastUsedAt: null,
+                source: 'notion',
                 priorityRank,
                 recommendedSeconds: recommendedSeconds > 0 ? recommendedSeconds : null,
             });
@@ -5580,13 +5691,13 @@ class TimeTracker {
         const notionMap = new Map();
 
         normalizedItems.forEach((item) => {
-            const label = this.normalizeActivityText(item.title || '');
+            const label = this.normalizeActivityText(item.title || item.label || '');
             if (!label) return;
             const rank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
             const existing = notionMap.get(label);
             if (!existing) {
-                notionMap.set(label, { priorityRank: rank, recommendedSeconds });
+                notionMap.set(label, { ...item, priorityRank: rank, recommendedSeconds });
                 return;
             }
             const existingRank = existing.priorityRank ?? Infinity;
@@ -5601,23 +5712,27 @@ class TimeTracker {
                 }
             }
             if (replace) {
-                notionMap.set(label, { priorityRank: rank, recommendedSeconds });
+                notionMap.set(label, { ...item, priorityRank: rank, recommendedSeconds });
             }
         });
 
         (this.plannedActivities || []).forEach((item) => {
             if (!item) return;
-            const label = this.normalizeActivityText(item.label || '');
+            const label = this.normalizeActivityText(item.label || item.title || item.name || '');
             if (!label) return;
 
             if (item.source === 'notion') {
                 if (notionMap.has(label)) {
                     const info = notionMap.get(label);
-                    const rank = info.priorityRank ?? null;
-                    const recommended = Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null;
                     const prevRecommended = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-                    if ((item.priorityRank ?? null) !== rank || (prevRecommended ?? null) !== (recommended ?? null)) changed = true;
-                    next.push({ label, source: 'notion', priorityRank: rank, recommendedSeconds: recommended });
+                    const nextRecommended = Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null;
+                    if ((item.priorityRank ?? null) !== (info.priorityRank ?? null) || (prevRecommended ?? null) !== (nextRecommended ?? null)) changed = true;
+                    next.push({
+                        ...item,
+                        ...info,
+                        priorityRank: info.priorityRank ?? null,
+                        recommendedSeconds: nextRecommended,
+                    });
                     notionMap.delete(label);
                 } else {
                     changed = true; // stale notion entry removed
@@ -5627,16 +5742,32 @@ class TimeTracker {
 
             const localPriorityRank = this.normalizePriorityRankValue(item.priorityRank);
             const localRecommended = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
-            next.push({ label, source: 'local', priorityRank: localPriorityRank, recommendedSeconds: localRecommended });
+            next.push({
+                ...item,
+                ...(this.normalizeActivityCatalogEntry ? this.normalizeActivityCatalogEntry(item) : {}),
+                label,
+                name: label,
+                title: label,
+                normalizedName: this.normalizeActivityText(item.normalizedName || label),
+                parentId: String(item.parentId || '').trim() || null,
+                source: 'local',
+                priorityRank: localPriorityRank,
+                recommendedSeconds: localRecommended,
+            });
             if (notionMap.has(label)) notionMap.delete(label);
         });
 
         notionMap.forEach((info, label) => {
             next.push({
+                ...info,
                 label,
+                name: label,
+                title: label,
+                normalizedName: label,
+                parentId: null,
                 source: 'notion',
                 priorityRank: info.priorityRank ?? null,
-                recommendedSeconds: Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null
+                recommendedSeconds: Number.isFinite(info.recommendedSeconds) ? Math.max(0, Number(info.recommendedSeconds)) : null,
             });
             changed = true;
         });
