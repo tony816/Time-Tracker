@@ -716,7 +716,7 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, []);
 
         assert.equal(subSection.hidden, false);
-        assert.ok(title.textContent.endsWith('Work'));
+        assert.equal(title.textContent, '');
         assert.equal(backBtn.hidden, true);
         assert.equal(backBtn.getAttribute('aria-hidden'), 'true');
         assert.ok(subBoard.children[0].children[0].className.includes('activity-chip-self'));
@@ -785,6 +785,7 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
     };
     const subSection = createNode('div');
     subSection.className = 'inline-plan-subsection';
+    subSection.style = {};
     const subBoard = createNode('div');
     subBoard.className = 'activity-chip-board inline-plan-sub-board';
     const title = createNode('div');
@@ -794,7 +795,19 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
     const closeBtn = createNode('button');
     closeBtn.className = 'inline-plan-subsection-close';
     closeBtn.textContent = '×';
+    const dropdownClasses = new Set();
     const dropdown = {
+        classList: {
+            add(name) {
+                dropdownClasses.add(name);
+            },
+            remove(name) {
+                dropdownClasses.delete(name);
+            },
+            contains(name) {
+                return dropdownClasses.has(name);
+            },
+        },
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
@@ -846,6 +859,9 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
         assert.equal(subSection.hidden, false);
         assert.equal(closeBtn.getAttribute('aria-label'), '세부활동 설정 닫기');
 
+        assert.equal(subSection.style.visibility, 'visible');
+        assert.equal(dropdownClasses.has('inline-plan-child-popover-open'), true);
+
         closeBtn.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -853,6 +869,8 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
         });
 
         assert.equal(subSection.hidden, true);
+        assert.equal(subSection.style.visibility, 'hidden');
+        assert.equal(dropdownClasses.has('inline-plan-child-popover-open'), false);
         assert.equal(ctx.modalPlanSectionOpen, false);
     } finally {
         globalThis.document = originalDocument;
@@ -919,7 +937,60 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
     assert.equal(section.style.width, '360px');
     assert.equal(section.style.maxWidth, '360px');
     assert.equal(section.style.visibility, 'visible');
-    assert.equal(section.style.zIndex, '30');
+    assert.equal(section.style.zIndex, '80');
+    assert.equal(section.style.maxHeight, '220px');
+});
+
+test('positionInlinePlanChildPopover caps tall child board height', () => {
+    const makeStyleBag = () => ({
+        setProperty(name, value) {
+            this[name] = String(value);
+        },
+    });
+    const section = {
+        hidden: false,
+        style: makeStyleBag(),
+        classList: {
+            add() {},
+            remove() {},
+            contains() { return false; },
+        },
+        offsetHeight: 800,
+        scrollHeight: 800,
+    };
+    const dropdown = {
+        style: makeStyleBag(),
+        classList: {
+            contains() {
+                return false;
+            },
+        },
+        getBoundingClientRect() {
+            return { left: 0, top: 0, right: 520, bottom: 900, width: 520, height: 900 };
+        },
+        querySelector(selector) {
+            if (selector === '.inline-plan-subsection') return section;
+            return null;
+        },
+    };
+    const anchor = {
+        isConnected: true,
+        getBoundingClientRect() {
+            return { left: 120, top: 40, right: 156, bottom: 70, width: 36, height: 30 };
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanChildPopoverAnchorEl: anchor,
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+    };
+
+    controller.positionInlinePlanChildPopover.call(ctx, anchor);
+
+    assert.equal(section.style.maxHeight, '248px');
+    assert.equal(section.style.zIndex, '80');
 });
 
 test('positionInlinePlanChildPopover re-resolves the active caret after rerender', () => {
@@ -1169,7 +1240,7 @@ test('caret toggles child board open, close, and switch parent', () => {
         assert.equal(subSection.hidden, false);
         assert.equal(ctx.modalPlanSectionOpen, true);
         assert.equal(ctx.modalPlanSectionOpenParentId, 'study');
-        assert.ok(title.textContent.endsWith('Study'));
+        assert.equal(title.textContent, '');
     } finally {
         globalThis.document = originalDocument;
     }

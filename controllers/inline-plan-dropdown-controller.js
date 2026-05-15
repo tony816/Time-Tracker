@@ -581,9 +581,9 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             section.style.width = '100%';
             section.style.maxWidth = 'none';
             section.style.marginTop = '10px';
-            section.style.maxHeight = 'none';
+            section.style.maxHeight = 'min(280px, 46vh)';
             section.style.visibility = 'visible';
-            section.style.zIndex = 'auto';
+            section.style.zIndex = '80';
             this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
             return;
         }
@@ -593,6 +593,8 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const margin = 8;
         const minWidth = 300;
         const maxWidth = 360;
+        const minHeight = 128;
+        const maxHeightLimit = 248;
         const width = Math.max(minWidth, Math.min(maxWidth, Math.floor(dropdownWidth - (margin * 2)) || maxWidth));
         let left = Math.round(anchorLeft - dropdownRect.left);
         if (left + width > dropdownWidth - margin) {
@@ -603,24 +605,35 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const viewportHeight = Number.isFinite(dropdownHeight) && dropdownHeight > 0
             ? dropdownHeight
             : ((typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) ? window.innerHeight : 0);
-        const top = Math.round(anchorBottom - dropdownRect.top + gap);
-        const availableBelow = Math.max(120, Math.floor(viewportHeight - top - margin));
-        const maxHeight = Math.max(160, availableBelow);
+        const topBelow = Math.round(anchorBottom - dropdownRect.top + gap);
+        const anchorTopInDropdown = Number.isFinite(anchorTop) ? Math.round(anchorTop - dropdownRect.top) : topBelow;
+        const availableBelow = Math.max(0, Math.floor(viewportHeight - topBelow - margin));
+        const availableAbove = Math.max(0, Math.floor(anchorTopInDropdown - gap - margin));
+        const naturalHeight = Math.max(Number(section.scrollHeight) || 0, Number(section.offsetHeight) || 0);
+        const placeAbove = availableBelow < minHeight && availableAbove > availableBelow;
+        const available = placeAbove ? availableAbove : availableBelow;
+        const boundedHeight = Math.max(
+            minHeight,
+            Math.min(maxHeightLimit, available || maxHeightLimit, naturalHeight || maxHeightLimit)
+        );
+        const top = placeAbove
+            ? Math.max(margin, anchorTopInDropdown - gap - boundedHeight)
+            : Math.max(margin, topBelow);
 
         const anchorCenter = anchorLeft - dropdownRect.left + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
         const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
 
         section.style.position = 'absolute';
-        section.style.top = `${Math.max(margin, top)}px`;
+        section.style.top = `${top}px`;
         section.style.left = `${left}px`;
         section.style.width = `${width}px`;
         section.style.maxWidth = `${width}px`;
-        section.style.maxHeight = `${maxHeight}px`;
+        section.style.maxHeight = `${boundedHeight}px`;
         section.style.marginTop = '0';
         section.style.right = 'auto';
         section.style.bottom = 'auto';
         section.style.visibility = 'visible';
-        section.style.zIndex = '30';
+        section.style.zIndex = '80';
         section.style.setProperty('--inline-plan-subsection-notch-left', `${Math.round(notchLeft)}px`);
         this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
     }
@@ -1004,7 +1017,17 @@ function closePlanActivityChildMenu(options = {}) {
         const section = this.inlinePlanDropdown
             ? this.inlinePlanDropdown.querySelector('.inline-plan-subsection')
             : null;
-        if (section) section.hidden = true;
+        if (section) {
+            section.hidden = true;
+            if (section.style) section.style.visibility = 'hidden';
+        }
+        if (
+            this.inlinePlanDropdown
+            && this.inlinePlanDropdown.classList
+            && typeof this.inlinePlanDropdown.classList.remove === 'function'
+        ) {
+            this.inlinePlanDropdown.classList.remove('inline-plan-child-popover-open');
+        }
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
         this.inlineChildComposerOpenParentId = null;
@@ -1029,14 +1052,16 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget || !parentItem) return;
         const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
         const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
-        const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
         const backBtn = this.inlinePlanDropdown.querySelector('.inline-plan-sub-back');
         const closeBtn = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-close');
         if (!section || !board) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
-        if (title) title.textContent = parentLabel ? `활동군: ${parentLabel}` : '활동군';
         section.hidden = false;
+        if (section.style) section.style.visibility = 'visible';
+        if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.add === 'function') {
+            this.inlinePlanDropdown.classList.add('inline-plan-child-popover-open');
+        }
         if (!section.id) section.id = 'inline-plan-subsection';
         this.modalPlanSectionOpen = true;
         const parentId = String(parentItem.id || '').trim() || null;
@@ -1414,7 +1439,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             <div class="activity-chip-board"></div>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-subsection-head">
-                    <div class="inline-plan-subsection-title">세부활동</div>
                     <button type="button" class="inline-plan-subsection-close" aria-label="세부활동 설정 닫기">×</button>
                 </div>
                 <div class="activity-chip-board inline-plan-sub-board"></div>
@@ -1602,7 +1626,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         if (inlineSubClose && !inlineSubClose.getAttribute('aria-label')) {
             inlineSubClose.setAttribute('aria-label', '세부활동 설정 닫기');
         }
-
         // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
         this.inlinePlanContext = {
             root: dropdown,
