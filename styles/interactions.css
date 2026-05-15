@@ -1265,23 +1265,14 @@ button.activity-chip,
 .inline-plan-subsection-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 0;
-  justify-content: flex-start;
-}
-
-.inline-plan-sub-back {
-  border: 1px solid #d8e1ea;
-  border-radius: 8px;
-  background: #fff;
-  color: #526172;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 6px 9px;
-  cursor: pointer;
+  margin-bottom: 2px;
+  min-width: 0;
 }
 
 .inline-plan-subsection-title {
+  flex: 1 1 auto;
   min-width: 0;
   font-size: 13px;
   font-weight: 800;
@@ -1291,12 +1282,38 @@ button.activity-chip,
   white-space: nowrap;
 }
 
+.inline-plan-subsection-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 26px;
+}
+
+.inline-plan-subsection-close:hover,
+.inline-plan-subsection-close:focus-visible {
+  background: #f1f5f9;
+  color: #0f172a;
+  outline: none;
+}
+
 .inline-plan-subsection .inline-plan-sub-board {
   border: 0;
   background: transparent;
   padding: 0;
   max-height: 260px;
   overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 .inline-plan-sub-board .activity-chip-row + .activity-chip-board-title,

@@ -548,9 +548,9 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
         if (!section || section.hidden) return;
 
-        const resolvedAnchor = this.resolveInlinePlanAnchor
-            ? this.resolveInlinePlanAnchor(anchorEl || this.inlinePlanChildPopoverAnchorEl || null)
-            : (anchorEl || this.inlinePlanChildPopoverAnchorEl || null);
+        const resolvedAnchor = getOpenParentCaretAnchor.call(this)
+            || (anchorEl && anchorEl.isConnected ? anchorEl : null)
+            || (this.inlinePlanChildPopoverAnchorEl && this.inlinePlanChildPopoverAnchorEl.isConnected ? this.inlinePlanChildPopoverAnchorEl : null);
         if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') return;
         if (typeof this.inlinePlanDropdown.getBoundingClientRect !== 'function') return;
 
@@ -581,13 +581,15 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             section.style.width = '100%';
             section.style.maxWidth = 'none';
             section.style.marginTop = '10px';
+            section.style.maxHeight = 'none';
             section.style.visibility = 'visible';
             section.style.zIndex = 'auto';
+            this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
             return;
         }
 
         section.classList.remove('inline-plan-subsection-flow');
-        const gap = 6;
+        const gap = 8;
         const margin = 8;
         const minWidth = 300;
         const maxWidth = 360;
@@ -598,19 +600,12 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         }
         left = Math.max(margin, left);
 
-        const popoverHeight = Number.isFinite(section.offsetHeight) && section.offsetHeight > 0
-            ? section.offsetHeight
-            : Number.isFinite(section.scrollHeight) && section.scrollHeight > 0
-                ? section.scrollHeight
-                : 0;
         const viewportHeight = Number.isFinite(dropdownHeight) && dropdownHeight > 0
             ? dropdownHeight
             : ((typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) ? window.innerHeight : 0);
-        const maxHeight = Math.max(160, Math.floor(viewportHeight - (margin * 2)));
-        let top = Math.round(anchorBottom - dropdownRect.top + gap);
-        if (popoverHeight > 0 && top + popoverHeight > maxHeight) {
-            top = Math.max(margin, Math.round(anchorTop - dropdownRect.top - popoverHeight - gap));
-        }
+        const top = Math.round(anchorBottom - dropdownRect.top + gap);
+        const availableBelow = Math.max(120, Math.floor(viewportHeight - top - margin));
+        const maxHeight = Math.max(160, availableBelow);
 
         const anchorCenter = anchorLeft - dropdownRect.left + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
         const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
@@ -620,12 +615,14 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         section.style.left = `${left}px`;
         section.style.width = `${width}px`;
         section.style.maxWidth = `${width}px`;
+        section.style.maxHeight = `${maxHeight}px`;
         section.style.marginTop = '0';
         section.style.right = 'auto';
         section.style.bottom = 'auto';
         section.style.visibility = 'visible';
         section.style.zIndex = '30';
         section.style.setProperty('--inline-plan-subsection-notch-left', `${Math.round(notchLeft)}px`);
+        this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
     }
 
 function getCatalogItemLabel(item) {
@@ -643,6 +640,18 @@ function getInlinePlanSelectionSeconds() {
 
 function getActivityBoardItemId(item) {
         return String(item && item.id ? item.id : '').trim();
+    }
+
+function getOpenParentCaretAnchor() {
+        if (!this.inlinePlanDropdown) return null;
+        const parentId = String(this.modalPlanSectionOpenParentId || '').trim();
+        if (!parentId) return null;
+        const dropdown = this.inlinePlanDropdown;
+        if (typeof dropdown.querySelectorAll !== 'function') return null;
+        const chips = Array.from(dropdown.querySelectorAll('.activity-chip[data-activity-id]'));
+        const chip = chips.find((node) => node && node.dataset && String(node.dataset.activityId || '').trim() === parentId);
+        if (!chip || typeof chip.querySelector !== 'function') return null;
+        return chip.querySelector('.activity-chip-caret') || null;
     }
 
 function hasActivityUsageHistory(item) {
@@ -814,8 +823,9 @@ function renderInlinePlanDropdownOptions() {
             const chip = document.createElement('span');
             chip.className = `activity-chip${canOpenChildBoard ? ' activity-chip-parent activity-chip-split' : ''}`;
             chip.dataset.label = label;
-            if (canOpenChildBoard) chip.dataset.parentId = String(item.id || '');
             const itemId = String(item.id || '').trim();
+            chip.dataset.activityId = itemId;
+            if (canOpenChildBoard) chip.dataset.parentId = itemId;
             const currentOpenParentId = String(this.modalPlanSectionOpenParentId || '').trim();
             const isOpenParent = canOpenChildBoard && this.modalPlanSectionOpen && currentOpenParentId === itemId;
             if (isOpenParent) chip.classList.add('activity-chip-open');
@@ -841,6 +851,7 @@ function renderInlinePlanDropdownOptions() {
                 const caret = document.createElement('button');
                 caret.type = 'button';
                 caret.className = 'activity-chip-caret';
+                caret.dataset.activityId = itemId;
                 caret.innerHTML = `
                     <svg
                         viewBox="0 0 20 20"
@@ -1020,6 +1031,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
         const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
         const backBtn = this.inlinePlanDropdown.querySelector('.inline-plan-sub-back');
+        const closeBtn = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-close');
         if (!section || !board) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
@@ -1046,6 +1058,15 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             backBtn.hidden = true;
             backBtn.setAttribute('aria-hidden', 'true');
             backBtn.onclick = null;
+        }
+        if (closeBtn) {
+            closeBtn.setAttribute('aria-label', '세부활동 설정 닫기');
+            closeBtn.title = '세부활동 설정 닫기';
+            closeBtn.onclick = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closePlanActivityChildMenu();
+            };
         }
 
         const selfRow = document.createElement('div');
@@ -1224,6 +1245,11 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             this.renderInlinePlanDropdownOptions();
         }
 
+        const freshAnchor = getOpenParentCaretAnchor.call(this) || anchorEl || null;
+        if (freshAnchor) {
+            this.inlinePlanChildPopoverAnchorEl = freshAnchor;
+        }
+
         const targetAnchor = getInlinePlanAnchorState.call(this);
         if (targetAnchor && this.positionInlinePlanDropdown) {
             this.positionInlinePlanDropdown(targetAnchor);
@@ -1388,8 +1414,8 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             <div class="activity-chip-board"></div>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-subsection-head">
-                    <button type="button" class="inline-plan-sub-back">← 전체 활동으로</button>
                     <div class="inline-plan-subsection-title">세부활동</div>
+                    <button type="button" class="inline-plan-subsection-close" aria-label="세부활동 설정 닫기">×</button>
                 </div>
                 <div class="activity-chip-board inline-plan-sub-board"></div>
             </div>`;        dropdown.style.visibility = 'hidden';
@@ -1568,9 +1594,13 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         const inlineBoard = dropdown.querySelector('.activity-chip-board');
         const inlineSubBoard = dropdown.querySelector('.inline-plan-sub-board');
         const inlineBack = dropdown.querySelector('.inline-plan-sub-back');
+        const inlineSubClose = dropdown.querySelector('.inline-plan-subsection-close');
         if (inlineBack) {
             inlineBack.hidden = true;
             inlineBack.setAttribute('aria-hidden', 'true');
+        }
+        if (inlineSubClose && !inlineSubClose.getAttribute('aria-label')) {
+            inlineSubClose.setAttribute('aria-label', '세부활동 설정 닫기');
         }
 
         // 컨텍스트 초기화: 인라인 전용 세부활동 요소 지정
@@ -1579,7 +1609,8 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             list: inlineBoard,
             section: subSection,
             subBoard: inlineSubBoard,
-            backBtn: inlineBack
+            backBtn: inlineBack,
+            closeBtn: inlineSubClose
         };
 
         // 현재 슬롯 범위 기준 기본 총시간 및 기존 세부활동 불러오기
