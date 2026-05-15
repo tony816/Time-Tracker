@@ -420,6 +420,18 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
     });
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const closeBtn = createNode('button');
@@ -429,6 +441,7 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             if (selector === '.inline-plan-subsection-close') return closeBtn;
@@ -458,6 +471,9 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
         renderTimeEntries() {},
         calculateTotals() {},
         autoSave() {},
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
         positionInlinePlanDropdown() {},
         dedupeAndSortPlannedActivities() {},
         savePlannedActivities() {},
@@ -476,7 +492,7 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
             { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work' },
         ]);
 
-        const selfRow = subBoard.children[0];
+        const selfRow = subBoard.children.find((node) => Array.isArray(node.children) && node.children[0] && String(node.children[0].className).includes('activity-chip-self'));
         const selfButton = selfRow.children[0];
         assert.ok(selfButton.className.includes('activity-chip-self'));
         selfButton.dispatchEvent({
@@ -498,8 +514,8 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
         controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, [
             { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work' },
         ]);
-        const childRow = subBoard.children[2];
-        const childButton = childRow.children[0];
+        const childRow = subBoard.children.find((node) => Array.isArray(node.children) && node.children[1] && String(node.children[1].className).includes('activity-chip'));
+        const childButton = childRow.children[1];
         childButton.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -672,12 +688,25 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
     });
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const dropdown = {
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             return null;
@@ -730,20 +759,12 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         assert.equal(title.textContent, 'Work의 세부활동');
         assert.equal(backBtn.hidden, true);
         assert.equal(backBtn.getAttribute('aria-hidden'), 'true');
-        assert.ok(subBoard.children[0].children[0].className.includes('activity-chip-self'));
-        assert.ok(subBoard.children[1].className.includes('activity-chip-board-title'));
-        assert.ok(subBoard.children[2].className.includes('inline-plan-empty'));
-        assert.ok(subBoard.children[3].className.includes('activity-chip-add'));
-
-        const addButton = subBoard.children[3];
-        addButton.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
+        const bodyRow = subBoard.children.find((node) => Array.isArray(node.children) && node.children[0] && String(node.children[0].className).includes('activity-chip-self'));
+        assert.ok(bodyRow.children[0].className.includes('activity-chip-self'));
+        assert.ok(bodyRow.children[1].className.includes('inline-plan-empty'));
 
         assert.equal(promptCalled, false);
-        const composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        const composer = actions.children.find((node) => node.className === 'activity-child-composer');
         assert.ok(composer);
         const composerInput = composer.children[0];
         const composerSubmit = composer.children[1];
@@ -801,6 +822,18 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
     subBoard.className = 'activity-chip-board inline-plan-sub-board';
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const closeBtn = createNode('button');
@@ -822,6 +855,7 @@ test('openPlanActivityChildMenu closes via the popover close button', () => {
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             if (selector === '.inline-plan-subsection-close') return closeBtn;
@@ -1212,6 +1246,18 @@ test('caret toggles child board open, close, and switch parent', () => {
     });
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const dropdown = {
@@ -1219,6 +1265,7 @@ test('caret toggles child board open, close, and switch parent', () => {
             if (selector === '.activity-chip-board') return board;
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             return null;
@@ -1370,12 +1417,25 @@ test('inline child composer creates children, blocks duplicates, and allows same
     });
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const dropdown = {
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             return null;
@@ -1423,13 +1483,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
 
     try {
         controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[0], anchor, []);
-        let addBtn = subBoard.children[3];
-        addBtn.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-        let composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        let composer = actions.children.find((node) => node.className === 'activity-child-composer');
         let input = composer.children[0];
         let submit = composer.children[1];
         input.value = '스쿼트';
@@ -1447,7 +1501,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         assert.equal(exerciseChildren[0].source, 'local');
         assert.equal(exerciseChildren[0].usageCount, 0);
         assert.equal(saveCalls.length, 1);
-        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        composer = actions.children.find((node) => node.className === 'activity-child-composer');
         input = composer.children[0];
         submit = composer.children[1];
         assert.equal(input.value, '');
@@ -1476,7 +1530,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
         assert.equal(exerciseChildren.length, 2);
         assert.equal(saveCalls.length, 2);
-        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        composer = actions.children.find((node) => node.className === 'activity-child-composer');
         input = composer.children[0];
         assert.equal(input.value, '');
 
@@ -1497,13 +1551,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         assert.ok(duplicateChip);
 
         controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[1], anchor, []);
-        addBtn = subBoard.children[3];
-        addBtn.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        composer = actions.children.find((node) => node.className === 'activity-child-composer');
         input = composer.children[0];
         submit = composer.children[1];
         input.value = '스쿼트';
@@ -1575,12 +1623,25 @@ test('inline child composer can be cancelled with button or Escape', () => {
     });
     const title = createNode('div');
     title.className = 'inline-plan-subsection-title';
+    const actions = createNode('div');
+    actions.className = 'inline-plan-child-actions';
+    actions._innerHTML = '';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     const backBtn = createNode('button');
     backBtn.className = 'inline-plan-sub-back';
     const dropdown = {
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return subSection;
             if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.inline-plan-child-actions') return actions;
             if (selector === '.inline-plan-subsection-title') return title;
             if (selector === '.inline-plan-sub-back') return backBtn;
             return null;
@@ -1623,14 +1684,8 @@ test('inline child composer can be cancelled with button or Escape', () => {
 
     try {
         controller.openPlanActivityChildMenu.call(ctx, ctx.plannedActivities[0], anchor, []);
-        const addBtn = subBoard.children[3];
-        addBtn.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
 
-        let composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        let composer = actions.children.find((node) => node.className === 'activity-child-composer');
         assert.ok(composer);
         const input = composer.children[0];
         const cancelBtn = composer.children[2];
@@ -1642,16 +1697,11 @@ test('inline child composer can be cancelled with button or Escape', () => {
         });
 
         assert.equal(subSection.hidden, false);
-        assert.equal(ctx.inlineChildComposerOpenParentId, null);
+        assert.equal(ctx.inlineChildComposerOpenParentId, 'exercise');
         assert.equal(ctx.plannedActivities.filter((item) => item.parentId === 'exercise').length, 0);
-        assert.ok(subBoard.children.some((node) => node.className === 'activity-chip activity-chip-add'));
+        assert.ok(actions.children.some((node) => node.className === 'activity-child-composer'));
 
-        addBtn.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-        composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
+        composer = actions.children.find((node) => node.className === 'activity-child-composer');
         const escapeInput = composer.children[0];
         escapeInput.value = '스쿼트';
         escapeInput.dispatchEvent({
@@ -1663,8 +1713,8 @@ test('inline child composer can be cancelled with button or Escape', () => {
         });
 
         assert.equal(subSection.hidden, false);
-        assert.equal(ctx.inlineChildComposerOpenParentId, null);
-        assert.ok(subBoard.children.some((node) => node.className === 'activity-chip activity-chip-add'));
+        assert.equal(ctx.inlineChildComposerOpenParentId, 'exercise');
+        assert.ok(actions.children.some((node) => node.className === 'activity-child-composer'));
     } finally {
         globalThis.document = originalDocument;
     }

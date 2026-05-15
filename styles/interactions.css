@@ -1334,6 +1334,22 @@ button.activity-chip,
   flex: 1 1 auto;
 }
 
+.inline-plan-child-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inline-plan-child-actions .activity-child-composer {
+  margin-top: 0;
+  width: 100%;
+}
+
+.inline-plan-child-actions .activity-child-composer-cancel {
+  display: none;
+}
+
 .inline-plan-sub-board .activity-chip-row + .activity-chip-board-title,
 .inline-plan-sub-board .inline-plan-empty {
   margin-top: 6px;

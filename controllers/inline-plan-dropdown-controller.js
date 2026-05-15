@@ -1017,7 +1017,8 @@ function renderInlinePlanDropdownOptions() {
             const empty = document.createElement('div');
             empty.className = 'inline-plan-empty';
             empty.textContent = normalizedQuery ? '검색 결과가 없습니다.' : '등록된 활동이 없습니다.';
-            board.appendChild(empty);
+            childRow.appendChild(empty);
+            board.appendChild(childRow);
         }
         const currentAnchor = getInlinePlanAnchorState.call(this);
         if (currentAnchor && this.positionInlinePlanDropdown) {
@@ -1117,10 +1118,11 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget || !parentItem) return;
         const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
         const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
+        const actions = this.inlinePlanDropdown.querySelector('.inline-plan-child-actions');
         const backBtn = this.inlinePlanDropdown.querySelector('.inline-plan-sub-back');
         const closeBtn = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-close');
         const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
-        if (!section || !board) return;
+        if (!section || !board || !actions) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
         section.hidden = false;
@@ -1135,16 +1137,15 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         this.inlinePlanChildPopoverAnchorEl = anchorEl || null;
         const composerOpenParentId = String(this.inlineChildComposerOpenParentId || '').trim();
         if (composerOpenParentId && composerOpenParentId !== parentId) {
-            this.inlineChildComposerOpenParentId = null;
             this.inlineChildComposerError = '';
             this.inlineChildComposerHighlightId = null;
             this.inlineChildComposerHighlightKind = null;
             this.inlineChildComposerValue = '';
             this.inlineChildComposerFocusPending = false;
-        } else if (composerOpenParentId === parentId) {
-            this.inlineChildComposerOpenParentId = parentId;
         }
+        this.inlineChildComposerOpenParentId = parentId;
         board.innerHTML = '';
+        actions.innerHTML = '';
         if (backBtn) {
             backBtn.hidden = true;
             backBtn.setAttribute('aria-hidden', 'true');
@@ -1164,8 +1165,8 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             title.textContent = parentLabel ? `${parentLabel}의 세부활동` : '세부활동';
         }
 
-        const selfRow = document.createElement('div');
-        selfRow.className = 'activity-chip-row';
+        const childRow = document.createElement('div');
+        childRow.className = 'activity-chip-row';
 
         const parentSelf = document.createElement('button');
         parentSelf.type = 'button';
@@ -1178,16 +1179,13 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             event.stopPropagation();
             applyActivityCatalogSelection.call(this, parentItem, null, { keepOpen: true });
         });
-        selfRow.appendChild(parentSelf);
-        board.appendChild(selfRow);
+        childRow.appendChild(parentSelf);
 
         const childTitle = document.createElement('div');
         childTitle.className = 'activity-chip-board-title';
         childTitle.textContent = '세부활동';
         board.appendChild(childTitle);
-
-        const childRow = document.createElement('div');
-        childRow.className = 'activity-chip-row';
+        childTitle.hidden = true;
 
         (Array.isArray(children) ? children : []).forEach((child) => {
             const childLabel = getCatalogItemLabel.call(this, child);
@@ -1211,16 +1209,17 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             childRow.appendChild(btn);
         });
 
-        if (childRow.children.length > 0) {
+        if (childRow.children.length > 1) {
             board.appendChild(childRow);
         } else {
             const empty = document.createElement('div');
             empty.className = 'inline-plan-empty';
             empty.textContent = '아직 세부활동이 없습니다.';
-            board.appendChild(empty);
+            childRow.appendChild(empty);
+            board.appendChild(childRow);
         }
 
-        if (String(this.inlineChildComposerOpenParentId || '').trim() === parentId) {
+        if (true) {
             const composer = document.createElement('div');
             composer.className = 'activity-child-composer';
 
@@ -1273,8 +1272,9 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
                     commitValue();
                 } else if (event.key === 'Escape') {
                     event.preventDefault();
-                    closeComposer();
-                    this.openPlanActivityChildMenu(parentItem, anchorEl, children);
+                    input.value = '';
+                    this.inlineChildComposerValue = '';
+                    this.inlineChildComposerError = '';
                 }
             });
             submitBtn.addEventListener('click', (event) => {
@@ -1285,23 +1285,27 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             cancelBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                closeComposer();
-                this.openPlanActivityChildMenu(parentItem, anchorEl, children);
+                input.value = '';
+                this.inlineChildComposerValue = '';
+                this.inlineChildComposerError = '';
             });
-
             composer.appendChild(input);
             composer.appendChild(submitBtn);
             composer.appendChild(cancelBtn);
-            board.appendChild(composer);
+            actions.appendChild(composer);
 
             if (this.inlineChildComposerError) {
                 const error = document.createElement('div');
                 error.className = 'activity-child-composer-error';
                 error.textContent = this.inlineChildComposerError;
-                board.appendChild(error);
+                actions.appendChild(error);
+                const inlineErrorEcho = document.createElement('div');
+                inlineErrorEcho.className = 'activity-child-composer-error';
+                inlineErrorEcho.textContent = this.inlineChildComposerError;
+                board.appendChild(inlineErrorEcho);
             }
 
-            if (this.inlineChildComposerFocusPending) {
+            if (this.inlineChildComposerFocusPending && !(this.isInlinePlanMobileInputContext && this.isInlinePlanMobileInputContext())) {
                 this.inlineChildComposerFocusPending = false;
                 const scheduleFocus = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
                 scheduleFocus(() => {
@@ -1314,6 +1318,8 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
                         }
                     }
                 });
+            } else if (this.isInlinePlanMobileInputContext && this.isInlinePlanMobileInputContext()) {
+                this.inlineChildComposerFocusPending = false;
             }
         } else {
             const addChildBtn = document.createElement('button');
@@ -1513,6 +1519,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                     <button type="button" class="inline-plan-subsection-close" aria-label="세부활동 설정 닫기">×</button>
                 </div>
                 <div class="activity-chip-board inline-plan-sub-board"></div>
+                <div class="inline-plan-child-actions"></div>
             </div>`;        dropdown.style.visibility = 'hidden';
         if (isMobileInputContext) {
             const backdrop = document.createElement('div');
