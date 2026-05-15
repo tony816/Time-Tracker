@@ -1033,13 +1033,15 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   display: inline-flex;
   align-items: stretch;
   max-width: 100%;
-  min-height: 34px;
-  border: 1px solid #d8e1ea;
-  border-radius: 9px;
-  background: #fff;
-  color: #1f2d3d;
+  min-height: 38px;
+  border: 1px solid #d5dee8;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #111827;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.025);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
   transition:
     border-color 0.14s ease,
     background 0.14s ease,
@@ -1058,9 +1060,8 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
 button.activity-chip,
 .activity-chip-main,
 .activity-chip-caret {
-  min-height: 34px;
+  min-height: 38px;
   border: 0;
-  background: transparent;
   color: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -1073,7 +1074,8 @@ button.activity-chip,
 
 button.activity-chip,
 .activity-chip-main {
-  padding: 0 11px;
+  padding: 0 13px;
+  background: transparent;
 }
 
 .activity-chip-main {
@@ -1085,12 +1087,12 @@ button.activity-chip,
 .activity-chip-split .activity-chip-main {
   flex: 1 1 auto;
   justify-content: flex-start;
-  padding-inline-end: 13px;
+  padding-inline-end: 15px;
 }
 
 .activity-chip-label {
   min-width: 0;
-  max-width: 180px;
+  max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1098,45 +1100,58 @@ button.activity-chip,
 
 .activity-chip-caret {
   position: relative;
-  width: 36px;
-  flex: 0 0 36px;
+  width: 42px;
+  flex: 0 0 42px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #475569;
+  color: #334155;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(249, 251, 253, 0.96) 0%,
+      rgba(244, 247, 251, 0.96) 100%
+    );
 }
 
 .activity-chip-caret::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  top: 9px;
+  bottom: 9px;
   width: 1px;
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    #e2e8f0 18%,
-    #e2e8f0 82%,
+    rgba(203, 213, 225, 0.85) 18%,
+    rgba(203, 213, 225, 0.85) 82%,
     transparent 100%
   );
 }
 
 .activity-chip:hover,
 .activity-chip:focus-within {
-  border-color: #b8cce0;
+  border-color: #b7c8da;
   background: #fff;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.045);
+  box-shadow:
+    0 3px 8px rgba(15, 23, 42, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
 }
 
 .activity-chip-split .activity-chip-main:hover {
-  background: #f8fbff;
+  background: #fbfdff;
 }
 
 .activity-chip-split .activity-chip-caret:hover {
-  background: #f8fafc;
-  color: #1e293b;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(241, 245, 249, 1) 0%,
+      rgba(236, 242, 248, 1) 100%
+    );
+  color: #0f172a;
 }
 
 .activity-chip-split .activity-chip-caret:active {
@@ -1151,8 +1166,8 @@ button.activity-chip,
 }
 
 .activity-chip-caret svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   stroke-width: 2.25;
   transform: translateX(1px);
   pointer-events: none;

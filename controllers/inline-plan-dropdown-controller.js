@@ -754,7 +754,7 @@ function renderInlinePlanDropdownOptions() {
                         focusable="false"
                     >
                         <path
-                            d="M7.5 5L12.5 10L7.5 15"
+                            d="M5.75 7.75L10 12.25L14.25 7.75"
                             stroke="currentColor"
                             stroke-linecap="round"
                             stroke-linejoin="round"
