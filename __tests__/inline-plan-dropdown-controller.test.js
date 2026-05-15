@@ -33,6 +33,10 @@ const applyInlinePlanSelectionWrapper = buildMethod(
     'applyInlinePlanSelection(label, options = {})',
     '(label, options = {})'
 );
+const touchPlannedActivityUsageWrapper = buildMethod(
+    'touchPlannedActivityUsage(activityItem, parentItem = null)',
+    '(activityItem, parentItem = null)'
+);
 
 test('inline-plan-dropdown-controller exports and global attach are available', () => {
     assert.ok(controller);
@@ -81,11 +85,17 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
             calls.push(['apply', this, label, options]);
             return 'apply-result';
         },
+        touchPlannedActivityUsage(activityItem, parentItem) {
+            calls.push(['touchUsage', this, activityItem, parentItem]);
+            return 'touch-result';
+        },
     };
 
     const ctx = { id: 'tracker' };
     const anchor = { id: 'anchor' };
     const options = { keepOpen: true };
+    const activityItem = { id: 'activity-1' };
+    const parentItem = { id: 'parent-1' };
 
     try {
         assert.equal(buildPlannedActivityOptionsWrapper.call(ctx, ['A']), 'build-result');
@@ -95,6 +105,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         assert.equal(openInlinePlanDropdownWrapper.call(ctx, 3, anchor, 5), 'open-result');
         assert.equal(closeInlinePlanDropdownWrapper.call(ctx), 'close-result');
         assert.equal(applyInlinePlanSelectionWrapper.call(ctx, 'A', options), 'apply-result');
+        assert.equal(touchPlannedActivityUsageWrapper.call(ctx, activityItem, parentItem), 'touch-result');
     } finally {
         globalThis.TimeTrackerInlinePlanDropdownController = original;
     }
@@ -107,6 +118,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['open', ctx, 3, anchor, 5],
         ['close', ctx],
         ['apply', ctx, 'A', options],
+        ['touchUsage', ctx, activityItem, parentItem],
     ]);
 });
 
