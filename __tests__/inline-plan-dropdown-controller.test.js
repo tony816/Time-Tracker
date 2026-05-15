@@ -190,6 +190,17 @@ test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessib
                         }
                     });
                 },
+                remove(...classes) {
+                    const target = this.owner;
+                    if (!target) return;
+                    const tokens = target.className.split(/\s+/).filter(Boolean);
+                    target.className = tokens.filter((token) => !classes.includes(token)).join(' ');
+                },
+                contains(cls) {
+                    const target = this.owner;
+                    if (!target) return false;
+                    return target.className.split(/\s+/).filter(Boolean).includes(cls);
+                },
             },
             textContent: '',
             title: '',
@@ -716,7 +727,7 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         controller.openPlanActivityChildMenu.call(ctx, { id: 'work', name: 'Work', label: 'Work' }, anchor, []);
 
         assert.equal(subSection.hidden, false);
-        assert.equal(title.textContent, '');
+        assert.equal(title.textContent, 'Work의 세부활동');
         assert.equal(backBtn.hidden, true);
         assert.equal(backBtn.getAttribute('aria-hidden'), 'true');
         assert.ok(subBoard.children[0].children[0].className.includes('activity-chip-self'));
@@ -882,21 +893,33 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
         setProperty(name, value) {
             this[name] = String(value);
         },
+        removeProperty(name) {
+            delete this[name];
+        },
     });
+    const sectionClasses = new Set();
     const section = {
         hidden: false,
         style: makeStyleBag(),
         classList: {
-            add() {},
-            remove() {},
-            contains() { return false; },
+            add(...classes) {
+                classes.forEach((name) => sectionClasses.add(name));
+            },
+            remove(...classes) {
+                classes.forEach((name) => sectionClasses.delete(name));
+            },
+            contains(name) { return sectionClasses.has(name); },
         },
         offsetHeight: 220,
         scrollHeight: 220,
     };
+    const dropdownClasses = new Set(['inline-plan-child-popover-open']);
     const dropdown = {
         style: makeStyleBag(),
         classList: {
+            remove(name) {
+                dropdownClasses.delete(name);
+            },
             contains(name) {
                 return name === 'inline-plan-dropdown-sheet' ? false : false;
             },
@@ -917,6 +940,8 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
     };
     const ctx = {
         inlinePlanDropdown: dropdown,
+        modalPlanSectionOpen: true,
+        modalPlanSectionOpenParentId: 'work',
         inlinePlanChildPopoverAnchorEl: anchor,
         isInlinePlanMobileInputContext() {
             return false;
@@ -939,6 +964,7 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
     assert.equal(section.style.visibility, 'visible');
     assert.equal(section.style.zIndex, '80');
     assert.equal(section.style.maxHeight, '220px');
+    assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
 });
 
 test('positionInlinePlanChildPopover caps tall child board height', () => {
@@ -946,21 +972,33 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
         setProperty(name, value) {
             this[name] = String(value);
         },
+        removeProperty(name) {
+            delete this[name];
+        },
     });
+    const sectionClasses = new Set();
     const section = {
         hidden: false,
         style: makeStyleBag(),
         classList: {
-            add() {},
-            remove() {},
-            contains() { return false; },
+            add(...classes) {
+                classes.forEach((name) => sectionClasses.add(name));
+            },
+            remove(...classes) {
+                classes.forEach((name) => sectionClasses.delete(name));
+            },
+            contains(name) { return sectionClasses.has(name); },
         },
         offsetHeight: 800,
         scrollHeight: 800,
     };
+    const dropdownClasses = new Set(['inline-plan-child-popover-open']);
     const dropdown = {
         style: makeStyleBag(),
         classList: {
+            remove(name) {
+                dropdownClasses.delete(name);
+            },
             contains() {
                 return false;
             },
@@ -981,6 +1019,8 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
     };
     const ctx = {
         inlinePlanDropdown: dropdown,
+        modalPlanSectionOpen: true,
+        modalPlanSectionOpenParentId: 'work',
         inlinePlanChildPopoverAnchorEl: anchor,
         isInlinePlanMobileInputContext() {
             return false;
@@ -989,7 +1029,7 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
 
     controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
-    assert.equal(section.style.maxHeight, '248px');
+    assert.equal(section.style.maxHeight, '420px');
     assert.equal(section.style.zIndex, '80');
 });
 
@@ -997,6 +1037,9 @@ test('positionInlinePlanChildPopover re-resolves the active caret after rerender
     const makeStyleBag = () => ({
         setProperty(name, value) {
             this[name] = String(value);
+        },
+        removeProperty(name) {
+            delete this[name];
         },
     });
     const section = {
@@ -1048,6 +1091,7 @@ test('positionInlinePlanChildPopover re-resolves the active caret after rerender
     };
     const ctx = {
         inlinePlanDropdown: dropdown,
+        modalPlanSectionOpen: true,
         modalPlanSectionOpenParentId: 'work',
         inlinePlanChildPopoverAnchorEl: staleAnchor,
         isInlinePlanMobileInputContext() {
@@ -1240,7 +1284,7 @@ test('caret toggles child board open, close, and switch parent', () => {
         assert.equal(subSection.hidden, false);
         assert.equal(ctx.modalPlanSectionOpen, true);
         assert.equal(ctx.modalPlanSectionOpenParentId, 'study');
-        assert.equal(title.textContent, '');
+        assert.equal(title.textContent, 'Study의 세부활동');
     } finally {
         globalThis.document = originalDocument;
     }

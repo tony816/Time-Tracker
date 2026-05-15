@@ -546,12 +546,51 @@ function positionInlinePlanDropdown(anchorEl) {
 function positionInlinePlanChildPopover(anchorEl = null) {
         if (!this.inlinePlanDropdown) return;
         const section = this.inlinePlanDropdown.querySelector('.inline-plan-subsection');
-        if (!section || section.hidden) return;
+        if (!section) return;
+        const shouldShow = Boolean(
+            this.modalPlanSectionOpen
+            && String(this.modalPlanSectionOpenParentId || '').trim()
+        );
+        if (!shouldShow) {
+            section.hidden = true;
+            if (section.style) {
+                section.style.visibility = 'hidden';
+                if (typeof section.style.removeProperty === 'function') {
+                    section.style.removeProperty('--inline-plan-subsection-notch-left');
+                }
+            }
+            if (section.classList && typeof section.classList.remove === 'function') {
+                section.classList.remove('inline-plan-subsection-anchored');
+                section.classList.remove('inline-plan-subsection-flow');
+            }
+            if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.remove === 'function') {
+                this.inlinePlanDropdown.classList.remove('inline-plan-child-popover-open');
+            }
+            return;
+        }
+        if (section.hidden) return;
 
         const resolvedAnchor = getOpenParentCaretAnchor.call(this)
             || (anchorEl && anchorEl.isConnected ? anchorEl : null)
             || (this.inlinePlanChildPopoverAnchorEl && this.inlinePlanChildPopoverAnchorEl.isConnected ? this.inlinePlanChildPopoverAnchorEl : null);
-        if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') return;
+        if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') {
+            section.hidden = true;
+            if (section.style) {
+                section.style.visibility = 'hidden';
+                if (typeof section.style.removeProperty === 'function') {
+                    section.style.removeProperty('--inline-plan-subsection-notch-left');
+                }
+            }
+            if (section.classList && typeof section.classList.remove === 'function') {
+                section.classList.remove('inline-plan-subsection-anchored');
+                section.classList.remove('inline-plan-subsection-flow');
+            }
+            if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.remove === 'function') {
+                this.inlinePlanDropdown.classList.remove('inline-plan-child-popover-open');
+            }
+            this.inlinePlanChildPopoverAnchorEl = null;
+            return;
+        }
         if (typeof this.inlinePlanDropdown.getBoundingClientRect !== 'function') return;
 
         const dropdown = this.inlinePlanDropdown;
@@ -573,6 +612,7 @@ function positionInlinePlanChildPopover(anchorEl = null) {
 
         if (useFlowLayout) {
             section.classList.add('inline-plan-subsection-flow');
+            section.classList.remove('inline-plan-subsection-anchored');
             section.style.position = 'relative';
             section.style.top = '';
             section.style.left = '';
@@ -581,7 +621,7 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             section.style.width = '100%';
             section.style.maxWidth = 'none';
             section.style.marginTop = '10px';
-            section.style.maxHeight = 'min(280px, 46vh)';
+            section.style.maxHeight = 'min(420px, calc(100vh - 96px))';
             section.style.visibility = 'visible';
             section.style.zIndex = '80';
             this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
@@ -589,12 +629,12 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         }
 
         section.classList.remove('inline-plan-subsection-flow');
+        section.classList.add('inline-plan-subsection-anchored');
         const gap = 8;
         const margin = 8;
         const minWidth = 300;
         const maxWidth = 360;
-        const minHeight = 128;
-        const maxHeightLimit = 248;
+        const minHeight = 220;
         const width = Math.max(minWidth, Math.min(maxWidth, Math.floor(dropdownWidth - (margin * 2)) || maxWidth));
         let left = Math.round(anchorLeft - dropdownRect.left);
         if (left + width > dropdownWidth - margin) {
@@ -606,19 +646,15 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             ? dropdownHeight
             : ((typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) ? window.innerHeight : 0);
         const topBelow = Math.round(anchorBottom - dropdownRect.top + gap);
-        const anchorTopInDropdown = Number.isFinite(anchorTop) ? Math.round(anchorTop - dropdownRect.top) : topBelow;
         const availableBelow = Math.max(0, Math.floor(viewportHeight - topBelow - margin));
-        const availableAbove = Math.max(0, Math.floor(anchorTopInDropdown - gap - margin));
         const naturalHeight = Math.max(Number(section.scrollHeight) || 0, Number(section.offsetHeight) || 0);
-        const placeAbove = availableBelow < minHeight && availableAbove > availableBelow;
-        const available = placeAbove ? availableAbove : availableBelow;
+        const maxHeightLimit = Math.min(420, Math.max(300, Math.floor(viewportHeight - topBelow - margin)));
+        const available = availableBelow;
         const boundedHeight = Math.max(
-            minHeight,
+            Math.min(minHeight, Math.max(available, 0)),
             Math.min(maxHeightLimit, available || maxHeightLimit, naturalHeight || maxHeightLimit)
         );
-        const top = placeAbove
-            ? Math.max(margin, anchorTopInDropdown - gap - boundedHeight)
-            : Math.max(margin, topBelow);
+        const top = Math.max(margin, topBelow);
 
         const anchorCenter = anchorLeft - dropdownRect.left + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
         const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
@@ -1019,7 +1055,16 @@ function closePlanActivityChildMenu(options = {}) {
             : null;
         if (section) {
             section.hidden = true;
-            if (section.style) section.style.visibility = 'hidden';
+            if (section.style) {
+                section.style.visibility = 'hidden';
+                if (typeof section.style.removeProperty === 'function') {
+                    section.style.removeProperty('--inline-plan-subsection-notch-left');
+                }
+            }
+            if (section.classList && typeof section.classList.remove === 'function') {
+                section.classList.remove('inline-plan-subsection-anchored');
+                section.classList.remove('inline-plan-subsection-flow');
+            }
         }
         if (
             this.inlinePlanDropdown
@@ -1054,6 +1099,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const board = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
         const backBtn = this.inlinePlanDropdown.querySelector('.inline-plan-sub-back');
         const closeBtn = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-close');
+        const title = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-title');
         if (!section || !board) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
@@ -1092,6 +1138,10 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
                 event.stopPropagation();
                 this.closePlanActivityChildMenu();
             };
+        }
+
+        if (title) {
+            title.textContent = parentLabel ? `${parentLabel}의 세부활동` : '세부활동';
         }
 
         const selfRow = document.createElement('div');
@@ -1439,6 +1489,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             <div class="activity-chip-board"></div>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-subsection-head">
+                    <div class="inline-plan-subsection-title"></div>
                     <button type="button" class="inline-plan-subsection-close" aria-label="세부활동 설정 닫기">×</button>
                 </div>
                 <div class="activity-chip-board inline-plan-sub-board"></div>
@@ -1647,13 +1698,26 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        this.inlinePlanChildPopoverAnchorEl = null;
         this.inlineChildComposerOpenParentId = null;
         this.inlineChildComposerError = '';
         this.inlineChildComposerHighlightId = null;
         this.inlineChildComposerHighlightKind = null;
         this.inlineChildComposerValue = '';
         this.inlineChildComposerFocusPending = false;
-        if (subSection) subSection.hidden = true;
+        if (subSection) {
+            subSection.hidden = true;
+            if (subSection.style) {
+                subSection.style.visibility = 'hidden';
+                if (typeof subSection.style.removeProperty === 'function') {
+                    subSection.style.removeProperty('--inline-plan-subsection-notch-left');
+                }
+            }
+            if (subSection.classList && typeof subSection.classList.remove === 'function') {
+                subSection.classList.remove('inline-plan-subsection-anchored');
+                subSection.classList.remove('inline-plan-subsection-flow');
+            }
+        }
         const baseSlot = this.timeSlots[range.startIndex] || {};
         this.modalPlanTitle = typeof baseSlot.planTitle === 'string'
             ? (this.normalizeActivityText ? this.normalizeActivityText(baseSlot.planTitle) : baseSlot.planTitle.trim())
