@@ -722,9 +722,9 @@ test('openPlanActivityChildMenu renders an empty child board with parent self se
         const composerInput = composer.children[0];
         const composerSubmit = composer.children[1];
         const composerCancel = composer.children[2];
-        assert.ok(String(composerInput.getAttribute('placeholder') || '').includes('????'));
-        assert.equal(composerSubmit.textContent, '??');
-        assert.equal(composerCancel.textContent, '??');
+        assert.ok(String(composerInput.getAttribute('placeholder') || '').includes('세부활동'));
+        assert.equal(composerSubmit.textContent, '추가');
+        assert.equal(composerCancel.textContent, '취소');
         assert.equal(ctx.inlineChildComposerOpenParentId, 'work');
     } finally {
         globalThis.document = originalDocument;
@@ -995,8 +995,8 @@ test('inline child composer creates children, blocks duplicates, and allows same
         timeSlots: [{}],
         mergedFields: new Map(),
         plannedActivities: [
-            { id: 'exercise', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
-            { id: 'study', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'study', name: '공부', label: '공부', normalizedName: '공부', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -1032,7 +1032,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         let composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
         let input = composer.children[0];
         let submit = composer.children[1];
-        input.value = '???';
+        input.value = '스쿼트';
         input.dispatchEvent({
             type: 'keydown',
             key: 'Enter',
@@ -1043,7 +1043,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
 
         let exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
         assert.equal(exerciseChildren.length, 1);
-        assert.equal(exerciseChildren[0].label, '???');
+        assert.equal(exerciseChildren[0].label, '스쿼트');
         assert.equal(exerciseChildren[0].source, 'local');
         assert.equal(exerciseChildren[0].usageCount, 0);
         assert.equal(saveCalls.length, 1);
@@ -1066,7 +1066,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         const createdChip = findNodeWithClass(subBoard, 'activity-chip-new-highlight');
         assert.ok(createdChip);
 
-        input.value = '??';
+        input.value = '걷기';
         submit.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -1080,7 +1080,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         input = composer.children[0];
         assert.equal(input.value, '');
 
-        input.value = '???';
+        input.value = '스쿼트';
         input.dispatchEvent({
             type: 'keydown',
             key: 'Enter',
@@ -1092,7 +1092,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
         assert.equal(exerciseChildren.length, 2);
         assert.equal(saveCalls.length, 2);
-        assert.ok(String(subBoard.children.map((node) => node.textContent).join(' ')).includes('??'));
+        assert.ok(String(subBoard.children.map((node) => node.textContent).join(' ')).includes('이미 있는 세부활동입니다.'));
         const duplicateChip = findNodeWithClass(subBoard, 'activity-chip-duplicate-highlight');
         assert.ok(duplicateChip);
 
@@ -1106,7 +1106,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
         composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
         input = composer.children[0];
         submit = composer.children[1];
-        input.value = '???';
+        input.value = '스쿼트';
         submit.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -1115,7 +1115,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
 
         const studyChildren = ctx.plannedActivities.filter((item) => item.parentId === 'study');
         assert.equal(studyChildren.length, 1);
-        assert.equal(studyChildren[0].label, '???');
+        assert.equal(studyChildren[0].label, '스쿼트');
         assert.equal(saveCalls.length, 3);
     } finally {
         globalThis.document = originalDocument;
@@ -1199,7 +1199,7 @@ test('inline child composer can be cancelled with button or Escape', () => {
         timeSlots: [{}],
         mergedFields: new Map(),
         plannedActivities: [
-            { id: 'exercise', name: '??', label: '??', normalizedName: '??', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, colorKey: null, defaultDurationMinutes: null, displayMode: 'chip', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -1234,7 +1234,7 @@ test('inline child composer can be cancelled with button or Escape', () => {
         assert.ok(composer);
         const input = composer.children[0];
         const cancelBtn = composer.children[2];
-        input.value = '??';
+        input.value = '취소';
         cancelBtn.dispatchEvent({
             type: 'click',
             preventDefault() {},
@@ -1253,7 +1253,7 @@ test('inline child composer can be cancelled with button or Escape', () => {
         });
         composer = subBoard.children.find((node) => node.className === 'activity-child-composer');
         const escapeInput = composer.children[0];
-        escapeInput.value = '??';
+        escapeInput.value = '스쿼트';
         escapeInput.dispatchEvent({
             type: 'keydown',
             key: 'Escape',

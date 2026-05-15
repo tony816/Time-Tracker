@@ -862,7 +862,7 @@ function createChildActivityForParent(parentItem, rawName) {
             return currentName === normalizedName;
         });
         if (existing) {
-            this.inlineChildComposerError = '?? ?? ???????.';
+            this.inlineChildComposerError = '이미 있는 세부활동입니다.';
             this.inlineChildComposerHighlightId = existing.id || null;
             this.inlineChildComposerHighlightKind = 'duplicate';
             return { status: 'duplicate', item: existing };
@@ -927,7 +927,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!section || !board) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
-        if (title) title.textContent = parentLabel ? `???: ${parentLabel}` : '???';
+        if (title) title.textContent = parentLabel ? `활동군: ${parentLabel}` : '활동군';
         section.hidden = false;
         if (!section.id) section.id = 'inline-plan-subsection';
         this.modalPlanSectionOpen = true;
@@ -957,9 +957,9 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const parentSelf = document.createElement('button');
         parentSelf.type = 'button';
         parentSelf.className = 'activity-chip activity-chip-self';
-        parentSelf.setAttribute('aria-label', parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??');
-        parentSelf.title = parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??';
-        parentSelf.textContent = parentLabel ? `${parentLabel} ?? ??` : '?? ?? ??';
+        parentSelf.setAttribute('aria-label', parentLabel ? `${parentLabel} 자체 선택` : '자체 선택');
+        parentSelf.title = parentLabel ? `${parentLabel} 자체 선택` : '자체 선택';
+        parentSelf.textContent = parentLabel ? `${parentLabel} 자체 선택` : '자체 선택';
         parentSelf.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -970,7 +970,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
 
         const childTitle = document.createElement('div');
         childTitle.className = 'activity-chip-board-title';
-        childTitle.textContent = '????';
+        childTitle.textContent = '세부활동';
         board.appendChild(childTitle);
 
         const childRow = document.createElement('div');
@@ -987,8 +987,8 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
                 btn.className += ` ${this.inlineChildComposerHighlightKind === 'duplicate' ? 'activity-chip-duplicate-highlight' : 'activity-chip-new-highlight'}`;
             }
             btn.dataset.label = childLabel;
-            btn.setAttribute('aria-label', `${childLabel} ??`);
-            btn.title = `${childLabel} ??`;
+            btn.setAttribute('aria-label', `${childLabel} 선택`);
+            btn.title = `${childLabel} 선택`;
             btn.textContent = childLabel;
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -1003,7 +1003,7 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         } else {
             const empty = document.createElement('div');
             empty.className = 'inline-plan-empty';
-            empty.textContent = '?? ????? ????.';
+            empty.textContent = '아직 세부활동이 없습니다.';
             board.appendChild(empty);
         }
 
@@ -1014,18 +1014,18 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'activity-child-composer-input';
-            input.setAttribute('placeholder', parentLabel && parentLabel.length <= 12 ? `${parentLabel} ???? ??` : '???? ?? ??...');
+            input.setAttribute('placeholder', parentLabel && parentLabel.length <= 12 ? `${parentLabel}의 세부활동 입력` : '세부활동 이름 입력...');
             input.value = this.inlineChildComposerValue || '';
 
             const submitBtn = document.createElement('button');
             submitBtn.type = 'button';
             submitBtn.className = 'activity-child-composer-submit';
-            submitBtn.textContent = '??';
+            submitBtn.textContent = '추가';
 
             const cancelBtn = document.createElement('button');
             cancelBtn.type = 'button';
             cancelBtn.className = 'activity-child-composer-cancel';
-            cancelBtn.textContent = '??';
+            cancelBtn.textContent = '취소';
 
             const closeComposer = () => {
                 this.inlineChildComposerOpenParentId = null;
@@ -1106,9 +1106,9 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
             const addChildBtn = document.createElement('button');
             addChildBtn.type = 'button';
             addChildBtn.className = 'activity-chip activity-chip-add';
-            addChildBtn.setAttribute('aria-label', '+ ???? ??');
-            addChildBtn.title = '+ ???? ??';
-            addChildBtn.textContent = '+ ???? ??';
+            addChildBtn.setAttribute('aria-label', '+ 세부활동 추가');
+            addChildBtn.title = '+ 세부활동 추가';
+            addChildBtn.textContent = '+ 세부활동 추가';
             addChildBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
