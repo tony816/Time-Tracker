@@ -16,6 +16,7 @@ Supporting current docs:
 - `docs/product-identity.md`: product identity and anti-shallow decision checklist
 - `docs/high-risk-refactor-plan.md`: completed high-risk refactor record
 - `docs/vibe-coding-protocol-v1.md`: contributor workflow notes
+- `docs/codex-token-efficient-prompts.md`: token-efficient Codex prompt and AI setting guide
 
 ## Historical Refactor Logs
 
@@ -48,5 +49,6 @@ These files describe earlier extraction stages and are mainly useful for archaeo
 | Need product direction before making feature calls | `README.md`, `docs/product-identity.md` |
 | Need current architecture fast | `README.md`, `docs/ai-handoff-map.md` |
 | Touching actual-grid / lock / extra allocation | `docs/actual-lock-guardrails.md`, then current code/tests |
+| Writing a scoped Codex prompt or AI instruction | `docs/codex-token-efficient-prompts.md` |
 | Investigating why a boundary exists | relevant `docs/refactor-stage*.md` |
 | Reviewing high-risk extraction history | `docs/high-risk-refactor-plan.md` |

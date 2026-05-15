@@ -36,19 +36,6 @@
 - HTML: semantic structure and focused elements; use `data-*` attributes consumed by `script.js`.
 - Comments: short and purposeful (Korean/English allowed).
 
-## Testing Guidelines
-- Current baseline uses `node:test` under `__tests__/`.
-- Add tests near related coverage and keep naming `*.test.js`.
-- For behavior changes, run related tests first, then run full suite with `npm test`.
-- The default validation flow MUST include browser-based real-use testing.
-- For browser validation, ALWAYS launch the SPA via `desktop-commander` and execute the UI scenario with `playwright` or `playwright-mcp` unless the user explicitly tells you not to.
-- Do not treat code-only or unit-test-only validation as sufficient when the change can affect rendered UI behavior, interaction flow, or browser-visible persistence behavior.
-- Manual checks for UI-impact changes:
-  - slot rendering
-  - selection/merge/split behavior
-  - timer start/pause/stop
-  - date transition
-  - save/load persistence
 
 ## Commit & Pull Request Guidelines
 - Commits: concise imperative subject; optional scope prefix (`core:`, `ui:`, etc.).
@@ -67,6 +54,15 @@
 - If the change can affect UI behavior, you MUST also run the documented browser smoke check unless the user explicitly tells you not to.
 - Do not close the task after only fixing row data; verify row generation, effective lock mask, grid graphics, click blocking, and extra allocation together.
 
+## Token-Efficient Doc Loading
+- Do not preload every Markdown file in `docs/` for routine tasks.
+- Start with `docs/docs-index.md` only when document selection is needed, then open the smallest relevant source document.
+- Read `docs/ai-handoff-map.md` only when current architecture context is needed.
+- Read `docs/product-identity.md` only for product direction, UX, or feature decision work.
+- Read `docs/actual-lock-guardrails.md` only for actual-grid locking, locked rows, assigned-duration, or extra-slot allocation work.
+- Read `docs/refactor-stage*.md` and `docs/high-risk-refactor-plan.md` only when investigating historical boundaries or prior refactor decisions.
+- Use `docs/codex-token-efficient-prompts.md` as the prompt/AI setting guide, not as required context for every coding task.
+
 ## Security & Compatibility Tips
 - `localStorage` is device-local; do not store sensitive data.
 - Keep compatibility with legacy/missing fields in timer/activity objects.
@@ -78,17 +74,6 @@
 - Keep patches small and single-intent when possible.
 - State is in-memory plus `localStorage`; merged ranges use keys like `type-start-end`.
 
-## Collaboration Prompt Protocol
-- For every new coding request, do not start work immediately.
-- First respond with a refined prompt using this exact frame:
-  - 무엇:
-  - 어떤 형식:
-  - 대상(사용자):
-  - 왜:
-  - 소스:
-  - 금지 사항:
-  - 테스트:
-  - cetera(추가로 너가 더 입력해야 한다고 생각하는 것):
 
 
 
