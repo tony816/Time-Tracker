@@ -3830,7 +3830,7 @@ class TimeTracker {
                 lastPausedAt: Number.isFinite(segment.timer.lastPausedAt) ? Math.floor(segment.timer.lastPausedAt) : null,
             },
             display: {
-                icon: segment.timer && segment.timer.running ? '❚❚' : '⏱',
+                icon: segment.timer && segment.timer.running ? '❚❚' : '▶',
                 action: segment.timer && segment.timer.running ? 'pause' : 'start',
                 timeText: `0m / ${Math.ceil(segment.plannedSeconds / 60)}m`,
                 tone: 'under',
@@ -3855,7 +3855,7 @@ class TimeTracker {
 
     getPlanSegmentTimerIcon(index, segmentId = null) {
         const model = this.buildPlanSegmentViewModel(index, segmentId);
-        return (model.display && model.display.icon) || '⏱';
+        return (model.display && model.display.icon) || '▶';
     }
 
     formatTime(seconds) {

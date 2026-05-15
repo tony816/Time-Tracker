@@ -234,7 +234,7 @@ function buildSplitVisualization(type, index) {
                         : {
                             id: segmentId,
                             display: {
-                                icon: this.getPlanSegmentTimerIcon ? this.getPlanSegmentTimerIcon(baseIndex, segmentId) : '⏱',
+                                icon: this.getPlanSegmentTimerIcon ? this.getPlanSegmentTimerIcon(baseIndex, segmentId) : '▶',
                                 timeText: this.getPlanSegmentTimerText ? this.getPlanSegmentTimerText(baseIndex, segmentId) : '',
                                 tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex, segmentId) : 'under',
                             },

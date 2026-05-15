@@ -13,7 +13,7 @@ test('plan-segment-timer-core exports and global attach are available', () => {
 });
 
 test('plan segment timer icons describe the next action', () => {
-    assert.equal(core.getSegmentTimerIcon({ status: 'idle' }), '⏱');
+    assert.equal(core.getSegmentTimerIcon({ status: 'idle' }), '▶');
     assert.equal(core.getSegmentTimerIcon({ status: 'running' }), '❚❚');
     assert.equal(core.getSegmentTimerIcon({ status: 'paused' }), '▶');
 });

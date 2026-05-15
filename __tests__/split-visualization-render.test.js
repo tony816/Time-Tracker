@@ -88,7 +88,7 @@ test('buildSplitVisualization renders plan-only timer controls inside planned gr
                     lastPausedAt: null,
                 },
                 display: {
-                    icon: '⏱',
+                    icon: '▶',
                     action: 'start',
                     timeText: '0m / 60m',
                     tone: 'under',
@@ -144,7 +144,7 @@ test('buildSplitVisualization renders parent title above child activity inside p
                     lastPausedAt: null,
                 },
                 display: {
-                    icon: '⏱',
+                    icon: '▶',
                     action: 'start',
                     timeText: '0m / 60m',
                     tone: 'under',

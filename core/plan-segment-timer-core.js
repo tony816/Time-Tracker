@@ -76,7 +76,7 @@
         const status = normalizeSegmentTimer(timer).status;
         if (status === 'running') return '❚❚';
         if (status === 'paused') return '▶';
-        return '⏱';
+        return '▶';
     }
 
     function getSegmentTimerAction(timer) {

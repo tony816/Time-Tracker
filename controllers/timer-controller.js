@@ -634,7 +634,7 @@ function getPlanSegmentTimerIcon(index, segmentId = null) {
     if (core && typeof core.getSegmentTimerIcon === 'function') {
         return core.getSegmentTimerIcon(timer || {});
     }
-    return timer && timer.running ? '❚❚' : '⏱';
+    return timer && timer.running ? '❚❚' : '▶';
 }
 
 function stopTimer(index) {

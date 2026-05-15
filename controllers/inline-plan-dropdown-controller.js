@@ -1657,7 +1657,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                 this.scheduleInlinePlanViewportSync();
                 return;
             }
-            this.closeInlinePlanDropdown();
+            this.scheduleInlinePlanViewportSync();
         };
         window.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
         document.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
@@ -1676,7 +1676,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
                 this.scheduleInlinePlanViewportSync();
                 return;
             }
-            this.closeInlinePlanDropdown();
+            this.scheduleInlinePlanViewportSync();
         };
         document.addEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
         window.addEventListener('wheel', this.inlinePlanGestureCloseHandler, true);
