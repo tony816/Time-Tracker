@@ -599,7 +599,6 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         if (!dropdownRect || !anchorRect) return;
 
         const dropdownWidth = Number.isFinite(dropdownRect.width) ? dropdownRect.width : 0;
-        const dropdownHeight = Number.isFinite(dropdownRect.height) ? dropdownRect.height : 0;
         const anchorLeft = Number.isFinite(anchorRect.left) ? anchorRect.left : 0;
         const anchorTop = Number.isFinite(anchorRect.top) ? anchorRect.top : 0;
         const anchorBottom = Number.isFinite(anchorRect.bottom) ? anchorRect.bottom : (anchorTop + (Number.isFinite(anchorRect.height) ? anchorRect.height : 0));
@@ -607,7 +606,6 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const useFlowLayout = Boolean(
             this.isInlinePlanMobileInputContext && this.isInlinePlanMobileInputContext()
             || dropdown.classList.contains('inline-plan-dropdown-sheet')
-            || dropdownWidth < 320
         );
 
         if (useFlowLayout) {
@@ -622,8 +620,14 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             section.style.maxWidth = 'none';
             section.style.marginTop = '10px';
             section.style.maxHeight = 'min(420px, calc(100vh - 96px))';
+            section.style.overflow = 'hidden';
             section.style.visibility = 'visible';
             section.style.zIndex = '80';
+            const flowBoard = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
+            if (flowBoard && flowBoard.style) {
+                flowBoard.style.maxHeight = '';
+                flowBoard.style.overflow = 'auto';
+            }
             this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
             return;
         }
@@ -634,7 +638,9 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const margin = 8;
         const minWidth = 300;
         const maxWidth = 360;
-        const minHeight = 220;
+        const minPopoverHeight = 280;
+        const preferredPopoverHeight = 360;
+        const maxPopoverHeight = 420;
         const width = Math.max(minWidth, Math.min(maxWidth, Math.floor(dropdownWidth - (margin * 2)) || maxWidth));
         let left = Math.round(anchorLeft - dropdownRect.left);
         if (left + width > dropdownWidth - margin) {
@@ -642,17 +648,19 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         }
         left = Math.max(margin, left);
 
-        const viewportHeight = Number.isFinite(dropdownHeight) && dropdownHeight > 0
-            ? dropdownHeight
-            : ((typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) ? window.innerHeight : 0);
+        const viewportHeight = (typeof window !== 'undefined' && Number.isFinite(window.innerHeight))
+            ? window.innerHeight
+            : ((Number.isFinite(dropdownRect.bottom) ? dropdownRect.bottom : 0) + 600);
         const topBelow = Math.round(anchorBottom - dropdownRect.top + gap);
-        const availableBelow = Math.max(0, Math.floor(viewportHeight - topBelow - margin));
+        const availableBelow = Math.max(0, Math.floor(viewportHeight - anchorBottom - margin));
         const naturalHeight = Math.max(Number(section.scrollHeight) || 0, Number(section.offsetHeight) || 0);
-        const maxHeightLimit = Math.min(420, Math.max(300, Math.floor(viewportHeight - topBelow - margin)));
-        const available = availableBelow;
+        const popoverHeight = Math.min(
+            maxPopoverHeight,
+            Math.max(minPopoverHeight, naturalHeight || preferredPopoverHeight)
+        );
         const boundedHeight = Math.max(
-            Math.min(minHeight, Math.max(available, 0)),
-            Math.min(maxHeightLimit, available || maxHeightLimit, naturalHeight || maxHeightLimit)
+            Math.min(minPopoverHeight, Math.max(availableBelow, 0)),
+            Math.min(popoverHeight, availableBelow || popoverHeight)
         );
         const top = Math.max(margin, topBelow);
 
@@ -668,9 +676,21 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         section.style.marginTop = '0';
         section.style.right = 'auto';
         section.style.bottom = 'auto';
+        section.style.overflow = 'hidden';
         section.style.visibility = 'visible';
         section.style.zIndex = '80';
         section.style.setProperty('--inline-plan-subsection-notch-left', `${Math.round(notchLeft)}px`);
+        const anchoredBoard = this.inlinePlanDropdown.querySelector('.inline-plan-sub-board');
+        const header = this.inlinePlanDropdown.querySelector('.inline-plan-subsection-head');
+        if (anchoredBoard && anchoredBoard.style) {
+            const headerHeight = header && typeof header.getBoundingClientRect === 'function'
+                ? Math.ceil(header.getBoundingClientRect().height || 0)
+                : 0;
+            const verticalPadding = 24;
+            const boardMaxHeight = Math.max(160, boundedHeight - headerHeight - verticalPadding - gap);
+            anchoredBoard.style.maxHeight = `${boardMaxHeight}px`;
+            anchoredBoard.style.overflow = 'auto';
+        }
         this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
     }
 

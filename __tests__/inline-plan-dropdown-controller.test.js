@@ -913,6 +913,14 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
         offsetHeight: 220,
         scrollHeight: 220,
     };
+    const board = {
+        style: makeStyleBag(),
+    };
+    const header = {
+        getBoundingClientRect() {
+            return { height: 36 };
+        },
+    };
     const dropdownClasses = new Set(['inline-plan-child-popover-open']);
     const dropdown = {
         style: makeStyleBag(),
@@ -929,6 +937,8 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
         },
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return section;
+            if (selector === '.inline-plan-sub-board') return board;
+            if (selector === '.inline-plan-subsection-head') return header;
             return null;
         },
     };
@@ -963,8 +973,12 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
     assert.equal(section.style.maxWidth, '360px');
     assert.equal(section.style.visibility, 'visible');
     assert.equal(section.style.zIndex, '80');
-    assert.equal(section.style.maxHeight, '220px');
+    assert.equal(section.style.maxHeight, '280px');
+    assert.equal(section.style.overflow, 'hidden');
     assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
+    assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);
+    assert.equal(board.style.overflow, 'auto');
+    assert.equal(board.style.maxHeight, '212px');
 });
 
 test('positionInlinePlanChildPopover caps tall child board height', () => {
@@ -992,6 +1006,14 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
         offsetHeight: 800,
         scrollHeight: 800,
     };
+    const board = {
+        style: makeStyleBag(),
+    };
+    const header = {
+        getBoundingClientRect() {
+            return { height: 36 };
+        },
+    };
     const dropdownClasses = new Set(['inline-plan-child-popover-open']);
     const dropdown = {
         style: makeStyleBag(),
@@ -1008,6 +1030,8 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
         },
         querySelector(selector) {
             if (selector === '.inline-plan-subsection') return section;
+            if (selector === '.inline-plan-sub-board') return board;
+            if (selector === '.inline-plan-subsection-head') return header;
             return null;
         },
     };
@@ -1030,7 +1054,10 @@ test('positionInlinePlanChildPopover caps tall child board height', () => {
     controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
     assert.equal(section.style.maxHeight, '420px');
+    assert.equal(section.style.overflow, 'hidden');
     assert.equal(section.style.zIndex, '80');
+    assert.equal(board.style.overflow, 'auto');
+    assert.equal(board.style.maxHeight, '352px');
 });
 
 test('positionInlinePlanChildPopover re-resolves the active caret after rerender', () => {
