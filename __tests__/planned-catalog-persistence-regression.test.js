@@ -11,6 +11,10 @@ const normalizeLocalPlannedCatalogEntries = buildMethod(
     'normalizeLocalPlannedCatalogEntries(entries)',
     '(entries)'
 );
+const repairPlannedActivityCatalogIdentity = buildMethod(
+    'repairPlannedActivityCatalogIdentity(options = {})',
+    '(options = {})'
+);
 const getLocalPlannedEntries = buildMethod(
     'getLocalPlannedEntries()',
     '()'
@@ -254,6 +258,82 @@ test('legacy cache entries migrate into canonical planned activities', () => {
         assert.ok(ctx.plannedActivities.every((item) => item.usageCount === 0));
         assert.ok(ctx.plannedActivities.every((item) => item.lastUsedAt === null));
         assert.ok(ctx.plannedActivities.every((item) => item.source === 'local'));
+    } finally {
+        delete globalThis.localStorage;
+    }
+});
+
+test('loadPlannedActivities repairs duplicate top-level parent ids before using the catalog', () => {
+    const cacheKey = 'timeTracker.plannedActivityCatalog.v1';
+    const localStorage = createLocalStorageStub();
+    localStorage.setItem(cacheKey, JSON.stringify({
+        version: 1,
+        items: [
+            createCanonicalActivity('activity_item', '운동', null),
+            createCanonicalActivity('activity_item', '독서', null),
+            createCanonicalActivity('child-walk', '걷기', 'activity_item'),
+        ],
+    }));
+
+    const saves = [];
+    const ctx = {
+        plannedActivities: [],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizePriorityRankValue(value) {
+            if (value === '' || value == null) return null;
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) return null;
+            return Math.max(1, Math.floor(parsed));
+        },
+        normalizeDurationStep(seconds) {
+            if (!Number.isFinite(seconds)) return null;
+            return Math.max(0, Math.floor(seconds));
+        },
+        normalizeActivityCatalogEntry,
+        normalizeLocalPlannedCatalogEntries,
+        repairPlannedActivityCatalogIdentity,
+        getLocalPlannedEntries,
+        extractPlannedActivityCatalogEntries,
+        readPlannedActivityCatalogCache,
+        writePlannedActivityCatalogCache,
+        persistPlannedActivitiesLocally,
+        loadPlannedActivities,
+        savePlannedActivities(options = {}) {
+            saves.push('save');
+            return savePlannedActivities.call(this, options);
+        },
+        dedupeAndSortPlannedActivities() {},
+        scheduleSupabasePlannedSave() {},
+        getPlannedActivityCatalogCacheKey() {
+            return cacheKey;
+        },
+    };
+
+    globalThis.localStorage = localStorage;
+
+    try {
+        loadPlannedActivities.call(ctx);
+
+        const topLevel = ctx.plannedActivities.filter((item) => item && !item.parentId);
+        assert.equal(topLevel.length, 2);
+        assert.equal(new Set(topLevel.map((item) => item.id)).size, 2);
+
+        const exercise = topLevel.find((item) => item.label === '운동');
+        const reading = topLevel.find((item) => item.label === '독서');
+        const walking = ctx.plannedActivities.filter((item) => item.label === '걷기');
+
+        assert.ok(exercise);
+        assert.ok(reading);
+        assert.equal(walking.length, 1);
+        assert.equal(walking[0].parentId, exercise.id);
+        assert.notEqual(exercise.id, reading.id);
+        assert.equal(saves.length >= 1, true);
+
+        const cached = JSON.parse(localStorage.getItem(cacheKey));
+        const cachedTopLevel = (cached.items || []).filter((item) => item && !item.parentId);
+        assert.equal(new Set(cachedTopLevel.map((item) => item.id)).size, 2);
     } finally {
         delete globalThis.localStorage;
     }

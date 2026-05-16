@@ -1151,6 +1151,33 @@ class TimeTracker {
         if (!Number.isFinite(parsed)) return null;
         return Math.max(1, Math.floor(parsed));
     }
+    createActivityCatalogId(seed = '') {
+        const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
+            ? globalThis.TimeTrackerActivityCore
+            : null;
+        if (activityCore && typeof activityCore.createActivityCatalogId === 'function') {
+            return activityCore.createActivityCatalogId(seed);
+        }
+        const base = String(seed || '').trim().normalize('NFKC');
+        if (base) {
+            let hash = 2166136261;
+            for (let i = 0; i < base.length; i += 1) {
+                hash ^= base.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            const asciiSlug = base
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+            return `activity_${asciiSlug || 'u'}_${(hash >>> 0).toString(36)}`;
+        }
+        try {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                return `activity_${crypto.randomUUID()}`;
+            }
+        } catch (_) {}
+        return `activity_${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
+    }
     normalizeActivityCatalogEntry(raw) {
         const activityCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerActivityCore)
             ? globalThis.TimeTrackerActivityCore
@@ -1165,13 +1192,37 @@ class TimeTracker {
         }
         const item = raw && typeof raw === 'object' ? raw : {};
         const name = this.normalizeActivityText(item.name ?? item.label ?? item.title ?? '');
+        const parentId = String(item.parentId || '').trim() || null;
+        const createId = typeof this.createActivityCatalogId === 'function'
+            ? (seed) => this.createActivityCatalogId(seed)
+            : (seed) => {
+                const base = String(seed || '').trim().normalize('NFKC');
+                if (base) {
+                    let hash = 2166136261;
+                    for (let i = 0; i < base.length; i += 1) {
+                        hash ^= base.charCodeAt(i);
+                        hash = Math.imul(hash, 16777619);
+                    }
+                    const asciiSlug = base
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '');
+                    return `activity_${asciiSlug || 'u'}_${(hash >>> 0).toString(36)}`;
+                }
+                try {
+                    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                        return `activity_${crypto.randomUUID()}`;
+                    }
+                } catch (_) {}
+                return `activity_${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
+            };
         return {
-            id: String(item.id || '').trim() || `activity_${Date.now()}`,
+            id: String(item.id || '').trim() || createId(parentId ? `${parentId}::${name}` : name),
             name,
             label: name,
             title: name,
             normalizedName: name,
-            parentId: String(item.parentId || '').trim() || null,
+            parentId,
             colorKey: String(item.colorKey || '').trim() || null,
             defaultDurationMinutes: Number.isFinite(item.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(item.defaultDurationMinutes))) : null,
             displayMode: String(item.displayMode || '').trim() || 'chip',
@@ -1211,12 +1262,20 @@ class TimeTracker {
         const items = this.normalizeActivityCatalogArray(entries);
         const byId = new Map(items.map((item) => [item.id, item]));
         const byParentId = new Map();
+        const topLevelIdCounts = new Map();
+        const topLevelItems = items.filter((item) => !item.parentId);
+        topLevelItems.forEach((item) => {
+            const id = String(item.id || '').trim();
+            if (!id) return;
+            topLevelIdCounts.set(id, (topLevelIdCounts.get(id) || 0) + 1);
+        });
         items.forEach((item) => {
             const key = item.parentId || '';
+            if (key && (topLevelIdCounts.get(key) || 0) > 1) return;
             if (!byParentId.has(key)) byParentId.set(key, []);
             byParentId.get(key).push(item);
         });
-        const topLevel = items.filter((item) => !item.parentId);
+        const topLevel = topLevelItems;
         return {
             items,
             byId,
@@ -1224,7 +1283,7 @@ class TimeTracker {
             pinned: topLevel.filter((item) => item.pinned && !item.archived),
             recent: topLevel.filter((item) => !item.pinned && !item.archived).slice(0, 8),
             parents: topLevel.slice(),
-            children: items.filter((item) => item.parentId),
+            children: items.filter((item) => item.parentId && (topLevelIdCounts.get(item.parentId) || 0) <= 1),
             topLevel,
         };
     }
@@ -1235,13 +1294,37 @@ class TimeTracker {
             : (value) => {
                 const raw = value && typeof value === 'object' ? value : {};
                 const label = this.normalizeActivityText(raw.name ?? raw.label ?? raw.title ?? '');
+                const parentId = String(raw.parentId || '').trim() || null;
+                const createId = typeof this.createActivityCatalogId === 'function'
+                    ? (seed) => this.createActivityCatalogId(seed)
+                    : (seed) => {
+                        const base = String(seed || '').trim().normalize('NFKC');
+                        if (base) {
+                            let hash = 2166136261;
+                            for (let i = 0; i < base.length; i += 1) {
+                                hash ^= base.charCodeAt(i);
+                                hash = Math.imul(hash, 16777619);
+                            }
+                            const asciiSlug = base
+                                .toLowerCase()
+                                .replace(/[^a-z0-9]+/g, '_')
+                                .replace(/^_+|_+$/g, '');
+                            return `activity_${asciiSlug || 'u'}_${(hash >>> 0).toString(36)}`;
+                        }
+                        try {
+                            if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                                return `activity_${crypto.randomUUID()}`;
+                            }
+                        } catch (_) {}
+                        return `activity_${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
+                    };
                 return {
-                    id: String(raw.id || '').trim() || `activity_${Date.now()}`,
+                    id: String(raw.id || '').trim() || createId(parentId ? `${parentId}::${label}` : label),
                     name: label,
                     label,
                     title: label,
                     normalizedName: label,
-                    parentId: String(raw.parentId || '').trim() || null,
+                    parentId,
                     colorKey: String(raw.colorKey || '').trim() || null,
                     defaultDurationMinutes: Number.isFinite(raw.defaultDurationMinutes) ? Math.max(0, Math.floor(Number(raw.defaultDurationMinutes))) : null,
                     displayMode: String(raw.displayMode || '').trim() || 'chip',
@@ -1281,6 +1364,82 @@ class TimeTracker {
             }));
         });
         return normalized;
+    }
+    repairPlannedActivityCatalogIdentity(options = {}) {
+        const items = Array.isArray(this.plannedActivities) ? this.plannedActivities : [];
+        const topLevelItems = items.filter((item) => item && !String(item.parentId || '').trim());
+        if (topLevelItems.length === 0) {
+            return { changed: false };
+        }
+
+        const topLevelIdCounts = new Map();
+        topLevelItems.forEach((item) => {
+            const id = String(item.id || '').trim();
+            if (!id) return;
+            topLevelIdCounts.set(id, (topLevelIdCounts.get(id) || 0) + 1);
+        });
+
+        const usedIds = new Set(items.map((item) => String(item && item.id || '').trim()).filter(Boolean));
+        const duplicateSeen = new Map();
+        const createId = typeof this.createActivityCatalogId === 'function'
+            ? (seed) => this.createActivityCatalogId(seed)
+            : (seed) => {
+                const base = String(seed || '').trim().normalize('NFKC');
+                if (base) {
+                    let hash = 2166136261;
+                    for (let i = 0; i < base.length; i += 1) {
+                        hash ^= base.charCodeAt(i);
+                        hash = Math.imul(hash, 16777619);
+                    }
+                    const asciiSlug = base
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_+|_+$/g, '');
+                    return `activity_${asciiSlug || 'u'}_${(hash >>> 0).toString(36)}`;
+                }
+                try {
+                    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                        return `activity_${crypto.randomUUID()}`;
+                    }
+                } catch (_) {}
+                return `activity_${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
+            };
+        let changed = false;
+
+        topLevelItems.forEach((item) => {
+            const oldId = String(item.id || '').trim();
+            const label = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || item.name || item.title || '')
+                : String(item.label || item.name || item.title || '').trim();
+            if (!label) return;
+            const count = oldId ? (topLevelIdCounts.get(oldId) || 0) : 0;
+            if (!oldId || count <= 1) return;
+
+            const seenCount = (duplicateSeen.get(oldId) || 0) + 1;
+            duplicateSeen.set(oldId, seenCount);
+            if (seenCount === 1) {
+                usedIds.add(oldId);
+                return;
+            }
+
+            let nextId = createId(`root::${label}::${seenCount}`);
+            let suffix = seenCount;
+            while (usedIds.has(nextId) && nextId !== oldId) {
+                suffix += 1;
+                nextId = createId(`root::${label}::${suffix}`);
+            }
+            if (nextId === oldId) return;
+
+            item.id = nextId;
+            usedIds.add(nextId);
+            changed = true;
+        });
+
+        if (changed && options.save !== false && typeof this.savePlannedActivities === 'function') {
+            this.savePlannedActivities();
+        }
+
+        return { changed };
     }
     getLocalPlannedEntries() {
         const entries = [];
@@ -4793,6 +4952,9 @@ class TimeTracker {
         const cached = this.readPlannedActivityCatalogCache();
         const entries = this.extractPlannedActivityCatalogEntries(cached);
         this.plannedActivities = this.normalizeLocalPlannedCatalogEntries(entries);
+        if (typeof this.repairPlannedActivityCatalogIdentity === 'function') {
+            this.repairPlannedActivityCatalogIdentity({ save: true });
+        }
         this.dedupeAndSortPlannedActivities();
     }
     savePlannedActivities(options = {}) {

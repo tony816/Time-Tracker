@@ -127,6 +127,52 @@ test('activity-core normalizeActivityCatalogEntry fills canonical catalog fields
     });
 });
 
+test('activity-core createActivityCatalogId is deterministic and Unicode-safe', () => {
+    const exerciseId = activityCore.createActivityCatalogId('운동');
+    const readingId = activityCore.createActivityCatalogId('독서');
+    const studyId = activityCore.createActivityCatalogId('공부');
+
+    assert.notEqual(exerciseId, readingId);
+    assert.notEqual(exerciseId, studyId);
+    assert.notEqual(readingId, studyId);
+    assert.equal(exerciseId.startsWith('activity_'), true);
+    assert.equal(readingId.startsWith('activity_'), true);
+    assert.equal(studyId.startsWith('activity_'), true);
+    assert.notEqual(exerciseId, 'activity_item');
+    assert.notEqual(readingId, 'activity_item');
+    assert.notEqual(studyId, 'activity_item');
+    assert.equal(activityCore.createActivityCatalogId('운동'), exerciseId);
+});
+
+test('activity-core normalizeActivityCatalogEntry generates unique ids for Korean top-level labels', () => {
+    const normalize = (value) => String(value || '').trim();
+    const exercise = activityCore.normalizeActivityCatalogEntry({ label: '운동', parentId: null }, { normalizeActivityText: normalize });
+    const reading = activityCore.normalizeActivityCatalogEntry({ label: '독서', parentId: null }, { normalizeActivityText: normalize });
+    const study = activityCore.normalizeActivityCatalogEntry({ label: '공부', parentId: null }, { normalizeActivityText: normalize });
+
+    assert.notEqual(exercise.id, reading.id);
+    assert.notEqual(exercise.id, study.id);
+    assert.notEqual(reading.id, study.id);
+    assert.notEqual(exercise.id, 'activity_item');
+    assert.notEqual(reading.id, 'activity_item');
+    assert.notEqual(study.id, 'activity_item');
+});
+
+test('activity-core groupActivityCatalogEntries hides ambiguous children when top-level ids collide', () => {
+    const grouped = activityCore.groupActivityCatalogEntries([
+        { id: 'activity_item', label: '운동', parentId: null },
+        { id: 'activity_item', label: '독서', parentId: null },
+        { id: 'child_walk', label: '걷기', parentId: 'activity_item' },
+    ], {
+        normalizeActivityText: (value) => String(value || '').trim(),
+        normalizeDurationStep: (seconds) => Math.max(0, Math.floor(seconds)),
+    });
+
+    assert.equal(grouped.parents.length, 2);
+    assert.equal(grouped.byParentId.has('activity_item'), false);
+    assert.equal(grouped.children.some((item) => item.label === '걷기'), false);
+});
+
 test('activity-core formatActivitiesSummary renders list and total', () => {
     const summary = activityCore.formatActivitiesSummary([
         { label: ' 집중 ', seconds: 3600 },

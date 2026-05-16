@@ -144,10 +144,25 @@
             .filter((item) => item.label || item.seconds > 0);
     }
 
+    function hashCatalogSeed(seed = '') {
+        const text = String(seed || '').normalize('NFKC');
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i += 1) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(36);
+    }
+
     function createActivityCatalogId(seed = '') {
-        const base = String(seed || '').trim();
+        const base = String(seed || '').trim().normalize('NFKC');
         if (base) {
-            return `activity_${base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'item'}`;
+            const asciiSlug = base
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+            const hash = hashCatalogSeed(base);
+            return `activity_${asciiSlug || 'u'}_${hash}`;
         }
         try {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -163,8 +178,11 @@
         const item = raw && typeof raw === 'object' ? raw : {};
         const name = normalizeActivityText(item.name ?? item.label ?? item.title ?? '');
         const normalizedName = normalizeActivityText(item.normalizedName ?? name);
-        const id = String(item.id || '').trim() || createActivityCatalogId(normalizedName || name);
         const parentId = String(item.parentId || '').trim() || null;
+        const idSeed = parentId
+            ? `${parentId}::${normalizedName || name}`
+            : `${normalizedName || name}`;
+        const id = String(item.id || '').trim() || createActivityCatalogId(idSeed);
         const colorKey = String(item.colorKey || '').trim() || null;
         const defaultDurationMinutes = Number.isFinite(item.defaultDurationMinutes)
             ? Math.max(0, Math.floor(Number(item.defaultDurationMinutes)))
@@ -215,13 +233,21 @@
         const items = normalizeActivityCatalogArray(entries, options);
         const byParentId = new Map();
         const byId = new Map();
+        const topLevelItems = items.filter((item) => !item.parentId);
+        const topLevelIdCounts = new Map();
+        topLevelItems.forEach((item) => {
+            const id = String(item.id || '').trim();
+            if (!id) return;
+            topLevelIdCounts.set(id, (topLevelIdCounts.get(id) || 0) + 1);
+        });
         items.forEach((item) => {
             byId.set(item.id, item);
             const parentKey = item.parentId || '';
+            if (parentKey && (topLevelIdCounts.get(parentKey) || 0) > 1) return;
             if (!byParentId.has(parentKey)) byParentId.set(parentKey, []);
             byParentId.get(parentKey).push(item);
         });
-        const topLevel = items.filter((item) => !item.parentId);
+        const topLevel = topLevelItems;
         const pinned = topLevel.filter((item) => item.pinned && !item.archived);
         const recent = topLevel
             .filter((item) => !item.pinned && !item.archived)
@@ -233,7 +259,11 @@
             })
             .slice(0, 8);
         const parents = topLevel.slice();
-        const children = items.filter((item) => item.parentId && byId.has(item.parentId));
+        const children = items.filter((item) => {
+            if (!item || !item.parentId) return false;
+            if ((topLevelIdCounts.get(item.parentId) || 0) > 1) return false;
+            return byId.has(item.parentId);
+        });
         return {
             items,
             byId,
@@ -249,6 +279,7 @@
     return Object.freeze({
         formatActivitiesSummary,
         createActivityCatalogId,
+        hashCatalogSeed,
         normalizeActivityCatalogEntry,
         normalizeActivityCatalogArray,
         groupActivityCatalogEntries,

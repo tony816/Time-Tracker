@@ -80,16 +80,24 @@ function groupActivityBoard(entries) {
         const safe = Array.isArray(entries) ? entries.slice() : [];
         const byId = new Map();
         const byParentId = new Map();
+        const topLevelIdCounts = new Map();
+        const topLevelItems = safe.filter((item) => item && !item.parentId);
+        topLevelItems.forEach((item) => {
+            const id = String(item.id || '').trim();
+            if (!id) return;
+            topLevelIdCounts.set(id, (topLevelIdCounts.get(id) || 0) + 1);
+        });
         safe.forEach((item) => {
             if (!item || typeof item !== 'object') return;
             const id = String(item.id || item.label || '').trim();
             if (id) byId.set(id, item);
             const parentId = String(item.parentId || '').trim();
+            if (parentId && (topLevelIdCounts.get(parentId) || 0) > 1) return;
             const key = parentId || '';
             if (!byParentId.has(key)) byParentId.set(key, []);
             byParentId.get(key).push(item);
         });
-        const topLevel = safe.filter((item) => !item || !item.parentId);
+        const topLevel = topLevelItems;
         return {
             items: safe,
             byId,
@@ -97,7 +105,7 @@ function groupActivityBoard(entries) {
             pinned: topLevel.filter((item) => item && item.pinned && !item.archived),
             recent: topLevel.filter((item) => item && !item.pinned && !item.archived).slice(0, 8),
             parents: topLevel.slice(),
-            children: safe.filter((item) => item && item.parentId),
+            children: safe.filter((item) => item && item.parentId && (topLevelIdCounts.get(String(item.parentId || '').trim()) || 0) <= 1),
             topLevel,
         };
     }
@@ -867,6 +875,10 @@ function renderInlinePlanDropdownOptions() {
         const board = this.inlinePlanDropdown.querySelector('.activity-chip-board');
         if (!board) return;
 
+        if (typeof this.repairPlannedActivityCatalogIdentity === 'function') {
+            this.repairPlannedActivityCatalogIdentity({ save: true });
+        }
+
         const catalogGrouped = this.groupActivityBoard(this.plannedActivities || []);
         const searchInput = this.inlinePlanDropdown.querySelector('.inline-plan-input');
         const searchQuery = searchInput ? (searchInput.value || '') : '';
@@ -1086,7 +1098,24 @@ function createChildActivityForParent(parentItem, rawName) {
         const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(rawName) : String(rawName || '').trim();
         if (!normalizedName) return { status: 'empty' };
 
-        const parentId = String(parentItem && parentItem.id ? parentItem.id : '').trim();
+        if (typeof this.repairPlannedActivityCatalogIdentity === 'function') {
+            this.repairPlannedActivityCatalogIdentity({ save: false });
+        }
+
+        const originalParentId = String(parentItem && parentItem.id ? parentItem.id : '').trim();
+        const parentLabel = this.normalizeActivityText
+            ? this.normalizeActivityText(parentItem && (parentItem.label || parentItem.name || parentItem.title || ''))
+            : String(parentItem && (parentItem.label || parentItem.name || parentItem.title || '')).trim();
+        const repairedParent = (Array.isArray(this.plannedActivities) ? this.plannedActivities : []).find((item) => {
+            if (!item || item.parentId) return false;
+            const itemLabel = this.normalizeActivityText
+                ? this.normalizeActivityText(item.label || item.name || item.title || '')
+                : String(item.label || item.name || item.title || '').trim();
+            const itemId = String(item.id || '').trim();
+            if (originalParentId && itemId === originalParentId) return true;
+            return Boolean(parentLabel) && itemLabel === parentLabel;
+        }) || parentItem;
+        const parentId = String(repairedParent && repairedParent.id ? repairedParent.id : '').trim();
         if (!parentId) {
             this.inlineChildComposerError = '부모 활동을 찾을 수 없습니다.';
             this.inlineChildComposerHighlightId = null;
