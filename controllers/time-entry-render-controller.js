@@ -276,6 +276,12 @@ function buildSplitVisualization(type, index) {
                                               data-index="${baseIndex}"
                                               data-segment-id="${escapedSegmentId}">${timerText}</span>
                                     </div>
+                                    <div class="plan-segment-toolbar" aria-label="계획 세그먼트 작업">
+                                        <button type="button" class="plan-segment-action" data-action="split" data-index="${baseIndex}"${activityIndexAttr} title="Split">S</button>
+                                        <button type="button" class="plan-segment-action" data-action="merge" data-index="${baseIndex}"${activityIndexAttr} title="Merge">M</button>
+                                        <button type="button" class="plan-segment-action" data-action="duplicate" data-index="${baseIndex}"${activityIndexAttr} title="Duplicate">D</button>
+                                        <button type="button" class="plan-segment-action" data-action="delete" data-index="${baseIndex}"${activityIndexAttr} title="Delete">X</button>
+                                    </div>
                                     <button type="button"
                                             class="plan-segment-resize-handle plan-segment-resize-right"
                                             data-edge="right"

@@ -3701,6 +3701,79 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+
+    getNormalizedPlanSegmentActivities(baseIndex) {
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        if (!slot) return [];
+        const blockStartMinute = baseIndex * 60;
+        let cursor = blockStartMinute;
+        return this.normalizePlanActivitiesArray(slot.planActivities)
+            .filter((item) => item && item.kind !== 'virtual-rest')
+            .map((item) => {
+                const durationMinutes = Number.isFinite(item.durationMinutes)
+                    ? Math.max(10, Math.floor(item.durationMinutes))
+                    : Math.max(10, Math.floor((Number(item.seconds) || 0) / 60));
+                const startMinute = Number.isFinite(item.startMinute) ? Math.floor(item.startMinute) : cursor;
+                cursor = startMinute + durationMinutes;
+                return { ...item, startMinute, durationMinutes, seconds: durationMinutes * 60 };
+            });
+    }
+
+    applyPlanSegmentAction(baseIndex, activityIndex, action) {
+        if (!Number.isInteger(baseIndex) || !this.timeSlots || !this.timeSlots[baseIndex]) return false;
+        if (!Number.isInteger(activityIndex) || activityIndex < 0) return false;
+        if (this.isPlanSegmentTimerRunning(baseIndex)) return false;
+        const slot = this.timeSlots[baseIndex];
+        const blockStartMinute = baseIndex * 60;
+        const blockEndMinute = blockStartMinute + Math.max(1, this.getBlockLength('planned', baseIndex)) * 60;
+        const activities = this.getNormalizedPlanSegmentActivities(baseIndex);
+        const item = activities[activityIndex];
+        if (!item) return false;
+
+        if (action === 'delete') {
+            activities.splice(activityIndex, 1);
+        } else if (action === 'split') {
+            if (item.durationMinutes < 20) return false;
+            const first = Math.floor(item.durationMinutes / 20) * 10;
+            const firstDuration = Math.max(10, first);
+            const secondDuration = item.durationMinutes - firstDuration;
+            if (secondDuration < 10) return false;
+            activities.splice(activityIndex, 1,
+                { ...item, durationMinutes: firstDuration, seconds: firstDuration * 60 },
+                { ...item, startMinute: item.startMinute + firstDuration, durationMinutes: secondDuration, seconds: secondDuration * 60 }
+            );
+        } else if (action === 'merge') {
+            const next = activities[activityIndex + 1];
+            if (!next) return false;
+            const compatible = item.label === next.label
+                && (item.titleText || '') === (next.titleText || '')
+                && item.startMinute + item.durationMinutes === next.startMinute;
+            if (!compatible) return false;
+            activities.splice(activityIndex, 2, {
+                ...item,
+                durationMinutes: item.durationMinutes + next.durationMinutes,
+                seconds: (item.durationMinutes + next.durationMinutes) * 60,
+            });
+        } else if (action === 'duplicate') {
+            const gaps = globalThis.TimeTrackerPlanSegmentCore.calculateVirtualRestGaps(
+                activities.map((entry) => ({ startMinute: entry.startMinute, endMinute: entry.startMinute + entry.durationMinutes })),
+                { startMinute: blockStartMinute, endMinute: blockEndMinute }
+            );
+            const gap = gaps.find((entry) => entry.durationMinutes >= item.durationMinutes);
+            if (!gap) return false;
+            activities.push({ ...item, startMinute: gap.startMinute });
+            activities.sort((a, b) => a.startMinute - b.startMinute);
+        } else {
+            return false;
+        }
+
+        slot.planActivities = activities.map((entry) => ({ ...entry, seconds: entry.durationMinutes * 60 }));
+        slot.planned = activities.map((entry) => entry.label).filter(Boolean).join(' · ');
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {

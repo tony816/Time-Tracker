@@ -29,6 +29,10 @@ const movePlanActivitySegment = buildMethod(
     'movePlanActivitySegment(baseIndex, activityIndex, targetStartMinute)',
     '(baseIndex, activityIndex, targetStartMinute)'
 );
+const applyPlanSegmentAction = buildMethod(
+    'applyPlanSegmentAction(baseIndex, activityIndex, action)',
+    '(baseIndex, activityIndex, action)'
+);
 
 test('plan-only empty slot renders a calculated virtual rest gap', () => {
     const ctx = {
@@ -363,4 +367,66 @@ test('background move blocks overlap and running timers', () => {
     assert.equal(movePlanActivitySegment.call(ctx, 0, 0, 20), false);
     ctx.isPlanSegmentTimerRunning = () => true;
     assert.equal(movePlanActivitySegment.call(ctx, 0, 0, 0), false);
+});
+
+function buildActionCtx(planActivities, options = {}) {
+    return {
+        timeSlots: [{
+            planned: planActivities.map((item) => item.label).join(' · '),
+            planActivities: planActivities.map((item) => ({ ...item })),
+            planSegmentTimers: options.timers || {},
+        }],
+        getBlockLength() {
+            return 1;
+        },
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        getNormalizedPlanSegmentActivities(baseIndex) {
+            const slot = this.timeSlots[baseIndex];
+            return this.normalizePlanActivitiesArray(slot.planActivities).map((item) => ({ ...item }));
+        },
+        isPlanSegmentTimerRunning() {
+            return Boolean(options.running);
+        },
+        renderTimeEntries() {
+            this.rendered = true;
+        },
+        calculateTotals() {},
+        autoSave() {},
+    };
+}
+
+test('toolbar split, merge, delete, and duplicate update real segments only', () => {
+    let ctx = buildActionCtx([{ label: 'A', seconds: 2400, startMinute: 0, durationMinutes: 40 }]);
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'split'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.durationMinutes), [20, 20]);
+
+    ctx = buildActionCtx([
+        { label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 },
+        { label: 'A', seconds: 1200, startMinute: 20, durationMinutes: 20 },
+    ]);
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'merge'), true);
+    assert.equal(ctx.timeSlots[0].planActivities.length, 1);
+    assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
+
+    ctx = buildActionCtx([{ label: 'A', seconds: 1200, startMinute: 20, durationMinutes: 20 }]);
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'delete'), true);
+    assert.equal(ctx.timeSlots[0].planActivities.length, 0);
+
+    ctx = buildActionCtx([{ label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 }]);
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'duplicate'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.startMinute), [0, 20]);
+});
+
+test('toolbar actions protect running segments and incompatible merge', () => {
+    let ctx = buildActionCtx([{ label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 }], { running: true });
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'delete'), false);
+    assert.equal(ctx.rendered, undefined);
+
+    ctx = buildActionCtx([
+        { label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 },
+        { label: 'B', seconds: 1200, startMinute: 20, durationMinutes: 20 },
+    ]);
+    assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'merge'), false);
 });

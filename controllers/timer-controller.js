@@ -840,6 +840,20 @@ function attachTimerListeners(entryDiv, index) {
         });
     });
 
+    const actionButtons = entryDiv.querySelectorAll('.plan-segment-action');
+    actionButtons.forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const baseIndex = parseInt(button.dataset.index, 10);
+            const activityIndex = parseInt(button.dataset.activityIndex, 10);
+            const action = String(button.dataset.action || '');
+            if (typeof this.applyPlanSegmentAction === 'function') {
+                this.applyPlanSegmentAction(baseIndex, activityIndex, action);
+            }
+        });
+    });
+
     const planSegmentGraphics = entryDiv.querySelectorAll('.plan-segment-graphic');
     planSegmentGraphics.forEach((graphic) => {
         const main = graphic.querySelector && graphic.querySelector('.plan-segment-graphic-main');
@@ -907,7 +921,7 @@ function attachTimerListeners(entryDiv, index) {
                 e.stopPropagation();
                 return;
             }
-            if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-graphic-label')) return;
+            if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-action, .plan-segment-graphic-label')) return;
             e.preventDefault();
             e.stopPropagation();
             const baseIndex = parseInt(graphic.dataset.index, 10);

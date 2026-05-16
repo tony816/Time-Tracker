@@ -106,6 +106,8 @@ test('buildSplitVisualization renders plan-only timer controls inside planned gr
     assert.match(html, /0m \/ 60m/);
     assert.match(html, /plan-segment-resize-left/);
     assert.match(html, /plan-segment-resize-right/);
+    assert.match(html, /plan-segment-toolbar/);
+    assert.doesNotMatch(html, /is-virtual-rest-gap[\s\S]*plan-segment-toolbar/);
     assert.match(html, /data-start-minute="[^"]*"/);
 });
 
