@@ -33,6 +33,10 @@ const applyPlanSegmentAction = buildMethod(
     'applyPlanSegmentAction(baseIndex, activityIndex, action)',
     '(baseIndex, activityIndex, action)'
 );
+const swapPlanRows = buildMethod(
+    'swapPlanRows(sourceIndex, targetIndex)',
+    '(sourceIndex, targetIndex)'
+);
 
 test('plan-only empty slot renders a calculated virtual rest gap', () => {
     const ctx = {
@@ -429,4 +433,52 @@ test('toolbar actions protect running segments and incompatible merge', () => {
         { label: 'B', seconds: 1200, startMinute: 20, durationMinutes: 20 },
     ]);
     assert.equal(applyPlanSegmentAction.call(ctx, 0, 0, 'merge'), false);
+});
+
+test('row swap exchanges plan contents and recalculates segment starts', () => {
+    const ctx = {
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 }], planSegmentTimers: {} },
+            { planned: 'B', planActivities: [{ label: 'B', seconds: 1800, startMinute: 60, durationMinutes: 30 }], planSegmentTimers: {} },
+        ],
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        isPlanSegmentTimerRunning() {
+            return false;
+        },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    assert.equal(swapPlanRows.call(ctx, 0, 1), true);
+    assert.equal(ctx.timeSlots[0].planned, 'B');
+    assert.equal(ctx.timeSlots[1].planned, 'A');
+    assert.equal(ctx.timeSlots[0].planActivities[0].startMinute, 0);
+    assert.equal(ctx.timeSlots[1].planActivities[0].startMinute, 60);
+});
+
+test('row swap is blocked when either row has a running plan segment timer', () => {
+    const ctx = {
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 }], planSegmentTimers: { a: { running: true } } },
+            { planned: 'B', planActivities: [{ label: 'B', seconds: 1800, startMinute: 60, durationMinutes: 30 }], planSegmentTimers: {} },
+        ],
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        isPlanSegmentTimerRunning(index) {
+            return Object.values(this.timeSlots[index].planSegmentTimers || {}).some((timer) => timer.running);
+        },
+        renderTimeEntries() {
+            assert.fail('blocked row swap should not render');
+        },
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    assert.equal(swapPlanRows.call(ctx, 0, 1), false);
+    assert.equal(ctx.timeSlots[0].planned, 'A');
+    assert.equal(ctx.timeSlots[1].planned, 'B');
 });

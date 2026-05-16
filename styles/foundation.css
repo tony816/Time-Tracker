@@ -244,6 +244,26 @@ html.actual-recording-disabled .split-cell-wrapper .split-visualization-planned 
   pointer-events: auto;
 }
 
+.plan-row-swap-handle {
+  align-self: stretch;
+  width: 20px;
+  border: 0;
+  border-right: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(148, 163, 184, 0.14);
+  color: #475569;
+  cursor: ns-resize;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+}
+
+.plan-row-swap-handle:hover,
+.plan-row-swap-handle:focus-visible {
+  background: rgba(148, 163, 184, 0.28);
+  outline: 2px solid rgba(71, 85, 105, 0.22);
+  outline-offset: -2px;
+}
+
 html.actual-recording-disabled .split-grid-segment.has-plan-segment-timer {
   padding: 0;
   overflow: hidden;

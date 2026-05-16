@@ -103,6 +103,7 @@
             hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
             hasActualMergeContinuation: Boolean(actualRange && index >= actualRange.start && index < actualRange.end),
             innerHtml: `
+                <button type="button" class="plan-row-swap-handle" data-index="${index}" aria-label="계획 행 이동">↕</button>
                 ${plannedContent}
                 ${timeContent}
                 ${actualContent}

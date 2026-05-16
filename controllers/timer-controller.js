@@ -792,6 +792,28 @@ function attachTimerListeners(entryDiv, index) {
         });
     });
 
+    const rowHandles = entryDiv.querySelectorAll('.plan-row-swap-handle');
+    rowHandles.forEach((handle) => {
+        let startY = null;
+        handle.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            startY = Number(event.clientY) || 0;
+            const up = (upEvent) => {
+                document.removeEventListener('pointerup', up);
+                const endY = Number(upEvent && upEvent.clientY) || startY;
+                const deltaRows = Math.round((endY - startY) / 48);
+                const sourceIndex = parseInt(handle.dataset.index, 10);
+                const targetIndex = sourceIndex + deltaRows;
+                if (deltaRows !== 0 && typeof this.swapPlanRows === 'function') {
+                    this.swapPlanRows(sourceIndex, targetIndex);
+                }
+                startY = null;
+            };
+            document.addEventListener('pointerup', up);
+        });
+    });
+
     const segmentTimerBtns = entryDiv.querySelectorAll('.plan-segment-timer-button');
     segmentTimerBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {

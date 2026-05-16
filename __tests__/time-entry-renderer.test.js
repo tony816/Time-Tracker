@@ -31,6 +31,7 @@ test('buildRowRenderModel renders non-merged row with wrapped planned/actual con
     assert.equal(row.routineMatch.id, 'routine-1');
 
     assert.match(row.innerHtml, /wrapped-planned/);
+    assert.match(row.innerHtml, /plan-row-swap-handle/);
     assert.match(row.innerHtml, /wrapped-actual/);
     assert.match(row.innerHtml, /data-index="3"/);
     assert.match(row.innerHtml, /deep &quot;work&quot;/);

@@ -3774,6 +3774,60 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+
+    swapPlanRows(sourceIndex, targetIndex) {
+        if (!Number.isInteger(sourceIndex) || !Number.isInteger(targetIndex)) return false;
+        if (!this.timeSlots || !this.timeSlots[sourceIndex] || !this.timeSlots[targetIndex]) return false;
+        if (sourceIndex === targetIndex) return false;
+        if (this.isPlanSegmentTimerRunning(sourceIndex) || this.isPlanSegmentTimerRunning(targetIndex)) return false;
+        const sourceSlot = this.timeSlots[sourceIndex];
+        const targetSlot = this.timeSlots[targetIndex];
+        const sourcePlan = {
+            planned: sourceSlot.planned || '',
+            planTitle: sourceSlot.planTitle || '',
+            planTitleBandOn: Boolean(sourceSlot.planTitleBandOn),
+            planActivities: this.normalizePlanActivitiesArray(sourceSlot.planActivities).map((item) => ({ ...item })),
+            planSegmentTimers: sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object' ? { ...sourceSlot.planSegmentTimers } : {},
+        };
+        const targetPlan = {
+            planned: targetSlot.planned || '',
+            planTitle: targetSlot.planTitle || '',
+            planTitleBandOn: Boolean(targetSlot.planTitleBandOn),
+            planActivities: this.normalizePlanActivitiesArray(targetSlot.planActivities).map((item) => ({ ...item })),
+            planSegmentTimers: targetSlot.planSegmentTimers && typeof targetSlot.planSegmentTimers === 'object' ? { ...targetSlot.planSegmentTimers } : {},
+        };
+        const rebase = (items, rowIndex) => {
+            const rowStart = rowIndex * 60;
+            let cursor = rowStart;
+            return items.map((item) => {
+                const durationMinutes = Number.isFinite(item.durationMinutes)
+                    ? Math.max(10, Math.floor(item.durationMinutes))
+                    : Math.max(10, Math.floor((Number(item.seconds) || 0) / 60));
+                const next = {
+                    ...item,
+                    startMinute: cursor,
+                    durationMinutes,
+                    seconds: durationMinutes * 60,
+                };
+                cursor += durationMinutes;
+                return next;
+            });
+        };
+        sourceSlot.planned = targetPlan.planned;
+        sourceSlot.planTitle = targetPlan.planTitle;
+        sourceSlot.planTitleBandOn = targetPlan.planTitleBandOn;
+        sourceSlot.planActivities = rebase(targetPlan.planActivities, sourceIndex);
+        sourceSlot.planSegmentTimers = targetPlan.planSegmentTimers;
+        targetSlot.planned = sourcePlan.planned;
+        targetSlot.planTitle = sourcePlan.planTitle;
+        targetSlot.planTitleBandOn = sourcePlan.planTitleBandOn;
+        targetSlot.planActivities = rebase(sourcePlan.planActivities, targetIndex);
+        targetSlot.planSegmentTimers = sourcePlan.planSegmentTimers;
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {
