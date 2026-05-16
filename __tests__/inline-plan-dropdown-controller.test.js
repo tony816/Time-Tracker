@@ -1382,11 +1382,9 @@ test('scrollChildPopoverIntoDropdownView reveals child composer within dropdown 
     assert.ok(composerRect.top >= dropdownRect.top + 8);
 });
 
-test('positionInlinePlanChildPopover keeps the popover below the caret and auto-scrolls into view without flipping', () => {
+test('positionInlinePlanChildPopover keeps the popover below the caret after auto-scroll', () => {
     const originalDocument = globalThis.document;
     const originalRAF = globalThis.requestAnimationFrame;
-    let sectionTopWriteCount = 0;
-    let sectionTopValue = '';
     const makeStyleBag = () => ({
         setProperty(name, value) {
             this[name] = String(value);
@@ -1395,54 +1393,6 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
             delete this[name];
         },
     });
-    const makeSectionStyleBag = () => {
-        const style = makeStyleBag();
-        Object.defineProperty(style, 'top', {
-            get() {
-                return sectionTopValue;
-            },
-            set(value) {
-                sectionTopWriteCount += 1;
-                sectionTopValue = String(value);
-            },
-            configurable: true,
-        });
-        return style;
-    };
-    const section = {
-        hidden: false,
-        className: '',
-        style: makeSectionStyleBag(),
-        classList: {
-            owner: null,
-            add(...classes) {
-                const target = this.owner;
-                if (!target) return;
-                classes.forEach((cls) => {
-                    if (!cls) return;
-                    const tokens = String(target.className || '').split(/\s+/).filter(Boolean);
-                    if (!tokens.includes(cls)) {
-                        target.className = (target.className ? `${target.className} ` : '') + cls;
-                    }
-                });
-            },
-            remove(...classes) {
-                const target = this.owner;
-                if (!target) return;
-                const tokens = String(target.className || '').split(/\s+/).filter(Boolean);
-                target.className = tokens.filter((token) => !classes.includes(token)).join(' ');
-            },
-            contains(cls) {
-                const target = this.owner;
-                if (!target) return false;
-                return String(target.className || '').split(/\s+/).filter(Boolean).includes(cls);
-            },
-        },
-        getBoundingClientRect() {
-            return { top: 260, bottom: 440, left: 0, right: 0, width: 0, height: 180 };
-        },
-    };
-    section.classList.owner = section;
     const containsByParent = function containsByParent(node) {
         let current = node;
         while (current) {
@@ -1451,82 +1401,118 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
         }
         return false;
     };
-    const scrollContainer = {
-        scrollTop: 0,
-        scrollHeight: 900,
-        clientHeight: 300,
-        contains: containsByParent,
-        getBoundingClientRect() {
-            const top = 100 - (this.scrollTop / 10);
-            const bottom = top + 300;
-            return { top, bottom, left: 0, right: 420, width: 420, height: 300 };
+    const makeClassList = (owner) => ({
+        add(...classes) {
+            classes.forEach((cls) => {
+                if (!cls) return;
+                const tokens = String(owner.className || '').split(/\s+/).filter(Boolean);
+                if (!tokens.includes(cls)) {
+                    owner.className = (owner.className ? `${owner.className} ` : '') + cls;
+                }
+            });
         },
-    };
-    const anchor = {
-        isConnected: true,
-        getBoundingClientRect() {
-            return { top: 250, bottom: 280, left: 160, right: 196, width: 36, height: 30 };
+        remove(...classes) {
+            const tokens = String(owner.className || '').split(/\s+/).filter(Boolean);
+            owner.className = tokens.filter((token) => !classes.includes(token)).join(' ');
         },
-    };
-    const row = { parentElement: scrollContainer };
-    anchor.parentElement = row;
-    const dropdown = {
-        scrollTop: 0,
-        scrollHeight: 900,
-        clientHeight: 300,
-        style: makeStyleBag(),
-        contains: containsByParent,
-        classList: {
-            contains() { return false; },
+        contains(cls) {
+            return String(owner.className || '').split(/\s+/).filter(Boolean).includes(cls);
         },
-        getBoundingClientRect() {
-            const top = 100 - (this.scrollTop / 10);
-            return { top, bottom: top + 300, left: 0, right: 420, width: 420, height: 300 };
-        },
-        querySelector(selector) {
+    });
+
+    const runCase = (anchorContentBottom) => {
+        const dropdown = {
+            scrollTop: 0,
+            scrollHeight: 980,
+            clientHeight: 300,
+            style: makeStyleBag(),
+            contains: containsByParent,
+            classList: {
+                contains() { return false; },
+            },
+            getBoundingClientRect() {
+                return { top: 100, bottom: 400, left: 0, right: 420, width: 420, height: 300 };
+            },
+        };
+        const section = {
+            hidden: false,
+            className: '',
+            style: makeStyleBag(),
+            parentElement: dropdown,
+            getBoundingClientRect() {
+                const top = 100 + (Number.parseInt(this.style.top, 10) || 0) - dropdown.scrollTop;
+                return { top, bottom: top + 180, left: 0, right: 360, width: 360, height: 180 };
+            },
+        };
+        section.classList = makeClassList(section);
+        const scrollContainer = {
+            scrollTop: 0,
+            scrollHeight: 900,
+            clientHeight: 220,
+            parentElement: dropdown,
+            contains: containsByParent,
+            getBoundingClientRect() {
+                return { top: 112, bottom: 332, left: 10, right: 410, width: 400, height: 220 };
+            },
+        };
+        const anchor = {
+            isConnected: true,
+            parentElement: { parentElement: scrollContainer },
+            getBoundingClientRect() {
+                const bottom = 100 + anchorContentBottom - dropdown.scrollTop;
+                return { top: bottom - 30, bottom, left: 160, right: 196, width: 36, height: 30 };
+            },
+        };
+        dropdown.querySelector = (selector) => {
             if (selector === '.inline-plan-subsection') return section;
             if (selector === '.activity-chip-board') return scrollContainer;
             if (selector === '.inline-plan-sub-board') return { style: makeStyleBag() };
             if (selector === '.inline-plan-subsection-head') return { getBoundingClientRect() { return { height: 40 }; } };
             return null;
-        },
-        querySelectorAll(selector) {
+        };
+        dropdown.querySelectorAll = (selector) => {
             if (selector === '.activity-chip-caret[data-activity-id]') return [anchor];
             return [];
-        },
-    };
-    scrollContainer.parentElement = dropdown;
-    section.parentElement = dropdown;
-    const ctx = {
-        inlinePlanDropdown: dropdown,
-        modalPlanSectionOpen: true,
-        modalPlanSectionOpenParentId: 'work',
-        inlinePlanChildPopoverAnchorEl: anchor,
-        inlinePlanChildPopoverAnchorSectionKey: 'parents',
-        inlinePlanChildPopoverAnchorInstanceKey: 'parents::work',
-        isInlinePlanMobileInputContext() {
-            return false;
-        },
-    };
+        };
+        const ctx = {
+            inlinePlanDropdown: dropdown,
+            modalPlanSectionOpen: true,
+            modalPlanSectionOpenParentId: 'work',
+            inlinePlanChildPopoverAnchorEl: anchor,
+            inlinePlanChildPopoverAnchorSectionKey: 'parents',
+            inlinePlanChildPopoverAnchorInstanceKey: 'parents::work',
+            isInlinePlanMobileInputContext() {
+                return false;
+            },
+        };
 
-    globalThis.document = {
-        createElement() {
-            return { style: makeStyleBag() };
-        },
-    };
-    globalThis.requestAnimationFrame = (fn) => fn();
-
-    try {
         controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
-        assert.equal(section.style.top, '188px');
-        assert.equal(sectionTopWriteCount, 1);
+        const finalSectionRect = section.getBoundingClientRect();
+        const finalAnchorRect = anchor.getBoundingClientRect();
+        const finalDropdownRect = dropdown.getBoundingClientRect();
+        const expectedTop = anchorContentBottom + 8;
+
+        assert.equal(section.style.top, `${expectedTop}px`);
         assert.ok(dropdown.scrollTop > 0);
         assert.equal(scrollContainer.scrollTop, 0);
+        assert.ok(finalSectionRect.top >= finalAnchorRect.bottom + 8 - 1);
+        assert.ok(finalSectionRect.bottom <= finalDropdownRect.bottom - 8 + 1);
         assert.equal(section.style.position, 'absolute');
         assert.equal(section.classList.contains('inline-plan-subsection-above'), false);
         assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);
         assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
+    };
+
+    try {
+        globalThis.document = {
+            createElement() {
+                return { style: makeStyleBag() };
+            },
+        };
+        globalThis.requestAnimationFrame = (fn) => fn();
+
+        [280, 520].forEach((anchorContentBottom) => runCase(anchorContentBottom));
     } finally {
         globalThis.document = originalDocument;
         globalThis.requestAnimationFrame = originalRAF;

@@ -676,6 +676,27 @@ function positionInlinePlanChildPopover(anchorEl = null) {
 
         const anchorCenter = anchorLeft - dropdownRect.left + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
         const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
+        const placeSectionBelowAnchor = () => {
+            if (typeof dropdown.getBoundingClientRect !== 'function') return false;
+            if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') return false;
+
+            const nextDropdownRect = dropdown.getBoundingClientRect();
+            const nextAnchorRect = resolvedAnchor.getBoundingClientRect();
+            if (!nextDropdownRect || !nextAnchorRect) return false;
+
+            const nextAnchorTop = Number.isFinite(nextAnchorRect.top) ? nextAnchorRect.top : 0;
+            const nextAnchorBottom = Number.isFinite(nextAnchorRect.bottom)
+                ? nextAnchorRect.bottom
+                : nextAnchorTop + (Number.isFinite(nextAnchorRect.height) ? nextAnchorRect.height : 0);
+            const dropdownScrollTop = Number(dropdown.scrollTop) || 0;
+            const nextTopBelow = Math.round(
+                nextAnchorBottom - nextDropdownRect.top + dropdownScrollTop + gap
+            );
+            const nextTop = Math.max(margin, nextTopBelow);
+            section.style.top = `${nextTop}px`;
+
+            return true;
+        };
 
         section.style.position = 'absolute';
         section.style.top = `${top}px`;
@@ -704,10 +725,20 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         if (!this.inlinePlanChildPopoverAutoScrolling) {
             this.inlinePlanChildPopoverAutoScrolling = true;
             try {
-                scrollChildPopoverIntoDropdownView(this.inlinePlanDropdown, section, {
-                    margin,
-                    anchorEl: resolvedAnchor,
-                });
+                for (let pass = 0; pass < 3; pass += 1) {
+                    placeSectionBelowAnchor();
+
+                    const didScroll = scrollChildPopoverIntoDropdownView(this.inlinePlanDropdown, section, {
+                        margin,
+                        anchorEl: resolvedAnchor,
+                    });
+
+                    placeSectionBelowAnchor();
+
+                    if (!didScroll) break;
+                }
+
+                placeSectionBelowAnchor();
             } finally {
                 this.inlinePlanChildPopoverAutoScrolling = false;
             }
