@@ -255,9 +255,18 @@ function buildSplitVisualization(type, index) {
                     const graphicMainClass = safeTitleLabel
                         ? 'plan-segment-graphic-main has-segment-title'
                         : 'plan-segment-graphic-main';
+                    const activityIndexAttr = Number.isInteger(segment.activityIndex)
+                        ? ` data-activity-index="${segment.activityIndex}"`
+                        : '';
                     labelHtml = `<div class="plan-segment-graphic"
                                       data-index="${baseIndex}"
-                                      data-segment-id="${escapedSegmentId}">
+                                      data-segment-id="${escapedSegmentId}"${activityIndexAttr}>
+                                    <button type="button"
+                                            class="plan-segment-resize-handle plan-segment-resize-left"
+                                            data-edge="left"
+                                            data-index="${baseIndex}"
+                                            data-segment-id="${escapedSegmentId}"${activityIndexAttr}
+                                            aria-label="계획 세그먼트 시작 조절"></button>
                                     ${buttonHtml}
                                     <div class="${graphicMainClass}">
                                         ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
@@ -266,6 +275,12 @@ function buildSplitVisualization(type, index) {
                                               data-index="${baseIndex}"
                                               data-segment-id="${escapedSegmentId}">${timerText}</span>
                                     </div>
+                                    <button type="button"
+                                            class="plan-segment-resize-handle plan-segment-resize-right"
+                                            data-edge="right"
+                                            data-index="${baseIndex}"
+                                            data-segment-id="${escapedSegmentId}"${activityIndexAttr}
+                                            aria-label="계획 세그먼트 끝 조절"></button>
                                 </div>`;
                 } else if (isVirtualRest) {
                     const gapId = this.escapeAttribute(segment.id || `virtual-rest-${index}-${idx}`);

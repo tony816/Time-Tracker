@@ -3379,12 +3379,13 @@ class TimeTracker {
             const stepSeconds = 600;
             const segmentMetaUnits = [];
             let absoluteMinute = Math.max(0, baseIndex * 60);
-            activities.forEach((item) => {
+            activities.forEach((item, activityIndex) => {
                 const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
                 const unitCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / stepSeconds)) : 0;
                 for (let i = 0; i < unitCount; i += 1) {
                     segmentMetaUnits.push({
                         virtualRest: Boolean(item && item.kind === 'virtual-rest'),
+                        activityIndex,
                         id: item && item.id,
                         startMinute: Number.isFinite(item && item.startMinute) ? Math.floor(item.startMinute) : absoluteMinute,
                         durationMinutes: Number.isFinite(item && item.durationMinutes) ? Math.floor(item.durationMinutes) : Math.floor(seconds / 60),
@@ -3408,9 +3409,24 @@ class TimeTracker {
                 return {
                     ...segment,
                     virtualRest: true,
+                    activityIndex: null,
                     id: firstUnit.id || `virtual-rest-${baseIndex}-${unitCursor}`,
                     startMinute: Number.isFinite(firstUnit.startMinute) ? firstUnit.startMinute : baseIndex * 60,
                     durationMinutes,
+                };
+            }).map((segment) => {
+                if (!segment || segment.virtualRest || !segment.label) return segment;
+                const span = Number.isFinite(segment.span) ? Math.max(0, Math.floor(segment.span)) : 0;
+                const startUnit = result.gridSegments.slice(0, result.gridSegments.indexOf(segment)).reduce((sum, item) => {
+                    return sum + (Number.isFinite(item && item.span) ? Math.max(0, Math.floor(item.span)) : 0);
+                }, 0);
+                const units = segmentMetaUnits.slice(startUnit, startUnit + span).filter((unit) => unit && !unit.virtualRest);
+                const first = units[0] || {};
+                return {
+                    ...segment,
+                    activityIndex: Number.isInteger(first.activityIndex) ? first.activityIndex : null,
+                    startMinute: Number.isFinite(first.startMinute) ? first.startMinute : segment.startMinute,
+                    durationMinutes: Number.isFinite(first.durationMinutes) ? first.durationMinutes : segment.durationMinutes,
                 };
             });
             const titleByLabel = new Map();
@@ -3478,6 +3494,83 @@ class TimeTracker {
             .filter((item) => item && Number.isFinite(item.startMinute))
             .sort((a, b) => a.startMinute - b.startMinute)
             .map((item) => ({ ...item }));
+    }
+
+    isPlanSegmentTimerRunning(baseIndex) {
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const timers = slot && slot.planSegmentTimers && typeof slot.planSegmentTimers === 'object'
+            ? slot.planSegmentTimers
+            : {};
+        return Object.values(timers).some((timer) => timer && timer.running);
+    }
+
+    resizePlanActivitySegment(baseIndex, activityIndex, edge, deltaMinutes) {
+        if (!Number.isInteger(baseIndex) || !this.timeSlots || !this.timeSlots[baseIndex]) return false;
+        if (!Number.isInteger(activityIndex) || activityIndex < 0) return false;
+        if (this.isPlanSegmentTimerRunning(baseIndex)) return false;
+        const core = globalThis.TimeTrackerPlanSegmentCore;
+        const snap = core && typeof core.snapToTenMinutes === 'function'
+            ? (value) => core.snapToTenMinutes(value)
+            : (value) => Math.round((Number(value) || 0) / 10) * 10;
+        const slot = this.timeSlots[baseIndex];
+        const blockStartMinute = baseIndex * 60;
+        const blockEndMinute = blockStartMinute + Math.max(1, this.getBlockLength('planned', baseIndex)) * 60;
+        const activities = this.normalizePlanActivitiesArray(slot.planActivities)
+            .filter((item) => item && item.kind !== 'virtual-rest')
+            .map((item, index) => {
+                const durationMinutes = Number.isFinite(item.durationMinutes)
+                    ? Math.max(10, Math.floor(item.durationMinutes))
+                    : Math.max(10, Math.floor((Number(item.seconds) || 0) / 60));
+                const fallbackStart = index === 0
+                    ? blockStartMinute
+                    : null;
+                return {
+                    ...item,
+                    startMinute: Number.isFinite(item.startMinute) ? Math.floor(item.startMinute) : fallbackStart,
+                    durationMinutes,
+                    seconds: durationMinutes * 60,
+                };
+            });
+        let cursor = blockStartMinute;
+        activities.forEach((item) => {
+            if (!Number.isFinite(item.startMinute)) item.startMinute = cursor;
+            item.startMinute = Math.max(blockStartMinute, Math.min(blockEndMinute, item.startMinute));
+            item.durationMinutes = Math.max(10, Math.min(blockEndMinute - item.startMinute, item.durationMinutes));
+            item.seconds = item.durationMinutes * 60;
+            cursor = Math.max(cursor, item.startMinute + item.durationMinutes);
+        });
+        const item = activities[activityIndex];
+        if (!item) return false;
+        const delta = snap(Number(deltaMinutes) || 0);
+        if (delta === 0) return false;
+        const previous = activities[activityIndex - 1] || null;
+        const next = activities[activityIndex + 1] || null;
+        const previousEnd = previous ? previous.startMinute + previous.durationMinutes : blockStartMinute;
+        const nextStart = next ? next.startMinute : blockEndMinute;
+        let start = item.startMinute;
+        let end = item.startMinute + item.durationMinutes;
+        if (edge === 'left') {
+            start = Math.max(previousEnd, Math.min(end - 10, snap(start + delta)));
+        } else if (edge === 'right') {
+            end = Math.min(nextStart, Math.max(start + 10, snap(end + delta)));
+        } else {
+            return false;
+        }
+        const nextDuration = Math.max(10, end - start);
+        const changed = start !== item.startMinute || nextDuration !== item.durationMinutes;
+        if (!changed) return false;
+        activities[activityIndex] = {
+            ...item,
+            startMinute: start,
+            durationMinutes: nextDuration,
+            seconds: nextDuration * 60,
+        };
+        slot.planActivities = activities.map((entry) => ({ ...entry }));
+        slot.planned = activities.map((entry) => entry.label).filter(Boolean).join(' · ');
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
     }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);

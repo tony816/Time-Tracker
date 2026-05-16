@@ -805,6 +805,41 @@ function attachTimerListeners(entryDiv, index) {
         });
     });
 
+    const resizeHandles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
+    resizeHandles.forEach((handle) => {
+        let startY = null;
+        const cleanup = () => {
+            document.removeEventListener('pointermove', move);
+            document.removeEventListener('pointerup', up);
+            document.removeEventListener('pointercancel', cleanup);
+            startY = null;
+        };
+        const move = (event) => {
+            if (startY == null || !event) return;
+            if (event.cancelable) event.preventDefault();
+        };
+        const up = (event) => {
+            if (startY == null) return;
+            const endY = Number(event && event.clientY) || startY;
+            const deltaMinutes = Math.round((endY - startY) / 12) * 10;
+            cleanup();
+            const baseIndex = parseInt(handle.dataset.index, 10);
+            const activityIndex = parseInt(handle.dataset.activityIndex, 10);
+            const edge = String(handle.dataset.edge || '');
+            if (typeof this.resizePlanActivitySegment === 'function') {
+                this.resizePlanActivitySegment(baseIndex, activityIndex, edge, deltaMinutes);
+            }
+        };
+        handle.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            startY = Number(event.clientY) || 0;
+            document.addEventListener('pointermove', move, { passive: false });
+            document.addEventListener('pointerup', up);
+            document.addEventListener('pointercancel', cleanup);
+        });
+    });
+
     const planSegmentGraphics = entryDiv.querySelectorAll('.plan-segment-graphic');
     planSegmentGraphics.forEach((graphic) => {
         graphic.addEventListener('click', (e) => {

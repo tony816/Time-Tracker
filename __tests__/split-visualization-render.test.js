@@ -104,6 +104,8 @@ test('buildSplitVisualization renders plan-only timer controls inside planned gr
     assert.match(html, /class="plan-segment-timer-button"/);
     assert.match(html, /집중 작업/);
     assert.match(html, /0m \/ 60m/);
+    assert.match(html, /plan-segment-resize-left/);
+    assert.match(html, /plan-segment-resize-right/);
 });
 
 test('buildSplitVisualization renders parent title above child activity inside plan segment', () => {
