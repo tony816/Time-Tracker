@@ -828,6 +828,27 @@ function attachTimerListeners(entryDiv, index) {
             }
         });
     });
+
+    const restGapButtons = entryDiv.querySelectorAll('.plan-rest-gap');
+    restGapButtons.forEach((button) => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIndex = Number.isInteger(parseInt(button.dataset.index, 10))
+                ? parseInt(button.dataset.index, 10)
+                : index;
+            const startMinute = Number(button.dataset.startMinute);
+            const durationMinutes = Number(button.dataset.durationMinutes);
+            if (typeof this.openInlinePlanDropdown !== 'function') return;
+            this.openInlinePlanDropdown(baseIndex, button, baseIndex, {
+                virtualGap: {
+                    id: button.dataset.gapId || null,
+                    startMinute: Number.isFinite(startMinute) ? startMinute : baseIndex * 60,
+                    durationMinutes: Number.isFinite(durationMinutes) ? durationMinutes : 60,
+                },
+            });
+        });
+    });
 }
 
     return Object.freeze({

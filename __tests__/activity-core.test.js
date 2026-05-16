@@ -91,6 +91,16 @@ test('activity-core normalizePlanActivitiesArray keeps label/seconds and activit
     ]);
 });
 
+test('activity-core normalizePlanActivitiesArray preserves real segment placement metadata', () => {
+    const result = activityCore.normalizePlanActivitiesArray([
+        { label: 'Work', seconds: 1800, startMinute: 120.8, durationMinutes: 30.2 },
+    ]);
+
+    assert.deepEqual(result, [
+        { label: 'Work', seconds: 1800, startMinute: 120, durationMinutes: 30 },
+    ]);
+});
+
 test('activity-core normalizeActivityCatalogEntry fills canonical catalog fields', () => {
     const entry = activityCore.normalizeActivityCatalogEntry({
         id: 'a1',

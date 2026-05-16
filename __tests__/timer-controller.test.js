@@ -382,6 +382,53 @@ test('plan segment graphic clicks route to the inline plan dropdown anchor', () 
     assert.deepEqual(calls, ['planned-input-click']);
 });
 
+test('virtual rest gap clicks open inline plan dropdown with gap target metadata', () => {
+    const calls = [];
+    const button = {
+        dataset: {
+            index: '2',
+            gapId: 'virtual-rest-120-150',
+            startMinute: '120',
+            durationMinutes: '30',
+        },
+        addEventListener(type, handler) {
+            this[type] = handler;
+        },
+    };
+    const entryDiv = {
+        querySelectorAll(selector) {
+            if (selector === '.timer-btn') return [];
+            if (selector === '.plan-segment-timer-button') return [];
+            if (selector === '.plan-segment-graphic') return [];
+            if (selector === '.plan-rest-gap') return [button];
+            return [];
+        },
+    };
+    const ctx = {
+        openInlinePlanDropdown(index, anchor, endIndex, options) {
+            calls.push({ index, anchor, endIndex, options });
+        },
+    };
+
+    timerController.attachTimerListeners.call(ctx, entryDiv, 2);
+    button.click({
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].index, 2);
+    assert.equal(calls[0].anchor, button);
+    assert.equal(calls[0].endIndex, 2);
+    assert.deepEqual(calls[0].options, {
+        virtualGap: {
+            id: 'virtual-rest-120-150',
+            startMinute: 120,
+            durationMinutes: 30,
+        },
+    });
+});
+
 test('updateRunningTimers keeps plan segment elapsed base stable while rendering live text', () => {
     const originalNow = Date.now;
     const originalDocument = globalThis.document;

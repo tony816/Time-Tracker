@@ -139,6 +139,10 @@
                     const rawValue = item[key];
                     normalized[key] = rawValue == null ? null : normalizeActivityText(rawValue);
                 });
+                ['startMinute', 'durationMinutes'].forEach((key) => {
+                    if (!Number.isFinite(item[key])) return;
+                    normalized[key] = Math.max(0, Math.floor(Number(item[key])));
+                });
                 return normalized;
             })
             .filter((item) => item.label || item.seconds > 0);

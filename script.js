@@ -5716,7 +5716,7 @@ class TimeTracker {
     }
 
         openInlinePlanDropdown(index, anchorEl, endIndex = null) {
-        return globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown.call(this, index, anchorEl, endIndex);
+        return globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown.call(this, index, anchorEl, endIndex, arguments[3] || {});
     }
         applyInlinePlanBackgroundContext() {
         return globalThis.TimeTrackerInlinePlanDropdownController.applyInlinePlanBackgroundContext.call(this);

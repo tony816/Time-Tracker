@@ -702,9 +702,50 @@ function getCatalogItemLabel(item) {
 
 function getInlinePlanSelectionSeconds() {
         const target = this.inlinePlanTarget || {};
+        if (target.virtualGap && Number.isFinite(target.virtualGap.durationMinutes)) {
+            return Math.max(1, Math.floor(target.virtualGap.durationMinutes)) * 60;
+        }
         const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
         const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
         return Math.max(1, Math.abs(endIndex - startIndex) + 1) * 3600;
+    }
+
+function insertPlanItemIntoVirtualGap(planItem) {
+        const target = this.inlinePlanTarget || {};
+        if (!target.virtualGap || !planItem) return false;
+        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
+        const slot = this.timeSlots && this.timeSlots[startIndex];
+        if (!slot) return false;
+        const gap = target.virtualGap;
+        const startMinute = Number.isFinite(gap.startMinute)
+            ? Math.max(0, Math.floor(gap.startMinute))
+            : startIndex * 60;
+        const durationMinutes = Number.isFinite(gap.durationMinutes)
+            ? Math.max(10, Math.floor(gap.durationMinutes))
+            : Math.max(10, Math.floor((Number(planItem.seconds) || 0) / 60));
+        const nextItem = {
+            ...planItem,
+            seconds: durationMinutes * 60,
+            startMinute,
+            durationMinutes,
+        };
+        const existing = typeof this.normalizePlanActivitiesArray === 'function'
+            ? this.normalizePlanActivitiesArray(slot.planActivities)
+            : (Array.isArray(slot.planActivities) ? slot.planActivities : []);
+        const withoutVirtual = existing
+            .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item) => ({ ...item }));
+        withoutVirtual.push(nextItem);
+        withoutVirtual.sort((a, b) => {
+            const aStart = Number.isFinite(a.startMinute) ? a.startMinute : startIndex * 60;
+            const bStart = Number.isFinite(b.startMinute) ? b.startMinute : startIndex * 60;
+            return aStart - bStart;
+        });
+        slot.planActivities = withoutVirtual;
+        slot.planned = withoutVirtual.map((item) => item && item.label).filter(Boolean).join(' · ');
+        slot.planTitle = nextItem.titleText || slot.planTitle || '';
+        slot.planTitleBandOn = Boolean(slot.planTitle);
+        return true;
     }
 
 function getActivityBoardItemId(item) {
@@ -783,17 +824,21 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             activityText,
         };
 
-        if (this.inlinePlanTarget.mergeKey) {
+        const insertedIntoGap = insertPlanItemIntoVirtualGap.call(this, planItem);
+
+        if (!insertedIntoGap && this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, activityText);
         }
 
-        for (let i = startIndex; i <= endIndex; i++) {
-            if (!this.timeSlots[i]) continue;
-            const isStart = i === startIndex;
-            this.timeSlots[i].planned = isStart ? activityText : '';
-            this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
-            this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
-            this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+        if (!insertedIntoGap) {
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? activityText : '';
+                this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
+                this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
+                this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+            }
         }
 
         this.modalPlanActivities = [{ ...planItem, invalid: false }];
@@ -1480,7 +1525,7 @@ function isEventWithinCurrentInlinePlanRange(targetEl) {
         return rowIndex >= safeStart && rowIndex <= safeEnd;
     }
 
-function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
+function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) {
         if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
             return;
         }
@@ -1500,7 +1545,14 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.currentPlanSource = this.getActivePlanSource();
 
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
-        this.inlinePlanTarget = { ...range, anchor };
+        const virtualGap = options && options.virtualGap && Number.isFinite(options.virtualGap.durationMinutes)
+            ? {
+                startMinute: Number.isFinite(options.virtualGap.startMinute) ? Math.floor(options.virtualGap.startMinute) : range.startIndex * 60,
+                durationMinutes: Math.max(10, Math.floor(options.virtualGap.durationMinutes)),
+                id: String(options.virtualGap.id || '').trim() || null,
+            }
+            : null;
+        this.inlinePlanTarget = virtualGap ? { ...range, anchor, virtualGap } : { ...range, anchor };
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
             : null;
@@ -1955,17 +2007,29 @@ function applyInlinePlanSelection(label, options = {}) {
         const startIndex = Math.min(safeStart, safeEnd);
         const endIndex = Math.max(safeStart, safeEnd);
 
-        if (this.inlinePlanTarget.mergeKey) {
+        const seconds = getInlinePlanSelectionSeconds.call(this);
+        const gapInserted = insertPlanItemIntoVirtualGap.call(this, {
+            label: normalized,
+            seconds,
+            titleActivityId: null,
+            titleText: null,
+            activityId: null,
+            activityText: normalized,
+        });
+
+        if (!gapInserted && this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, normalized);
         }
 
-        for (let i = startIndex; i <= endIndex; i++) {
-            if (!this.timeSlots[i]) continue;
-            const isStart = i === startIndex;
-            this.timeSlots[i].planned = isStart ? normalized : '';
-            this.timeSlots[i].planActivities = [];
-            this.timeSlots[i].planTitle = isStart ? normalized : '';
-            this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+        if (!gapInserted) {
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? normalized : '';
+                this.timeSlots[i].planActivities = [];
+                this.timeSlots[i].planTitle = isStart ? normalized : '';
+                this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+            }
         }
 
         this.renderTimeEntries(Boolean(options.keepOpen));
