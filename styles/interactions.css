@@ -1253,6 +1253,23 @@ button.activity-chip,
   visibility: hidden !important;
 }
 
+.inline-plan-child-popover-layer {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 2100;
+  pointer-events: none;
+}
+
+.inline-plan-child-popover-layer[hidden] {
+  display: none !important;
+}
+
+.inline-plan-child-popover-layer .inline-plan-subsection {
+  position: fixed;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 .inline-plan-subsection::before {
   display: none;
 }

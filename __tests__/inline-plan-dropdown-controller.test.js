@@ -1000,8 +1000,8 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
 
     controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
-    assert.equal(section.style.position, 'absolute');
-    assert.equal(section.style.left, '52px');
+    assert.equal(section.style.position, 'fixed');
+    assert.equal(section.style.left, '160px');
     assert.equal(section.style.top, '136px');
     assert.equal(section.style.width, '360px');
     assert.equal(section.style.maxWidth, '360px');
@@ -1420,7 +1420,7 @@ test('positionInlinePlanChildPopover keeps the popover below the caret after aut
         },
     });
 
-    const runCase = (anchorContentBottom) => {
+    const runCase = (anchorViewportBottom) => {
         const dropdown = {
             scrollTop: 0,
             scrollHeight: 980,
@@ -1440,7 +1440,7 @@ test('positionInlinePlanChildPopover keeps the popover below the caret after aut
             style: makeStyleBag(),
             parentElement: dropdown,
             getBoundingClientRect() {
-                const top = 100 + (Number.parseInt(this.style.top, 10) || 0) - dropdown.scrollTop;
+                const top = Number.parseInt(this.style.top, 10) || 0;
                 return { top, bottom: top + 180, left: 0, right: 360, width: 360, height: 180 };
             },
         };
@@ -1459,7 +1459,7 @@ test('positionInlinePlanChildPopover keeps the popover below the caret after aut
             isConnected: true,
             parentElement: { parentElement: scrollContainer },
             getBoundingClientRect() {
-                const bottom = 100 + anchorContentBottom - dropdown.scrollTop;
+                const bottom = anchorViewportBottom;
                 return { top: bottom - 30, bottom, left: 160, right: 196, width: 36, height: 30 };
             },
         };
@@ -1490,15 +1490,14 @@ test('positionInlinePlanChildPopover keeps the popover below the caret after aut
 
         const finalSectionRect = section.getBoundingClientRect();
         const finalAnchorRect = anchor.getBoundingClientRect();
-        const finalDropdownRect = dropdown.getBoundingClientRect();
-        const expectedTop = anchorContentBottom + 8;
+        const expectedTop = anchorViewportBottom + 8;
 
         assert.equal(section.style.top, `${expectedTop}px`);
-        assert.ok(dropdown.scrollTop > 0);
+        assert.equal(dropdown.scrollTop, 0);
         assert.equal(scrollContainer.scrollTop, 0);
         assert.ok(finalSectionRect.top >= finalAnchorRect.bottom + 8 - 1);
-        assert.ok(finalSectionRect.bottom <= finalDropdownRect.bottom - 8 + 1);
-        assert.equal(section.style.position, 'absolute');
+        assert.ok(finalSectionRect.bottom <= 600 - 8 + 1);
+        assert.equal(section.style.position, 'fixed');
         assert.equal(section.classList.contains('inline-plan-subsection-above'), false);
         assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);
         assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
@@ -1512,7 +1511,7 @@ test('positionInlinePlanChildPopover keeps the popover below the caret after aut
         };
         globalThis.requestAnimationFrame = (fn) => fn();
 
-        [280, 520].forEach((anchorContentBottom) => runCase(anchorContentBottom));
+        [280, 320].forEach((anchorViewportBottom) => runCase(anchorViewportBottom));
     } finally {
         globalThis.document = originalDocument;
         globalThis.requestAnimationFrame = originalRAF;
