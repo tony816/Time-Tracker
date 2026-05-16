@@ -260,6 +260,7 @@ function buildSplitVisualization(type, index) {
                         : '';
                     labelHtml = `<div class="plan-segment-graphic"
                                       data-index="${baseIndex}"
+                                      data-start-minute="${Number.isFinite(segment.startMinute) ? Math.max(0, Math.floor(segment.startMinute)) : ''}"
                                       data-segment-id="${escapedSegmentId}"${activityIndexAttr}>
                                     <button type="button"
                                             class="plan-segment-resize-handle plan-segment-resize-left"

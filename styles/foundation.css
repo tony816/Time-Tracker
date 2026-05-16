@@ -374,6 +374,11 @@ html.actual-recording-disabled .split-grid-segment.is-virtual-rest-gap {
   font-weight: 700;
   line-height: 1;
   padding: 0;
+  cursor: grab;
+}
+
+.plan-segment-graphic-main:active {
+  cursor: grabbing;
 }
 
 .plan-segment-timer-spacer {

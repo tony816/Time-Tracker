@@ -25,6 +25,10 @@ const beginPlanSegmentTitleEdit = buildMethod(
     'beginPlanSegmentTitleEdit(labelEl, baseIndex, activityIndex)',
     '(labelEl, baseIndex, activityIndex)'
 );
+const movePlanActivitySegment = buildMethod(
+    'movePlanActivitySegment(baseIndex, activityIndex, targetStartMinute)',
+    '(baseIndex, activityIndex, targetStartMinute)'
+);
 
 test('plan-only empty slot renders a calculated virtual rest gap', () => {
     const ctx = {
@@ -290,4 +294,73 @@ test('inline title editor saves on Enter, cancels on Escape, and preserves empty
     } finally {
         globalThis.document = originalDocument;
     }
+});
+
+test('background move drops a segment into a virtual gap and leaves old space empty', () => {
+    const ctx = {
+        timeSlots: [{
+            planned: 'A · B',
+            planActivities: [
+                { label: 'A', seconds: 1200, startMinute: 0, durationMinutes: 20 },
+                { label: 'B', seconds: 1200, startMinute: 40, durationMinutes: 20 },
+            ],
+        }],
+        getBlockLength() {
+            return 1;
+        },
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        isPlanSegmentTimerRunning() {
+            return false;
+        },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    assert.equal(movePlanActivitySegment.call(ctx, 0, 0, 20), true);
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, 'A');
+    assert.equal(ctx.timeSlots[0].planActivities[0].startMinute, 20);
+    const items = getPlanActivitiesWithVirtualGaps.call({
+        ...ctx,
+        getSplitActivities(type, baseIndex) {
+            return this.normalizePlanActivitiesArray(this.timeSlots[baseIndex].planActivities).map(item => ({ ...item }));
+        },
+        getPlannedLabelForIndex() {
+            return 'A · B';
+        },
+    }, 0);
+    assert.equal(items.some((item) => item.kind === 'virtual-rest' && item.startMinute === 0 && item.durationMinutes === 20), true);
+});
+
+test('background move blocks overlap and running timers', () => {
+    const ctx = {
+        timeSlots: [{
+            planned: 'A · B',
+            planActivities: [
+                { label: 'A', seconds: 1800, startMinute: 0, durationMinutes: 30 },
+                { label: 'B', seconds: 1800, startMinute: 30, durationMinutes: 30 },
+            ],
+            planSegmentTimers: {},
+        }],
+        getBlockLength() {
+            return 1;
+        },
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        isPlanSegmentTimerRunning() {
+            return false;
+        },
+        renderTimeEntries() {
+            assert.fail('blocked move should not render');
+        },
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    assert.equal(movePlanActivitySegment.call(ctx, 0, 0, 20), false);
+    ctx.isPlanSegmentTimerRunning = () => true;
+    assert.equal(movePlanActivitySegment.call(ctx, 0, 0, 0), false);
 });

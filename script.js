@@ -3656,6 +3656,51 @@ class TimeTracker {
         if (typeof input.select === 'function') input.select();
         return true;
     }
+
+    movePlanActivitySegment(baseIndex, activityIndex, targetStartMinute) {
+        if (!Number.isInteger(baseIndex) || !this.timeSlots || !this.timeSlots[baseIndex]) return false;
+        if (!Number.isInteger(activityIndex) || activityIndex < 0) return false;
+        if (this.isPlanSegmentTimerRunning(baseIndex)) return false;
+        const core = globalThis.TimeTrackerPlanSegmentCore;
+        const snap = core && typeof core.snapToTenMinutes === 'function'
+            ? (value) => core.snapToTenMinutes(value)
+            : (value) => Math.round((Number(value) || 0) / 10) * 10;
+        const slot = this.timeSlots[baseIndex];
+        const blockStartMinute = baseIndex * 60;
+        const blockEndMinute = blockStartMinute + Math.max(1, this.getBlockLength('planned', baseIndex)) * 60;
+        const activities = this.normalizePlanActivitiesArray(slot.planActivities)
+            .filter((item) => item && item.kind !== 'virtual-rest')
+            .map((item, index) => {
+                const durationMinutes = Number.isFinite(item.durationMinutes)
+                    ? Math.max(10, Math.floor(item.durationMinutes))
+                    : Math.max(10, Math.floor((Number(item.seconds) || 0) / 60));
+                return {
+                    ...item,
+                    startMinute: Number.isFinite(item.startMinute) ? Math.floor(item.startMinute) : blockStartMinute + (index * durationMinutes),
+                    durationMinutes,
+                    seconds: durationMinutes * 60,
+                };
+            });
+        const item = activities[activityIndex];
+        if (!item) return false;
+        const nextStart = Math.max(blockStartMinute, Math.min(blockEndMinute - item.durationMinutes, snap(targetStartMinute)));
+        const nextEnd = nextStart + item.durationMinutes;
+        const overlaps = activities.some((entry, index) => {
+            if (index === activityIndex || !entry) return false;
+            const start = Number.isFinite(entry.startMinute) ? entry.startMinute : blockStartMinute;
+            const end = start + Math.max(10, Math.floor(Number(entry.durationMinutes) || 10));
+            return nextStart < end && nextEnd > start;
+        });
+        if (overlaps || nextStart === item.startMinute) return false;
+        activities[activityIndex] = { ...item, startMinute: nextStart };
+        activities.sort((a, b) => a.startMinute - b.startMinute);
+        slot.planActivities = activities.map((entry) => ({ ...entry }));
+        slot.planned = activities.map((entry) => entry.label).filter(Boolean).join(' · ');
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {

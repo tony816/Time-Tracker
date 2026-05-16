@@ -842,6 +842,53 @@ function attachTimerListeners(entryDiv, index) {
 
     const planSegmentGraphics = entryDiv.querySelectorAll('.plan-segment-graphic');
     planSegmentGraphics.forEach((graphic) => {
+        const main = graphic.querySelector && graphic.querySelector('.plan-segment-graphic-main');
+        if (main) {
+            let dragStartY = null;
+            let dragStartMinute = null;
+            const cleanupDrag = () => {
+                document.removeEventListener('pointermove', dragMove);
+                document.removeEventListener('pointerup', dragUp);
+                document.removeEventListener('pointercancel', cleanupDrag);
+                dragStartY = null;
+                dragStartMinute = null;
+            };
+            const dragMove = (event) => {
+                if (dragStartY == null) return;
+                if (event.cancelable) event.preventDefault();
+                const delta = Math.abs((Number(event.clientY) || dragStartY) - dragStartY);
+                if (delta >= 4) graphic.dataset.dragMoved = 'true';
+            };
+            const dragUp = (event) => {
+                if (dragStartY == null) return;
+                const deltaMinutes = Math.round(((Number(event.clientY) || dragStartY) - dragStartY) / 12) * 10;
+                const moved = Math.abs(deltaMinutes) >= 10;
+                const baseIndex = parseInt(graphic.dataset.index, 10);
+                const activityIndex = parseInt(graphic.dataset.activityIndex, 10);
+                const targetStart = (Number.isFinite(dragStartMinute) ? dragStartMinute : baseIndex * 60) + deltaMinutes;
+                cleanupDrag();
+                if (moved && typeof this.movePlanActivitySegment === 'function') {
+                    this.movePlanActivitySegment(baseIndex, activityIndex, targetStart);
+                }
+                if (moved) {
+                    setTimeout(() => {
+                        delete graphic.dataset.dragMoved;
+                    }, 0);
+                }
+            };
+            main.addEventListener('pointerdown', (event) => {
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-graphic-label, .plan-segment-title-editor')) return;
+                event.preventDefault();
+                event.stopPropagation();
+                dragStartY = Number(event.clientY) || 0;
+                dragStartMinute = Number(graphic.dataset.startMinute);
+                if (!Number.isFinite(dragStartMinute)) dragStartMinute = parseInt(graphic.dataset.index, 10) * 60;
+                graphic.dataset.dragMoved = 'false';
+                document.addEventListener('pointermove', dragMove, { passive: false });
+                document.addEventListener('pointerup', dragUp);
+                document.addEventListener('pointercancel', cleanupDrag);
+            });
+        }
         const label = graphic.querySelector && graphic.querySelector('.plan-segment-graphic-label');
         if (label) {
             label.addEventListener('click', (event) => {
@@ -855,6 +902,11 @@ function attachTimerListeners(entryDiv, index) {
             });
         }
         graphic.addEventListener('click', (e) => {
+            if (graphic.dataset.dragMoved === 'true') {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-graphic-label')) return;
             e.preventDefault();
             e.stopPropagation();
