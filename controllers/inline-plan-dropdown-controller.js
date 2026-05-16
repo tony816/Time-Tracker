@@ -701,7 +701,86 @@ function positionInlinePlanChildPopover(anchorEl = null) {
             anchoredBoard.style.maxHeight = `${boardMaxHeight}px`;
             anchoredBoard.style.overflow = 'auto';
         }
+        if (!this.inlinePlanChildPopoverAutoScrolling) {
+            this.inlinePlanChildPopoverAutoScrolling = true;
+            try {
+                const didScroll = scrollChildPopoverIntoDropdownView(this.inlinePlanDropdown, section, { margin });
+                if (didScroll && typeof this.inlinePlanDropdown.getBoundingClientRect === 'function') {
+                    const nextDropdownRect = this.inlinePlanDropdown.getBoundingClientRect();
+                    const nextAnchorRect = resolvedAnchor.getBoundingClientRect();
+                    if (nextDropdownRect && nextAnchorRect) {
+                        const nextAnchorTop = Number.isFinite(nextAnchorRect.top) ? nextAnchorRect.top : 0;
+                        const nextAnchorBottom = Number.isFinite(nextAnchorRect.bottom)
+                            ? nextAnchorRect.bottom
+                            : (nextAnchorTop + (Number.isFinite(nextAnchorRect.height) ? nextAnchorRect.height : 0));
+                        const nextTopBelow = Math.round(nextAnchorBottom - nextDropdownRect.top + gap);
+                        const nextTop = Math.max(margin, nextTopBelow);
+                        section.style.top = `${nextTop}px`;
+                    }
+                }
+            } finally {
+                this.inlinePlanChildPopoverAutoScrolling = false;
+            }
+        }
         this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
+    }
+
+function getInlinePlanDropdownScrollContainer(dropdown) {
+        if (!dropdown) return null;
+
+        const candidates = [
+            typeof dropdown.querySelector === 'function' ? dropdown.querySelector('.inline-plan-dropdown-content') : null,
+            typeof dropdown.querySelector === 'function' ? dropdown.querySelector('.activity-chip-board') : null,
+            dropdown,
+        ].filter(Boolean);
+
+        return candidates.find((node) => {
+            if (!node || typeof node.getBoundingClientRect !== 'function') return false;
+            const style = typeof window !== 'undefined' && window.getComputedStyle
+                ? window.getComputedStyle(node)
+                : null;
+            const overflowY = style ? String(style.overflowY || style.overflow || '') : '';
+            const canScroll = Number(node.scrollHeight) > (Number(node.clientHeight) + 1);
+            return canScroll || /auto|scroll|overlay/.test(overflowY);
+        }) || dropdown;
+    }
+
+function scrollChildPopoverIntoDropdownView(dropdown, popover, options = {}) {
+        if (!dropdown || !popover) return false;
+        if (typeof popover.getBoundingClientRect !== 'function') return false;
+
+        const scrollContainer = getInlinePlanDropdownScrollContainer(dropdown);
+        if (!scrollContainer || typeof scrollContainer.getBoundingClientRect !== 'function') return false;
+
+        const margin = Number.isFinite(options.margin) ? options.margin : 8;
+
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
+
+        if (!containerRect || !popoverRect) return false;
+
+        let delta = 0;
+
+        const bottomOverflow = popoverRect.bottom - (containerRect.bottom - margin);
+        if (bottomOverflow > 0) {
+            delta = bottomOverflow;
+        }
+
+        const topOverflow = (containerRect.top + margin) - popoverRect.top;
+        if (topOverflow > 0) {
+            delta = -topOverflow;
+        }
+
+        if (Math.abs(delta) < 1) return false;
+
+        const before = Number(scrollContainer.scrollTop) || 0;
+        const maxScroll = Math.max(0, (Number(scrollContainer.scrollHeight) || 0) - (Number(scrollContainer.clientHeight) || 0));
+        const next = Math.max(0, Math.min(maxScroll, before + delta));
+
+        if (Math.abs(next - before) < 1) return false;
+
+        scrollContainer.scrollTop = next;
+        return true;
     }
 
 function getCatalogItemLabel(item) {
@@ -2113,6 +2192,8 @@ function applyInlinePlanSelection(label, options = {}) {
         scheduleInlinePlanViewportSync,
         getInlinePlanViewportMetrics,
         getInlinePlanMinimumInteractiveHeight,
+        getInlinePlanDropdownScrollContainer,
+        scrollChildPopoverIntoDropdownView,
         ensureInlinePlanInputVisible,
         isInlinePlanInputFocused,
         markInlinePlanInputIntent,

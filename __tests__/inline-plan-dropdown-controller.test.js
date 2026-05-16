@@ -1160,6 +1160,208 @@ test('positionInlinePlanChildPopover re-resolves the active caret after rerender
     assert.equal(ctx.inlinePlanChildPopoverAnchorEl, freshCaret);
 });
 
+test('scrollChildPopoverIntoDropdownView scrolls just enough to reveal clipped popover bounds', () => {
+    const scrollContainer = {
+        scrollTop: 0,
+        scrollHeight: 900,
+        clientHeight: 300,
+        getBoundingClientRect() {
+            return { top: 100, bottom: 400, left: 0, right: 400, width: 400, height: 300 };
+        },
+    };
+    const dropdown = {
+        scrollTop: 0,
+        querySelector(selector) {
+            if (selector === '.inline-plan-dropdown-content') return null;
+            if (selector === '.activity-chip-board') return scrollContainer;
+            return null;
+        },
+    };
+    const popover = {
+        getBoundingClientRect() {
+            return { top: 260, bottom: 440, left: 0, right: 0, width: 0, height: 180 };
+        },
+    };
+
+    const didScroll = controller.scrollChildPopoverIntoDropdownView.call({}, dropdown, popover, { margin: 8 });
+
+    assert.equal(didScroll, true);
+    assert.equal(scrollContainer.scrollTop, 48);
+});
+
+test('scrollChildPopoverIntoDropdownView scrolls upward when the popover top is clipped', () => {
+    const scrollContainer = {
+        scrollTop: 200,
+        scrollHeight: 900,
+        clientHeight: 300,
+        getBoundingClientRect() {
+            return { top: 100, bottom: 400, left: 0, right: 400, width: 400, height: 300 };
+        },
+    };
+    const dropdown = {
+        scrollTop: 200,
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return scrollContainer;
+            return null;
+        },
+    };
+    const popover = {
+        getBoundingClientRect() {
+            return { top: 88, bottom: 220, left: 0, right: 0, width: 0, height: 132 };
+        },
+    };
+
+    const didScroll = controller.scrollChildPopoverIntoDropdownView.call({}, dropdown, popover, { margin: 8 });
+
+    assert.equal(didScroll, true);
+    assert.equal(scrollContainer.scrollTop, 180);
+});
+
+test('scrollChildPopoverIntoDropdownView does not scroll when the popover is already fully visible', () => {
+    const scrollContainer = {
+        scrollTop: 140,
+        scrollHeight: 900,
+        clientHeight: 300,
+        getBoundingClientRect() {
+            return { top: 100, bottom: 400, left: 0, right: 400, width: 400, height: 300 };
+        },
+    };
+    const dropdown = {
+        scrollTop: 140,
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return scrollContainer;
+            return null;
+        },
+    };
+    const popover = {
+        getBoundingClientRect() {
+            return { top: 140, bottom: 240, left: 0, right: 0, width: 0, height: 100 };
+        },
+    };
+
+    const didScroll = controller.scrollChildPopoverIntoDropdownView.call({}, dropdown, popover, { margin: 8 });
+
+    assert.equal(didScroll, false);
+    assert.equal(scrollContainer.scrollTop, 140);
+});
+
+test('positionInlinePlanChildPopover keeps the popover below the caret and auto-scrolls into view without flipping', () => {
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const makeStyleBag = () => ({
+        setProperty(name, value) {
+            this[name] = String(value);
+        },
+        removeProperty(name) {
+            delete this[name];
+        },
+    });
+    const section = {
+        hidden: false,
+        className: '',
+        style: makeStyleBag(),
+        classList: {
+            owner: null,
+            add(...classes) {
+                const target = this.owner;
+                if (!target) return;
+                classes.forEach((cls) => {
+                    if (!cls) return;
+                    const tokens = String(target.className || '').split(/\s+/).filter(Boolean);
+                    if (!tokens.includes(cls)) {
+                        target.className = (target.className ? `${target.className} ` : '') + cls;
+                    }
+                });
+            },
+            remove(...classes) {
+                const target = this.owner;
+                if (!target) return;
+                const tokens = String(target.className || '').split(/\s+/).filter(Boolean);
+                target.className = tokens.filter((token) => !classes.includes(token)).join(' ');
+            },
+            contains(cls) {
+                const target = this.owner;
+                if (!target) return false;
+                return String(target.className || '').split(/\s+/).filter(Boolean).includes(cls);
+            },
+        },
+        getBoundingClientRect() {
+            return { top: 260, bottom: 440, left: 0, right: 0, width: 0, height: 180 };
+        },
+    };
+    section.classList.owner = section;
+    const scrollContainer = {
+        scrollTop: 0,
+        scrollHeight: 900,
+        clientHeight: 300,
+        getBoundingClientRect() {
+            const top = 100 - (this.scrollTop / 10);
+            const bottom = top + 300;
+            return { top, bottom, left: 0, right: 420, width: 420, height: 300 };
+        },
+    };
+    const anchor = {
+        isConnected: true,
+        getBoundingClientRect() {
+            return { top: 250, bottom: 280, left: 160, right: 196, width: 36, height: 30 };
+        },
+    };
+    const dropdown = {
+        scrollTop: 0,
+        style: makeStyleBag(),
+        classList: {
+            contains() { return false; },
+        },
+        getBoundingClientRect() {
+            const top = 100 - (scrollContainer.scrollTop / 10);
+            return { top, bottom: top + 300, left: 0, right: 420, width: 420, height: 300 };
+        },
+        querySelector(selector) {
+            if (selector === '.inline-plan-subsection') return section;
+            if (selector === '.activity-chip-board') return scrollContainer;
+            if (selector === '.inline-plan-sub-board') return { style: makeStyleBag() };
+            if (selector === '.inline-plan-subsection-head') return { getBoundingClientRect() { return { height: 40 }; } };
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector === '.activity-chip-caret[data-activity-id]') return [anchor];
+            return [];
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        modalPlanSectionOpen: true,
+        modalPlanSectionOpenParentId: 'work',
+        inlinePlanChildPopoverAnchorEl: anchor,
+        inlinePlanChildPopoverAnchorSectionKey: 'parents',
+        inlinePlanChildPopoverAnchorInstanceKey: 'parents::work',
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+    };
+
+    globalThis.document = {
+        createElement() {
+            return { style: makeStyleBag() };
+        },
+    };
+    globalThis.requestAnimationFrame = (fn) => fn();
+
+    try {
+        controller.positionInlinePlanChildPopover.call(ctx, anchor);
+
+        assert.equal(section.style.top, '193px');
+        assert.equal(scrollContainer.scrollTop, 48);
+        assert.equal(section.style.position, 'absolute');
+        assert.equal(section.classList.contains('inline-plan-subsection-above'), false);
+        assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);
+        assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
 test('caret toggles child board open, close, and switch parent', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
