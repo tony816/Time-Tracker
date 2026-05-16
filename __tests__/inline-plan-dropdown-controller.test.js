@@ -1245,6 +1245,143 @@ test('scrollChildPopoverIntoDropdownView does not scroll when the popover is alr
     assert.equal(scrollContainer.scrollTop, 140);
 });
 
+test('scrollChildPopoverIntoDropdownView uses dropdown when board does not clip sibling popover', () => {
+    const containsByParent = function containsByParent(node) {
+        let current = node;
+        while (current) {
+            if (current === this) return true;
+            current = current.parentElement || null;
+        }
+        return false;
+    };
+    const dropdown = {
+        scrollTop: 0,
+        scrollHeight: 1000,
+        clientHeight: 300,
+        parentElement: null,
+        contains: containsByParent,
+        getBoundingClientRect() {
+            return { top: 100, bottom: 400, left: 0, right: 420, width: 420, height: 300 };
+        },
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+    };
+    const board = {
+        scrollTop: 0,
+        scrollHeight: 900,
+        clientHeight: 200,
+        parentElement: dropdown,
+        contains: containsByParent,
+        getBoundingClientRect() {
+            return { top: 120, bottom: 320, left: 10, right: 410, width: 400, height: 200 };
+        },
+    };
+    const row = { parentElement: board };
+    const caret = {
+        parentElement: row,
+        getBoundingClientRect() {
+            return { top: 250, bottom: 280, left: 160, right: 196, width: 36, height: 30 };
+        },
+    };
+    const popover = {
+        parentElement: dropdown,
+        getBoundingClientRect() {
+            return { top: 270, bottom: 450, left: 40, right: 400, width: 360, height: 180 };
+        },
+    };
+
+    const didScroll = controller.scrollChildPopoverIntoDropdownView.call({}, dropdown, popover, {
+        margin: 8,
+        anchorEl: caret,
+    });
+
+    assert.equal(didScroll, true);
+    assert.equal(dropdown.scrollTop, 58);
+    assert.equal(board.scrollTop, 0);
+});
+
+test('scrollChildPopoverIntoDropdownView reveals child composer within dropdown boundary', () => {
+    const containsByParent = function containsByParent(node) {
+        let current = node;
+        while (current) {
+            if (current === this) return true;
+            current = current.parentElement || null;
+        }
+        return false;
+    };
+    const dropdown = {
+        scrollTop: 0,
+        scrollHeight: 1000,
+        clientHeight: 300,
+        parentElement: null,
+        contains: containsByParent,
+        getBoundingClientRect() {
+            return { top: 100, bottom: 400, left: 0, right: 420, width: 420, height: 300 };
+        },
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+    };
+    const board = {
+        scrollTop: 0,
+        scrollHeight: 900,
+        clientHeight: 200,
+        parentElement: dropdown,
+        contains: containsByParent,
+        getBoundingClientRect() {
+            return { top: 120, bottom: 320, left: 10, right: 410, width: 400, height: 200 };
+        },
+    };
+    const row = { parentElement: board };
+    const caret = {
+        parentElement: row,
+        getBoundingClientRect() {
+            return { top: 250, bottom: 280, left: 160, right: 196, width: 36, height: 30 };
+        },
+    };
+    const popover = {
+        parentElement: dropdown,
+        getBoundingClientRect() {
+            return {
+                top: 240 - dropdown.scrollTop,
+                bottom: 460 - dropdown.scrollTop,
+                left: 40,
+                right: 400,
+                width: 360,
+                height: 220,
+            };
+        },
+    };
+    const composer = {
+        getBoundingClientRect() {
+            return {
+                top: 414 - dropdown.scrollTop,
+                bottom: 444 - dropdown.scrollTop,
+                left: 52,
+                right: 388,
+                width: 336,
+                height: 30,
+            };
+        },
+    };
+
+    const didScroll = controller.scrollChildPopoverIntoDropdownView.call({}, dropdown, popover, {
+        margin: 8,
+        anchorEl: caret,
+    });
+    const composerRect = composer.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+
+    assert.equal(didScroll, true);
+    assert.equal(board.scrollTop, 0);
+    assert.ok(dropdown.scrollTop > 0);
+    assert.ok(composerRect.bottom <= dropdownRect.bottom - 8);
+    assert.ok(composerRect.top >= dropdownRect.top + 8);
+});
+
 test('positionInlinePlanChildPopover keeps the popover below the caret and auto-scrolls into view without flipping', () => {
     const originalDocument = globalThis.document;
     const originalRAF = globalThis.requestAnimationFrame;
@@ -1290,10 +1427,19 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
         },
     };
     section.classList.owner = section;
+    const containsByParent = function containsByParent(node) {
+        let current = node;
+        while (current) {
+            if (current === this) return true;
+            current = current.parentElement || null;
+        }
+        return false;
+    };
     const scrollContainer = {
         scrollTop: 0,
         scrollHeight: 900,
         clientHeight: 300,
+        contains: containsByParent,
         getBoundingClientRect() {
             const top = 100 - (this.scrollTop / 10);
             const bottom = top + 300;
@@ -1306,14 +1452,19 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
             return { top: 250, bottom: 280, left: 160, right: 196, width: 36, height: 30 };
         },
     };
+    const row = { parentElement: scrollContainer };
+    anchor.parentElement = row;
     const dropdown = {
         scrollTop: 0,
+        scrollHeight: 900,
+        clientHeight: 300,
         style: makeStyleBag(),
+        contains: containsByParent,
         classList: {
             contains() { return false; },
         },
         getBoundingClientRect() {
-            const top = 100 - (scrollContainer.scrollTop / 10);
+            const top = 100 - (this.scrollTop / 10);
             return { top, bottom: top + 300, left: 0, right: 420, width: 420, height: 300 };
         },
         querySelector(selector) {
@@ -1328,6 +1479,8 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
             return [];
         },
     };
+    scrollContainer.parentElement = dropdown;
+    section.parentElement = dropdown;
     const ctx = {
         inlinePlanDropdown: dropdown,
         modalPlanSectionOpen: true,
@@ -1350,8 +1503,9 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
     try {
         controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
-        assert.equal(section.style.top, '193px');
-        assert.equal(scrollContainer.scrollTop, 48);
+        assert.ok(Number.parseInt(section.style.top, 10) > 0);
+        assert.ok(dropdown.scrollTop > 0);
+        assert.equal(scrollContainer.scrollTop, 0);
         assert.equal(section.style.position, 'absolute');
         assert.equal(section.classList.contains('inline-plan-subsection-above'), false);
         assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);

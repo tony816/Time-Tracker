@@ -704,8 +704,8 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         if (!this.inlinePlanChildPopoverAutoScrolling) {
             this.inlinePlanChildPopoverAutoScrolling = true;
             try {
-                const didScroll = scrollChildPopoverIntoDropdownView(this.inlinePlanDropdown, section, { margin });
-                if (didScroll && typeof this.inlinePlanDropdown.getBoundingClientRect === 'function') {
+                const repositionSectionBelowAnchor = () => {
+                    if (typeof this.inlinePlanDropdown.getBoundingClientRect !== 'function') return;
                     const nextDropdownRect = this.inlinePlanDropdown.getBoundingClientRect();
                     const nextAnchorRect = resolvedAnchor.getBoundingClientRect();
                     if (nextDropdownRect && nextAnchorRect) {
@@ -717,6 +717,15 @@ function positionInlinePlanChildPopover(anchorEl = null) {
                         const nextTop = Math.max(margin, nextTopBelow);
                         section.style.top = `${nextTop}px`;
                     }
+                };
+
+                for (let pass = 0; pass < 2; pass += 1) {
+                    const didScroll = scrollChildPopoverIntoDropdownView(this.inlinePlanDropdown, section, {
+                        margin,
+                        anchorEl: resolvedAnchor,
+                    });
+                    if (!didScroll) break;
+                    repositionSectionBelowAnchor();
                 }
             } finally {
                 this.inlinePlanChildPopoverAutoScrolling = false;
@@ -725,8 +734,85 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
     }
 
-function getInlinePlanDropdownScrollContainer(dropdown) {
+function nodeContains(parent, child) {
+        if (!parent || !child) return false;
+        if (parent === child) return true;
+        if (typeof parent.contains === 'function') {
+            try {
+                return parent.contains(child);
+            } catch (error) {
+                // Fall back to parentElement walking for test doubles.
+            }
+        }
+
+        let current = child;
+        while (current) {
+            if (current === parent) return true;
+            current = current.parentElement || null;
+        }
+        return false;
+    }
+
+function isScrollableDropdownNode(node) {
+        if (!node || typeof node.getBoundingClientRect !== 'function') return false;
+        const style = typeof window !== 'undefined' && window.getComputedStyle
+            ? window.getComputedStyle(node)
+            : null;
+        const overflowY = style ? String(style.overflowY || style.overflow || '') : '';
+        const canScroll = Number(node.scrollHeight) > (Number(node.clientHeight) + 1);
+        return canScroll || /auto|scroll|overlay/.test(overflowY);
+    }
+
+function getScrollableAncestorsWithinDropdown(node, dropdown) {
+        const result = [];
+        let current = node && node.parentElement ? node.parentElement : null;
+
+        while (current && dropdown && nodeContains(dropdown, current)) {
+            if (isScrollableDropdownNode(current)) {
+                result.push(current);
+            }
+
+            if (current === dropdown) break;
+            current = current.parentElement || null;
+        }
+
+        if (dropdown && !result.includes(dropdown)) {
+            result.push(dropdown);
+        }
+
+        return result;
+    }
+
+function getInlinePlanDropdownScrollContainer(dropdown, options = {}) {
         if (!dropdown) return null;
+
+        const anchorEl = options && options.anchorEl ? options.anchorEl : null;
+        const popover = options && options.popover ? options.popover : null;
+        if (anchorEl) {
+            const ancestors = getScrollableAncestorsWithinDropdown(anchorEl, dropdown);
+            const sharedScrollContainer = ancestors.find((node) => (
+                node === dropdown
+                || !popover
+                || nodeContains(node, popover)
+            ) && isScrollableDropdownNode(node));
+            if (sharedScrollContainer) return sharedScrollContainer;
+
+            if (isScrollableDropdownNode(dropdown)) return dropdown;
+
+            const fallbackBoard = typeof dropdown.querySelector === 'function'
+                ? dropdown.querySelector('.activity-chip-board')
+                : null;
+            if (
+                fallbackBoard
+                && nodeContains(fallbackBoard, anchorEl)
+                && (!popover || nodeContains(fallbackBoard, popover))
+                && isScrollableDropdownNode(fallbackBoard)
+            ) {
+                return fallbackBoard;
+            }
+
+            return dropdown;
+        }
 
         const candidates = [
             typeof dropdown.querySelector === 'function' ? dropdown.querySelector('.inline-plan-dropdown-content') : null,
@@ -734,41 +820,47 @@ function getInlinePlanDropdownScrollContainer(dropdown) {
             dropdown,
         ].filter(Boolean);
 
-        return candidates.find((node) => {
-            if (!node || typeof node.getBoundingClientRect !== 'function') return false;
-            const style = typeof window !== 'undefined' && window.getComputedStyle
-                ? window.getComputedStyle(node)
-                : null;
-            const overflowY = style ? String(style.overflowY || style.overflow || '') : '';
-            const canScroll = Number(node.scrollHeight) > (Number(node.clientHeight) + 1);
-            return canScroll || /auto|scroll|overlay/.test(overflowY);
-        }) || dropdown;
+        return candidates.find((node) => isScrollableDropdownNode(node)) || dropdown;
     }
 
 function scrollChildPopoverIntoDropdownView(dropdown, popover, options = {}) {
         if (!dropdown || !popover) return false;
         if (typeof popover.getBoundingClientRect !== 'function') return false;
 
-        const scrollContainer = getInlinePlanDropdownScrollContainer(dropdown);
+        const scrollContainer = getInlinePlanDropdownScrollContainer(dropdown, {
+            anchorEl: options.anchorEl || null,
+            popover,
+        });
         if (!scrollContainer || typeof scrollContainer.getBoundingClientRect !== 'function') return false;
 
         const margin = Number.isFinite(options.margin) ? options.margin : 8;
 
-        const containerRect = scrollContainer.getBoundingClientRect();
+        const scrollRect = scrollContainer.getBoundingClientRect();
+        const dropdownRect = typeof dropdown.getBoundingClientRect === 'function'
+            ? dropdown.getBoundingClientRect()
+            : scrollRect;
         const popoverRect = popover.getBoundingClientRect();
 
-        if (!containerRect || !popoverRect) return false;
+        if (!scrollRect || !dropdownRect || !popoverRect) return false;
 
         let delta = 0;
+        const visibleTop = Math.max(
+            Number.isFinite(scrollRect.top) ? scrollRect.top : 0,
+            Number.isFinite(dropdownRect.top) ? dropdownRect.top : 0
+        ) + margin;
+        const visibleBottom = Math.min(
+            Number.isFinite(scrollRect.bottom) ? scrollRect.bottom : 0,
+            Number.isFinite(dropdownRect.bottom) ? dropdownRect.bottom : 0
+        ) - margin;
 
-        const bottomOverflow = popoverRect.bottom - (containerRect.bottom - margin);
+        const bottomOverflow = popoverRect.bottom - visibleBottom;
         if (bottomOverflow > 0) {
             delta = bottomOverflow;
-        }
-
-        const topOverflow = (containerRect.top + margin) - popoverRect.top;
-        if (topOverflow > 0) {
-            delta = -topOverflow;
+        } else {
+            const topOverflow = visibleTop - popoverRect.top;
+            if (topOverflow > 0) {
+                delta = -topOverflow;
+            }
         }
 
         if (Math.abs(delta) < 1) return false;
