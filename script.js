@@ -3572,6 +3572,90 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+
+    findPlannedCatalogItemByLabel(label) {
+        const normalized = this.normalizeActivityText ? this.normalizeActivityText(label || '') : String(label || '').trim();
+        if (!normalized) return null;
+        return (this.plannedActivities || []).find((item) => {
+            const itemLabel = this.normalizeActivityText
+                ? this.normalizeActivityText(item && (item.label || item.name || item.title) || '')
+                : String(item && (item.label || item.name || item.title) || '').trim();
+            return itemLabel === normalized;
+        }) || null;
+    }
+
+    updatePlanSegmentTitle(baseIndex, activityIndex, nextLabel) {
+        if (!Number.isInteger(baseIndex) || !this.timeSlots || !this.timeSlots[baseIndex]) return false;
+        if (!Number.isInteger(activityIndex) || activityIndex < 0) return false;
+        const normalized = this.normalizeActivityText ? this.normalizeActivityText(nextLabel || '') : String(nextLabel || '').trim();
+        if (!normalized) return false;
+        const slot = this.timeSlots[baseIndex];
+        const activities = this.normalizePlanActivitiesArray(slot.planActivities)
+            .filter((item) => item && item.kind !== 'virtual-rest')
+            .map((item) => ({ ...item }));
+        const item = activities[activityIndex];
+        if (!item) return false;
+        const catalogItem = this.findPlannedCatalogItemByLabel(normalized);
+        const parentItem = catalogItem && catalogItem.parentId
+            ? (this.plannedActivities || []).find((entry) => String(entry && entry.id || '').trim() === String(catalogItem.parentId || '').trim())
+            : null;
+        activities[activityIndex] = {
+            ...item,
+            label: normalized,
+            activityText: normalized,
+            activityId: catalogItem ? (String(catalogItem.id || '').trim() || null) : null,
+            titleActivityId: parentItem ? (String(parentItem.id || '').trim() || null) : null,
+            titleText: parentItem ? (this.normalizeActivityText ? this.normalizeActivityText(parentItem.label || parentItem.name || '') : String(parentItem.label || parentItem.name || '').trim()) : null,
+        };
+        slot.planActivities = activities;
+        slot.planned = activities.map((entry) => entry.label).filter(Boolean).join(' · ');
+        const firstTitle = activities.find((entry) => entry && entry.titleText);
+        slot.planTitle = firstTitle ? firstTitle.titleText : '';
+        slot.planTitleBandOn = Boolean(slot.planTitle);
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
+
+    beginPlanSegmentTitleEdit(labelEl, baseIndex, activityIndex) {
+        if (!labelEl || !labelEl.parentNode) return false;
+        const previous = this.normalizeActivityText ? this.normalizeActivityText(labelEl.textContent || '') : String(labelEl.textContent || '').trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'plan-segment-title-editor';
+        input.value = previous;
+        input.setAttribute('aria-label', '계획 세그먼트 제목 편집');
+        labelEl.replaceWith(input);
+        let done = false;
+        const finish = (mode) => {
+            if (done) return;
+            done = true;
+            const nextValue = mode === 'cancel' ? previous : (this.normalizeActivityText ? this.normalizeActivityText(input.value || '') : String(input.value || '').trim());
+            const finalValue = nextValue || previous;
+            const replacement = document.createElement('span');
+            replacement.className = 'plan-segment-graphic-label';
+            replacement.title = finalValue;
+            replacement.textContent = finalValue;
+            input.replaceWith(replacement);
+            if (mode !== 'cancel' && finalValue !== previous) {
+                this.updatePlanSegmentTitle(baseIndex, activityIndex, finalValue);
+            }
+        };
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.isComposing) {
+                event.preventDefault();
+                finish('save');
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                finish('cancel');
+            }
+        });
+        input.addEventListener('blur', () => finish('save'));
+        if (typeof input.focus === 'function') input.focus();
+        if (typeof input.select === 'function') input.select();
+        return true;
+    }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {

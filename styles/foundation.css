@@ -347,6 +347,22 @@ html.actual-recording-disabled .split-grid-segment.is-virtual-rest-gap {
   align-self: center;
 }
 
+.plan-segment-title-editor {
+  min-width: 0;
+  width: calc(100% - 8px);
+  justify-self: center;
+  align-self: center;
+  border: 1px solid rgba(15, 23, 42, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 2px 4px;
+}
+
 .plan-segment-timer-button {
   align-self: stretch;
   border: 0;

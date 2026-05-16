@@ -842,8 +842,20 @@ function attachTimerListeners(entryDiv, index) {
 
     const planSegmentGraphics = entryDiv.querySelectorAll('.plan-segment-graphic');
     planSegmentGraphics.forEach((graphic) => {
+        const label = graphic.querySelector && graphic.querySelector('.plan-segment-graphic-label');
+        if (label) {
+            label.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const baseIndex = parseInt(graphic.dataset.index, 10);
+                const activityIndex = parseInt(graphic.dataset.activityIndex, 10);
+                if (typeof this.beginPlanSegmentTitleEdit === 'function') {
+                    this.beginPlanSegmentTitleEdit(label, baseIndex, activityIndex);
+                }
+            });
+        }
         graphic.addEventListener('click', (e) => {
-            if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button')) return;
+            if (e.target && e.target.closest && e.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-graphic-label')) return;
             e.preventDefault();
             e.stopPropagation();
             const baseIndex = parseInt(graphic.dataset.index, 10);

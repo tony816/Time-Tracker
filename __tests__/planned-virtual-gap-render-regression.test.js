@@ -17,6 +17,14 @@ const resizePlanActivitySegment = buildMethod(
     'resizePlanActivitySegment(baseIndex, activityIndex, edge, deltaMinutes)',
     '(baseIndex, activityIndex, edge, deltaMinutes)'
 );
+const updatePlanSegmentTitle = buildMethod(
+    'updatePlanSegmentTitle(baseIndex, activityIndex, nextLabel)',
+    '(baseIndex, activityIndex, nextLabel)'
+);
+const beginPlanSegmentTitleEdit = buildMethod(
+    'beginPlanSegmentTitleEdit(labelEl, baseIndex, activityIndex)',
+    '(labelEl, baseIndex, activityIndex)'
+);
 
 test('plan-only empty slot renders a calculated virtual rest gap', () => {
     const ctx = {
@@ -190,4 +198,96 @@ test('resize expansion is blocked by adjacent real segments and running timers',
     ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].running = false;
     assert.equal(resizePlanActivitySegment.call(ctx, 0, 0, 'right', 20), false);
     assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 30);
+});
+
+test('inline title update matches catalog child metadata without renaming catalog entries', () => {
+    const catalog = [
+        { id: 'work', label: 'Work' },
+        { id: 'focus', label: 'Focus', parentId: 'work' },
+    ];
+    const ctx = {
+        plannedActivities: catalog.map((item) => ({ ...item })),
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', seconds: 1800, startMinute: 0, durationMinutes: 30 }] }],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizePlanActivitiesArray(value) {
+            return require('../core/activity-core').normalizePlanActivitiesArray(value);
+        },
+        findPlannedCatalogItemByLabel(label) {
+            const normalized = this.normalizeActivityText(label);
+            return this.plannedActivities.find((item) => this.normalizeActivityText(item.label) === normalized) || null;
+        },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    assert.equal(updatePlanSegmentTitle.call(ctx, 0, 0, 'Focus'), true);
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, 'Focus');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityId, 'focus');
+    assert.equal(ctx.timeSlots[0].planActivities[0].titleActivityId, 'work');
+    assert.equal(ctx.timeSlots[0].planActivities[0].titleText, 'Work');
+    assert.deepEqual(ctx.plannedActivities, catalog);
+});
+
+test('inline title editor saves on Enter, cancels on Escape, and preserves empty values', () => {
+    const originalDocument = globalThis.document;
+    const events = {};
+    let replacement = null;
+    const labelEl = {
+        textContent: 'Old',
+        parentNode: {},
+        replaceWith(node) {
+            replacement = node;
+        },
+    };
+    const ctx = {
+        updates: [],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        updatePlanSegmentTitle(baseIndex, activityIndex, value) {
+            this.updates.push({ baseIndex, activityIndex, value });
+        },
+    };
+    globalThis.document = {
+        createElement(tag) {
+            return {
+                tag,
+                value: '',
+                className: '',
+                textContent: '',
+                title: '',
+                setAttribute() {},
+                addEventListener(type, handler) {
+                    events[type] = handler;
+                },
+                replaceWith(node) {
+                    replacement = node;
+                },
+                focus() {},
+                select() {},
+            };
+        },
+    };
+
+    try {
+        assert.equal(beginPlanSegmentTitleEdit.call(ctx, labelEl, 0, 0), true);
+        replacement.value = 'New';
+        events.keydown({ key: 'Enter', isComposing: false, preventDefault() {} });
+        assert.deepEqual(ctx.updates, [{ baseIndex: 0, activityIndex: 0, value: 'New' }]);
+
+        beginPlanSegmentTitleEdit.call(ctx, labelEl, 0, 0);
+        replacement.value = 'Cancelled';
+        events.keydown({ key: 'Escape', preventDefault() {} });
+        assert.equal(ctx.updates.length, 1);
+
+        beginPlanSegmentTitleEdit.call(ctx, labelEl, 0, 0);
+        replacement.value = '   ';
+        events.blur();
+        assert.equal(ctx.updates.length, 1);
+    } finally {
+        globalThis.document = originalDocument;
+    }
 });
