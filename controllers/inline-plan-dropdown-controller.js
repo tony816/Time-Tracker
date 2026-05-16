@@ -589,6 +589,8 @@ function positionInlinePlanChildPopover(anchorEl = null) {
                 this.inlinePlanDropdown.classList.remove('inline-plan-child-popover-open');
             }
             this.inlinePlanChildPopoverAnchorEl = null;
+            this.inlinePlanChildPopoverAnchorSectionKey = null;
+            this.inlinePlanChildPopoverAnchorInstanceKey = null;
             return;
         }
         if (typeof this.inlinePlanDropdown.getBoundingClientRect !== 'function') return;
@@ -717,10 +719,42 @@ function getOpenParentCaretAnchor() {
         if (!parentId) return null;
         const dropdown = this.inlinePlanDropdown;
         if (typeof dropdown.querySelectorAll !== 'function') return null;
-        const chips = Array.from(dropdown.querySelectorAll('.activity-chip[data-activity-id]'));
-        const chip = chips.find((node) => node && node.dataset && String(node.dataset.activityId || '').trim() === parentId);
-        if (!chip || typeof chip.querySelector !== 'function') return null;
-        return chip.querySelector('.activity-chip-caret') || null;
+        const carets = Array.from(dropdown.querySelectorAll('.activity-chip-caret[data-activity-id]'));
+
+        const instanceKey = String(this.inlinePlanChildPopoverAnchorInstanceKey || '').trim();
+        if (instanceKey) {
+            const exactInstance = carets.find((node) =>
+                node
+                && node.dataset
+                && String(node.dataset.chipInstanceKey || '').trim() === instanceKey
+            );
+            if (exactInstance) return exactInstance;
+        }
+
+        const sectionKey = String(this.inlinePlanChildPopoverAnchorSectionKey || '').trim();
+        if (sectionKey) {
+            const exactSection = carets.find((node) =>
+                node
+                && node.dataset
+                && String(node.dataset.activityId || '').trim() === parentId
+                && String(node.dataset.boardSection || '').trim() === sectionKey
+            );
+            if (exactSection) return exactSection;
+        }
+
+        if (
+            this.inlinePlanChildPopoverAnchorEl
+            && this.inlinePlanChildPopoverAnchorEl.isConnected
+            && typeof this.inlinePlanChildPopoverAnchorEl.getBoundingClientRect === 'function'
+        ) {
+            return this.inlinePlanChildPopoverAnchorEl;
+        }
+
+        return carets.find((node) =>
+            node
+            && node.dataset
+            && String(node.dataset.activityId || '').trim() === parentId
+        ) || null;
     }
 
 function hasActivityUsageHistory(item) {
@@ -882,7 +916,7 @@ function renderInlinePlanDropdownOptions() {
             all: topLevelItems,
         };
 
-        const renderChip = (item) => {
+        const renderChip = (item, sectionKey = '') => {
             const label = getCatalogItemLabel.call(this, item);
             if (!label) return null;
             const canOpenChildBoard = !item.parentId;
@@ -893,7 +927,11 @@ function renderInlinePlanDropdownOptions() {
             chip.className = `activity-chip${canOpenChildBoard ? ' activity-chip-parent activity-chip-split' : ''}`;
             chip.dataset.label = label;
             const itemId = String(item.id || '').trim();
+            const normalizedSectionKey = String(sectionKey || 'unknown').trim() || 'unknown';
+            const chipInstanceKey = `${normalizedSectionKey}::${itemId}`;
             chip.dataset.activityId = itemId;
+            chip.dataset.boardSection = normalizedSectionKey;
+            chip.dataset.chipInstanceKey = chipInstanceKey;
             if (canOpenChildBoard) chip.dataset.parentId = itemId;
             const currentOpenParentId = String(this.modalPlanSectionOpenParentId || '').trim();
             const isOpenParent = canOpenChildBoard && this.modalPlanSectionOpen && currentOpenParentId === itemId;
@@ -921,6 +959,8 @@ function renderInlinePlanDropdownOptions() {
                 caret.type = 'button';
                 caret.className = 'activity-chip-caret';
                 caret.dataset.activityId = itemId;
+                caret.dataset.boardSection = normalizedSectionKey;
+                caret.dataset.chipInstanceKey = chipInstanceKey;
                 caret.innerHTML = `
                     <svg
                         viewBox="0 0 20 20"
@@ -945,10 +985,21 @@ function renderInlinePlanDropdownOptions() {
                     event.stopPropagation();
                     const parentId = String(item.id || '').trim();
                     const currentlyOpenParentId = String(this.modalPlanSectionOpenParentId || '').trim();
-                    if (this.modalPlanSectionOpen && currentlyOpenParentId === parentId) {
+                    const clickedInstanceKey = String(caret.dataset.chipInstanceKey || '').trim();
+                    const openInstanceKey = String(this.inlinePlanChildPopoverAnchorInstanceKey || '').trim();
+                    if (
+                        this.modalPlanSectionOpen
+                        && currentlyOpenParentId === parentId
+                        && openInstanceKey
+                        && clickedInstanceKey
+                        && openInstanceKey === clickedInstanceKey
+                    ) {
                         this.closePlanActivityChildMenu();
                         return;
                     }
+                    this.inlinePlanChildPopoverAnchorEl = caret;
+                    this.inlinePlanChildPopoverAnchorSectionKey = caret.dataset.boardSection || '';
+                    this.inlinePlanChildPopoverAnchorInstanceKey = caret.dataset.chipInstanceKey || '';
                     this.openPlanActivityChildMenu(item, caret, childItemsForParent);
                 });
                 chip.appendChild(caret);
@@ -957,7 +1008,7 @@ function renderInlinePlanDropdownOptions() {
             return chip;
         };
 
-        const renderSearchChip = (entry) => {
+        const renderSearchChip = (entry, sectionKey = '') => {
             if (!entry || !entry.item) return null;
             const item = entry.item;
             const parent = entry.parent || null;
@@ -966,6 +1017,11 @@ function renderInlinePlanDropdownOptions() {
             const chip = document.createElement('span');
             chip.className = 'activity-chip';
             chip.dataset.label = label;
+            const itemId = String(item.id || '').trim();
+            const normalizedSectionKey = String(sectionKey || 'unknown').trim() || 'unknown';
+            chip.dataset.activityId = itemId;
+            chip.dataset.boardSection = normalizedSectionKey;
+            chip.dataset.chipInstanceKey = `${normalizedSectionKey}::${itemId}`;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'activity-chip-main';
@@ -1007,7 +1063,7 @@ function renderInlinePlanDropdownOptions() {
             const row = document.createElement('div');
             row.className = 'activity-chip-row';
             items.forEach((item) => {
-                const chip = section.key === 'search' ? renderSearchChip(item) : renderChip(item);
+                const chip = section.key === 'search' ? renderSearchChip(item, section.key) : renderChip(item, section.key);
                 if (chip) row.appendChild(chip);
             });
             wrap.appendChild(row);
@@ -1030,7 +1086,13 @@ function createChildActivityForParent(parentItem, rawName) {
         const normalizedName = this.normalizeActivityText ? this.normalizeActivityText(rawName) : String(rawName || '').trim();
         if (!normalizedName) return { status: 'empty' };
 
-        const parentId = String(parentItem && parentItem.id ? parentItem.id : '').trim() || null;
+        const parentId = String(parentItem && parentItem.id ? parentItem.id : '').trim();
+        if (!parentId) {
+            this.inlineChildComposerError = '부모 활동을 찾을 수 없습니다.';
+            this.inlineChildComposerHighlightId = null;
+            this.inlineChildComposerHighlightKind = null;
+            return { status: 'invalid-parent' };
+        }
         const currentItems = Array.isArray(this.plannedActivities) ? this.plannedActivities : [];
         const existing = currentItems.find((item) => {
             if (!item || String(item.parentId || '').trim() !== parentId) return false;
@@ -1045,7 +1107,7 @@ function createChildActivityForParent(parentItem, rawName) {
         }
 
         const child = {
-            id: `${parentId || 'activity'}_${Date.now()}`,
+            id: `${parentId}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
             name: normalizedName,
             label: normalizedName,
             title: normalizedName,
@@ -1103,6 +1165,8 @@ function closePlanActivityChildMenu(options = {}) {
         this.inlineChildComposerValue = '';
         this.inlineChildComposerFocusPending = false;
         this.inlinePlanChildPopoverAnchorEl = null;
+        this.inlinePlanChildPopoverAnchorSectionKey = null;
+        this.inlinePlanChildPopoverAnchorInstanceKey = null;
 
         if (options.rerender !== false && typeof this.renderInlinePlanDropdownOptions === 'function') {
             this.renderInlinePlanDropdownOptions();
@@ -1125,6 +1189,8 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         if (!section || !board || !actions) return;
 
         const parentLabel = getCatalogItemLabel.call(this, parentItem);
+        const parentId = String(parentItem.id || '').trim();
+        if (!parentId) return;
         section.hidden = false;
         if (section.style) section.style.visibility = 'visible';
         if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.add === 'function') {
@@ -1132,9 +1198,12 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         }
         if (!section.id) section.id = 'inline-plan-subsection';
         this.modalPlanSectionOpen = true;
-        const parentId = String(parentItem.id || '').trim() || null;
         this.modalPlanSectionOpenParentId = parentId;
         this.inlinePlanChildPopoverAnchorEl = anchorEl || null;
+        if (anchorEl && anchorEl.dataset) {
+            this.inlinePlanChildPopoverAnchorSectionKey = anchorEl.dataset.boardSection || this.inlinePlanChildPopoverAnchorSectionKey || '';
+            this.inlinePlanChildPopoverAnchorInstanceKey = anchorEl.dataset.chipInstanceKey || this.inlinePlanChildPopoverAnchorInstanceKey || '';
+        }
         const composerOpenParentId = String(this.inlineChildComposerOpenParentId || '').trim();
         if (composerOpenParentId && composerOpenParentId !== parentId) {
             this.inlineChildComposerError = '';
@@ -1256,7 +1325,10 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
                     return;
                 }
                 this.inlineChildComposerFocusPending = true;
-                const nextChildren = (this.plannedActivities || []).filter((item) => item && String(item.parentId || '').trim() === parentId);
+                const activeParentId = String(parentItem && parentItem.id ? parentItem.id : '').trim();
+                const nextChildren = (this.plannedActivities || []).filter((item) =>
+                    item && String(item.parentId || '').trim() === activeParentId
+                );
                 this.openPlanActivityChildMenu(parentItem, anchorEl, nextChildren);
             };
 
@@ -1349,6 +1421,10 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const freshAnchor = getOpenParentCaretAnchor.call(this) || anchorEl || null;
         if (freshAnchor) {
             this.inlinePlanChildPopoverAnchorEl = freshAnchor;
+            if (freshAnchor.dataset) {
+                this.inlinePlanChildPopoverAnchorSectionKey = freshAnchor.dataset.boardSection || this.inlinePlanChildPopoverAnchorSectionKey || '';
+                this.inlinePlanChildPopoverAnchorInstanceKey = freshAnchor.dataset.chipInstanceKey || this.inlinePlanChildPopoverAnchorInstanceKey || '';
+            }
         }
 
         const targetAnchor = getInlinePlanAnchorState.call(this);
@@ -1726,6 +1802,8 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
         this.inlinePlanChildPopoverAnchorEl = null;
+        this.inlinePlanChildPopoverAnchorSectionKey = null;
+        this.inlinePlanChildPopoverAnchorInstanceKey = null;
         this.inlineChildComposerOpenParentId = null;
         this.inlineChildComposerError = '';
         this.inlineChildComposerHighlightId = null;
@@ -1755,6 +1833,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
             inlineBack.addEventListener('click', () => {
                 if (subSection) subSection.hidden = true;
                 this.modalPlanSectionOpen = false;
+                this.modalPlanSectionOpenParentId = null;
+                this.inlinePlanChildPopoverAnchorEl = null;
+                this.inlinePlanChildPopoverAnchorSectionKey = null;
+                this.inlinePlanChildPopoverAnchorInstanceKey = null;
             });
         }
 
@@ -1941,6 +2023,8 @@ function closeInlinePlanDropdown() {
         this.inlineChildComposerValue = '';
         this.inlineChildComposerFocusPending = false;
         this.inlinePlanChildPopoverAnchorEl = null;
+        this.inlinePlanChildPopoverAnchorSectionKey = null;
+        this.inlinePlanChildPopoverAnchorInstanceKey = null;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }
@@ -2004,9 +2088,11 @@ function applyInlinePlanSelection(label, options = {}) {
         isInlinePlanInputFocused,
         markInlinePlanInputIntent,
         hasRecentInlinePlanInputIntent,
+        getOpenParentCaretAnchor,
         positionInlinePlanDropdown,
         positionInlinePlanChildPopover,
         renderInlinePlanDropdownOptions,
+        createChildActivityForParent,
         touchPlannedActivityUsage,
         groupActivityBoard,
         closePlanActivityChildMenu,

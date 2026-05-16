@@ -1113,16 +1113,10 @@ test('positionInlinePlanChildPopover re-resolves the active caret after rerender
         },
     };
     const freshCaret = {
+        dataset: { activityId: 'work', boardSection: 'parents', chipInstanceKey: 'parents::work' },
         isConnected: true,
         getBoundingClientRect() {
             return { left: 160, top: 98, right: 196, bottom: 128, width: 36, height: 30 };
-        },
-    };
-    const freshChip = {
-        dataset: { activityId: 'work' },
-        querySelector(selector) {
-            if (selector === '.activity-chip-caret') return freshCaret;
-            return null;
         },
     };
     const staleAnchor = {
@@ -1146,7 +1140,7 @@ test('positionInlinePlanChildPopover re-resolves the active caret after rerender
             return null;
         },
         querySelectorAll(selector) {
-            if (selector === '.activity-chip[data-activity-id]') return [freshChip];
+            if (selector === '.activity-chip-caret[data-activity-id]') return [freshCaret];
             return [];
         },
     };
@@ -1364,6 +1358,204 @@ test('caret toggles child board open, close, and switch parent', () => {
     }
 });
 
+test('caret anchor follows the exact rendered parent instance across sections', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        const listeners = {};
+        const attributes = {};
+        const node = {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            textContent: '',
+            title: '',
+            type: '',
+            appendChild(child) {
+                this.children.push(child);
+                return child;
+            },
+            addEventListener(type, handler) {
+                listeners[type] = handler;
+            },
+            dispatchEvent(event) {
+                if (listeners[event.type]) listeners[event.type](event);
+            },
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
+            classList: {
+                owner: null,
+                add(...classes) {
+                    const target = this.owner;
+                    if (!target) return;
+                    classes.forEach((cls) => {
+                        if (!cls) return;
+                        const tokens = target.className.split(/\s+/).filter(Boolean);
+                        if (!tokens.includes(cls)) {
+                            target.className = (target.className ? `${target.className} ` : '') + cls;
+                        }
+                    });
+                },
+                remove(...classes) {
+                    const target = this.owner;
+                    if (!target) return;
+                    const tokens = target.className.split(/\s+/).filter(Boolean);
+                    target.className = tokens.filter((token) => !classes.includes(token)).join(' ');
+                },
+                contains(cls) {
+                    const target = this.owner;
+                    if (!target) return false;
+                    return target.className.split(/\s+/).filter(Boolean).includes(cls);
+                },
+            },
+        };
+        node.classList.owner = node;
+        return node;
+    };
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const searchInput = { value: '' };
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+        querySelectorAll(selector) {
+            if (selector !== '.activity-chip-caret[data-activity-id]') return [];
+            const matches = [];
+            const visit = (node) => {
+                if (!node) return;
+                const className = String(node.className || '');
+                const hasCaretClass = className.split(/\s+/).includes('activity-chip-caret');
+                if (hasCaretClass && node.dataset && String(node.dataset.activityId || '').trim()) {
+                    matches.push(node);
+                }
+                Array.from(node.children || []).forEach(visit);
+            };
+            board.children.forEach(visit);
+            return matches;
+        },
+    };
+    const recentCaretClicks = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        plannedActivities: [
+            {
+                id: 'reading',
+                name: 'Reading',
+                label: 'Reading',
+                normalizedName: 'Reading',
+                parentId: null,
+                usageCount: 3,
+                lastUsedAt: '2026-05-16T00:00:00.000Z',
+            },
+            {
+                id: 'exercise',
+                name: 'Exercise',
+                label: 'Exercise',
+                normalizedName: 'Exercise',
+                parentId: null,
+            },
+        ],
+        modalPlanSectionOpen: false,
+        modalPlanSectionOpenParentId: null,
+        inlinePlanChildPopoverAnchorEl: null,
+        inlinePlanChildPopoverAnchorSectionKey: null,
+        inlinePlanChildPopoverAnchorInstanceKey: null,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        positionInlinePlanDropdown() {},
+        openPlanActivityChildMenu(parentItem, anchorEl, children) {
+            this.modalPlanSectionOpen = true;
+            this.modalPlanSectionOpenParentId = String(parentItem && parentItem.id ? parentItem.id : '').trim();
+            recentCaretClicks.push({ parentId: parentItem.id, anchorEl, childCount: children.length });
+        },
+        closePlanActivityChildMenu() {
+            this.modalPlanSectionOpen = false;
+            this.modalPlanSectionOpenParentId = null;
+            this.inlinePlanChildPopoverAnchorEl = null;
+            this.inlinePlanChildPopoverAnchorSectionKey = null;
+            this.inlinePlanChildPopoverAnchorInstanceKey = null;
+        },
+    };
+
+    globalThis.document = { createElement: createNode };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+
+        const carets = controller.getOpenParentCaretAnchor
+            ? dropdown.querySelectorAll('.activity-chip-caret[data-activity-id]')
+            : [];
+        const recentReadingCaret = carets.find((node) => String(node.dataset.boardSection || '').trim() === 'recent' && String(node.dataset.activityId || '').trim() === 'reading');
+        const parentsReadingCaret = carets.find((node) => String(node.dataset.boardSection || '').trim() === 'parents' && String(node.dataset.activityId || '').trim() === 'reading');
+
+        assert.ok(recentReadingCaret);
+        assert.ok(parentsReadingCaret);
+
+        recentReadingCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(ctx.modalPlanSectionOpen, true);
+        assert.equal(ctx.modalPlanSectionOpenParentId, 'reading');
+        assert.equal(ctx.inlinePlanChildPopoverAnchorSectionKey, 'recent');
+        assert.equal(ctx.inlinePlanChildPopoverAnchorInstanceKey, 'recent::reading');
+        assert.equal(controller.getOpenParentCaretAnchor.call(ctx), recentReadingCaret);
+
+        parentsReadingCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(ctx.modalPlanSectionOpen, true);
+        assert.equal(ctx.modalPlanSectionOpenParentId, 'reading');
+        assert.equal(ctx.inlinePlanChildPopoverAnchorSectionKey, 'parents');
+        assert.equal(ctx.inlinePlanChildPopoverAnchorInstanceKey, 'parents::reading');
+        assert.equal(controller.getOpenParentCaretAnchor.call(ctx), parentsReadingCaret);
+        assert.equal(recentCaretClicks.length, 2);
+
+        parentsReadingCaret.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(ctx.modalPlanSectionOpen, false);
+        assert.equal(ctx.modalPlanSectionOpenParentId, null);
+        assert.equal(ctx.inlinePlanChildPopoverAnchorSectionKey, null);
+        assert.equal(ctx.inlinePlanChildPopoverAnchorInstanceKey, null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('inline child composer creates children, blocks duplicates, and allows same child name under another parent', () => {
     const originalDocument = globalThis.document;
     const originalRAF = globalThis.requestAnimationFrame;
@@ -1497,6 +1689,7 @@ test('inline child composer creates children, blocks duplicates, and allows same
 
         let exerciseChildren = ctx.plannedActivities.filter((item) => item.parentId === 'exercise');
         assert.equal(exerciseChildren.length, 1);
+        assert.equal(exerciseChildren[0].parentId, 'exercise');
         assert.equal(exerciseChildren[0].label, '스쿼트');
         assert.equal(exerciseChildren[0].source, 'local');
         assert.equal(exerciseChildren[0].usageCount, 0);
@@ -1563,12 +1756,54 @@ test('inline child composer creates children, blocks duplicates, and allows same
 
         const studyChildren = ctx.plannedActivities.filter((item) => item.parentId === 'study');
         assert.equal(studyChildren.length, 1);
+        assert.equal(studyChildren[0].parentId, 'study');
         assert.equal(studyChildren[0].label, '스쿼트');
         assert.equal(saveCalls.length, 3);
     } finally {
         globalThis.document = originalDocument;
         globalThis.requestAnimationFrame = originalRAF;
     }
+});
+
+test('createChildActivityForParent scopes children to one parent and rejects missing parents', () => {
+    const ctx = {
+        plannedActivities: [
+            { id: 'reading', label: 'Reading', name: 'Reading', normalizedName: 'Reading', parentId: null },
+            { id: 'exercise', label: 'Exercise', name: 'Exercise', normalizedName: 'Exercise', parentId: null },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() {},
+        inlineChildComposerError: '',
+        inlineChildComposerHighlightId: null,
+        inlineChildComposerHighlightKind: null,
+    };
+
+    const first = controller.createChildActivityForParent.call(ctx, ctx.plannedActivities[0], '333');
+    assert.equal(first.status, 'created');
+    assert.ok(ctx.plannedActivities.some((item) => item.label === '333' && item.parentId === 'reading'));
+    assert.equal(ctx.plannedActivities.some((item) => item.label === '333' && item.parentId === 'exercise'), false);
+
+    const second = controller.createChildActivityForParent.call(ctx, ctx.plannedActivities[1], '333');
+    assert.equal(second.status, 'created');
+
+    const children333 = ctx.plannedActivities.filter((item) => item.label === '333');
+    assert.equal(children333.length, 2);
+    assert.ok(children333.some((item) => item.parentId === 'reading'));
+    assert.ok(children333.some((item) => item.parentId === 'exercise'));
+
+    const duplicate = controller.createChildActivityForParent.call(ctx, ctx.plannedActivities[0], '333');
+    assert.equal(duplicate.status, 'duplicate');
+    assert.equal(ctx.plannedActivities.filter((item) => item.label === '333').length, 2);
+    assert.equal(ctx.inlineChildComposerHighlightId, duplicate.item.id);
+    assert.equal(ctx.inlineChildComposerHighlightKind, 'duplicate');
+
+    const invalid = controller.createChildActivityForParent.call(ctx, { label: 'Missing id' }, '333');
+    assert.equal(invalid.status, 'invalid-parent');
+    assert.equal(ctx.inlineChildComposerError, '부모 활동을 찾을 수 없습니다.');
+    assert.equal(ctx.plannedActivities.filter((item) => item.label === '333').length, 2);
 });
 
 test('inline child composer can be cancelled with button or Escape', () => {

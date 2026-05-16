@@ -69,6 +69,8 @@ class TimeTracker {
         this.inlinePlanInputIntentUntil = 0;
         this.inlinePlanContext = null;
         this.inlinePlanChildPopoverAnchorEl = null;
+        this.inlinePlanChildPopoverAnchorSectionKey = null;
+        this.inlinePlanChildPopoverAnchorInstanceKey = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
         this.inlinePriorityMenuOutsideHandler = null;
