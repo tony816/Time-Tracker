@@ -1385,6 +1385,8 @@ test('scrollChildPopoverIntoDropdownView reveals child composer within dropdown 
 test('positionInlinePlanChildPopover keeps the popover below the caret and auto-scrolls into view without flipping', () => {
     const originalDocument = globalThis.document;
     const originalRAF = globalThis.requestAnimationFrame;
+    let sectionTopWriteCount = 0;
+    let sectionTopValue = '';
     const makeStyleBag = () => ({
         setProperty(name, value) {
             this[name] = String(value);
@@ -1393,10 +1395,24 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
             delete this[name];
         },
     });
+    const makeSectionStyleBag = () => {
+        const style = makeStyleBag();
+        Object.defineProperty(style, 'top', {
+            get() {
+                return sectionTopValue;
+            },
+            set(value) {
+                sectionTopWriteCount += 1;
+                sectionTopValue = String(value);
+            },
+            configurable: true,
+        });
+        return style;
+    };
     const section = {
         hidden: false,
         className: '',
-        style: makeStyleBag(),
+        style: makeSectionStyleBag(),
         classList: {
             owner: null,
             add(...classes) {
@@ -1503,7 +1519,8 @@ test('positionInlinePlanChildPopover keeps the popover below the caret and auto-
     try {
         controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
-        assert.ok(Number.parseInt(section.style.top, 10) > 0);
+        assert.equal(section.style.top, '188px');
+        assert.equal(sectionTopWriteCount, 1);
         assert.ok(dropdown.scrollTop > 0);
         assert.equal(scrollContainer.scrollTop, 0);
         assert.equal(section.style.position, 'absolute');
