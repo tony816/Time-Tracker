@@ -160,3 +160,46 @@ test('buildSplitVisualization renders parent title above child activity inside p
     assert.match(html, /has-segment-title/);
     assert.doesNotMatch(html, /split-title-band/);
 });
+
+test('buildSplitVisualization renders virtual rest gaps without timer controls', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 5);
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        id: 'virtual-rest-300-360',
+                        label: '휴식',
+                        span: 6,
+                        virtualRest: true,
+                        startMinute: 300,
+                        durationMinutes: 60,
+                        connectTop: false,
+                        connectBottom: false,
+                    },
+                ],
+            };
+        },
+        escapeHtml(value) {
+            return String(value);
+        },
+        escapeAttribute(value) {
+            return String(value);
+        },
+        getSplitColor() {
+            return '#abcdef';
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 5);
+
+    assert.match(html, /is-virtual-rest-gap/);
+    assert.match(html, /class="plan-rest-gap"/);
+    assert.match(html, /data-start-minute="300"/);
+    assert.match(html, /data-duration-minutes="60"/);
+    assert.doesNotMatch(html, /plan-segment-timer-button/);
+    assert.doesNotMatch(html, /has-plan-segment-timer/);
+});

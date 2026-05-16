@@ -222,8 +222,10 @@ function buildSplitVisualization(type, index) {
                 let labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
-                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label) ? ' has-plan-segment-timer' : '';
-                if (!isActual && this.actualRecordingDisabled && segment.label) {
+                const isVirtualRest = Boolean(!isActual && segment.virtualRest);
+                const virtualRestClass = isVirtualRest ? ' is-virtual-rest-gap' : '';
+                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) ? ' has-plan-segment-timer' : '';
+                if (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) {
                     const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                     const segmentIndex = labeledSegmentCount > 1 ? idx : null;
                     const segmentId = this.getPlanSegmentId
@@ -265,6 +267,19 @@ function buildSplitVisualization(type, index) {
                                               data-segment-id="${escapedSegmentId}">${timerText}</span>
                                     </div>
                                 </div>`;
+                } else if (isVirtualRest) {
+                    const gapId = this.escapeAttribute(segment.id || `virtual-rest-${index}-${idx}`);
+                    const gapStart = Number.isFinite(segment.startMinute) ? Math.max(0, Math.floor(segment.startMinute)) : '';
+                    const gapDuration = Number.isFinite(segment.durationMinutes) ? Math.max(0, Math.floor(segment.durationMinutes)) : '';
+                    labelHtml = `<button type="button"
+                                         class="plan-rest-gap"
+                                         data-index="${index}"
+                                         data-gap-id="${gapId}"
+                                         data-start-minute="${gapStart}"
+                                         data-duration-minutes="${gapDuration}"
+                                         aria-label="휴식 시간 채우기">
+                                    <span class="plan-rest-gap-label">${safeLabel}</span>
+                                </button>`;
                 }
                 const failedIconHtml = failedClass
                     ? '<span class="split-grid-failed-mark" aria-hidden="true">X</span>'
@@ -279,7 +294,7 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${planOnlyTimerClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${planOnlyTimerClass}${virtualRestClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

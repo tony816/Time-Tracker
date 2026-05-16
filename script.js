@@ -3370,12 +3370,53 @@ class TimeTracker {
             return { gridSegments, titleSegments, showTitleBand, toggleable: true, showLabels: true };
         }
 
-        const activities = this.getSplitActivities(type, baseIndex);
+        let activities = this.getSplitActivities(type, baseIndex);
+        if (type === 'planned' && this.actualRecordingDisabled && typeof this.getPlanActivitiesWithVirtualGaps === 'function') {
+            activities = this.getPlanActivitiesWithVirtualGaps(baseIndex, range);
+        }
         const result = buildSegmentsFromActivities(activities);
         if (type === 'planned' && result && Array.isArray(result.gridSegments)) {
+            const stepSeconds = 600;
+            const segmentMetaUnits = [];
+            let absoluteMinute = Math.max(0, baseIndex * 60);
+            activities.forEach((item) => {
+                const seconds = Number.isFinite(item && item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+                const unitCount = seconds > 0 ? Math.max(1, Math.ceil(seconds / stepSeconds)) : 0;
+                for (let i = 0; i < unitCount; i += 1) {
+                    segmentMetaUnits.push({
+                        virtualRest: Boolean(item && item.kind === 'virtual-rest'),
+                        id: item && item.id,
+                        startMinute: Number.isFinite(item && item.startMinute) ? Math.floor(item.startMinute) : absoluteMinute,
+                        durationMinutes: Number.isFinite(item && item.durationMinutes) ? Math.floor(item.durationMinutes) : Math.floor(seconds / 60),
+                    });
+                }
+                absoluteMinute += Math.floor(seconds / 60);
+            });
+            let unitCursor = 0;
+            result.gridSegments = result.gridSegments.map((segment) => {
+                const span = Number.isFinite(segment && segment.span) ? Math.max(0, Math.floor(segment.span)) : 0;
+                const units = segmentMetaUnits.slice(unitCursor, unitCursor + span);
+                unitCursor += span;
+                if (!segment || !segment.label || units.length === 0 || !units.every((unit) => unit && unit.virtualRest)) {
+                    return segment;
+                }
+                const firstUnit = units[0] || {};
+                const durationMinutes = units.reduce((sum, unit) => {
+                    if (!unit || !Number.isFinite(unit.durationMinutes)) return sum;
+                    return Math.max(sum, unit.durationMinutes);
+                }, span * 10);
+                return {
+                    ...segment,
+                    virtualRest: true,
+                    id: firstUnit.id || `virtual-rest-${baseIndex}-${unitCursor}`,
+                    startMinute: Number.isFinite(firstUnit.startMinute) ? firstUnit.startMinute : baseIndex * 60,
+                    durationMinutes,
+                };
+            });
             const titleByLabel = new Map();
             activities.forEach((item) => {
                 if (!item) return;
+                if (item.kind === 'virtual-rest') return;
                 const label = normalizeSegmentLabel(item.activityText || item.label || '');
                 const title = normalizeSegmentLabel(item.titleText || '');
                 if (label && title && !titleByLabel.has(label)) {
@@ -3391,6 +3432,52 @@ class TimeTracker {
             }
         }
         return result;
+    }
+
+    getPlanActivitiesWithVirtualGaps(baseIndex, range = null) {
+        const slot = this.timeSlots[baseIndex];
+        if (!slot) return [];
+        const blockLength = Math.max(1, this.getBlockLength('planned', baseIndex));
+        const blockStartMinute = Math.max(0, baseIndex * 60);
+        const blockEndMinute = blockStartMinute + (blockLength * 60);
+        const core = globalThis.TimeTrackerPlanSegmentCore;
+        const restLabel = core && core.REST_LABEL ? core.REST_LABEL : '\uD734\uC2DD';
+        const realActivities = this.getSplitActivities('planned', baseIndex)
+            .filter((item) => item && item.kind !== 'virtual-rest')
+            .map((item) => ({ ...item }));
+        const planLabel = this.getPlannedLabelForIndex(baseIndex);
+        if (realActivities.length === 0 && planLabel) return realActivities;
+
+        const realSegments = [];
+        let cursor = blockStartMinute;
+        realActivities.forEach((item) => {
+            const durationMinutes = Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
+            const explicitStart = Number.isFinite(item.startMinute) ? Math.floor(item.startMinute) : cursor;
+            const startMinute = Math.max(blockStartMinute, Math.min(blockEndMinute, explicitStart));
+            const endMinute = Math.max(startMinute, Math.min(blockEndMinute, startMinute + durationMinutes));
+            item.startMinute = startMinute;
+            item.durationMinutes = Math.max(0, endMinute - startMinute);
+            item.seconds = item.durationMinutes * 60;
+            realSegments.push({ startMinute, endMinute, kind: 'real' });
+            cursor = Math.max(cursor, endMinute);
+        });
+
+        const gaps = core && typeof core.calculateVirtualRestGaps === 'function'
+            ? core.calculateVirtualRestGaps(realSegments, { startMinute: blockStartMinute, endMinute: blockEndMinute })
+            : [];
+        const allItems = realActivities.concat(gaps.map((gap) => ({
+            id: gap.id,
+            kind: 'virtual-rest',
+            label: restLabel,
+            seconds: gap.durationMinutes * 60,
+            startMinute: gap.startMinute,
+            durationMinutes: gap.durationMinutes,
+        })));
+
+        return allItems
+            .filter((item) => item && Number.isFinite(item.startMinute))
+            .sort((a, b) => a.startMinute - b.startMinute)
+            .map((item) => ({ ...item }));
     }
     getSplitRange(type, index) {
         const mergeKey = this.findMergeKey(type, index);

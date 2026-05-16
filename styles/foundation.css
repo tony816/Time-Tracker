@@ -249,6 +249,44 @@ html.actual-recording-disabled .split-grid-segment.has-plan-segment-timer {
   overflow: hidden;
 }
 
+html.actual-recording-disabled .split-grid-segment.is-virtual-rest-gap {
+  padding: 0;
+  background: rgba(148, 163, 184, 0.16) !important;
+  border: 1px dashed rgba(100, 116, 139, 0.42);
+  box-shadow: none;
+  color: #64748b;
+}
+
+.plan-rest-gap {
+  width: 100%;
+  min-height: 44px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+}
+
+.plan-rest-gap:hover,
+.plan-rest-gap:focus-visible {
+  background: rgba(255, 255, 255, 0.42);
+  outline: 2px solid rgba(100, 116, 139, 0.28);
+  outline-offset: -2px;
+}
+
+.plan-rest-gap-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .plan-segment-graphic {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
