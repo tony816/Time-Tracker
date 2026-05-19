@@ -294,6 +294,78 @@ test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessib
     }
 });
 
+test('renderInlinePlanDropdownOptions renders an empty catalog state without throwing', () => {
+    const originalDocument = globalThis.document;
+    const createNode = (tagName) => {
+        const attributes = {};
+        return {
+            tagName,
+            children: [],
+            dataset: {},
+            className: '',
+            textContent: '',
+            title: '',
+            type: '',
+            appendChild(node) {
+                this.children.push(node);
+                return node;
+            },
+            addEventListener() {},
+            setAttribute(name, value) {
+                attributes[name] = String(value);
+            },
+            getAttribute(name) {
+                return attributes[name];
+            },
+        };
+    };
+    const board = {
+        children: [],
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML || '';
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const searchInput = { value: '' };
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        plannedActivities: [],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+    };
+
+    globalThis.document = { createElement: createNode };
+
+    try {
+        assert.doesNotThrow(() => controller.renderInlinePlanDropdownOptions.call(ctx));
+        assert.equal(board.children.length, 1);
+        assert.equal(board.children[0].className, 'activity-chip-row');
+        assert.equal(board.children[0].children[0].className, 'inline-plan-empty');
+        assert.equal(board.children[0].children[0].textContent, '등록된 활동이 없습니다.');
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('renderInlinePlanDropdownOptions hides recent when it duplicates the visible top-level list without history', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
