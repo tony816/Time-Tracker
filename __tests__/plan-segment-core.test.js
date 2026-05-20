@@ -10,6 +10,7 @@ test('plan-segment-core exports pure helpers', () => {
     assert.equal(typeof planSegmentCore.mergeAdjacentGaps, 'function');
     assert.equal(typeof planSegmentCore.findOverlaps, 'function');
     assert.equal(typeof planSegmentCore.createSegmentId, 'function');
+    assert.equal(typeof planSegmentCore.resizePlanSegmentInList, 'function');
     assert.equal(globalThis.TimeTrackerPlanSegmentCore, planSegmentCore);
 });
 
@@ -198,4 +199,83 @@ test('virtual rest gaps are not included in simulated persisted planActivities a
             virtual: true,
         },
     ]);
+});
+
+test('resizePlanSegmentInList shrinks right edge and leaves a calculable trailing gap', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'A', seconds: 60 * 60 },
+    ], 0, 'right', 40, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result[0].seconds, 40 * 60);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result, { startMinute: 0, endMinute: 60 }), [
+        {
+            id: 'virtual-rest-40-20',
+            kind: 'virtual-rest',
+            label: '휴식',
+            startMinute: 40,
+            durationMinutes: 20,
+            virtual: true,
+        },
+    ]);
+});
+
+test('resizePlanSegmentInList expands right edge only into the adjacent gap', () => {
+    const segments = [
+        { label: 'A', startMinute: 0, durationMinutes: 30, seconds: 30 * 60 },
+        { label: 'B', startMinute: 50, durationMinutes: 10, seconds: 10 * 60 },
+    ];
+
+    const allowed = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 50, { startMinute: 0, endMinute: 60 });
+    const blocked = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 60, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(allowed[0].endMinute, 50);
+    assert.equal(allowed[0].seconds, 50 * 60);
+    assert.equal(blocked[0].endMinute, 50);
+    assert.equal(blocked[0].seconds, 50 * 60);
+});
+
+test('resizePlanSegmentInList shrinks left edge and leaves a calculable leading gap', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'A', startMinute: 20, durationMinutes: 40, seconds: 40 * 60 },
+    ], 0, 'left', 40, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result[0].startMinute, 40);
+    assert.equal(result[0].seconds, 20 * 60);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result, { startMinute: 20, endMinute: 60 }), [
+        {
+            id: 'virtual-rest-20-20',
+            kind: 'virtual-rest',
+            label: '휴식',
+            startMinute: 20,
+            durationMinutes: 20,
+            virtual: true,
+        },
+    ]);
+});
+
+test('resizePlanSegmentInList expands left edge only into the adjacent gap', () => {
+    const segments = [
+        { label: 'A', startMinute: 0, durationMinutes: 20, seconds: 20 * 60 },
+        { label: 'B', startMinute: 40, durationMinutes: 20, seconds: 20 * 60 },
+    ];
+
+    const allowed = planSegmentCore.resizePlanSegmentInList(segments, 1, 'left', 20, { startMinute: 0, endMinute: 60 });
+    const blocked = planSegmentCore.resizePlanSegmentInList(segments, 1, 'left', 10, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(allowed[1].startMinute, 20);
+    assert.equal(allowed[1].seconds, 40 * 60);
+    assert.equal(blocked[1].startMinute, 20);
+    assert.equal(blocked[1].seconds, 40 * 60);
+});
+
+test('resizePlanSegmentInList enforces minimum duration and strips virtual metadata', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'A', startMinute: 0, durationMinutes: 30, seconds: 30 * 60 },
+        { kind: 'virtual-rest', virtual: true, label: '?댁떇', startMinute: 30, durationMinutes: 30 },
+    ], 0, 'right', 5, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].durationMinutes, 10);
+    assert.equal(result[0].seconds, 10 * 60);
+    assert.equal(result.some((item) => item.kind === 'virtual-rest' || item.virtual), false);
 });

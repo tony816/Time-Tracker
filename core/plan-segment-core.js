@@ -168,6 +168,92 @@
         return overlaps;
     }
 
+    function normalizePlanSegmentListForResize(segments = []) {
+        const safeSegments = Array.isArray(segments) ? segments : [];
+        let cursor = 0;
+        return safeSegments
+            .filter((segment) => segment && typeof segment === 'object' && !segment.virtual && segment.kind !== 'virtual-rest')
+            .map((segment, index) => {
+                const durationMinutes = Number.isFinite(segment.durationMinutes)
+                    ? Math.max(0, Math.floor(segment.durationMinutes))
+                    : Math.max(0, Math.floor((Number(segment.seconds) || 0) / 60));
+                const startMinute = Number.isFinite(segment.startMinute)
+                    ? Math.max(0, Math.floor(segment.startMinute))
+                    : cursor;
+                const endMinute = Number.isFinite(segment.endMinute)
+                    ? Math.max(startMinute, Math.floor(segment.endMinute))
+                    : startMinute + durationMinutes;
+                cursor = Math.max(cursor, endMinute);
+                return {
+                    index,
+                    segment,
+                    startMinute: snapToTenMinutes(startMinute),
+                    endMinute: snapToTenMinutes(endMinute, { min: startMinute }),
+                    durationMinutes: Math.max(0, snapToTenMinutes(endMinute, { min: startMinute }) - snapToTenMinutes(startMinute)),
+                };
+            })
+            .filter((segment) => segment.durationMinutes > 0)
+            .sort((a, b) => a.startMinute - b.startMinute);
+    }
+
+    function canResizePlanSegment(segments = [], segmentIndex = 0, edge = 'right', targetMinute = 0, rangeInput = {}) {
+        const normalized = normalizePlanSegmentListForResize(segments);
+        const target = normalized.find((item) => item.index === segmentIndex);
+        if (!target) return { allowed: false, startMinute: 0, endMinute: 0, durationMinutes: 0 };
+
+        const range = normalizePlanSegmentRange({
+            startMinute: Number.isFinite(rangeInput.startMinute) ? rangeInput.startMinute : 0,
+            endMinute: Number.isFinite(rangeInput.endMinute) ? rangeInput.endMinute : Math.max(60, target.endMinute),
+        });
+        const position = normalized.indexOf(target);
+        const previous = position > 0 ? normalized[position - 1] : null;
+        const next = position >= 0 && position < normalized.length - 1 ? normalized[position + 1] : null;
+        const minStart = previous ? previous.endMinute : range.startMinute;
+        const maxEnd = next ? next.startMinute : range.endMinute;
+        const snappedTarget = snapToTenMinutes(targetMinute, { min: range.startMinute, max: range.endMinute });
+
+        let startMinute = target.startMinute;
+        let endMinute = target.endMinute;
+        if (edge === 'left') {
+            startMinute = Math.max(minStart, Math.min(snappedTarget, target.endMinute - TEN_MINUTES));
+        } else {
+            endMinute = Math.min(maxEnd, Math.max(snappedTarget, target.startMinute + TEN_MINUTES));
+        }
+        const durationMinutes = Math.max(0, endMinute - startMinute);
+
+        return {
+            allowed: durationMinutes >= TEN_MINUTES,
+            startMinute,
+            endMinute,
+            durationMinutes,
+            clamped: (edge === 'left' ? startMinute : endMinute) !== snappedTarget,
+        };
+    }
+
+    function resizePlanSegmentInList(segments = [], segmentIndex = 0, edge = 'right', targetMinute = 0, rangeInput = {}) {
+        const resize = canResizePlanSegment(segments, segmentIndex, edge, targetMinute, rangeInput);
+        const source = Array.isArray(segments) ? segments : [];
+        if (!resize.allowed) {
+            return source
+                .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+                .map((item) => ({ ...item }));
+        }
+
+        return source
+            .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item, index) => {
+                const next = { ...item };
+                delete next.kind;
+                delete next.virtual;
+                if (index !== segmentIndex) return next;
+                next.startMinute = resize.startMinute;
+                next.endMinute = resize.endMinute;
+                next.durationMinutes = resize.durationMinutes;
+                next.seconds = resize.durationMinutes * 60;
+                return next;
+            });
+    }
+
     return Object.freeze({
         snapToTenMinutes,
         normalizePlanSegmentRange,
@@ -175,5 +261,8 @@
         mergeAdjacentGaps,
         findOverlaps,
         createSegmentId,
+        normalizePlanSegmentListForResize,
+        canResizePlanSegment,
+        resizePlanSegmentInList,
     });
 });

@@ -9,6 +9,10 @@ const attachVirtualRestGapListeners = buildMethod(
     'attachVirtualRestGapListeners(entryDiv, index)',
     '(entryDiv, index)'
 );
+const attachPlanSegmentResizeListeners = buildMethod(
+    'attachPlanSegmentResizeListeners(entryDiv, index)',
+    '(entryDiv, index)'
+);
 
 function createNode() {
     const listeners = {};
@@ -277,4 +281,87 @@ test('filled gap is rendered as a real planned segment instead of a virtual rest
 
     assert.doesNotMatch(html, /split-grid-segment-virtual-rest/);
     assert.match(html, /class="plan-segment-timer-button"/);
+});
+
+test('plan segment resize starts only from resize handles and stops propagation', () => {
+    const originalDocument = globalThis.document;
+    const documentListeners = {};
+    const grid = {
+        getBoundingClientRect() {
+            return { width: 60 };
+        },
+    };
+    const segmentClassList = {
+        added: [],
+        removed: [],
+        contains() { return false; },
+        add(cls) { this.added.push(cls); },
+        remove(cls) { this.removed.push(cls); },
+    };
+    const segment = {
+        dataset: {
+            segmentIndex: '0',
+            segmentStartMinute: '0',
+            segmentEndMinute: '30',
+        },
+        classList: segmentClassList,
+        closest(selector) {
+            if (selector === '.split-grid') return grid;
+            return null;
+        },
+    };
+    const handle = {
+        dataset: { resizeEdge: 'right' },
+        addEventListener(type, handler) {
+            this[type] = handler;
+        },
+        closest(selector) {
+            if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') return segment;
+            return null;
+        },
+    };
+    const entryDiv = {
+        querySelectorAll(selector) {
+            assert.equal(selector, '.plan-segment-resize-handle');
+            return [handle];
+        },
+    };
+    const calls = [];
+    const ctx = {
+        getBlockLength(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 0);
+            return 1;
+        },
+        applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+            calls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        },
+    };
+    let stopped = false;
+    let prevented = false;
+    globalThis.document = {
+        addEventListener(type, handler) {
+            documentListeners[type] = handler;
+        },
+        removeEventListener() {},
+    };
+
+    try {
+        attachPlanSegmentResizeListeners.call(ctx, entryDiv, 0);
+        handle.pointerdown({
+            target: handle,
+            clientX: 0,
+            preventDefault() { prevented = true; },
+            stopPropagation() { stopped = true; },
+        });
+        documentListeners.pointerup({ clientX: 20 });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(prevented, true);
+    assert.equal(stopped, true);
+    assert.deepEqual(calls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 50 }]);
+    assert.deepEqual(segmentClassList.added, ['is-resizing-plan-segment']);
+    assert.deepEqual(segmentClassList.removed, ['is-resizing-plan-segment']);
 });

@@ -147,6 +147,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachVirtualRestGapListeners === 'function') {
                 this.attachVirtualRestGapListeners(entryDiv, index);
             }
+            if (typeof this.attachPlanSegmentResizeListeners === 'function') {
+                this.attachPlanSegmentResizeListeners(entryDiv, index);
+            }
 
             // 타이머 이벤트 리스너 추가
             this.attachTimerListeners(entryDiv, index);
@@ -228,12 +231,17 @@ function buildSplitVisualization(type, index) {
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
                 const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) ? ' has-plan-segment-timer' : '';
+                let planSegmentId = '';
+                let planSegmentIndex = Number.isFinite(segment.segmentIndex) ? Math.floor(segment.segmentIndex) : null;
+                let isRunningPlanSegment = false;
                 if (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) {
                     const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                    const segmentIndex = labeledSegmentCount > 1 ? idx : null;
+                    const segmentIndex = planSegmentIndex != null ? planSegmentIndex : (labeledSegmentCount > 1 ? idx : null);
                     const segmentId = this.getPlanSegmentId
                         ? this.getPlanSegmentId(baseIndex, segmentIndex != null ? segmentIndex : null)
                         : `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`;
+                    planSegmentId = segmentId;
+                    planSegmentIndex = segmentIndex;
                     const model = this.buildPlanSegmentViewModel
                         ? this.buildPlanSegmentViewModel(baseIndex, segmentId)
                         : {
@@ -244,6 +252,10 @@ function buildSplitVisualization(type, index) {
                                 tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex, segmentId) : 'under',
                             },
                         };
+                    isRunningPlanSegment = Boolean(
+                        (model && model.timer && (model.timer.running === true || model.timer.status === 'running'))
+                        || (this.isPlanSegmentRunning && this.isPlanSegmentRunning(baseIndex, segmentId))
+                    );
                     const escapedSegmentId = this.escapeAttribute(model.id);
                     const icon = model.display.icon;
                     const timerText = this.escapeHtml(model.display.timeText);
@@ -287,7 +299,15 @@ function buildSplitVisualization(type, index) {
                 const virtualRestAttr = isVirtualRest
                     ? ` data-segment-kind="virtual-rest" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
                     : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}"${unitAttr}${extraAttr}${virtualRestAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                const realPlanAttr = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest)
+                    ? ` data-segment-kind="real-plan" data-segment-id="${this.escapeAttribute ? this.escapeAttribute(planSegmentId) : planSegmentId}" data-segment-index="${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-start-minute="${Number(segment.startMinute) || 0}" data-segment-duration-minutes="${Number(segment.durationMinutes) || 0}" data-segment-end-minute="${Number(segment.endMinute) || 0}"`
+                    : '';
+                const resizeDisabledClass = isRunningPlanSegment ? ' is-plan-segment-resize-disabled' : '';
+                const resizeTitle = isRunningPlanSegment ? ' title="실행 중인 세그먼트는 조정할 수 없음"' : '';
+                const resizeHandles = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest && !isRunningPlanSegment)
+                    ? '<span class="plan-segment-resize-handle plan-segment-resize-handle-left" data-resize-edge="left" aria-hidden="true"></span><span class="plan-segment-resize-handle plan-segment-resize-handle-right" data-resize-edge="right" aria-hidden="true"></span>'
+                    : '';
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

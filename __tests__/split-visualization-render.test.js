@@ -257,3 +257,67 @@ test('buildSplitVisualization renders parent title above child activity inside p
     assert.match(html, /has-segment-title/);
     assert.doesNotMatch(html, /split-title-band/);
 });
+
+test('buildSplitVisualization renders resize handles only for idle real plan segments', () => {
+    const idleCtx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: 'Plan', span: 6, segmentIndex: 0, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+                ],
+            };
+        },
+        escapeHtml(value) {
+            return String(value);
+        },
+        escapeAttribute(value) {
+            return String(value);
+        },
+        getSplitColor() {
+            return '#abcdef';
+        },
+        getPlanSegmentBaseIndex() {
+            return 0;
+        },
+        buildPlanSegmentViewModel() {
+            return {
+                id: 'planned-0-0-seg0',
+                timer: { status: 'idle', running: false },
+                display: { icon: 'play', timeText: '0m / 60m', tone: 'under' },
+            };
+        },
+    };
+
+    const idleHtml = buildSplitVisualization.call(idleCtx, 'planned', 0);
+    assert.match(idleHtml, /data-segment-kind="real-plan"/);
+    assert.match(idleHtml, /plan-segment-resize-handle-left/);
+    assert.match(idleHtml, /plan-segment-resize-handle-right/);
+
+    const runningCtx = {
+        ...idleCtx,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: 'Run', span: 3, segmentIndex: 0, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+                    { label: 'Rest', span: 3, kind: 'virtual-rest', virtual: true, startMinute: 30, durationMinutes: 30 },
+                ],
+            };
+        },
+        buildPlanSegmentViewModel() {
+            return {
+                id: 'planned-0-0-seg0',
+                timer: { status: 'running', running: true },
+                display: { icon: 'pause', timeText: '5m / 30m', tone: 'under' },
+            };
+        },
+    };
+
+    const runningHtml = buildSplitVisualization.call(runningCtx, 'planned', 0);
+    assert.match(runningHtml, /is-plan-segment-resize-disabled/);
+    assert.doesNotMatch(runningHtml, /plan-segment-resize-handle/);
+    const virtualRestSegment = runningHtml.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
+    assert.doesNotMatch(virtualRestSegment, /data-segment-kind="real-plan"/);
+});

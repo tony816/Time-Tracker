@@ -3541,7 +3541,7 @@ class TimeTracker {
             const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
             const range = { startMinute: 0, endMinute: blockMinutes };
             let cursor = 0;
-            const realSegments = activities.map((item) => {
+            const realSegments = activities.map((item, segmentIndex) => {
                 const durationMinutes = Number.isFinite(item.durationMinutes)
                     ? Math.max(0, Math.floor(item.durationMinutes))
                     : Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
@@ -3554,6 +3554,7 @@ class TimeTracker {
                 cursor = Math.max(cursor, endMinute);
                 return {
                     ...item,
+                    segmentIndex,
                     startMinute,
                     endMinute,
                     durationMinutes: Math.max(0, endMinute - startMinute),
@@ -5939,6 +5940,86 @@ class TimeTracker {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
                 openGap(event);
             });
+        });
+    }
+        isPlanSegmentRunning(baseIndex, segmentId) {
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const timer = slot && slot.planSegmentTimers && slot.planSegmentTimers[segmentId];
+        return Boolean(timer && (timer.running === true || timer.status === 'running'));
+    }
+        applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+        const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
+        if (!planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return false;
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        if (!slot) return false;
+        const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+        const current = this.normalizePlanActivitiesArray
+            ? this.normalizePlanActivitiesArray(slot.planActivities)
+            : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
+        const next = planSegmentCore.resizePlanSegmentInList(current, segmentIndex, edge, targetMinute, {
+            startMinute: 0,
+            endMinute: blockMinutes,
+        });
+        slot.planActivities = next.map((item) => {
+            const copy = { ...item };
+            delete copy.kind;
+            delete copy.virtual;
+            return copy;
+        });
+        slot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(slot.planActivities) : (slot.planned || '');
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
+        attachPlanSegmentResizeListeners(entryDiv, index) {
+        if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
+        handles.forEach((handle) => {
+            if (!handle || handle.dataset.resizeListenerAttached === 'true') return;
+            handle.dataset.resizeListenerAttached = 'true';
+            const startResize = (event) => {
+                const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
+                if (!segmentEl || segmentEl.classList.contains('is-plan-segment-resize-disabled')) return;
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-timer-time, .split-grid-segment-virtual-rest, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const edge = handle.dataset.resizeEdge === 'left' ? 'left' : 'right';
+                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+                const startMinute = Number(segmentEl.dataset.segmentStartMinute);
+                const endMinute = Number(segmentEl.dataset.segmentEndMinute);
+                if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return;
+                const grid = segmentEl.closest && segmentEl.closest('.split-grid');
+                const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
+                const blockMinutes = Math.max(60, this.getBlockLength('planned', index) * 60);
+                const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : 1;
+                const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
+                if (segmentEl.classList && segmentEl.classList.add) segmentEl.classList.add('is-resizing-plan-segment');
+
+                const finish = (moveEvent) => {
+                    const clientX = Number.isFinite(moveEvent.clientX) ? moveEvent.clientX : originX;
+                    const deltaMinutes = Math.round(((clientX - originX) / gridWidth) * blockMinutes / 10) * 10;
+                    const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
+                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
+                    document.removeEventListener('pointerup', finish, true);
+                    document.removeEventListener('mouseup', finish, true);
+                    document.removeEventListener('pointercancel', cancel, true);
+                    this.applyPlanSegmentResize(index, segmentIndex, edge, targetMinute);
+                };
+                const cancel = () => {
+                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
+                    document.removeEventListener('pointerup', finish, true);
+                    document.removeEventListener('mouseup', finish, true);
+                    document.removeEventListener('pointercancel', cancel, true);
+                };
+                document.addEventListener('pointerup', finish, true);
+                document.addEventListener('mouseup', finish, true);
+                document.addEventListener('pointercancel', cancel, true);
+            };
+            handle.addEventListener('pointerdown', startResize);
+            handle.addEventListener('mousedown', startResize);
         });
     }
         applyInlinePlanBackgroundContext() {
