@@ -167,6 +167,269 @@ test('isSameInlinePlanTarget can read the current range through shared controlle
     }
 });
 
+test('isSameInlinePlanTarget includes virtual rest gap identity', () => {
+    const ctx = {
+        inlinePlanTarget: {
+            startIndex: 1,
+            endIndex: 1,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 20,
+        },
+    };
+
+    assert.equal(
+        controller.isSameInlinePlanTarget.call(ctx, {
+            startIndex: 1,
+            endIndex: 1,
+        }),
+        false
+    );
+    assert.equal(
+        controller.isSameInlinePlanTarget.call(ctx, {
+            startIndex: 1,
+            endIndex: 1,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 40,
+            gapDurationMinutes: 20,
+        }),
+        false
+    );
+    assert.equal(
+        controller.isSameInlinePlanTarget.call(ctx, {
+            startIndex: 1,
+            endIndex: 1,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 20,
+        }),
+        true
+    );
+});
+
+test('openInlinePlanDropdown switches from normal row target to virtual rest gap target in the same row', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const anchor = { isConnected: true };
+    const dropdown = {
+        className: '',
+        innerHTML: '',
+        style: {},
+        addEventListener() {},
+        contains() { return false; },
+        querySelector() { return null; },
+    };
+    let closed = 0;
+    const ctx = {
+        inlinePlanDropdown: { existing: true },
+        inlinePlanTarget: { startIndex: 1, endIndex: 1, anchor },
+        timeSlots: [{}, {}],
+        suppressInlinePlanOpenUntil: 0,
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        clearSelection() {
+            throw new Error('normal toggle-close should not run for a virtual rest gap switch');
+        },
+        closeInlinePlanDropdown() {
+            closed += 1;
+            this.inlinePlanDropdown = null;
+        },
+        getActivePlanSource() {
+            return 'local';
+        },
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() {
+            return false;
+        },
+        renderInlinePlanDropdownOptions() {},
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+    };
+    globalThis.document = {
+        createElement() {
+            return dropdown;
+        },
+        body: {
+            appendChild() {},
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() {
+            return null;
+        },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {} };
+    globalThis.requestAnimationFrame = () => {};
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 30,
+        });
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+
+    assert.equal(closed, 1);
+    assert.equal(ctx.inlinePlanTarget.mode, 'virtual-rest-gap');
+    assert.equal(ctx.inlinePlanTarget.gapStartMinute, 20);
+    assert.equal(ctx.inlinePlanTarget.gapDurationMinutes, 30);
+});
+
+test('openInlinePlanDropdown switches between different virtual rest gaps in the same row', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const anchor = { isConnected: true };
+    const dropdown = {
+        className: '',
+        innerHTML: '',
+        style: {},
+        addEventListener() {},
+        contains() { return false; },
+        querySelector() { return null; },
+    };
+    const ctx = {
+        inlinePlanDropdown: { existing: true },
+        timeSlots: [{}, {}],
+        inlinePlanTarget: {
+            startIndex: 1,
+            endIndex: 1,
+            anchor,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 20,
+        },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        clearSelection() {
+            throw new Error('different virtual gap should switch instead of toggle-close');
+        },
+        closeInlinePlanDropdown() {
+            this.inlinePlanDropdown = null;
+        },
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return false; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        renderInlinePlanDropdownOptions() {},
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+    };
+    globalThis.document = {
+        createElement() { return dropdown; },
+        body: {
+            appendChild() {},
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {} };
+    globalThis.requestAnimationFrame = () => {};
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 50,
+            gapDurationMinutes: 10,
+        });
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+
+    assert.equal(ctx.inlinePlanTarget.mode, 'virtual-rest-gap');
+    assert.equal(ctx.inlinePlanTarget.gapStartMinute, 50);
+    assert.equal(ctx.inlinePlanTarget.gapDurationMinutes, 10);
+});
+
+test('openInlinePlanDropdown keeps exact same virtual rest gap as toggle-close behavior', () => {
+    const anchor = { isConnected: true };
+    let cleared = false;
+    let closed = false;
+    const ctx = {
+        inlinePlanDropdown: { existing: true },
+        inlinePlanTarget: {
+            startIndex: 1,
+            endIndex: 1,
+            anchor,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 20,
+        },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        clearSelection(type) {
+            assert.equal(type, 'planned');
+            cleared = true;
+        },
+        closeInlinePlanDropdown() {
+            closed = true;
+        },
+    };
+
+    controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
+        mode: 'virtual-rest-gap',
+        gapStartMinute: 20,
+        gapDurationMinutes: 20,
+    });
+
+    assert.equal(cleared, true);
+    assert.equal(closed, true);
+});
+
 test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessible labels', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {

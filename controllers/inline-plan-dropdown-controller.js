@@ -1868,6 +1868,21 @@ function isSameInlinePlanTarget(range, anchorEl = null) {
         if (currentStart !== nextStart || currentEnd !== nextEnd) {
             return false;
         }
+        const currentMode = String(current.mode || '');
+        const nextMode = String(range.mode || '');
+        if (currentMode !== nextMode) return false;
+        if (currentMode === 'virtual-rest-gap') {
+            const currentGapStart = Number(current.gapStartMinute);
+            const nextGapStart = Number(range.gapStartMinute);
+            const currentGapDuration = Number(current.gapDurationMinutes);
+            const nextGapDuration = Number(range.gapDurationMinutes);
+            return Number.isFinite(currentGapStart)
+                && Number.isFinite(nextGapStart)
+                && Number.isFinite(currentGapDuration)
+                && Number.isFinite(nextGapDuration)
+                && currentGapStart === nextGapStart
+                && currentGapDuration === nextGapDuration;
+        }
         return true;
     }
 
@@ -1898,6 +1913,17 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             range.startIndex = Math.min(range.startIndex, endIndex);
             range.endIndex = Math.max(range.endIndex, endIndex);
         }
+        const gapStartMinute = Number(options && options.gapStartMinute);
+        const gapDurationMinutes = Number(options && options.gapDurationMinutes);
+        const virtualGapTarget = options && options.mode === 'virtual-rest-gap'
+            && Number.isFinite(gapStartMinute)
+            && Number.isFinite(gapDurationMinutes)
+            && gapDurationMinutes > 0;
+        if (virtualGapTarget) {
+            range.mode = 'virtual-rest-gap';
+            range.gapStartMinute = Math.max(0, Math.floor(gapStartMinute));
+            range.gapDurationMinutes = Math.max(0, Math.floor(gapDurationMinutes));
+        }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
@@ -1909,19 +1935,13 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.currentPlanSource = this.getActivePlanSource();
 
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
-        const gapStartMinute = Number(options && options.gapStartMinute);
-        const gapDurationMinutes = Number(options && options.gapDurationMinutes);
-        const virtualGapTarget = options && options.mode === 'virtual-rest-gap'
-            && Number.isFinite(gapStartMinute)
-            && Number.isFinite(gapDurationMinutes)
-            && gapDurationMinutes > 0;
         this.inlinePlanTarget = virtualGapTarget
             ? {
                 ...range,
                 anchor,
                 mode: 'virtual-rest-gap',
-                gapStartMinute: Math.max(0, Math.floor(gapStartMinute)),
-                gapDurationMinutes: Math.max(0, Math.floor(gapDurationMinutes)),
+                gapStartMinute: range.gapStartMinute,
+                gapDurationMinutes: range.gapDurationMinutes,
             }
             : { ...range, anchor };
         this.inlinePlanHighlightRange = isMobileInputContext
