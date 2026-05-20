@@ -2682,7 +2682,13 @@ button.activity-chip,
   border: 1px dashed rgba(126, 140, 154, 0.42);
   color: rgba(85, 99, 112, 0.72);
   box-shadow: none;
-  cursor: default;
+  cursor: pointer;
+}
+
+.split-visualization-planned .split-grid-segment-virtual-rest:hover,
+.split-visualization-planned .split-grid-segment-virtual-rest:focus-visible {
+  background: rgba(223, 231, 238, 0.58) !important;
+  border-color: rgba(96, 110, 128, 0.5);
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest .split-grid-label {

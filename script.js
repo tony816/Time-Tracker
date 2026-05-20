@@ -5909,8 +5909,37 @@ class TimeTracker {
         return globalThis.TimeTrackerInlinePlanDropdownController.isEventWithinCurrentInlinePlanRange.call(this, targetEl);
     }
 
-        openInlinePlanDropdown(index, anchorEl, endIndex = null) {
-        return globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown.call(this, index, anchorEl, endIndex);
+        openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown.call(this, index, anchorEl, endIndex, options);
+    }
+        attachVirtualRestGapListeners(entryDiv, index) {
+        if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        const gaps = entryDiv.querySelectorAll('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
+        gaps.forEach((gapEl) => {
+            if (!gapEl || gapEl.dataset.virtualRestGapListenerAttached === 'true') return;
+            gapEl.dataset.virtualRestGapListenerAttached = 'true';
+            gapEl.setAttribute('role', 'button');
+            gapEl.setAttribute('tabindex', '0');
+            const openGap = (event) => {
+                const gapStartMinute = Number(gapEl.dataset.gapStartMinute);
+                const gapDurationMinutes = Number(gapEl.dataset.gapDurationMinutes);
+                if (!Number.isFinite(gapStartMinute) || !Number.isFinite(gapDurationMinutes) || gapDurationMinutes <= 0) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const range = this.getPlannedRangeInfo(index);
+                const anchor = gapEl.closest('.split-cell-wrapper.split-type-planned') || gapEl;
+                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
+                    mode: 'virtual-rest-gap',
+                    gapStartMinute,
+                    gapDurationMinutes,
+                });
+            };
+            gapEl.addEventListener('click', openGap);
+            gapEl.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                openGap(event);
+            });
+        });
     }
         applyInlinePlanBackgroundContext() {
         return globalThis.TimeTrackerInlinePlanDropdownController.applyInlinePlanBackgroundContext.call(this);

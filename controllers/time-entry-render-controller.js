@@ -144,6 +144,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
                 this.attachFieldSelectionListeners(entryDiv, index);
                 this.attachCellClickListeners(entryDiv, index);
             }
+            if (typeof this.attachVirtualRestGapListeners === 'function') {
+                this.attachVirtualRestGapListeners(entryDiv, index);
+            }
 
             // 타이머 이벤트 리스너 추가
             this.attachTimerListeners(entryDiv, index);
@@ -282,7 +285,7 @@ function buildSplitVisualization(type, index) {
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
                 const virtualRestAttr = isVirtualRest
-                    ? ` data-segment-kind="virtual-rest" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
+                    ? ` data-segment-kind="virtual-rest" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
                     : '';
                 return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}"${unitAttr}${extraAttr}${virtualRestAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
                 }).join('');

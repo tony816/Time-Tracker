@@ -26,8 +26,8 @@ const positionInlinePlanChildPopoverWrapper = buildMethod(
     '(anchorEl = null)'
 );
 const openInlinePlanDropdownWrapper = buildMethod(
-    'openInlinePlanDropdown(index, anchorEl, endIndex = null)',
-    '(index, anchorEl, endIndex = null)'
+    'openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {})',
+    '(index, anchorEl, endIndex = null, options = {})'
 );
 const closeInlinePlanDropdownWrapper = buildMethod(
     'closeInlinePlanDropdown()',
@@ -87,8 +87,8 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
             calls.push(['positionChild', this, anchorEl]);
             return 'position-child-result';
         },
-        openInlinePlanDropdown(index, anchorEl, endIndex) {
-            calls.push(['open', this, index, anchorEl, endIndex]);
+        openInlinePlanDropdown(index, anchorEl, endIndex, options) {
+            calls.push(['open', this, index, anchorEl, endIndex, options]);
             return 'open-result';
         },
         closeInlinePlanDropdown() {
@@ -121,7 +121,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         assert.equal(renderInlinePlanDropdownOptionsWrapper.call(ctx), 'render-result');
         assert.equal(positionInlinePlanDropdownWrapper.call(ctx, anchor), 'position-result');
         assert.equal(positionInlinePlanChildPopoverWrapper.call(ctx, anchor), 'position-child-result');
-        assert.equal(openInlinePlanDropdownWrapper.call(ctx, 3, anchor, 5), 'open-result');
+        assert.equal(openInlinePlanDropdownWrapper.call(ctx, 3, anchor, 5, options), 'open-result');
         assert.equal(closeInlinePlanDropdownWrapper.call(ctx), 'close-result');
         assert.equal(closePlanActivityChildMenuWrapper.call(ctx, options), 'close-child-result');
         assert.equal(applyInlinePlanSelectionWrapper.call(ctx, 'A', options), 'apply-result');
@@ -136,7 +136,7 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['render', ctx],
         ['position', ctx, anchor],
         ['positionChild', ctx, anchor],
-        ['open', ctx, 3, anchor, 5],
+        ['open', ctx, 3, anchor, 5, options],
         ['close', ctx],
         ['closeChild', ctx, options],
         ['apply', ctx, 'A', options],

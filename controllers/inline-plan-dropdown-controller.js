@@ -995,6 +995,63 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         return true;
     }
 
+function isVirtualRestGapTarget(target) {
+        return Boolean(
+            target
+            && target.mode === 'virtual-rest-gap'
+            && Number.isFinite(target.gapStartMinute)
+            && Number.isFinite(target.gapDurationMinutes)
+            && target.gapDurationMinutes > 0
+        );
+    }
+
+function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, target) {
+        const source = Array.isArray(existingActivities) ? existingActivities : [];
+        const gapStartMinute = Math.max(0, Math.floor(Number(target && target.gapStartMinute) || 0));
+        const gapDurationMinutes = Math.max(0, Math.floor(Number(target && target.gapDurationMinutes) || 0));
+        const fillItem = {
+            ...planItem,
+            seconds: gapDurationMinutes * 60,
+        };
+        delete fillItem.kind;
+        delete fillItem.virtual;
+
+        const nextActivities = source
+            .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item) => {
+                const copy = { ...item };
+                delete copy.kind;
+                delete copy.virtual;
+                return copy;
+            });
+
+        let cursor = 0;
+        let insertIndex = nextActivities.length;
+        for (let i = 0; i < nextActivities.length; i += 1) {
+            const item = nextActivities[i] || {};
+            const startMinute = Number.isFinite(item.startMinute)
+                ? Math.max(0, Math.floor(item.startMinute))
+                : cursor;
+            const durationMinutes = Number.isFinite(item.durationMinutes)
+                ? Math.max(0, Math.floor(item.durationMinutes))
+                : Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
+            const endMinute = Number.isFinite(item.endMinute)
+                ? Math.max(startMinute, Math.floor(item.endMinute))
+                : startMinute + durationMinutes;
+            if (gapStartMinute < startMinute || gapStartMinute < endMinute) {
+                insertIndex = i;
+                break;
+            }
+            cursor = Math.max(cursor, endMinute);
+            if (gapStartMinute >= cursor) {
+                insertIndex = i + 1;
+            }
+        }
+
+        nextActivities.splice(insertIndex, 0, fillItem);
+        return nextActivities;
+    }
+
 function touchPlannedActivityUsage(activityItem, parentItem = null) {
         if (!activityItem || !Array.isArray(this.plannedActivities)) return null;
         const activityId = String(activityItem.id || '').trim();
@@ -1041,17 +1098,44 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             activityText,
         };
 
-        if (this.inlinePlanTarget.mergeKey) {
+        if (isVirtualRestGapTarget(this.inlinePlanTarget)) {
+            const baseSlot = this.timeSlots[startIndex];
+            if (!baseSlot) return;
+            baseSlot.planActivities = buildPlanActivitiesWithVirtualGapFill(
+                this.normalizePlanActivitiesArray ? this.normalizePlanActivitiesArray(baseSlot.planActivities) : baseSlot.planActivities,
+                planItem,
+                this.inlinePlanTarget
+            );
+            const summary = this.formatActivitiesSummary ? this.formatActivitiesSummary(baseSlot.planActivities) : activityText;
+            baseSlot.planned = summary || activityText;
+            baseSlot.planTitle = titleText || '';
+            baseSlot.planTitleBandOn = Boolean(titleText);
+            for (let i = startIndex + 1; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                this.timeSlots[i].planned = '';
+                this.timeSlots[i].planActivities = [];
+                this.timeSlots[i].planTitle = '';
+                this.timeSlots[i].planTitleBandOn = false;
+            }
+        } else if (this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, activityText);
-        }
-
-        for (let i = startIndex; i <= endIndex; i++) {
-            if (!this.timeSlots[i]) continue;
-            const isStart = i === startIndex;
-            this.timeSlots[i].planned = isStart ? activityText : '';
-            this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
-            this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
-            this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? activityText : '';
+                this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
+                this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
+                this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+            }
+        } else {
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? activityText : '';
+                this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
+                this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
+                this.timeSlots[i].planTitleBandOn = Boolean(isStart && titleText);
+            }
         }
 
         this.modalPlanActivities = [{ ...planItem, invalid: false }];
@@ -1805,7 +1889,7 @@ function isEventWithinCurrentInlinePlanRange(targetEl) {
         return rowIndex >= safeStart && rowIndex <= safeEnd;
     }
 
-function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
+function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) {
         if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
             return;
         }
@@ -1825,7 +1909,21 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null) {
         this.currentPlanSource = this.getActivePlanSource();
 
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
-        this.inlinePlanTarget = { ...range, anchor };
+        const gapStartMinute = Number(options && options.gapStartMinute);
+        const gapDurationMinutes = Number(options && options.gapDurationMinutes);
+        const virtualGapTarget = options && options.mode === 'virtual-rest-gap'
+            && Number.isFinite(gapStartMinute)
+            && Number.isFinite(gapDurationMinutes)
+            && gapDurationMinutes > 0;
+        this.inlinePlanTarget = virtualGapTarget
+            ? {
+                ...range,
+                anchor,
+                mode: 'virtual-rest-gap',
+                gapStartMinute: Math.max(0, Math.floor(gapStartMinute)),
+                gapDurationMinutes: Math.max(0, Math.floor(gapDurationMinutes)),
+            }
+            : { ...range, anchor };
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
             : null;
@@ -2297,17 +2395,47 @@ function applyInlinePlanSelection(label, options = {}) {
         const startIndex = Math.min(safeStart, safeEnd);
         const endIndex = Math.max(safeStart, safeEnd);
 
-        if (this.inlinePlanTarget.mergeKey) {
+        if (isVirtualRestGapTarget(this.inlinePlanTarget)) {
+            const planItem = {
+                label: normalized,
+                seconds: this.inlinePlanTarget.gapDurationMinutes * 60,
+            };
+            const baseSlot = this.timeSlots[startIndex];
+            if (!baseSlot) return;
+            baseSlot.planActivities = buildPlanActivitiesWithVirtualGapFill(
+                this.normalizePlanActivitiesArray ? this.normalizePlanActivitiesArray(baseSlot.planActivities) : baseSlot.planActivities,
+                planItem,
+                this.inlinePlanTarget
+            );
+            baseSlot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(baseSlot.planActivities) : normalized;
+            baseSlot.planTitle = '';
+            baseSlot.planTitleBandOn = false;
+            for (let i = startIndex + 1; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                this.timeSlots[i].planned = '';
+                this.timeSlots[i].planActivities = [];
+                this.timeSlots[i].planTitle = '';
+                this.timeSlots[i].planTitleBandOn = false;
+            }
+        } else if (this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, normalized);
-        }
-
-        for (let i = startIndex; i <= endIndex; i++) {
-            if (!this.timeSlots[i]) continue;
-            const isStart = i === startIndex;
-            this.timeSlots[i].planned = isStart ? normalized : '';
-            this.timeSlots[i].planActivities = [];
-            this.timeSlots[i].planTitle = isStart ? normalized : '';
-            this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? normalized : '';
+                this.timeSlots[i].planActivities = [];
+                this.timeSlots[i].planTitle = isStart ? normalized : '';
+                this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+            }
+        } else {
+            for (let i = startIndex; i <= endIndex; i++) {
+                if (!this.timeSlots[i]) continue;
+                const isStart = i === startIndex;
+                this.timeSlots[i].planned = isStart ? normalized : '';
+                this.timeSlots[i].planActivities = [];
+                this.timeSlots[i].planTitle = isStart ? normalized : '';
+                this.timeSlots[i].planTitleBandOn = isStart ? false : false;
+            }
         }
 
         this.renderTimeEntries(Boolean(options.keepOpen));
