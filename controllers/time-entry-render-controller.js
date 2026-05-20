@@ -211,6 +211,8 @@ function buildSplitVisualization(type, index) {
                 const failedClass = (isActual && toggleable && segment.failed) ? ' is-failed' : '';
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
+                const isVirtualRest = Boolean(segment.virtual || segment.kind === 'virtual-rest');
+                const virtualRestClass = isVirtualRest ? ' split-grid-segment-virtual-rest' : '';
                 const canRenderLabel = Boolean(segment.label)
                     && !segment.suppressHoverLabel
                     && (showLabels || Boolean(segment.alwaysVisibleLabel));
@@ -222,8 +224,8 @@ function buildSplitVisualization(type, index) {
                 let labelHtml = safeLabel
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
-                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label) ? ' has-plan-segment-timer' : '';
-                if (!isActual && this.actualRecordingDisabled && segment.label) {
+                const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) ? ' has-plan-segment-timer' : '';
+                if (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) {
                     const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                     const segmentIndex = labeledSegmentCount > 1 ? idx : null;
                     const segmentId = this.getPlanSegmentId
@@ -279,7 +281,10 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${planOnlyTimerClass}"${unitAttr}${extraAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
+                const virtualRestAttr = isVirtualRest
+                    ? ` data-segment-kind="virtual-rest" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
+                    : '';
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}"${unitAttr}${extraAttr}${virtualRestAttr} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

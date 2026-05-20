@@ -3532,7 +3532,124 @@ class TimeTracker {
         }
 
         const activities = this.getSplitActivities(type, baseIndex);
-        const result = buildSegmentsFromActivities(activities);
+        const buildPlannedRenderSegments = () => {
+            const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
+            if (!planSegmentCore || typeof planSegmentCore.calculateVirtualRestGaps !== 'function') {
+                return null;
+            }
+
+            const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+            const range = { startMinute: 0, endMinute: blockMinutes };
+            let cursor = 0;
+            const realSegments = activities.map((item) => {
+                const durationMinutes = Number.isFinite(item.durationMinutes)
+                    ? Math.max(0, Math.floor(item.durationMinutes))
+                    : Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
+                const startMinute = Number.isFinite(item.startMinute)
+                    ? Math.max(0, Math.floor(item.startMinute))
+                    : cursor;
+                const endMinute = Number.isFinite(item.endMinute)
+                    ? Math.max(startMinute, Math.floor(item.endMinute))
+                    : startMinute + durationMinutes;
+                cursor = Math.max(cursor, endMinute);
+                return {
+                    ...item,
+                    startMinute,
+                    endMinute,
+                    durationMinutes: Math.max(0, endMinute - startMinute),
+                };
+            });
+            const virtualGaps = planSegmentCore.calculateVirtualRestGaps(realSegments, range);
+
+            const renderSegments = realSegments.concat(virtualGaps)
+                .filter((segment) => segment && segment.durationMinutes > 0)
+                .sort((a, b) => a.startMinute - b.startMinute);
+            if (renderSegments.length === 0) return null;
+
+            const totalUnits = Math.ceil(blockMinutes / 10);
+            const units = new Array(totalUnits).fill(null);
+            renderSegments.forEach((segment) => {
+                const startUnit = Math.max(0, Math.floor(segment.startMinute / 10));
+                const endUnit = Math.min(totalUnits, Math.ceil((segment.startMinute + segment.durationMinutes) / 10));
+                for (let unitIndex = startUnit; unitIndex < endUnit; unitIndex += 1) {
+                    units[unitIndex] = segment;
+                }
+            });
+
+            const useFullUnits = isMergedRange && index === baseIndex;
+            const offset = index - baseIndex;
+            const startUnit = useFullUnits ? 0 : offset * unitsPerRow;
+            const endUnit = useFullUnits ? units.length : startUnit + unitsPerRow;
+            if (startUnit < 0 || startUnit >= units.length) return null;
+            const slice = units.slice(startUnit, endUnit);
+            if (slice.length === 0) return null;
+
+            const sameUnit = (left, right) => {
+                if (!left && !right) return true;
+                if (!left || !right) return false;
+                if (left.kind === 'virtual-rest' || right.kind === 'virtual-rest' || left.virtual || right.virtual) {
+                    return left.kind === right.kind
+                        && Boolean(left.virtual) === Boolean(right.virtual)
+                        && left.startMinute === right.startMinute
+                        && left.durationMinutes === right.durationMinutes;
+                }
+                return normalizeSegmentLabel(left.activityText || left.label || '')
+                    === normalizeSegmentLabel(right.activityText || right.label || '');
+            };
+
+            const gridSegments = [];
+            let segmentStartIdx = 0;
+            for (let i = 0; i < slice.length; i += 1) {
+                const item = slice[i];
+                const isLastItem = (i === slice.length - 1);
+                const nextIsRowStart = ((i + 1) % unitsPerRow === 0);
+                const nextItem = isLastItem ? null : slice[i + 1];
+                const needsBreak = isLastItem || !sameUnit(item, nextItem) || nextIsRowStart;
+                if (!needsBreak) continue;
+
+                const span = i - segmentStartIdx + 1;
+                const connectTop = (
+                    segmentStartIdx > 0
+                    && segmentStartIdx % unitsPerRow === 0
+                    && sameUnit(slice[segmentStartIdx - 1], item)
+                );
+                const connectBottom = (
+                    nextIsRowStart
+                    && !isLastItem
+                    && sameUnit(slice[i + 1], item)
+                );
+                const label = item ? normalizeSegmentLabel(item.activityText || item.label || '') : '';
+                gridSegments.push({
+                    ...(item || {}),
+                    label,
+                    span,
+                    connectTop,
+                    connectBottom,
+                });
+                segmentStartIdx = i + 1;
+            }
+
+            const remainder = slice.length % unitsPerRow;
+            if (remainder !== 0) {
+                const remaining = unitsPerRow - remainder;
+                const last = gridSegments[gridSegments.length - 1];
+                if (last && !last.label) {
+                    last.span += remaining;
+                } else {
+                    gridSegments.push({ label: '', span: remaining, connectTop: false, connectBottom: false });
+                }
+            }
+
+            const hasLabels = gridSegments.some((segment) => segment && segment.label);
+            if (!hasLabels && !showTitleBand) return null;
+            if (!hasLabels && showTitleBand) {
+                return { gridSegments: [], titleSegments, showTitleBand };
+            }
+            return { gridSegments, titleSegments, showTitleBand };
+        };
+        const result = type === 'planned'
+            ? (buildPlannedRenderSegments() || buildSegmentsFromActivities(activities))
+            : buildSegmentsFromActivities(activities);
         if (type === 'planned' && result && Array.isArray(result.gridSegments)) {
             const titleByLabel = new Map();
             activities.forEach((item) => {
