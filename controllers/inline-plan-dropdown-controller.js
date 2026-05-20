@@ -1301,8 +1301,10 @@ function renderInlinePlanDropdownOptions() {
             const empty = document.createElement('div');
             empty.className = 'inline-plan-empty';
             empty.textContent = normalizedQuery ? '검색 결과가 없습니다.' : '등록된 활동이 없습니다.';
-            childRow.appendChild(empty);
-            board.appendChild(childRow);
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'activity-chip-row';
+            emptyRow.appendChild(empty);
+            board.appendChild(emptyRow);
         }
         const currentAnchor = getInlinePlanAnchorState.call(this);
         if (currentAnchor && this.positionInlinePlanDropdown) {
