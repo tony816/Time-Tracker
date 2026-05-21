@@ -674,6 +674,22 @@ test('renderTimeEntries attaches resize listeners to rendered plan segment handl
     assert.equal(handle.dataset.resizeListenerAttached, 'true');
 });
 
+test('renderTimeEntries does not render full-row virtual rest for empty planned slots', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([]);
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(container.querySelector('.split-grid-segment-virtual-rest'), null);
+    assert.equal(container.querySelector('[data-segment-kind="virtual-rest"]'), null);
+    assert.equal(container._innerHTML.includes('휴식'), false);
+});
+
 test('index.html loads plan segment core before app bootstrap for rendered resize', () => {
     const indexHtml = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
     const planCoreIndex = indexHtml.indexOf('src="core/plan-segment-core.js"');

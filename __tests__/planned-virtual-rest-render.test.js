@@ -81,16 +81,47 @@ test('computeSplitSegments does not render a virtual rest gap under ten minutes'
     assert.equal(result.gridSegments.some(segment => segment.kind === 'virtual-rest'), false);
 });
 
-test('computeSplitSegments renders a single virtual rest segment for an empty planned block', () => {
+test('computeSplitSegments does not render full-row virtual rest for an empty planned block', () => {
     const ctx = createContext([]);
 
     const result = computeSplitSegments.call(ctx, 'planned', 0);
 
+    assert.equal(result, null);
+});
+
+test('computeSplitSegments renders leading and trailing virtual rest around a middle real segment', () => {
+    const ctx = createContext([
+        { label: 'shower', seconds: 20 * 60, startMinute: 20, durationMinutes: 20, endMinute: 40 },
+    ]);
+
+    const result = computeSplitSegments.call(ctx, 'planned', 0);
+
     assert.ok(result);
-    assert.equal(result.gridSegments.length, 1);
-    assert.equal(result.gridSegments[0].label, '휴식');
+    assert.equal(result.gridSegments.length, 3);
     assert.equal(result.gridSegments[0].kind, 'virtual-rest');
-    assert.equal(result.gridSegments[0].span, 6);
+    assert.equal(result.gridSegments[0].startMinute, 0);
+    assert.equal(result.gridSegments[0].durationMinutes, 20);
+    assert.equal(result.gridSegments[1].label, 'shower');
+    assert.equal(result.gridSegments[1].startMinute, 20);
+    assert.equal(result.gridSegments[1].endMinute, 40);
+    assert.equal(result.gridSegments[2].kind, 'virtual-rest');
+    assert.equal(result.gridSegments[2].startMinute, 40);
+    assert.equal(result.gridSegments[2].durationMinutes, 20);
+});
+
+test('computeSplitSegments omits virtual rest between adjacent real segments', () => {
+    const ctx = createContext([
+        { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+        { label: 'B', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
+    ]);
+
+    const result = computeSplitSegments.call(ctx, 'planned', 0);
+
+    assert.ok(result);
+    assert.equal(result.gridSegments.length, 2);
+    assert.equal(result.gridSegments[0].label, 'A');
+    assert.equal(result.gridSegments[1].label, 'B');
+    assert.equal(result.gridSegments.some(segment => segment.kind === 'virtual-rest'), false);
 });
 
 test('computeSplitSegments keeps a real saved rest activity distinct from virtual rest', () => {

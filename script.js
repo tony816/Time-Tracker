@@ -3559,7 +3559,8 @@ class TimeTracker {
                     endMinute,
                     durationMinutes: Math.max(0, endMinute - startMinute),
                 };
-            });
+            }).filter((segment) => segment && segment.durationMinutes > 0);
+            if (realSegments.length === 0) return null;
             const virtualGaps = planSegmentCore.calculateVirtualRestGaps(realSegments, range);
 
             const renderSegments = realSegments.concat(virtualGaps)
