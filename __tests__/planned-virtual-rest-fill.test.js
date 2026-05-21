@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const inlineController = require('../controllers/inline-plan-dropdown-controller');
 const renderController = require('../controllers/time-entry-render-controller');
+const planSegmentCore = require('../core/plan-segment-core');
 const { buildMethod } = require('./helpers/script-method-builder');
 
 const attachVirtualRestGapListeners = buildMethod(
@@ -12,6 +13,14 @@ const attachVirtualRestGapListeners = buildMethod(
 const attachPlanSegmentResizeListeners = buildMethod(
     'attachPlanSegmentResizeListeners(entryDiv, index)',
     '(entryDiv, index)'
+);
+const normalizePlanActivitiesForSegmentResize = buildMethod(
+    'normalizePlanActivitiesForSegmentResize(raw)',
+    '(raw)'
+);
+const applyPlanSegmentResize = buildMethod(
+    'applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute)',
+    '(baseIndex, segmentIndex, edge, targetMinute)'
 );
 
 function createNode() {
@@ -364,4 +373,113 @@ test('plan segment resize starts only from resize handles and stops propagation'
     assert.deepEqual(calls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 50 }]);
     assert.deepEqual(segmentClassList.added, ['is-resizing-plan-segment']);
     assert.deepEqual(segmentClassList.removed, ['is-resizing-plan-segment']);
+});
+
+test('applyPlanSegmentResize preserves existing gap positions while resizing', () => {
+    const slot = {
+        planned: '',
+        planActivities: [
+            {
+                label: 'A',
+                seconds: 20 * 60,
+                titleActivityId: 'title-a',
+                titleText: 'Title A',
+                activityId: 'activity-a',
+                activityText: 'Activity A',
+                startMinute: 0,
+                durationMinutes: 20,
+                endMinute: 20,
+            },
+            {
+                label: 'B',
+                seconds: 20 * 60,
+                titleActivityId: 'title-b',
+                titleText: 'Title B',
+                activityId: 'activity-b',
+                activityText: 'Activity B',
+                startMinute: 40,
+                durationMinutes: 20,
+                endMinute: 60,
+            },
+            {
+                kind: 'virtual-rest',
+                virtual: true,
+                label: '휴식',
+                startMinute: 20,
+                durationMinutes: 20,
+                endMinute: 40,
+            },
+        ],
+    };
+    const calls = [];
+    const ctx = {
+        timeSlots: [slot],
+        normalizePlanActivitiesForSegmentResize,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeDurationStep(seconds) {
+            return Math.max(0, Math.round(Number(seconds) || 0));
+        },
+        getBlockLength(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 0);
+            return 1;
+        },
+        formatActivitiesSummary(items) {
+            return items.map(item => item.label).join(', ');
+        },
+        renderTimeEntries(force) {
+            calls.push(['renderTimeEntries', force]);
+        },
+        calculateTotals() {
+            calls.push(['calculateTotals']);
+        },
+        autoSave() {
+            calls.push(['autoSave']);
+        },
+    };
+
+    const result = applyPlanSegmentResize.call(ctx, 0, 0, 'right', 30);
+
+    assert.equal(result, true);
+    assert.equal(slot.planActivities.length, 2);
+    assert.deepEqual(slot.planActivities[0], {
+        label: 'A',
+        seconds: 30 * 60,
+        titleActivityId: 'title-a',
+        titleText: 'Title A',
+        activityId: 'activity-a',
+        activityText: 'Activity A',
+        startMinute: 0,
+        durationMinutes: 30,
+        endMinute: 30,
+    });
+    assert.deepEqual(slot.planActivities[1], {
+        label: 'B',
+        seconds: 20 * 60,
+        titleActivityId: 'title-b',
+        titleText: 'Title B',
+        activityId: 'activity-b',
+        activityText: 'Activity B',
+        startMinute: 40,
+        durationMinutes: 20,
+        endMinute: 60,
+    });
+    assert.equal(slot.planActivities.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(slot.planActivities, { startMinute: 0, endMinute: 60 }), [
+        {
+            id: 'virtual-rest-30-10',
+            kind: 'virtual-rest',
+            label: '휴식',
+            startMinute: 30,
+            durationMinutes: 10,
+            virtual: true,
+        },
+    ]);
+    assert.deepEqual(calls, [
+        ['renderTimeEntries', true],
+        ['calculateTotals'],
+        ['autoSave'],
+    ]);
 });

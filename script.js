@@ -4336,6 +4336,27 @@ class TimeTracker {
             .filter(item => item.label || item.seconds > 0);
     }
 
+    normalizePlanActivitiesForSegmentResize(raw) {
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .filter(item => item && typeof item === 'object' && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map(item => {
+                const labelSource = (item.label ?? item.title ?? '').toString();
+                const label = this.normalizeActivityText ? this.normalizeActivityText(labelSource) : labelSource.trim();
+                const rawSeconds = Number.isFinite(item.seconds) ? Number(item.seconds) : 0;
+                const seconds = this.normalizeDurationStep(rawSeconds) ?? 0;
+                const normalized = {
+                    ...item,
+                    label,
+                    seconds,
+                };
+                delete normalized.kind;
+                delete normalized.virtual;
+                return normalized;
+            })
+            .filter(item => item.label || item.seconds > 0);
+    }
+
     formatSecondsForInput(seconds) {
         const inputFormatCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerInputFormatCore)
             ? globalThis.TimeTrackerInputFormatCore
@@ -5953,9 +5974,10 @@ class TimeTracker {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         if (!slot) return false;
         const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
-        const current = this.normalizePlanActivitiesArray
-            ? this.normalizePlanActivitiesArray(slot.planActivities)
+        const current = this.normalizePlanActivitiesForSegmentResize
+            ? this.normalizePlanActivitiesForSegmentResize(slot.planActivities)
             : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
+        // resizePlanSegmentInList relies on existing start/end/duration fields to preserve gaps.
         const next = planSegmentCore.resizePlanSegmentInList(current, segmentIndex, edge, targetMinute, {
             startMinute: 0,
             endMinute: blockMinutes,
