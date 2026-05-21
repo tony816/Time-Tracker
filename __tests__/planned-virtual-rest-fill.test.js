@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const inlineController = require('../controllers/inline-plan-dropdown-controller');
 const renderController = require('../controllers/time-entry-render-controller');
+require('../core/actual-grid-core');
 const planSegmentCore = require('../core/plan-segment-core');
 const { buildMethod } = require('./helpers/script-method-builder');
 
@@ -13,6 +14,18 @@ const attachVirtualRestGapListeners = buildMethod(
 const attachPlanSegmentResizeListeners = buildMethod(
     'attachPlanSegmentResizeListeners(entryDiv, index)',
     '(entryDiv, index)'
+);
+const computeSplitSegments = buildMethod(
+    'computeSplitSegments(type, index)',
+    '(type, index)'
+);
+const getSplitActivities = buildMethod(
+    'getSplitActivities(type, baseIndex)',
+    '(type, baseIndex)'
+);
+const normalizePlanActivitiesPreservingSegments = buildMethod(
+    'normalizePlanActivitiesPreservingSegments(raw)',
+    '(raw)'
 );
 const normalizePlanActivitiesForSegmentResize = buildMethod(
     'normalizePlanActivitiesForSegmentResize(raw)',
@@ -143,6 +156,96 @@ function createGapFillContext() {
             },
         },
     };
+}
+
+function createPlannedRenderContext(planActivities, overrides = {}) {
+    const ctx = {
+        timeSlots: [
+            {
+                planned: '',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: Array.isArray(planActivities) ? planActivities.map(item => ({ ...item })) : [],
+            },
+        ],
+        mergedFields: new Map(),
+        actualRecordingDisabled: true,
+        findMergeKey() {
+            return null;
+        },
+        getSplitBaseIndex(type, index) {
+            assert.equal(type, 'planned');
+            return index;
+        },
+        getSplitRange(type, index) {
+            assert.equal(type, 'planned');
+            return { start: index, end: index };
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeDurationStep(seconds) {
+            return Math.max(0, Math.round(Number(seconds) || 0));
+        },
+        formatDurationSummary(seconds) {
+            return `${Math.floor(seconds / 60)}m`;
+        },
+        normalizePlanActivitiesPreservingSegments(raw) {
+            return normalizePlanActivitiesPreservingSegments.call(this, raw);
+        },
+        normalizePlanActivitiesForSegmentResize(raw) {
+            return normalizePlanActivitiesForSegmentResize.call(this, raw);
+        },
+        getSplitActivities(type, baseIndex) {
+            return getSplitActivities.call(this, type, baseIndex);
+        },
+        getPlannedLabelForIndex() {
+            return '';
+        },
+        getBlockLength(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 0);
+            return 1;
+        },
+        getPlanSegmentBaseIndex(index) {
+            return index;
+        },
+        getPlanSegmentId(index, segmentIndex) {
+            return `planned-${index}-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId) {
+            return {
+                id: segmentId,
+                display: { icon: 'play', timeText: '', tone: 'under' },
+            };
+        },
+        getSplitColor() {
+            return '#abcdef';
+        },
+        formatActivitiesSummary(items) {
+            return items.map(item => item.label).join(', ');
+        },
+        renderTimeEntries(force) {
+            this.lastRenderForce = force;
+            this.lastRenderContext = computeSplitSegments.call(this, 'planned', 0);
+        },
+        calculateTotals() {},
+        autoSave() {},
+        ...overrides,
+    };
+    return ctx;
+}
+
+function summarizeGridSegments(context) {
+    return context.gridSegments.map(segment => ({
+        label: segment.label,
+        startMinute: segment.startMinute,
+        endMinute: segment.endMinute,
+        durationMinutes: segment.durationMinutes,
+        span: segment.span,
+        kind: segment.kind,
+        virtual: segment.virtual,
+    }));
 }
 
 test('clicking a virtual rest gap opens the existing inline plan dropdown with gap metadata', () => {
@@ -609,4 +712,162 @@ test('applyPlanSegmentResize preserves existing gap positions while resizing', (
         ['calculateTotals'],
         ['autoSave'],
     ]);
+});
+
+test('planned render keeps resized segment span and virtual rest gap after right shrink', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: 'A',
+            seconds: 60 * 60,
+            startMinute: 0,
+            durationMinutes: 60,
+            endMinute: 60,
+        },
+    ]);
+
+    const result = applyPlanSegmentResize.call(ctx, 0, 0, 'right', 50);
+    const rendered = summarizeGridSegments(ctx.lastRenderContext);
+
+    assert.equal(result, true);
+    assert.equal(ctx.lastRenderForce, true);
+    assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 50);
+    assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 50);
+    assert.equal(ctx.timeSlots[0].planActivities.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(rendered, [
+        {
+            label: 'A',
+            startMinute: 0,
+            endMinute: 50,
+            durationMinutes: 50,
+            span: 5,
+            kind: undefined,
+            virtual: undefined,
+        },
+        {
+            label: '휴식',
+            startMinute: 50,
+            endMinute: undefined,
+            durationMinutes: 10,
+            span: 1,
+            kind: 'virtual-rest',
+            virtual: true,
+        },
+    ]);
+});
+
+test('planned render keeps following segment position after resizing into an existing gap', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: 'A',
+            seconds: 20 * 60,
+            startMinute: 0,
+            durationMinutes: 20,
+            endMinute: 20,
+        },
+        {
+            label: 'B',
+            seconds: 20 * 60,
+            startMinute: 40,
+            durationMinutes: 20,
+            endMinute: 60,
+        },
+    ]);
+
+    const result = applyPlanSegmentResize.call(ctx, 0, 0, 'right', 30);
+    const rendered = summarizeGridSegments(ctx.lastRenderContext);
+
+    assert.equal(result, true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20 },
+    ]);
+    assert.deepEqual(rendered, [
+        {
+            label: 'A',
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+            span: 3,
+            kind: undefined,
+            virtual: undefined,
+        },
+        {
+            label: '휴식',
+            startMinute: 30,
+            endMinute: undefined,
+            durationMinutes: 10,
+            span: 1,
+            kind: 'virtual-rest',
+            virtual: true,
+        },
+        {
+            label: 'B',
+            startMinute: 40,
+            endMinute: 60,
+            durationMinutes: 20,
+            span: 2,
+            kind: undefined,
+            virtual: undefined,
+        },
+    ]);
+});
+
+test('getSplitActivities planned preserves segment positions and strips virtual metadata', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: ' A ',
+            seconds: 20 * 60,
+            titleActivityId: ' title-a ',
+            titleText: ' Title A ',
+            activityId: ' activity-a ',
+            activityText: ' Activity A ',
+            startMinute: 0,
+            durationMinutes: 20,
+            endMinute: 20,
+        },
+        {
+            kind: 'virtual-rest',
+            virtual: true,
+            label: '?댁떇',
+            startMinute: 20,
+            durationMinutes: 20,
+            endMinute: 40,
+        },
+        {
+            label: 'B',
+            seconds: 20 * 60,
+            startMinute: 40,
+            durationMinutes: 20,
+            endMinute: 60,
+        },
+    ]);
+
+    const result = getSplitActivities.call(ctx, 'planned', 0);
+
+    assert.deepEqual(result, [
+        {
+            label: 'A',
+            seconds: 20 * 60,
+            titleActivityId: 'title-a',
+            titleText: 'Title A',
+            activityId: 'activity-a',
+            activityText: 'Activity A',
+            startMinute: 0,
+            durationMinutes: 20,
+            endMinute: 20,
+        },
+        {
+            label: 'B',
+            seconds: 20 * 60,
+            startMinute: 40,
+            durationMinutes: 20,
+            endMinute: 60,
+        },
+    ]);
+    assert.equal(result.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
 });

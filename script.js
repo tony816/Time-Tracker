@@ -3698,7 +3698,8 @@ class TimeTracker {
         const slot = this.timeSlots[baseIndex];
         if (!slot) return [];
         if (type === 'planned') {
-            const planActivities = this.normalizePlanActivitiesArray(slot.planActivities).map(item => ({ ...item }));
+            const normalizePlanActivities = this.normalizePlanActivitiesPreservingSegments || this.normalizePlanActivitiesArray;
+            const planActivities = normalizePlanActivities.call(this, slot.planActivities).map(item => ({ ...item }));
             if (planActivities.length > 0) {
                 return planActivities;
             }
@@ -4336,7 +4337,7 @@ class TimeTracker {
             .filter(item => item.label || item.seconds > 0);
     }
 
-    normalizePlanActivitiesForSegmentResize(raw) {
+    normalizePlanActivitiesPreservingSegments(raw) {
         if (!Array.isArray(raw)) return [];
         return raw
             .filter(item => item && typeof item === 'object' && item.kind !== 'virtual-rest' && item.virtual !== true)
@@ -4350,11 +4351,22 @@ class TimeTracker {
                     label,
                     seconds,
                 };
+                ['titleActivityId', 'titleText', 'activityId', 'activityText'].forEach((key) => {
+                    if (!(key in item)) return;
+                    const rawValue = item[key];
+                    normalized[key] = rawValue == null
+                        ? null
+                        : (this.normalizeActivityText ? this.normalizeActivityText(rawValue) : String(rawValue || '').trim());
+                });
                 delete normalized.kind;
                 delete normalized.virtual;
                 return normalized;
             })
             .filter(item => item.label || item.seconds > 0);
+    }
+
+    normalizePlanActivitiesForSegmentResize(raw) {
+        return this.normalizePlanActivitiesPreservingSegments(raw);
     }
 
     formatSecondsForInput(seconds) {
@@ -5974,8 +5986,8 @@ class TimeTracker {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         if (!slot) return false;
         const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
-        const current = this.normalizePlanActivitiesForSegmentResize
-            ? this.normalizePlanActivitiesForSegmentResize(slot.planActivities)
+        const current = this.normalizePlanActivitiesPreservingSegments
+            ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
             : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
         // resizePlanSegmentInList relies on existing start/end/duration fields to preserve gaps.
         const next = planSegmentCore.resizePlanSegmentInList(current, segmentIndex, edge, targetMinute, {
