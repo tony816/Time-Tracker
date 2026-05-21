@@ -321,6 +321,75 @@ test('buildSplitVisualization renders resize handles only for idle real plan seg
     assert.doesNotMatch(runningPlanSegment, /plan-segment-resize-handle/);
     const virtualRestSegment = runningHtml.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
     assert.doesNotMatch(virtualRestSegment, /data-segment-kind="real-plan"/);
-    assert.match(virtualRestSegment, /plan-segment-resize-handle-left/);
+    assert.doesNotMatch(virtualRestSegment, /plan-segment-resize-handle/);
+});
+
+test('buildSplitVisualization renders one persistent shared handle at adjacent boundaries', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: 'A', span: 3, segmentIndex: 0, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+                    { label: 'B', span: 3, segmentIndex: 1, startMinute: 30, durationMinutes: 30, endMinute: 60 },
+                ],
+            };
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        buildPlanSegmentViewModel(baseIndex, segmentId) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: { icon: 'play', timeText: '0m', tone: 'under' },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 0);
+    const firstSegment = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-index="0"[\s\S]*?<\/div>/)[0];
+    const secondSegment = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-index="1"[\s\S]*?<\/div>/)[0];
+
+    assert.match(firstSegment, /plan-segment-boundary-resize-handle-shared/);
+    assert.match(firstSegment, /plan-segment-resize-handle-right/);
+    assert.doesNotMatch(secondSegment, /plan-segment-resize-handle-left/);
+    assert.equal((html.match(/plan-segment-boundary-resize-handle-shared/g) || []).length, 1);
+});
+
+test('buildSplitVisualization renders one boundary handle between leading rest and a real segment', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: '휴식', span: 2, kind: 'virtual-rest', virtual: true, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+                    { label: 'A', span: 4, segmentIndex: 0, startMinute: 20, durationMinutes: 40, endMinute: 60 },
+                ],
+            };
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        buildPlanSegmentViewModel(baseIndex, segmentId) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: { icon: 'play', timeText: '0m', tone: 'under' },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 0);
+    const virtualRestSegment = html.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
+    const realSegment = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-kind="real-plan"[\s\S]*?<\/div>/)[0];
+
     assert.match(virtualRestSegment, /plan-segment-resize-handle-right/);
+    assert.match(virtualRestSegment, /plan-segment-boundary-resize-handle-shared/);
+    assert.doesNotMatch(realSegment, /plan-segment-resize-handle-left/);
+    assert.equal((html.match(/plan-segment-boundary-resize-handle-shared/g) || []).length, 1);
 });

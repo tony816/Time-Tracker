@@ -50,6 +50,9 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.plan-segment-resize-preview-segment\.plan-segment-resize-preview-rest\s*\{[^}]*align-self:\s*start;[^}]*height:\s*calc\(100% - 3px\);[^}]*max-height:\s*calc\(100% - 3px\);/s);
     assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*opacity:\s*0;/s);
     assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment-virtual-rest\s*\{[^}]*opacity:\s*0;/s);
+    assert.match(interactionsSource, /\.plan-segment-resize-handle\s*\{[^}]*width:\s*18px;[^}]*opacity:\s*1;/s);
+    assert.match(interactionsSource, /\.plan-segment-boundary-resize-handle-line,\s*\.plan-segment-resize-handle::after\s*\{[^}]*width:\s*2px;/s);
+    assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
     assert.match(interactionsSource, /\.split-visualization-actual\s*\{[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.activity-log-btn/);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.actual-field-container\s*\{[^}]*pointer-events:\s*none;/s);

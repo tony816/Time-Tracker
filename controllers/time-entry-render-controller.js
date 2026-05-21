@@ -94,6 +94,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
         if (!preserveInlineDropdown) {
             this.closeInlinePlanDropdown();
         }
+        if (typeof this.validateSelectedPlanSegment === 'function') {
+            this.validateSelectedPlanSegment();
+        }
         this.lastRenderedCurrentTimeIndex = this.getCurrentTimeIndex();
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
@@ -152,6 +155,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             }
             if (typeof this.attachPlanSegmentTitleEditListeners === 'function') {
                 this.attachPlanSegmentTitleEditListeners(entryDiv, index);
+            }
+            if (typeof this.attachPlanSegmentSelectionListeners === 'function') {
+                this.attachPlanSegmentSelectionListeners(entryDiv, index);
             }
 
             // 타이머 이벤트 리스너 추가
@@ -212,6 +218,12 @@ function buildSplitVisualization(type, index) {
         const gridHtml = hasGrid
             ? `<div class="split-grid">${(() => {
                 const labeledSegmentCount = gridSegments.reduce((count, segment) => count + (segment && segment.label ? 1 : 0), 0);
+                const getSegmentStartMinute = (item) => Number(item && item.startMinute) || 0;
+                const getSegmentEndMinute = (item) => {
+                    const explicitEnd = Number(item && item.endMinute);
+                    if (Number.isFinite(explicitEnd)) return explicitEnd;
+                    return getSegmentStartMinute(item) + (Number(item && item.durationMinutes) || 0);
+                };
                 return gridSegments.map((segment, idx) => {
                 const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
                 const emptyClass = segment.label ? '' : ' split-empty';
@@ -307,10 +319,29 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const resizeDisabledClass = isRunningPlanSegment ? ' is-plan-segment-resize-disabled' : '';
                 const resizeTitle = isRunningPlanSegment ? ' title="실행 중인 세그먼트는 조정할 수 없음"' : '';
-                const resizeHandles = (!isActual && this.actualRecordingDisabled && segment.label && (isVirtualRest || !isRunningPlanSegment))
-                    ? '<span class="plan-segment-resize-handle plan-segment-resize-handle-left" data-resize-edge="left" aria-hidden="true"></span><span class="plan-segment-resize-handle plan-segment-resize-handle-right" data-resize-edge="right" aria-hidden="true"></span>'
+                const selectedPlanSegment = this.selectedPlanSegment || null;
+                const baseIndexForSelection = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                const selectedClass = (!isActual
+                    && !isVirtualRest
+                    && selectedPlanSegment
+                    && Number(selectedPlanSegment.baseIndex) === Number(baseIndexForSelection)
+                    && Number(selectedPlanSegment.segmentIndex) === Number(planSegmentIndex))
+                    ? ' is-selected-plan-segment'
                     : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
+                const previousSegment = idx > 0 ? gridSegments[idx - 1] : null;
+                const nextSegment = idx + 1 < gridSegments.length ? gridSegments[idx + 1] : null;
+                const startMinute = getSegmentStartMinute(segment);
+                const endMinute = getSegmentEndMinute(segment);
+                const previousTouches = previousSegment && getSegmentEndMinute(previousSegment) === startMinute;
+                const nextTouches = nextSegment && getSegmentStartMinute(nextSegment) === endMinute;
+                const canResizeSegment = !isActual && this.actualRecordingDisabled && segment.label && (isVirtualRest || !isRunningPlanSegment);
+                const canRenderLeftHandle = canResizeSegment && !previousTouches && !isVirtualRest;
+                const canRenderRightHandle = canResizeSegment && (!isVirtualRest || nextTouches);
+                const handleLine = '<span class="plan-segment-boundary-resize-handle-line" aria-hidden="true"></span>';
+                const resizeHandles = canResizeSegment
+                    ? `${canRenderLeftHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-left plan-segment-boundary-resize-handle-left" data-resize-edge="left" aria-hidden="true">${handleLine}</span>` : ''}${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
+                    : '';
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}${selectedClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

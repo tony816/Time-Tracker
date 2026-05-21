@@ -6104,6 +6104,121 @@ class TimeTracker {
             });
         });
     }
+        getSelectedPlanSegment() {
+        const selected = this.selectedPlanSegment || null;
+        if (!selected) return null;
+        const baseIndex = Number(selected.baseIndex);
+        const segmentIndex = Number(selected.segmentIndex);
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return null;
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
+        if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return null;
+        return { baseIndex, segmentIndex, segment };
+    }
+        validateSelectedPlanSegment() {
+        if (!this.selectedPlanSegment) return true;
+        if (!this.getSelectedPlanSegment()) {
+            this.selectedPlanSegment = null;
+            return false;
+        }
+        return true;
+    }
+        setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return false;
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
+        if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
+        this.selectedPlanSegment = { baseIndex, segmentIndex };
+        if (options.render !== false && typeof this.renderTimeEntries === 'function') {
+            this.renderTimeEntries(true);
+        }
+        return true;
+    }
+        clearSelectedPlanSegment(options = {}) {
+        if (!this.selectedPlanSegment) return false;
+        this.selectedPlanSegment = null;
+        if (options.render !== false && typeof this.renderTimeEntries === 'function') {
+            this.renderTimeEntries(true);
+        }
+        return true;
+    }
+        ensurePlanSegmentSelectionGlobalListeners() {
+        if (this.planSegmentSelectionGlobalListenersAttached || typeof document === 'undefined') return;
+        this.planSegmentSelectionGlobalListenersAttached = true;
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (document.querySelector && document.querySelector('.plan-segment-title-edit-input')) return;
+            this.clearSelectedPlanSegment();
+        });
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target && target.closest && (
+                target.closest('.split-grid-segment[data-segment-kind="real-plan"]')
+                || target.closest('.activity-chip-board')
+                || target.closest('.inline-plan-subsection')
+            )) {
+                return;
+            }
+            this.clearSelectedPlanSegment();
+        });
+    }
+        attachPlanSegmentSelectionListeners(entryDiv, index) {
+        if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        this.ensurePlanSegmentSelectionGlobalListeners();
+        const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
+        segments.forEach((segmentEl) => {
+            if (!segmentEl || segmentEl.dataset.selectionListenerAttached === 'true') return;
+            segmentEl.dataset.selectionListenerAttached = 'true';
+            segmentEl.addEventListener('click', (event) => {
+                if (event.button != null && event.button !== 0) return;
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-graphic-label, .plan-segment-graphic-title, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+                this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+            }, true);
+        });
+    }
+        replaceSelectedPlanSegmentActivity(activityItem, parentItem = null) {
+        const selected = this.getSelectedPlanSegment();
+        if (!selected || !activityItem) return false;
+        const activityText = this.normalizeActivityText
+            ? this.normalizeActivityText(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '')
+            : String(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '').trim();
+        if (!activityText) return false;
+        const slot = this.timeSlots && this.timeSlots[selected.baseIndex];
+        if (!slot || !Array.isArray(slot.planActivities)) return false;
+        const current = slot.planActivities[selected.segmentIndex];
+        if (!current) return false;
+        const parentText = parentItem
+            ? (this.normalizeActivityText
+                ? this.normalizeActivityText(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '')
+                : String(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '').trim())
+            : '';
+        const nextSegment = {
+            ...current,
+            label: activityText,
+            activityText,
+            activityId: String(activityItem.id || '').trim() || current.activityId || null,
+        };
+        if (parentItem && parentText) {
+            nextSegment.titleText = parentText;
+            nextSegment.titleActivityId = String(parentItem.id || '').trim() || nextSegment.titleActivityId || null;
+        } else {
+            delete nextSegment.titleText;
+            delete nextSegment.titleActivityId;
+        }
+        slot.planActivities = slot.planActivities.map((item, idx) => idx === selected.segmentIndex ? nextSegment : item);
+        slot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(slot.planActivities) : activityText;
+        this.selectedPlanSegment = { baseIndex: selected.baseIndex, segmentIndex: selected.segmentIndex };
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
         applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
         const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
         if (!planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return false;

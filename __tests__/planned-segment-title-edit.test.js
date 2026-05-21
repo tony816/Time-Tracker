@@ -241,6 +241,7 @@ test('clicking plan segment title text opens inline editing UI', () => {
         assert.equal(input.focused, true);
         assert.equal(input.selected, true);
         assert.equal(harness.label.hidden, true);
+        assert.equal(input.parentNode, harness.label.parentNode);
     });
 });
 

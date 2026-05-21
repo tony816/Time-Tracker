@@ -39,6 +39,26 @@ const applyPlanSegmentResize = buildMethod(
     'applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute)',
     '(baseIndex, segmentIndex, edge, targetMinute)'
 );
+const attachPlanSegmentSelectionListeners = buildMethod(
+    'attachPlanSegmentSelectionListeners(entryDiv, index)',
+    '(entryDiv, index)'
+);
+const ensurePlanSegmentSelectionGlobalListeners = buildMethod(
+    'ensurePlanSegmentSelectionGlobalListeners()',
+    '()'
+);
+const getSelectedPlanSegment = buildMethod(
+    'getSelectedPlanSegment()',
+    '()'
+);
+const setSelectedPlanSegment = buildMethod(
+    'setSelectedPlanSegment(baseIndex, segmentIndex, options = {})',
+    '(baseIndex, segmentIndex, options = {})'
+);
+const replaceSelectedPlanSegmentActivity = buildMethod(
+    'replaceSelectedPlanSegmentActivity(activityItem, parentItem = null)',
+    '(activityItem, parentItem = null)'
+);
 
 function createNode() {
     const listeners = {};
@@ -292,6 +312,9 @@ function createClassList(node) {
 
 function matchesSelector(node, selector) {
     if (!node || !selector) return false;
+    if (String(selector).includes(',')) {
+        return String(selector).split(',').some(part => matchesSelector(node, part.trim()));
+    }
     const classMatch = /^\.([a-z0-9_-]+)/i.exec(selector);
     if (classMatch && !node.classList.contains(classMatch[1])) return false;
     const dataPattern = /\[data-([a-z0-9-]+)="([^"]*)"\]/gi;
@@ -474,6 +497,15 @@ function createRenderedResizeContext(planActivities, options = {}) {
         attachPlanSegmentResizeListeners(entryDiv, index) {
             this.resizeAttachCalls += 1;
             return attachPlanSegmentResizeListeners.call(this, entryDiv, index);
+        },
+        attachPlanSegmentSelectionListeners(entryDiv, index) {
+            return attachPlanSegmentSelectionListeners.call(this, entryDiv, index);
+        },
+        ensurePlanSegmentSelectionGlobalListeners() {
+            return ensurePlanSegmentSelectionGlobalListeners.call(this);
+        },
+        setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
+            return setSelectedPlanSegment.call(this, baseIndex, segmentIndex, options);
         },
         attachFieldSelectionListeners() {},
         attachCellClickListeners() {},
@@ -791,22 +823,15 @@ test('rendered DOM right-handle drag shrinks segment, rerenders gap, and reattac
         const firstGap = container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
         assert.equal(firstGap.dataset.gapStartMinute, '50');
         assert.equal(firstGap.dataset.gapDurationMinutes, '10');
-        const gapLeftHandle = firstGap.querySelector('.plan-segment-resize-handle-left');
-        assert.ok(gapLeftHandle);
-        assert.equal(gapLeftHandle.dataset.resizeListenerAttached, 'true');
-
-        dragResizeHandle(document, gapLeftHandle, 0, -10);
-        assert.deepEqual(applyCalls[1], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 });
-        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
-        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 40);
+        assert.equal(firstGap.querySelector('.plan-segment-resize-handle-left'), null);
 
         const secondHandle = container.querySelector('.plan-segment-resize-handle-right');
         assert.ok(secondHandle);
         assert.equal(secondHandle.dataset.resizeListenerAttached, 'true');
         dragResizeHandle(document, secondHandle, 0, -10);
-        assert.deepEqual(applyCalls[2], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 30 });
-        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 30);
-        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 30);
+        assert.deepEqual(applyCalls[1], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 });
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 40);
     } finally {
         globalThis.document = originalDocument;
     }
@@ -898,6 +923,99 @@ test('rendered DOM drag moves adjacent planned segment boundary without opening 
     } finally {
         globalThis.document = originalDocument;
     }
+});
+
+test('clicking real planned segment background selects only that segment', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+        { label: 'B', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
+    ]);
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const firstSegment = container.querySelector('.split-grid-segment[data-segment-kind="real-plan"]');
+        assert.ok(firstSegment);
+        const resizeHandle = firstSegment.querySelector('.plan-segment-resize-handle');
+        assert.ok(resizeHandle);
+        firstSegment.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: resizeHandle,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(ctx.selectedPlanSegment, undefined);
+
+        firstSegment.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: firstSegment,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
+        const selected = container.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]')
+            .filter((node) => String(node.className).includes('is-selected-plan-segment'));
+        assert.equal(selected.length, 1);
+        assert.equal(selected[0].dataset.segmentIndex, '0');
+        assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('selected planned segment activity replacement preserves range and neighbors', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'A', activityText: 'A', activityId: 'a', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+        { label: 'B', activityText: 'B', activityId: 'b', seconds: 40 * 60, startMinute: 20, durationMinutes: 40, endMinute: 60 },
+    ], {
+        renderCalls: 0,
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 1 },
+        renderTimeEntries() {
+            this.renderCalls += 1;
+        },
+    });
+    ctx.replaceSelectedPlanSegmentActivity = function(activityItem, parentItem = null) {
+        return replaceSelectedPlanSegmentActivity.call(this, activityItem, parentItem);
+    };
+    ctx.getSelectedPlanSegment = function() {
+        return getSelectedPlanSegment.call(this);
+    };
+
+    const catalogItem = { id: 'c', label: 'C' };
+    assert.equal(ctx.replaceSelectedPlanSegmentActivity(catalogItem), true);
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'A', activityText: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: 'C', activityText: 'C', activityId: 'c', startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
+    ]);
+    assert.deepEqual(catalogItem, { id: 'c', label: 'C' });
+    assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 1 });
+    assert.equal(ctx.renderCalls, 1);
+
+    const childItem = { id: 'child-review', label: 'Review' };
+    const parentItem = { id: 'parent-study', label: 'Study' };
+    assert.equal(ctx.replaceSelectedPlanSegmentActivity(childItem, parentItem), true);
+    assert.equal(ctx.timeSlots[0].planActivities[1].label, 'Review');
+    assert.equal(ctx.timeSlots[0].planActivities[1].activityText, 'Review');
+    assert.equal(ctx.timeSlots[0].planActivities[1].activityId, 'child-review');
+    assert.equal(ctx.timeSlots[0].planActivities[1].titleText, 'Study');
+    assert.equal(ctx.timeSlots[0].planActivities[1].titleActivityId, 'parent-study');
+    assert.equal(ctx.timeSlots[0].planActivities[1].startMinute, 20);
+    assert.equal(ctx.timeSlots[0].planActivities[1].endMinute, 60);
+    assert.deepEqual(childItem, { id: 'child-review', label: 'Review' });
+    assert.deepEqual(parentItem, { id: 'parent-study', label: 'Study' });
 });
 
 test('plan segment resize preview updates adjacent boundary without mutating data on pointermove', () => {

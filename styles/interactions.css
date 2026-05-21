@@ -2722,6 +2722,11 @@ button.activity-chip,
   position: relative;
 }
 
+.split-visualization-planned .split-grid-segment.is-selected-plan-segment {
+  outline: 2px solid rgba(37, 99, 235, 0.42);
+  outline-offset: -2px;
+}
+
 .split-grid.is-previewing-plan-resize > .split-grid-segment[data-segment-kind="real-plan"] {
   opacity: 0;
 }
@@ -2799,12 +2804,12 @@ button.activity-chip,
 
 .plan-segment-resize-handle {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
-  width: 14px;
+  top: 0;
+  bottom: 0;
+  width: 18px;
   z-index: 12;
   cursor: ew-resize;
-  opacity: 0;
+  opacity: 1;
   pointer-events: auto;
   touch-action: none;
   user-select: none;
@@ -2812,28 +2817,39 @@ button.activity-chip,
 }
 
 .plan-segment-resize-handle-left {
-  left: -2px;
+  left: -9px;
 }
 
 .plan-segment-resize-handle-right {
-  right: -2px;
+  right: -9px;
 }
 
-.split-grid-segment[data-segment-kind="real-plan"]:hover .plan-segment-resize-handle,
-.split-grid-segment[data-segment-kind="real-plan"]:focus-within .plan-segment-resize-handle,
-.split-grid-segment.is-resizing-plan-segment .plan-segment-resize-handle {
-  opacity: 1;
-}
-
+.plan-segment-boundary-resize-handle-line,
 .plan-segment-resize-handle::after {
   content: '';
   position: absolute;
-  top: 20%;
-  bottom: 20%;
-  left: 6px;
+  top: 18%;
+  bottom: 18%;
+  left: 8px;
   width: 2px;
   border-radius: 999px;
-  background: rgba(44, 62, 80, 0.38);
+  background: rgba(44, 62, 80, 0.3);
+}
+
+.plan-segment-boundary-resize-handle-line {
+  display: block;
+}
+
+.plan-segment-boundary-resize-handle::after {
+  content: none;
+}
+
+.plan-segment-resize-handle:hover .plan-segment-boundary-resize-handle-line,
+.plan-segment-resize-handle:focus-visible .plan-segment-boundary-resize-handle-line,
+.plan-segment-resize-handle:hover::after,
+.plan-segment-resize-handle:focus-visible::after,
+.split-grid-segment.is-resizing-plan-segment .plan-segment-resize-handle::after {
+  background: rgba(30, 64, 175, 0.58);
 }
 
 .split-grid-segment.is-plan-segment-resize-disabled {
