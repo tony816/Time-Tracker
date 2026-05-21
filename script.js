@@ -6035,8 +6035,7 @@ class TimeTracker {
                 const grid = segmentEl.closest && segmentEl.closest('.split-grid');
                 const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
                 const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
-                const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : 1;
+                const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
                 const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
                 let lastClientX = originX;
                 let cleanedUp = false;
@@ -6077,7 +6076,11 @@ class TimeTracker {
                         lastClientX = upEvent.clientX;
                     }
                     cleanup();
-                    const deltaMinutes = Math.round(((lastClientX - originX) / gridWidth) * blockMinutes / 10) * 10;
+                    const unitsPerRow = 6;
+                    const unitWidth = gridWidth / unitsPerRow;
+                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+                    const deltaUnits = Math.round((lastClientX - originX) / unitWidth);
+                    const deltaMinutes = deltaUnits * 10;
                     if (deltaMinutes === 0) return;
                     const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     this.applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute);

@@ -1,11 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const inlineController = require('../controllers/inline-plan-dropdown-controller');
 const renderController = require('../controllers/time-entry-render-controller');
 require('../core/actual-grid-core');
 const planSegmentCore = require('../core/plan-segment-core');
 const { buildMethod } = require('./helpers/script-method-builder');
+
+const repoRoot = path.resolve(__dirname, '..');
 
 const attachVirtualRestGapListeners = buildMethod(
     'attachVirtualRestGapListeners(entryDiv, index)',
@@ -248,6 +252,262 @@ function summarizeGridSegments(context) {
     }));
 }
 
+function toDatasetKey(name) {
+    return String(name || '').replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
+}
+
+function parseDataset(text = '') {
+    const dataset = {};
+    const pattern = /data-([a-z0-9-]+)="([^"]*)"/gi;
+    let match;
+    while ((match = pattern.exec(text))) {
+        dataset[toDatasetKey(match[1])] = match[2];
+    }
+    return dataset;
+}
+
+function createClassList(node) {
+    return {
+        add(value) {
+            const classes = new Set(String(node.className || '').split(/\s+/).filter(Boolean));
+            classes.add(value);
+            node.className = Array.from(classes).join(' ');
+        },
+        remove(value) {
+            const classes = new Set(String(node.className || '').split(/\s+/).filter(Boolean));
+            classes.delete(value);
+            node.className = Array.from(classes).join(' ');
+        },
+        contains(value) {
+            return String(node.className || '').split(/\s+/).includes(value);
+        },
+    };
+}
+
+function matchesSelector(node, selector) {
+    if (!node || !selector) return false;
+    const classMatch = /^\.([a-z0-9_-]+)/i.exec(selector);
+    if (classMatch && !node.classList.contains(classMatch[1])) return false;
+    const dataPattern = /\[data-([a-z0-9-]+)="([^"]*)"\]/gi;
+    let dataMatch;
+    while ((dataMatch = dataPattern.exec(selector))) {
+        if (node.dataset[toDatasetKey(dataMatch[1])] !== dataMatch[2]) return false;
+    }
+    return Boolean(classMatch || selector.startsWith('[data-'));
+}
+
+function createRenderNode(tagName = 'div', state = {}) {
+    const listeners = {};
+    const node = {
+        tagName: String(tagName || 'div').toUpperCase(),
+        children: [],
+        parentNode: null,
+        dataset: {},
+        className: '',
+        style: {},
+        textContent: '',
+        _innerHTML: '',
+        classList: null,
+        appendChild(child) {
+            this.children.push(child);
+            child.parentNode = this;
+            return child;
+        },
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        dispatchEvent(event) {
+            const handler = listeners[event.type];
+            if (handler) handler(event);
+        },
+        setPointerCapture(pointerId) {
+            this.capturedPointerId = pointerId;
+        },
+        releasePointerCapture(pointerId) {
+            this.releasedPointerId = pointerId;
+        },
+        getBoundingClientRect() {
+            return this.rect || { width: state.gridWidth || 60, height: 24, left: 0, right: state.gridWidth || 60 };
+        },
+        closest(selector) {
+            let current = this;
+            while (current) {
+                if (matchesSelector(current, selector)) return current;
+                current = current.parentNode;
+            }
+            return null;
+        },
+        querySelector(selector) {
+            return this.querySelectorAll(selector)[0] || null;
+        },
+        querySelectorAll(selector) {
+            const result = [];
+            const visit = (child) => {
+                if (matchesSelector(child, selector)) result.push(child);
+                child.children.forEach(visit);
+            };
+            this.children.forEach(visit);
+            return result;
+        },
+    };
+    node.classList = createClassList(node);
+    Object.defineProperty(node, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = String(value || '');
+            this.children = [];
+            if (!this._innerHTML) return;
+            parseRenderedEntryHtml(this, this._innerHTML, state);
+        },
+    });
+    return node;
+}
+
+function parseRenderedEntryHtml(entryNode, html, state) {
+    if (/class="[^"]*\bplanned-input\b/.test(html)) {
+        const input = createRenderNode('input', state);
+        input.className = 'input-field planned-input';
+        entryNode.appendChild(input);
+    }
+
+    if (!html.includes('class="split-grid"')) return;
+    const grid = createRenderNode('div', state);
+    grid.className = 'split-grid';
+    grid.rect = { width: state.gridWidth || 60, height: 24, left: 0, right: state.gridWidth || 60 };
+    entryNode.appendChild(grid);
+
+    const segmentPattern = /<div class="split-grid-segment([^"]*)"([^>]*)>/g;
+    const matches = Array.from(html.matchAll(segmentPattern));
+    matches.forEach((match, index) => {
+        const segmentHtmlStart = match.index;
+        const segmentHtmlEnd = index + 1 < matches.length ? matches[index + 1].index : html.length;
+        const segmentHtml = html.slice(segmentHtmlStart, segmentHtmlEnd);
+        const segment = createRenderNode('div', state);
+        segment.className = `split-grid-segment${match[1]}`;
+        segment.dataset = parseDataset(match[2]);
+        grid.appendChild(segment);
+
+        if (segmentHtml.includes('plan-segment-resize-handle-left')) {
+            const left = createRenderNode('span', state);
+            left.className = 'plan-segment-resize-handle plan-segment-resize-handle-left';
+            left.dataset = { resizeEdge: 'left' };
+            segment.appendChild(left);
+        }
+        if (segmentHtml.includes('plan-segment-resize-handle-right')) {
+            const right = createRenderNode('span', state);
+            right.className = 'plan-segment-resize-handle plan-segment-resize-handle-right';
+            right.dataset = { resizeEdge: 'right' };
+            segment.appendChild(right);
+        }
+    });
+}
+
+function createRenderDocument(state = {}) {
+    const container = createRenderNode('div', state);
+    const documentListeners = {};
+    return {
+        container,
+        document: {
+            createElement(tagName) {
+                return createRenderNode(tagName, state);
+            },
+            getElementById(id) {
+                return id === 'timeEntries' ? container : null;
+            },
+            addEventListener(type, handler) {
+                documentListeners[type] = handler;
+            },
+            removeEventListener(type, handler) {
+                if (documentListeners[type] === handler) delete documentListeners[type];
+            },
+            dispatch(type, event = {}) {
+                if (documentListeners[type]) documentListeners[type](event);
+            },
+        },
+    };
+}
+
+function createRenderedResizeContext(planActivities, options = {}) {
+    const state = { gridWidth: options.gridWidth || 60 };
+    const { container, document } = createRenderDocument(state);
+    const ctx = createPlannedRenderContext(planActivities, {
+        resizeAttachCalls: 0,
+        getCurrentTimeIndex() {
+            return 0;
+        },
+        closeInlinePlanDropdown() {},
+        buildTimeEntryRowModel(slot, index) {
+            const planned = renderController.wrapWithSplitVisualization.call(
+                this,
+                'planned',
+                index,
+                `<input type="text" class="input-field planned-input" data-index="${index}" data-type="planned">`
+            );
+            return {
+                routineMatch: null,
+                hasPlannedMergeContinuation: false,
+                hasActualMergeContinuation: false,
+                innerHtml: planned,
+            };
+        },
+        buildSplitVisualization(type, index) {
+            return renderController.buildSplitVisualization.call(this, type, index);
+        },
+        computeSplitSegments(type, index) {
+            return computeSplitSegments.call(this, type, index);
+        },
+        renderTimeEntries(preserveInlineDropdown = false) {
+            return renderController.renderTimeEntries.call(this, preserveInlineDropdown);
+        },
+        attachPlanSegmentResizeListeners(entryDiv, index) {
+            this.resizeAttachCalls += 1;
+            return attachPlanSegmentResizeListeners.call(this, entryDiv, index);
+        },
+        attachFieldSelectionListeners() {},
+        attachCellClickListeners() {},
+        attachTimerListeners() {},
+        attachActivityLogListener() {},
+        attachRowWideClickTargets() {},
+        centerMergedTimeContent() {},
+        resizeMergedActualContent() {},
+        resizeMergedPlannedContent() {},
+        getMobileTimeUiState(index) {
+            return { hostIndex: index, mode: 'idle', showControls: false, isCurrent: false, status: 'idle' };
+        },
+        escapeHtml(value) {
+            return String(value);
+        },
+        escapeAttribute(value) {
+            return String(value);
+        },
+        ...options.overrides,
+    });
+    return { ctx, container, document };
+}
+
+function dragResizeHandle(documentStub, handle, originX, moveX) {
+    let prevented = false;
+    let stopped = false;
+    handle.dispatchEvent({
+        type: 'pointerdown',
+        target: handle,
+        button: 0,
+        pointerId: 1,
+        clientX: originX,
+        preventDefault() { prevented = true; },
+        stopPropagation() { stopped = true; },
+    });
+    documentStub.dispatch('pointermove', {
+        clientX: moveX,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    documentStub.dispatch('pointerup', {});
+    return { prevented, stopped };
+}
+
 test('clicking a virtual rest gap opens the existing inline plan dropdown with gap metadata', () => {
     const gap = createNode();
     gap.dataset = {
@@ -393,6 +653,131 @@ test('filled gap is rendered as a real planned segment instead of a virtual rest
 
     assert.doesNotMatch(html, /split-grid-segment-virtual-rest/);
     assert.match(html, /class="plan-segment-timer-button"/);
+});
+
+test('renderTimeEntries attaches resize listeners to rendered plan segment handles', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const handle = container.querySelector('.plan-segment-resize-handle-right');
+    assert.ok(handle);
+    assert.equal(ctx.resizeAttachCalls, 1);
+    assert.equal(handle.dataset.resizeListenerAttached, 'true');
+});
+
+test('index.html loads plan segment core before app bootstrap for rendered resize', () => {
+    const indexHtml = fs.readFileSync(path.join(repoRoot, 'index.html'), 'utf8');
+    const planCoreIndex = indexHtml.indexOf('src="core/plan-segment-core.js"');
+    const scriptIndex = indexHtml.indexOf('src="script.js"');
+    const mainIndex = indexHtml.indexOf('src="main.js"');
+
+    assert.ok(planCoreIndex >= 0);
+    assert.ok(scriptIndex > planCoreIndex);
+    assert.ok(mainIndex > scriptIndex);
+});
+
+test('rendered DOM right-handle drag shrinks segment, rerenders gap, and reattaches listener', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    const applyCalls = [];
+    ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        return applyPlanSegmentResize.call(this, baseIndex, segmentIndex, edge, targetMinute);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const firstHandle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(firstHandle);
+
+        const dragState = dragResizeHandle(document, firstHandle, 0, -10);
+        assert.deepEqual(dragState, { prevented: true, stopped: true });
+        assert.deepEqual(applyCalls[0], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 50 });
+        assert.deepEqual(ctx.timeSlots[0].planActivities[0], {
+            label: 'A',
+            seconds: 50 * 60,
+            startMinute: 0,
+            durationMinutes: 50,
+            endMinute: 50,
+        });
+        assert.equal(ctx.timeSlots[0].planActivities.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
+        assert.equal(container.querySelector('.split-grid-segment[data-segment-kind="real-plan"]').dataset.segmentEndMinute, '50');
+        const firstGap = container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
+        assert.equal(firstGap.dataset.gapStartMinute, '50');
+        assert.equal(firstGap.dataset.gapDurationMinutes, '10');
+
+        const secondHandle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(secondHandle);
+        assert.equal(secondHandle.dataset.resizeListenerAttached, 'true');
+        dragResizeHandle(document, secondHandle, 0, -10);
+        assert.deepEqual(applyCalls[1], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 });
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 40);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('rendered DOM drag consumes adjacent gap but clamps before next real segment', () => {
+    const originalDocument = globalThis.document;
+    const gapCase = createRenderedResizeContext([
+        { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+    ]);
+    gapCase.ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        return applyPlanSegmentResize.call(this, baseIndex, segmentIndex, edge, targetMinute);
+    };
+    globalThis.document = gapCase.document;
+
+    try {
+        gapCase.ctx.renderTimeEntries(true);
+        dragResizeHandle(gapCase.document, gapCase.container.querySelector('.plan-segment-resize-handle-right'), 0, 10);
+        assert.equal(gapCase.ctx.timeSlots[0].planActivities[0].endMinute, 40);
+        assert.equal(gapCase.ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
+        const gap = gapCase.container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
+        assert.equal(gap.dataset.gapStartMinute, '40');
+        assert.equal(gap.dataset.gapDurationMinutes, '20');
+
+        const blockedCase = createRenderedResizeContext([
+            { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+            { label: 'B', seconds: 20 * 60, startMinute: 40, durationMinutes: 20, endMinute: 60 },
+        ]);
+        const calls = [];
+        blockedCase.ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+            calls.push({ baseIndex, segmentIndex, edge, targetMinute });
+            return applyPlanSegmentResize.call(this, baseIndex, segmentIndex, edge, targetMinute);
+        };
+        globalThis.document = blockedCase.document;
+        blockedCase.ctx.renderTimeEntries(true);
+        dragResizeHandle(blockedCase.document, blockedCase.container.querySelector('.plan-segment-resize-handle-right'), 0, 30);
+        assert.deepEqual(calls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 60 }]);
+        assert.deepEqual(blockedCase.ctx.timeSlots[0].planActivities.map(item => ({
+            label: item.label,
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { label: 'A', startMinute: 0, endMinute: 40, durationMinutes: 40 },
+            { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20 },
+        ]);
+        const realSegments = blockedCase.container.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
+        assert.equal(realSegments[0].dataset.segmentEndMinute, '40');
+        assert.equal(realSegments[1].dataset.segmentStartMinute, '40');
+        assert.equal(blockedCase.container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
 });
 
 test('plan segment resize uses pointer drag movement, base index, and suppresses synthetic mouse', () => {
