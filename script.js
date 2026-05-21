@@ -6000,7 +6000,14 @@ class TimeTracker {
         handles.forEach((handle) => {
             if (!handle || handle.dataset.resizeListenerAttached === 'true') return;
             handle.dataset.resizeListenerAttached = 'true';
+            let suppressMouseDownUntil = 0;
             const startResize = (event) => {
+                const isPointerEvent = event && event.type === 'pointerdown';
+                if (event && event.button != null && event.button !== 0) return;
+                if (!isPointerEvent && Date.now() < suppressMouseDownUntil) {
+                    return;
+                }
+                if (isPointerEvent) suppressMouseDownUntil = Date.now() + 500;
                 const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
                 if (!segmentEl || segmentEl.classList.contains('is-plan-segment-resize-disabled')) return;
                 if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-timer-time, .split-grid-segment-virtual-rest, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
@@ -6015,30 +6022,61 @@ class TimeTracker {
                 if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return;
                 const grid = segmentEl.closest && segmentEl.closest('.split-grid');
                 const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
-                const blockMinutes = Math.max(60, this.getBlockLength('planned', index) * 60);
+                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
                 const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : 1;
                 const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
+                let lastClientX = originX;
+                let cleanedUp = false;
+                const pointerId = event && event.pointerId;
+                const moveType = isPointerEvent ? 'pointermove' : 'mousemove';
+                const upType = isPointerEvent ? 'pointerup' : 'mouseup';
                 if (segmentEl.classList && segmentEl.classList.add) segmentEl.classList.add('is-resizing-plan-segment');
+                if (isPointerEvent && pointerId != null && handle.setPointerCapture) {
+                    try {
+                        handle.setPointerCapture(pointerId);
+                    } catch (_) {}
+                }
 
-                const finish = (moveEvent) => {
-                    const clientX = Number.isFinite(moveEvent.clientX) ? moveEvent.clientX : originX;
-                    const deltaMinutes = Math.round(((clientX - originX) / gridWidth) * blockMinutes / 10) * 10;
+                const cleanup = () => {
+                    if (cleanedUp) return;
+                    cleanedUp = true;
+                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
+                    document.removeEventListener(moveType, update, true);
+                    document.removeEventListener(upType, finish, true);
+                    if (isPointerEvent) document.removeEventListener('pointercancel', cancel, true);
+                    if (isPointerEvent && pointerId != null && handle.releasePointerCapture) {
+                        try {
+                            handle.releasePointerCapture(pointerId);
+                        } catch (_) {}
+                    }
+                };
+
+                const update = (moveEvent) => {
+                    if (Number.isFinite(moveEvent && moveEvent.clientX)) {
+                        lastClientX = moveEvent.clientX;
+                    }
+                    if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
+                    if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
+                };
+
+                const finish = (upEvent) => {
+                    if (Number.isFinite(upEvent && upEvent.clientX)) {
+                        lastClientX = upEvent.clientX;
+                    }
+                    cleanup();
+                    const deltaMinutes = Math.round(((lastClientX - originX) / gridWidth) * blockMinutes / 10) * 10;
+                    if (deltaMinutes === 0) return;
                     const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
-                    document.removeEventListener('pointerup', finish, true);
-                    document.removeEventListener('mouseup', finish, true);
-                    document.removeEventListener('pointercancel', cancel, true);
-                    this.applyPlanSegmentResize(index, segmentIndex, edge, targetMinute);
+                    this.applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute);
                 };
+
                 const cancel = () => {
-                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
-                    document.removeEventListener('pointerup', finish, true);
-                    document.removeEventListener('mouseup', finish, true);
-                    document.removeEventListener('pointercancel', cancel, true);
+                    cleanup();
                 };
-                document.addEventListener('pointerup', finish, true);
-                document.addEventListener('mouseup', finish, true);
-                document.addEventListener('pointercancel', cancel, true);
+                document.addEventListener(moveType, update, true);
+                document.addEventListener(upType, finish, true);
+                if (isPointerEvent) document.addEventListener('pointercancel', cancel, true);
             };
             handle.addEventListener('pointerdown', startResize);
             handle.addEventListener('mousedown', startResize);

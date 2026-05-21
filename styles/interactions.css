@@ -2704,19 +2704,22 @@ button.activity-chip,
   position: absolute;
   top: 2px;
   bottom: 2px;
-  width: 8px;
-  z-index: 5;
+  width: 14px;
+  z-index: 12;
   cursor: ew-resize;
   opacity: 0;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
   transition: opacity 0.12s ease;
 }
 
 .plan-segment-resize-handle-left {
-  left: 0;
+  left: -2px;
 }
 
 .plan-segment-resize-handle-right {
-  right: 0;
+  right: -2px;
 }
 
 .split-grid-segment[data-segment-kind="real-plan"]:hover .plan-segment-resize-handle,
@@ -2730,7 +2733,7 @@ button.activity-chip,
   position: absolute;
   top: 20%;
   bottom: 20%;
-  left: 3px;
+  left: 6px;
   width: 2px;
   border-radius: 999px;
   background: rgba(44, 62, 80, 0.38);
