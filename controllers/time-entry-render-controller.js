@@ -150,6 +150,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachPlanSegmentResizeListeners === 'function') {
                 this.attachPlanSegmentResizeListeners(entryDiv, index);
             }
+            if (typeof this.attachPlanSegmentTitleEditListeners === 'function') {
+                this.attachPlanSegmentTitleEditListeners(entryDiv, index);
+            }
 
             // 타이머 이벤트 리스너 추가
             this.attachTimerListeners(entryDiv, index);
@@ -276,7 +279,7 @@ function buildSplitVisualization(type, index) {
                                     ${buttonHtml}
                                     <div class="${graphicMainClass}">
                                         ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
-                                        <span class="plan-segment-graphic-label" title="${safeLabel}">${safeLabel}</span>
+                                        <span class="plan-segment-graphic-label" title="${safeLabel}" role="button" tabindex="0" data-title-edit-trigger="true">${safeLabel}</span>
                                         <span class="plan-segment-timer-time tone-${tone}"
                                               data-index="${baseIndex}"
                                               data-segment-id="${escapedSegmentId}">${timerText}</span>

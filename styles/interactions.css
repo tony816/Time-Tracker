@@ -81,6 +81,24 @@
   font-weight: 700;
 }
 
+.plan-segment-graphic-label[data-title-edit-trigger="true"] {
+  cursor: text;
+}
+
+.plan-segment-title-edit-input {
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  border: 1px solid #2563eb;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  line-height: 18px;
+  outline: none;
+}
+
 .timer-result-input {
   flex: 1;
   padding: 8px 12px;

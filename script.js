@@ -5981,6 +5981,129 @@ class TimeTracker {
         const timer = slot && slot.planSegmentTimers && slot.planSegmentTimers[segmentId];
         return Boolean(timer && (timer.running === true || timer.status === 'running'));
     }
+        applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        if (!slot) return false;
+        const nextTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(rawTitle || '')
+            : String(rawTitle || '').trim();
+        if (!nextTitle) return false;
+
+        const normalizePlanActivities = this.normalizePlanActivitiesPreservingSegments
+            || this.normalizePlanActivitiesArray;
+        const planActivities = normalizePlanActivities
+            ? normalizePlanActivities.call(this, slot.planActivities).map(item => ({ ...item }))
+            : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
+
+        if (planActivities.length > 0) {
+            if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= planActivities.length) {
+                return false;
+            }
+            const current = planActivities[segmentIndex];
+            if (!current) return false;
+            const previousTitle = this.normalizeActivityText
+                ? this.normalizeActivityText(current.activityText || current.label || '')
+                : String(current.activityText || current.label || '').trim();
+            if (previousTitle === nextTitle) return false;
+            planActivities[segmentIndex] = {
+                ...current,
+                label: nextTitle,
+                activityText: nextTitle,
+            };
+            slot.planActivities = planActivities;
+            slot.planned = this.formatActivitiesSummary
+                ? this.formatActivitiesSummary(slot.planActivities)
+                : nextTitle;
+        } else {
+            const previousTitle = this.normalizeActivityText
+                ? this.normalizeActivityText(slot.planned || slot.planTitle || '')
+                : String(slot.planned || slot.planTitle || '').trim();
+            if (previousTitle === nextTitle) return false;
+            slot.planned = nextTitle;
+            if (typeof slot.planTitle === 'string' && slot.planTitle.trim()) {
+                slot.planTitle = nextTitle;
+            }
+        }
+
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
+        attachPlanSegmentTitleEditListeners(entryDiv, index) {
+        if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        const labels = entryDiv.querySelectorAll('.plan-segment-graphic-label[data-title-edit-trigger="true"]');
+        labels.forEach((labelEl) => {
+            if (!labelEl || labelEl.dataset.titleEditListenerAttached === 'true') return;
+            labelEl.dataset.titleEditListenerAttached = 'true';
+            const startEdit = (event) => {
+                if (event && event.type === 'click' && event.button != null && event.button !== 0) return;
+                const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
+                if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return;
+                if (event && event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection')) {
+                    return;
+                }
+                if (labelEl.querySelector && labelEl.querySelector('.plan-segment-title-edit-input')) return;
+                if (event && event.preventDefault) event.preventDefault();
+                if (event && event.stopPropagation) event.stopPropagation();
+
+                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+                const previousTitle = String(labelEl.textContent || '').trim();
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'plan-segment-title-edit-input';
+                input.value = previousTitle;
+                input.setAttribute('aria-label', 'Edit planned segment title');
+                labelEl.hidden = true;
+                labelEl.insertAdjacentElement('afterend', input);
+                input.focus();
+                if (typeof input.select === 'function') input.select();
+
+                let finished = false;
+                const cleanup = () => {
+                    if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
+                        input.parentNode.removeChild(input);
+                    }
+                    labelEl.hidden = false;
+                };
+                const finish = (save) => {
+                    if (finished) return;
+                    finished = true;
+                    const rawValue = input.value;
+                    cleanup();
+                    if (!save) return;
+                    const normalized = this.normalizeActivityText
+                        ? this.normalizeActivityText(rawValue || '')
+                        : String(rawValue || '').trim();
+                    if (!normalized) return;
+                    this.applyPlanSegmentTitleEdit(baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, normalized);
+                };
+
+                input.addEventListener('keydown', (keyEvent) => {
+                    if (keyEvent.key === 'Enter') {
+                        keyEvent.preventDefault();
+                        keyEvent.stopPropagation();
+                        finish(true);
+                    } else if (keyEvent.key === 'Escape') {
+                        keyEvent.preventDefault();
+                        keyEvent.stopPropagation();
+                        finish(false);
+                    }
+                });
+                input.addEventListener('blur', () => finish(true));
+                input.addEventListener('click', (clickEvent) => {
+                    clickEvent.stopPropagation();
+                });
+            };
+
+            labelEl.addEventListener('click', startEdit);
+            labelEl.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                startEdit(event);
+            });
+        });
+    }
         applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
         const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
         if (!planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return false;
