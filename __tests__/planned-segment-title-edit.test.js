@@ -37,16 +37,28 @@ function createElementNode(tagName = 'span') {
             listeners[type] = handler;
         },
         dispatchEvent(event) {
+            if (!event.target) event.target = this;
             const handler = listeners[event.type];
             if (handler) handler(event);
+            if (event.bubbles && this.parentNode && typeof this.parentNode.dispatchEvent === 'function') {
+                this.parentNode.dispatchEvent(event);
+            }
         },
-        querySelector() {
-            return null;
+        querySelector(selector) {
+            return findDescendant(this, selector);
         },
         insertAdjacentElement(position, child) {
             assert.equal(position, 'afterend');
             child.parentNode = this.parentNode || this;
             this.insertedElement = child;
+            if (this.parentNode && Array.isArray(this.parentNode.children)) {
+                const index = this.parentNode.children.indexOf(this);
+                if (index >= 0) {
+                    this.parentNode.children.splice(index + 1, 0, child);
+                } else {
+                    this.parentNode.children.push(child);
+                }
+            }
             return child;
         },
         appendChild(child) {
@@ -67,6 +79,64 @@ function createElementNode(tagName = 'span') {
         },
     };
     return node;
+}
+
+function getNodeClasses(node) {
+    return String(node && node.className || '').split(/\s+/).filter(Boolean);
+}
+
+function hasNodeClass(node, className) {
+    return getNodeClasses(node).includes(className);
+}
+
+function matchesSelector(node, selector) {
+    if (!node || !selector) return false;
+    if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') {
+        return hasNodeClass(node, 'split-grid-segment')
+            && node.dataset
+            && node.dataset.segmentKind === 'real-plan';
+    }
+    if (selector === '.plan-segment-graphic-label[data-title-edit-trigger="true"]') {
+        return hasNodeClass(node, 'plan-segment-graphic-label')
+            && node.dataset
+            && node.dataset.titleEditTrigger === 'true';
+    }
+    if (selector.startsWith('.')) {
+        return hasNodeClass(node, selector.slice(1));
+    }
+    return false;
+}
+
+function findDescendant(root, selector) {
+    const children = Array.isArray(root && root.children) ? root.children : [];
+    for (const child of children) {
+        if (matchesSelector(child, selector)) return child;
+        const nested = findDescendant(child, selector);
+        if (nested) return nested;
+    }
+    return null;
+}
+
+function findAllDescendants(root, selector, matches = []) {
+    const children = Array.isArray(root && root.children) ? root.children : [];
+    children.forEach((child) => {
+        if (matchesSelector(child, selector)) matches.push(child);
+        findAllDescendants(child, selector, matches);
+    });
+    return matches;
+}
+
+function attachDomParent(child, parent) {
+    parent.appendChild(child);
+    child.closest = (selector) => {
+        let current = child;
+        while (current) {
+            if (matchesSelector(current, selector)) return current;
+            current = current.parentNode;
+        }
+        return null;
+    };
+    return child;
 }
 
 function createTitleEditHarness(options = {}) {
@@ -327,6 +397,108 @@ test('virtual rest gap markup has no title edit affordance', () => {
     assert.match(html, /data-segment-kind="virtual-rest"/);
     assert.doesNotMatch(html, /data-title-edit-trigger="true"/);
     assert.doesNotMatch(html, /plan-segment-graphic-label/);
+});
+
+function createRealisticPlanSegmentDom() {
+    const entryDiv = createElementNode('div');
+    const segment = createElementNode('div');
+    segment.className = 'split-grid-segment';
+    segment.dataset.segmentKind = 'real-plan';
+    segment.dataset.segmentIndex = '0';
+    segment.dataset.segmentId = 'planned-0-0';
+
+    const resizeHandle = createElementNode('span');
+    resizeHandle.className = 'plan-segment-resize-handle plan-segment-resize-handle-right';
+
+    const graphic = createElementNode('div');
+    graphic.className = 'plan-segment-graphic';
+
+    const timerButton = createElementNode('button');
+    timerButton.className = 'plan-segment-timer-button';
+
+    const main = createElementNode('div');
+    main.className = 'plan-segment-graphic-main';
+
+    const label = createElementNode('span');
+    label.className = 'plan-segment-graphic-label';
+    label.dataset.titleEditTrigger = 'true';
+    label.textContent = 'Focus';
+
+    const timerTime = createElementNode('span');
+    timerTime.className = 'plan-segment-timer-time';
+    timerTime.textContent = '0m / 60m';
+
+    attachDomParent(segment, entryDiv);
+    attachDomParent(resizeHandle, segment);
+    attachDomParent(graphic, segment);
+    attachDomParent(timerButton, graphic);
+    attachDomParent(main, graphic);
+    attachDomParent(label, main);
+    attachDomParent(timerTime, main);
+
+    entryDiv.querySelectorAll = (selector) => findAllDescendants(entryDiv, selector);
+
+    const calls = [];
+    const ctx = createTitleEditHarness({
+        ctx: {
+            applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
+                calls.push({ baseIndex, segmentIndex, rawTitle });
+                return applyPlanSegmentTitleEdit.call(this, baseIndex, segmentIndex, rawTitle);
+            },
+        },
+    }).ctx;
+
+    return { ctx, entryDiv, segment, timerButton, resizeHandle, label, calls };
+}
+
+test('real planned segment DOM only opens title editing from the label trigger', () => {
+    withDocument(() => {
+        const { ctx, entryDiv, segment, timerButton, resizeHandle, label } = createRealisticPlanSegmentDom();
+        attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
+
+        segment.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: segment,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+
+        timerButton.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: timerButton,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+
+        resizeHandle.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: resizeHandle,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+
+        label.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: label,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        const input = entryDiv.querySelector('.plan-segment-title-edit-input');
+        assert.ok(input);
+        assert.equal(input.value, 'Focus');
+    });
 });
 
 test('resize handle and timer button clicks do not start title editing', () => {
