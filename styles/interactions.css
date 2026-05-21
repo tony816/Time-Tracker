@@ -2769,9 +2769,9 @@ button.activity-chip,
 }
 
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-rest {
-  align-self: stretch;
-  height: 100%;
-  max-height: 100%;
+  align-self: start;
+  height: calc(100% - 3px);
+  max-height: calc(100% - 3px);
   border: 1px dashed rgba(96, 110, 128, 0.58);
   border-bottom: 1px dashed rgba(96, 110, 128, 0.58);
   background: rgba(231, 236, 241, 0.72);
