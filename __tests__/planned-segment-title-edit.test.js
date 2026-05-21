@@ -448,12 +448,12 @@ function createRealisticPlanSegmentDom() {
         },
     }).ctx;
 
-    return { ctx, entryDiv, segment, timerButton, resizeHandle, label, calls };
+    return { ctx, entryDiv, segment, timerButton, resizeHandle, label, timerTime, calls };
 }
 
 test('real planned segment DOM only opens title editing from the label trigger', () => {
     withDocument(() => {
-        const { ctx, entryDiv, segment, timerButton, resizeHandle, label } = createRealisticPlanSegmentDom();
+        const { ctx, entryDiv, segment, timerButton, resizeHandle, label, timerTime } = createRealisticPlanSegmentDom();
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
 
         segment.dispatchEvent({
@@ -480,6 +480,16 @@ test('real planned segment DOM only opens title editing from the label trigger',
             type: 'click',
             button: 0,
             target: resizeHandle,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+
+        timerTime.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: timerTime,
             bubbles: true,
             preventDefault() {},
             stopPropagation() {},
