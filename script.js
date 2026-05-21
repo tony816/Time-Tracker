@@ -6228,6 +6228,22 @@ class TimeTracker {
                         : 'plan-segment-resize-preview-segment';
                     if (previewSegment.style) {
                         previewSegment.style.gridColumn = `${startUnit + 1} / span ${span}`;
+                        if (!isVirtualRest && typeof this.getSplitColor === 'function') {
+                            const color = this.getSplitColor(
+                                'planned',
+                                segment.activityText || segment.label,
+                                segment.isExtra,
+                                segment.reservedIndices,
+                                'grid'
+                            );
+                            if (color) {
+                                if (typeof previewSegment.style.setProperty === 'function') {
+                                    previewSegment.style.setProperty('--split-segment-color', color);
+                                } else {
+                                    previewSegment.style['--split-segment-color'] = color;
+                                }
+                            }
+                        }
                     }
                     const label = document.createElement('span');
                     label.className = 'plan-segment-resize-preview-label';

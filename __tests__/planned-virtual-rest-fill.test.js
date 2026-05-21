@@ -560,6 +560,7 @@ function getPreviewSegments(container) {
     return container.querySelectorAll('.plan-segment-resize-preview-segment').map((segment) => ({
         className: segment.className,
         gridColumn: segment.style.gridColumn,
+        color: segment.style['--split-segment-color'] || '',
         label: segment.children[0] ? segment.children[0].textContent : '',
         duration: segment.children[1] ? segment.children[1].textContent : '',
     }));
@@ -921,8 +922,8 @@ test('plan segment resize preview updates adjacent boundary without mutating dat
         assert.equal(layer.ariaHidden, 'true');
         assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
         assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 4', label: '샤워', duration: '40m' },
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '5 / span 2', label: '이동/저녁준비', duration: '20m' },
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 4', color: '#abcdef', label: '샤워', duration: '40m' },
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '5 / span 2', color: '#abcdef', label: '이동/저녁준비', duration: '20m' },
         ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
@@ -963,8 +964,8 @@ test('plan segment resize preview shows virtual rest gap and cancels without app
         moveResizePreview(document, -10);
 
         assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 3', label: '샤워', duration: '30m' },
-            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: '4 / span 3', label: '휴식', duration: '30m' },
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 3', color: '#abcdef', label: '샤워', duration: '30m' },
+            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: '4 / span 3', color: '', label: '휴식', duration: '30m' },
         ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
