@@ -791,14 +791,22 @@ test('rendered DOM right-handle drag shrinks segment, rerenders gap, and reattac
         const firstGap = container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
         assert.equal(firstGap.dataset.gapStartMinute, '50');
         assert.equal(firstGap.dataset.gapDurationMinutes, '10');
+        const gapLeftHandle = firstGap.querySelector('.plan-segment-resize-handle-left');
+        assert.ok(gapLeftHandle);
+        assert.equal(gapLeftHandle.dataset.resizeListenerAttached, 'true');
+
+        dragResizeHandle(document, gapLeftHandle, 0, -10);
+        assert.deepEqual(applyCalls[1], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 });
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 40);
 
         const secondHandle = container.querySelector('.plan-segment-resize-handle-right');
         assert.ok(secondHandle);
         assert.equal(secondHandle.dataset.resizeListenerAttached, 'true');
         dragResizeHandle(document, secondHandle, 0, -10);
-        assert.deepEqual(applyCalls[1], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 });
-        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 40);
-        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 40);
+        assert.deepEqual(applyCalls[2], { baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 30 });
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 30);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 30);
     } finally {
         globalThis.document = originalDocument;
     }

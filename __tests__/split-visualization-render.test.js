@@ -317,7 +317,10 @@ test('buildSplitVisualization renders resize handles only for idle real plan seg
 
     const runningHtml = buildSplitVisualization.call(runningCtx, 'planned', 0);
     assert.match(runningHtml, /is-plan-segment-resize-disabled/);
-    assert.doesNotMatch(runningHtml, /plan-segment-resize-handle/);
+    const runningPlanSegment = runningHtml.match(/<div class="split-grid-segment[^"]*is-plan-segment-resize-disabled[^>]*>[\s\S]*?<\/div>/)[0];
+    assert.doesNotMatch(runningPlanSegment, /plan-segment-resize-handle/);
     const virtualRestSegment = runningHtml.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
     assert.doesNotMatch(virtualRestSegment, /data-segment-kind="real-plan"/);
+    assert.match(virtualRestSegment, /plan-segment-resize-handle-left/);
+    assert.match(virtualRestSegment, /plan-segment-resize-handle-right/);
 });

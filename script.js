@@ -6145,18 +6145,19 @@ class TimeTracker {
                 }
                 if (isPointerEvent) suppressMouseDownUntil = Date.now() + 500;
                 const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
-                if (!segmentEl || segmentEl.classList.contains('is-plan-segment-resize-disabled')) return;
-                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-timer-time, .split-grid-segment-virtual-rest, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                const virtualRestEl = handle.closest && handle.closest('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
+                const resizeSurfaceEl = segmentEl || virtualRestEl;
+                if (!resizeSurfaceEl || (segmentEl && segmentEl.classList.contains('is-plan-segment-resize-disabled'))) return;
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-timer-time, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
                     return;
                 }
                 event.preventDefault();
                 event.stopPropagation();
                 const edge = handle.dataset.resizeEdge === 'left' ? 'left' : 'right';
-                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
-                const startMinute = Number(segmentEl.dataset.segmentStartMinute);
-                const endMinute = Number(segmentEl.dataset.segmentEndMinute);
-                if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return;
-                const grid = segmentEl.closest && segmentEl.closest('.split-grid');
+                let segmentIndex = parseInt(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentIndex || '' : '', 10);
+                let startMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentStartMinute : NaN);
+                let endMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentEndMinute : NaN);
+                const grid = resizeSurfaceEl.closest && resizeSurfaceEl.closest('.split-grid');
                 const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
                 const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                 const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
@@ -6167,6 +6168,27 @@ class TimeTracker {
                         ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
                         : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
                     : [];
+                let effectiveEdge = edge;
+                if (!segmentEl && virtualRestEl) {
+                    const gapStartMinute = Number(virtualRestEl.dataset.gapStartMinute);
+                    const gapDurationMinutes = Number(virtualRestEl.dataset.gapDurationMinutes);
+                    const gapEndMinute = gapStartMinute + gapDurationMinutes;
+                    const indexedSegments = originalPlanActivities
+                        .map((item, itemIndex) => ({ item, itemIndex }))
+                        .filter(({ item }) => item && item.kind !== 'virtual-rest' && item.virtual !== true);
+                    const previous = indexedSegments.find(({ item }) => Number(item.endMinute) === gapStartMinute);
+                    const next = indexedSegments.find(({ item }) => Number(item.startMinute) === gapEndMinute);
+                    const target = edge === 'left'
+                        ? (previous ? { segmentIndex: previous.itemIndex, edge: 'right' } : null)
+                        : (next ? { segmentIndex: next.itemIndex, edge: 'left' } : null);
+                    if (!target) return;
+                    segmentIndex = target.segmentIndex;
+                    effectiveEdge = target.edge;
+                    const targetSegment = originalPlanActivities[segmentIndex];
+                    startMinute = Number(targetSegment && targetSegment.startMinute);
+                    endMinute = Number(targetSegment && targetSegment.endMinute);
+                }
+                if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return;
                 let previewLayer = null;
                 let lastPreviewDeltaUnits = null;
                 const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
@@ -6175,7 +6197,7 @@ class TimeTracker {
                 const pointerId = event && event.pointerId;
                 const moveType = isPointerEvent ? 'pointermove' : 'mousemove';
                 const upType = isPointerEvent ? 'pointerup' : 'mouseup';
-                if (segmentEl.classList && segmentEl.classList.add) segmentEl.classList.add('is-resizing-plan-segment');
+                if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) resizeSurfaceEl.classList.add('is-resizing-plan-segment');
                 if (isPointerEvent && pointerId != null && handle.setPointerCapture) {
                     try {
                         handle.setPointerCapture(pointerId);
@@ -6267,11 +6289,11 @@ class TimeTracker {
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
                     const deltaMinutes = deltaUnits * 10;
-                    const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
+                    const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPlanActivities.map(item => ({ ...item })),
                         segmentIndex,
-                        edge,
+                        effectiveEdge,
                         targetMinute,
                         { startMinute: 0, endMinute: blockMinutes }
                     );
@@ -6289,7 +6311,7 @@ class TimeTracker {
                     if (cleanedUp) return;
                     cleanedUp = true;
                     removePreview();
-                    if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
+                    if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) resizeSurfaceEl.classList.remove('is-resizing-plan-segment');
                     document.removeEventListener(moveType, update, true);
                     document.removeEventListener(upType, finish, true);
                     if (isPointerEvent) document.removeEventListener('pointercancel', cancel, true);
@@ -6320,8 +6342,8 @@ class TimeTracker {
                     const deltaUnits = Math.round((lastClientX - originX) / unitWidth);
                     const deltaMinutes = deltaUnits * 10;
                     if (deltaMinutes === 0) return;
-                    const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    this.applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute);
+                    const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
+                    this.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
                 };
 
                 const cancel = () => {

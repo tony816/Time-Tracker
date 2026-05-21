@@ -307,7 +307,7 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const resizeDisabledClass = isRunningPlanSegment ? ' is-plan-segment-resize-disabled' : '';
                 const resizeTitle = isRunningPlanSegment ? ' title="실행 중인 세그먼트는 조정할 수 없음"' : '';
-                const resizeHandles = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest && !isRunningPlanSegment)
+                const resizeHandles = (!isActual && this.actualRecordingDisabled && segment.label && (isVirtualRest || !isRunningPlanSegment))
                     ? '<span class="plan-segment-resize-handle plan-segment-resize-handle-left" data-resize-edge="left" aria-hidden="true"></span><span class="plan-segment-resize-handle plan-segment-resize-handle-right" data-resize-edge="right" aria-hidden="true"></span>'
                     : '';
                 return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
