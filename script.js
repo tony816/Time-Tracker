@@ -6032,7 +6032,7 @@ class TimeTracker {
     }
         attachPlanSegmentTitleEditListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
-        const labels = entryDiv.querySelectorAll('.plan-segment-graphic-label[data-title-edit-trigger="true"]');
+        const labels = entryDiv.querySelectorAll('[data-title-edit-trigger="true"]');
         labels.forEach((labelEl) => {
             if (!labelEl || labelEl.dataset.titleEditListenerAttached === 'true') return;
             labelEl.dataset.titleEditListenerAttached = 'true';
@@ -6055,6 +6055,12 @@ class TimeTracker {
                 input.className = 'plan-segment-title-edit-input';
                 input.value = previousTitle;
                 input.setAttribute('aria-label', 'Edit planned segment title');
+                const measuredWidth = labelEl.getBoundingClientRect && labelEl.getBoundingClientRect().width;
+                const fallbackCh = Math.max(3, Math.min(previousTitle.length + 1, 18));
+                input.style.minWidth = `${fallbackCh}ch`;
+                if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
+                    input.style.width = `${Math.ceil(measuredWidth + 12)}px`;
+                }
                 const setLabelEditing = (editing) => {
                     const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
                     const hasEditingClass = classes.includes('is-editing');
@@ -6193,7 +6199,7 @@ class TimeTracker {
             segmentEl.dataset.selectionListenerAttached = 'true';
             segmentEl.addEventListener('click', (event) => {
                 if (event.button != null && event.button !== 0) return;
-                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-graphic-label, .plan-segment-graphic-title, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, [data-title-edit-trigger="true"], .plan-segment-graphic-title, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
                     return;
                 }
                 event.preventDefault();

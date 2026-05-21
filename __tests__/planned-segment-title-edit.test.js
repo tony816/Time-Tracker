@@ -14,6 +14,10 @@ const applyPlanSegmentTitleEdit = buildMethod(
     'applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
 );
+const attachPlanSegmentSelectionListeners = buildMethod(
+    'attachPlanSegmentSelectionListeners(entryDiv, index)',
+    '(entryDiv, index)'
+);
 
 function createElementNode(tagName = 'span') {
     const listeners = {};
@@ -27,6 +31,7 @@ function createElementNode(tagName = 'span') {
         textContent: '',
         value: '',
         type: '',
+        style: {},
         focused: false,
         selected: false,
         removedChildren: [],
@@ -93,6 +98,9 @@ function hasNodeClass(node, className) {
 
 function matchesSelector(node, selector) {
     if (!node || !selector) return false;
+    if (String(selector).includes(',')) {
+        return String(selector).split(',').some(part => matchesSelector(node, part.trim()));
+    }
     if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') {
         return hasNodeClass(node, 'split-grid-segment')
             && node.dataset
@@ -102,6 +110,9 @@ function matchesSelector(node, selector) {
         return hasNodeClass(node, 'plan-segment-graphic-label')
             && node.dataset
             && node.dataset.titleEditTrigger === 'true';
+    }
+    if (selector === '[data-title-edit-trigger="true"]') {
+        return node.dataset && node.dataset.titleEditTrigger === 'true';
     }
     if (selector.startsWith('.')) {
         return hasNodeClass(node, selector.slice(1));
@@ -142,12 +153,16 @@ function attachDomParent(child, parent) {
 }
 
 function createTitleEditHarness(options = {}) {
+    const outerLabel = createElementNode('span');
+    outerLabel.className = 'plan-segment-graphic-label';
     const label = createElementNode('span');
-    label.className = 'plan-segment-graphic-label';
+    label.className = 'plan-segment-label-text';
     label.dataset.titleEditTrigger = 'true';
     label.textContent = options.label || 'Focus';
+    label.getBoundingClientRect = () => ({ width: options.textWidth ?? 40 });
     const parent = createElementNode('div');
-    label.parentNode = parent;
+    parent.appendChild(outerLabel);
+    outerLabel.appendChild(label);
     const segment = {
         dataset: {
             segmentKind: 'real-plan',
@@ -160,7 +175,7 @@ function createTitleEditHarness(options = {}) {
     };
     const entryDiv = {
         querySelectorAll(selector) {
-            assert.equal(selector, '.plan-segment-graphic-label[data-title-edit-trigger="true"]');
+            assert.equal(selector, '[data-title-edit-trigger="true"]');
             return [label];
         },
     };
@@ -203,7 +218,7 @@ function createTitleEditHarness(options = {}) {
         },
         ...options.ctx,
     };
-    return { ctx, entryDiv, label, calls };
+    return { ctx, entryDiv, outerLabel, label, calls };
 }
 
 function withDocument(run) {
@@ -246,6 +261,26 @@ test('clicking plan segment title text opens inline editing UI', () => {
         assert.equal(input.parentNode, harness.label);
         assert.equal(harness.label.textContent, '');
         assert.equal(hasNodeClass(harness.label, 'is-editing'), true);
+        assert.equal(hasNodeClass(harness.outerLabel, 'is-editing'), false);
+        assert.equal(input.style.width, '52px');
+        assert.equal(input.style.minWidth, '6ch');
+    });
+});
+
+test('clicking outer plan label space does not open inline editing UI', () => {
+    withDocument(() => {
+        const harness = createTitleEditHarness();
+        attachPlanSegmentTitleEditListeners.call(harness.ctx, harness.entryDiv, 0);
+
+        harness.outerLabel.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: harness.outerLabel,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
     });
 });
 
@@ -426,10 +461,14 @@ function createRealisticPlanSegmentDom() {
     const main = createElementNode('div');
     main.className = 'plan-segment-graphic-main';
 
+    const labelContainer = createElementNode('span');
+    labelContainer.className = 'plan-segment-graphic-label';
+
     const label = createElementNode('span');
-    label.className = 'plan-segment-graphic-label';
+    label.className = 'plan-segment-label-text';
     label.dataset.titleEditTrigger = 'true';
     label.textContent = 'Focus';
+    label.getBoundingClientRect = () => ({ width: 44 });
 
     const timerTime = createElementNode('span');
     timerTime.className = 'plan-segment-timer-time';
@@ -440,7 +479,8 @@ function createRealisticPlanSegmentDom() {
     attachDomParent(graphic, segment);
     attachDomParent(timerButton, graphic);
     attachDomParent(main, graphic);
-    attachDomParent(label, main);
+    attachDomParent(labelContainer, main);
+    attachDomParent(label, labelContainer);
     attachDomParent(timerTime, main);
 
     entryDiv.querySelectorAll = (selector) => findAllDescendants(entryDiv, selector);
@@ -448,6 +488,11 @@ function createRealisticPlanSegmentDom() {
     const calls = [];
     const ctx = createTitleEditHarness({
         ctx: {
+            ensurePlanSegmentSelectionGlobalListeners() {},
+            setSelectedPlanSegment(baseIndex, segmentIndex) {
+                this.selectedPlanSegment = { baseIndex, segmentIndex };
+                return true;
+            },
             applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
                 calls.push({ baseIndex, segmentIndex, rawTitle });
                 return applyPlanSegmentTitleEdit.call(this, baseIndex, segmentIndex, rawTitle);
@@ -455,12 +500,12 @@ function createRealisticPlanSegmentDom() {
         },
     }).ctx;
 
-    return { ctx, entryDiv, segment, timerButton, resizeHandle, label, timerTime, calls };
+    return { ctx, entryDiv, segment, timerButton, resizeHandle, labelContainer, label, timerTime, calls };
 }
 
 test('real planned segment DOM only opens title editing from the label trigger', () => {
     withDocument(() => {
-        const { ctx, entryDiv, segment, timerButton, resizeHandle, label, timerTime } = createRealisticPlanSegmentDom();
+        const { ctx, entryDiv, segment, timerButton, resizeHandle, labelContainer, label, timerTime } = createRealisticPlanSegmentDom();
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
 
         segment.dispatchEvent({
@@ -503,6 +548,16 @@ test('real planned segment DOM only opens title editing from the label trigger',
         });
         assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
 
+        labelContainer.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: labelContainer,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+
         label.dispatchEvent({
             type: 'click',
             button: 0,
@@ -518,6 +573,26 @@ test('real planned segment DOM only opens title editing from the label trigger',
         assert.equal(input.parentNode, label);
         assert.equal(label.textContent, '');
         assert.equal(hasNodeClass(label, 'is-editing'), true);
+    });
+});
+
+test('clicking label container space selects segment instead of opening title editing', () => {
+    withDocument(() => {
+        const { ctx, entryDiv, labelContainer } = createRealisticPlanSegmentDom();
+        attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
+        attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
+
+        labelContainer.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: labelContainer,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
     });
 });
 

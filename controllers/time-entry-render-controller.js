@@ -291,7 +291,9 @@ function buildSplitVisualization(type, index) {
                                     ${buttonHtml}
                                     <div class="${graphicMainClass}">
                                         ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
-                                        <span class="plan-segment-graphic-label" title="${safeLabel}" role="button" tabindex="0" data-title-edit-trigger="true">${safeLabel}</span>
+                                        <span class="plan-segment-graphic-label" title="${safeLabel}">
+                                            <span class="plan-segment-label-text" role="button" tabindex="0" data-title-edit-trigger="true">${safeLabel}</span>
+                                        </span>
                                         <span class="plan-segment-timer-time tone-${tone}"
                                               data-index="${baseIndex}"
                                               data-segment-id="${escapedSegmentId}">${timerText}</span>

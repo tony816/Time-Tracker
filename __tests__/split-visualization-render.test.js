@@ -253,7 +253,7 @@ test('buildSplitVisualization renders parent title above child activity inside p
     const html = buildSplitVisualization.call(ctx, 'planned', 5);
 
     assert.match(html, /plan-segment-graphic-title[^>]*>운동<\/span>/);
-    assert.match(html, /plan-segment-graphic-label[^>]*>스쿼트<\/span>/);
+    assert.match(html, /plan-segment-graphic-label[^>]*>[\s\S]*plan-segment-label-text[^>]*data-title-edit-trigger="true"[^>]*>스쿼트<\/span>/);
     assert.match(html, /has-segment-title/);
     assert.doesNotMatch(html, /split-title-band/);
 });
