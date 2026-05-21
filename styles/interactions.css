@@ -2727,7 +2727,7 @@ button.activity-chip,
 }
 
 .split-grid.is-previewing-plan-resize > .split-grid-segment-virtual-rest {
-  opacity: 0.65;
+  opacity: 0;
 }
 
 .plan-segment-resize-preview-layer {
@@ -2740,15 +2740,19 @@ button.activity-chip,
   pointer-events: none;
   column-gap: 0;
   row-gap: 0;
+  overflow: hidden;
 }
 
 .plan-segment-resize-preview-segment {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
+  align-self: stretch;
   align-items: center;
   justify-items: center;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   padding: 2px 4px;
   border: 0;
   border-bottom: 3px solid #fff;
@@ -2765,6 +2769,9 @@ button.activity-chip,
 }
 
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-rest {
+  align-self: stretch;
+  height: 100%;
+  max-height: 100%;
   border: 1px dashed rgba(96, 110, 128, 0.58);
   border-bottom: 1px dashed rgba(96, 110, 128, 0.58);
   background: rgba(231, 236, 241, 0.72);
