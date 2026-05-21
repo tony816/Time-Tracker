@@ -68,6 +68,8 @@ function createElementNode(tagName = 'span') {
         },
         removeChild(child) {
             this.removedChildren.push(child);
+            const index = this.children.indexOf(child);
+            if (index >= 0) this.children.splice(index, 1);
             child.parentNode = null;
             return child;
         },
@@ -227,7 +229,7 @@ function startTitleEdit(harness) {
         preventDefault() {},
         stopPropagation() {},
     });
-    return harness.label.insertedElement;
+    return harness.label.querySelector('.plan-segment-title-edit-input');
 }
 
 test('clicking plan segment title text opens inline editing UI', () => {
@@ -240,8 +242,10 @@ test('clicking plan segment title text opens inline editing UI', () => {
         assert.equal(input.value, 'Focus');
         assert.equal(input.focused, true);
         assert.equal(input.selected, true);
-        assert.equal(harness.label.hidden, true);
-        assert.equal(input.parentNode, harness.label.parentNode);
+        assert.equal(harness.label.hidden, false);
+        assert.equal(input.parentNode, harness.label);
+        assert.equal(harness.label.textContent, '');
+        assert.equal(hasNodeClass(harness.label, 'is-editing'), true);
     });
 });
 
@@ -290,6 +294,8 @@ test('pressing Escape cancels and keeps the previous title', () => {
         assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Focus');
         assert.equal(harness.calls.some(call => call === 'save'), false);
         assert.equal(harness.label.hidden, false);
+        assert.equal(harness.label.textContent, 'Focus');
+        assert.equal(hasNodeClass(harness.label, 'is-editing'), false);
     });
 });
 
@@ -509,6 +515,9 @@ test('real planned segment DOM only opens title editing from the label trigger',
         const input = entryDiv.querySelector('.plan-segment-title-edit-input');
         assert.ok(input);
         assert.equal(input.value, 'Focus');
+        assert.equal(input.parentNode, label);
+        assert.equal(label.textContent, '');
+        assert.equal(hasNodeClass(label, 'is-editing'), true);
     });
 });
 

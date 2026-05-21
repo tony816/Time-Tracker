@@ -6055,8 +6055,29 @@ class TimeTracker {
                 input.className = 'plan-segment-title-edit-input';
                 input.value = previousTitle;
                 input.setAttribute('aria-label', 'Edit planned segment title');
-                labelEl.hidden = true;
-                labelEl.insertAdjacentElement('afterend', input);
+                const setLabelEditing = (editing) => {
+                    const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
+                    const hasEditingClass = classes.includes('is-editing');
+                    if (labelEl.classList && typeof labelEl.classList.add === 'function' && typeof labelEl.classList.remove === 'function') {
+                        if (editing) {
+                            labelEl.classList.add('is-editing');
+                        } else {
+                            labelEl.classList.remove('is-editing');
+                        }
+                        return;
+                    }
+                    if (editing && !hasEditingClass) {
+                        classes.push('is-editing');
+                    } else if (!editing && hasEditingClass) {
+                        const filtered = classes.filter((className) => className !== 'is-editing');
+                        labelEl.className = filtered.join(' ');
+                        return;
+                    }
+                    labelEl.className = classes.join(' ');
+                };
+                setLabelEditing(true);
+                labelEl.textContent = '';
+                labelEl.appendChild(input);
                 input.focus();
                 if (typeof input.select === 'function') input.select();
 
@@ -6065,7 +6086,8 @@ class TimeTracker {
                     if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
                         input.parentNode.removeChild(input);
                     }
-                    labelEl.hidden = false;
+                    setLabelEditing(false);
+                    labelEl.textContent = previousTitle;
                 };
                 const finish = (save) => {
                     if (finished) return;

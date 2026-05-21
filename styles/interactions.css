@@ -85,18 +85,35 @@
   cursor: text;
 }
 
+.plan-segment-graphic-label.is-editing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 100%;
+}
+
 .plan-segment-title-edit-input {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   height: 20px;
+  box-sizing: border-box;
   border: 1px solid #2563eb;
   border-radius: 4px;
   padding: 0 4px;
   background: #ffffff;
   color: #111827;
   font: inherit;
+  font-weight: 600;
   line-height: 18px;
+  text-align: center;
   outline: none;
+}
+
+.plan-segment-graphic-label[hidden],
+.plan-segment-graphic-title[hidden] {
+  display: none !important;
 }
 
 .timer-result-input {

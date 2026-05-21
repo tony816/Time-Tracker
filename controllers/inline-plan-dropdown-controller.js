@@ -1079,21 +1079,26 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
     }
 
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
-        if (this.selectedPlanSegment && typeof this.replaceSelectedPlanSegmentActivity === 'function') {
-            const replaced = this.replaceSelectedPlanSegmentActivity(activityItem, parentItem || null);
-            if (replaced) {
-                const touched = this.touchPlannedActivityUsage ? this.touchPlannedActivityUsage(activityItem, parentItem || null) : null;
-                if (touched) {
-                    this.dedupeAndSortPlannedActivities();
-                    this.savePlannedActivities();
-                    if (typeof this.renderInlinePlanDropdownOptions === 'function') {
-                        this.renderInlinePlanDropdownOptions();
+        if (!activityItem) return;
+
+        if (!this.inlinePlanTarget) {
+            if (this.selectedPlanSegment && typeof this.replaceSelectedPlanSegmentActivity === 'function') {
+                const replaced = this.replaceSelectedPlanSegmentActivity(activityItem, parentItem || null);
+                if (replaced) {
+                    const touched = this.touchPlannedActivityUsage ? this.touchPlannedActivityUsage(activityItem, parentItem || null) : null;
+                    if (touched) {
+                        this.dedupeAndSortPlannedActivities();
+                        this.savePlannedActivities();
+                        if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+                            this.renderInlinePlanDropdownOptions();
+                        }
                     }
+                    return;
                 }
-                return;
             }
+            return;
         }
-        if (!this.inlinePlanTarget || !activityItem) return;
+
         const activityText = getCatalogItemLabel.call(this, activityItem);
         if (!activityText) return;
         const titleText = parentItem ? getCatalogItemLabel.call(this, parentItem) : null;

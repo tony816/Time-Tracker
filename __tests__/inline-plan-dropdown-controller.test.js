@@ -430,6 +430,306 @@ test('openInlinePlanDropdown keeps exact same virtual rest gap as toggle-close b
     assert.equal(closed, true);
 });
 
+function createInlineSelectionNode(tagName) {
+    const listeners = {};
+    const attributes = {};
+    const node = {
+        tagName,
+        children: [],
+        dataset: {},
+        className: '',
+        textContent: '',
+        title: '',
+        type: '',
+        parentNode: null,
+        classList: {
+            add(...classes) {
+                const tokens = String(node.className || '').split(/\s+/).filter(Boolean);
+                classes.forEach((className) => {
+                    if (className && !tokens.includes(className)) tokens.push(className);
+                });
+                node.className = tokens.join(' ');
+            },
+            remove(...classes) {
+                const tokens = String(node.className || '').split(/\s+/).filter(Boolean);
+                node.className = tokens.filter((className) => !classes.includes(className)).join(' ');
+            },
+            contains(className) {
+                return String(node.className || '').split(/\s+/).filter(Boolean).includes(className);
+            },
+        },
+        appendChild(child) {
+            child.parentNode = this;
+            this.children.push(child);
+            return child;
+        },
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        dispatchEvent(event) {
+            if (!event.target) event.target = this;
+            if (listeners[event.type]) listeners[event.type](event);
+        },
+        setAttribute(name, value) {
+            attributes[name] = String(value);
+        },
+        getAttribute(name) {
+            return attributes[name];
+        },
+    };
+    return node;
+}
+
+function collectNodeText(node) {
+    if (!node) return '';
+    const own = String(node.textContent || '');
+    const childText = (node.children || []).map(collectNodeText).join('');
+    return own + childText;
+}
+
+function findNode(root, predicate) {
+    if (!root) return null;
+    if (predicate(root)) return root;
+    for (const child of root.children || []) {
+        const found = findNode(child, predicate);
+        if (found) return found;
+    }
+    return null;
+}
+
+function createInlineSelectionHarness(options = {}) {
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            node.parentNode = this;
+            this.children.push(node);
+            return node;
+        },
+    };
+    const searchInput = { value: '' };
+    const dropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: options.inlinePlanTarget || { startIndex: 0, endIndex: 0 },
+        selectedPlanSegment: options.selectedPlanSegment || null,
+        timeSlots: options.timeSlots || [
+            {
+                planned: 'A',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: 'A', activityText: 'A', activityId: 'a', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                ],
+            },
+        ],
+        mergedFields: new Map(),
+        plannedActivities: options.plannedActivities || [
+            { id: 'fill', name: 'Fill', label: 'Fill', normalizedName: 'Fill', parentId: null, pinned: true, archived: false },
+        ],
+        modalPlanActivities: [],
+        modalPlanActiveRow: -1,
+        modalPlanTitle: '',
+        modalPlanTitleBandOn: false,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizePlanActivitiesArray(raw) {
+            return Array.isArray(raw) ? raw.map((item) => ({ ...item })) : [];
+        },
+        formatActivitiesSummary(items) {
+            return (items || []).map((item) => item && item.label).filter(Boolean).join(', ');
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        renderTimeEntries(keepOpen) {
+            calls.push(['render', keepOpen]);
+        },
+        calculateTotals() {
+            calls.push(['totals']);
+        },
+        autoSave() {
+            calls.push(['save']);
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+            this.inlinePlanTarget = null;
+        },
+        positionInlinePlanDropdown() {
+            calls.push(['position']);
+        },
+        ...options.ctx,
+    };
+    return { board, ctx, calls };
+}
+
+function renderInlineSelectionChip(harness, label = 'Fill') {
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+    try {
+        controller.renderInlinePlanDropdownOptions.call(harness.ctx);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+    const chipButton = findNode(harness.board, (node) =>
+        String(node.className || '').includes('activity-chip-main')
+        && collectNodeText(node).includes(label)
+    );
+    assert.ok(chipButton, `activity chip not rendered: ${label}`);
+    return chipButton;
+}
+
+function dispatchInlineSelectionClick(chipButton) {
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+    try {
+        chipButton.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+}
+
+test('activity chip selection uses virtual rest inline target before selected segment replacement', () => {
+    const harness = createInlineSelectionHarness({
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 0 },
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'virtual-rest-gap',
+            gapStartMinute: 20,
+            gapDurationMinutes: 20,
+        },
+    });
+    let replacementCalls = 0;
+    harness.ctx.replaceSelectedPlanSegmentActivity = () => {
+        replacementCalls += 1;
+        return true;
+    };
+    const chipButton = renderInlineSelectionChip(harness);
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(replacementCalls, 0);
+    assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'A');
+    assert.equal(harness.ctx.timeSlots[0].planActivities[1].label, 'Fill');
+    assert.equal(harness.ctx.timeSlots[0].planActivities[1].seconds, 1200);
+});
+
+test('activity chip selection replaces selected segment only when inline target is inactive', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 1 },
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: 'A', activityText: 'A', activityId: 'a', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                    { label: 'B', activityText: 'B', activityId: 'b', seconds: 2400, startMinute: 20, endMinute: 60, durationMinutes: 40 },
+                ],
+            },
+        ],
+    });
+    let replacementCalls = 0;
+    harness.ctx.replaceSelectedPlanSegmentActivity = (activityItem) => {
+        replacementCalls += 1;
+        const segment = harness.ctx.timeSlots[0].planActivities[1];
+        harness.ctx.timeSlots[0].planActivities[1] = {
+            ...segment,
+            label: activityItem.label,
+            activityText: activityItem.label,
+            activityId: activityItem.id,
+        };
+        return true;
+    };
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.ctx.inlinePlanTarget = null;
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(replacementCalls, 1);
+    assert.deepEqual(harness.ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'A', activityText: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: 'Fill', activityText: 'Fill', activityId: 'fill', startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
+    ]);
+});
+
+test('activity chip selection uses regular inline target before selected segment replacement', () => {
+    const harness = createInlineSelectionHarness({
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 0 },
+        inlinePlanTarget: { startIndex: 1, endIndex: 1 },
+        timeSlots: [
+            {
+                planned: 'A',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: 'A', activityText: 'A', activityId: 'a', seconds: 3600 },
+                ],
+            },
+            {
+                planned: 'Old',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: 'Old', activityText: 'Old', activityId: 'old', seconds: 3600 },
+                ],
+            },
+        ],
+    });
+    let replacementCalls = 0;
+    harness.ctx.replaceSelectedPlanSegmentActivity = () => {
+        replacementCalls += 1;
+        return true;
+    };
+    const chipButton = renderInlineSelectionChip(harness);
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(replacementCalls, 0);
+    assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'A');
+    assert.equal(harness.ctx.timeSlots[1].planned, 'Fill');
+    assert.equal(harness.ctx.timeSlots[1].planActivities[0].label, 'Fill');
+});
+
 test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessible labels', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
