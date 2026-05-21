@@ -61,6 +61,11 @@ function createNode() {
             child.parentNode = this;
             return child;
         },
+        removeChild(child) {
+            this.children = this.children.filter(item => item !== child);
+            child.parentNode = null;
+            return child;
+        },
         addEventListener(type, handler) {
             listeners[type] = handler;
         },
@@ -70,6 +75,7 @@ function createNode() {
         },
         setAttribute(name, value) {
             this[name] = String(value);
+            this[String(name).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase())] = String(value);
         },
         querySelector(selector) {
             return this.parts ? this.parts[selector] || null : null;
@@ -326,6 +332,10 @@ function createRenderNode(tagName = 'div', state = {}) {
         releasePointerCapture(pointerId) {
             this.releasedPointerId = pointerId;
         },
+        setAttribute(name, value) {
+            this[name] = String(value);
+            this[String(name).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase())] = String(value);
+        },
         getBoundingClientRect() {
             return this.rect || { width: state.gridWidth || 60, height: 24, left: 0, right: state.gridWidth || 60 };
         },
@@ -506,6 +516,53 @@ function dragResizeHandle(documentStub, handle, originX, moveX) {
     });
     documentStub.dispatch('pointerup', {});
     return { prevented, stopped };
+}
+
+function startResizePreview(handle, originX) {
+    let prevented = false;
+    let stopped = false;
+    handle.dispatchEvent({
+        type: 'pointerdown',
+        target: handle,
+        button: 0,
+        pointerId: 1,
+        clientX: originX,
+        preventDefault() { prevented = true; },
+        stopPropagation() { stopped = true; },
+    });
+    return { prevented, stopped };
+}
+
+function moveResizePreview(documentStub, clientX) {
+    documentStub.dispatch('pointermove', {
+        clientX,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+}
+
+function finishResizePreview(documentStub, clientX) {
+    documentStub.dispatch('pointerup', {
+        clientX,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+}
+
+function cancelResizePreview(documentStub) {
+    documentStub.dispatch('pointercancel', {
+        preventDefault() {},
+        stopPropagation() {},
+    });
+}
+
+function getPreviewSegments(container) {
+    return container.querySelectorAll('.plan-segment-resize-preview-segment').map((segment) => ({
+        className: segment.className,
+        gridColumn: segment.style.gridColumn,
+        label: segment.children[0] ? segment.children[0].textContent : '',
+        duration: segment.children[1] ? segment.children[1].textContent : '',
+    }));
 }
 
 test('clicking a virtual rest gap opens the existing inline plan dropdown with gap metadata', () => {
@@ -829,6 +886,95 @@ test('rendered DOM drag moves adjacent planned segment boundary without opening 
         ]);
         assert.equal(container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]'), null);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('plan segment resize preview updates adjacent boundary without mutating data on pointermove', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: '샤워', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+        { label: '이동/저녁준비', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
+    ]);
+    const originalPlan = JSON.stringify(ctx.timeSlots[0].planActivities);
+    const applyCalls = [];
+    ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        return true;
+    };
+    ctx.renderTimeEntries = function(preserveInlineDropdown = false) {
+        return renderController.renderTimeEntries.call(this, preserveInlineDropdown);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const handle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(handle);
+        assert.deepEqual(startResizePreview(handle, 0), { prevented: true, stopped: true });
+
+        moveResizePreview(document, 10);
+
+        const layer = container.querySelector('.plan-segment-resize-preview-layer');
+        assert.ok(layer);
+        assert.equal(layer.ariaHidden, 'true');
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
+        assert.deepEqual(getPreviewSegments(container), [
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 4', label: '샤워', duration: '40m' },
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '5 / span 2', label: '이동/저녁준비', duration: '20m' },
+        ]);
+        assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
+        assert.deepEqual(applyCalls, []);
+        assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
+
+        finishResizePreview(document, 10);
+
+        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
+        assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 }]);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('plan segment resize preview shows virtual rest gap and cancels without applying', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: '샤워', seconds: 40 * 60, startMinute: 0, durationMinutes: 40, endMinute: 40 },
+    ]);
+    const originalPlan = JSON.stringify(ctx.timeSlots[0].planActivities);
+    const applyCalls = [];
+    ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        return true;
+    };
+    ctx.renderTimeEntries = function(preserveInlineDropdown = false) {
+        return renderController.renderTimeEntries.call(this, preserveInlineDropdown);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const handle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(handle);
+        startResizePreview(handle, 0);
+
+        moveResizePreview(document, -10);
+
+        assert.deepEqual(getPreviewSegments(container), [
+            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 3', label: '샤워', duration: '30m' },
+            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: '4 / span 3', label: '휴식', duration: '30m' },
+        ]);
+        assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
+        assert.deepEqual(applyCalls, []);
+
+        cancelResizePreview(document);
+
+        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
+        assert.deepEqual(applyCalls, []);
+        assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
     } finally {
         globalThis.document = originalDocument;
     }

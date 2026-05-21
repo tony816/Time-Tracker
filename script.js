@@ -6160,6 +6160,15 @@ class TimeTracker {
                 const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
                 const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                 const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
+                const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+                const slot = this.timeSlots && this.timeSlots[baseIndex];
+                const originalPlanActivities = slot
+                    ? (this.normalizePlanActivitiesPreservingSegments
+                        ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
+                        : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
+                    : [];
+                let previewLayer = null;
+                let lastPreviewDeltaUnits = null;
                 const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
                 let lastClientX = originX;
                 let cleanedUp = false;
@@ -6173,9 +6182,97 @@ class TimeTracker {
                     } catch (_) {}
                 }
 
+                const removePreview = () => {
+                    if (previewLayer && previewLayer.parentNode) {
+                        if (typeof previewLayer.parentNode.removeChild === 'function') {
+                            previewLayer.parentNode.removeChild(previewLayer);
+                        } else if (Array.isArray(previewLayer.parentNode.children)) {
+                            previewLayer.parentNode.children = previewLayer.parentNode.children.filter(child => child !== previewLayer);
+                        }
+                    }
+                    previewLayer = null;
+                    if (grid && grid.classList && grid.classList.remove) {
+                        grid.classList.remove('is-previewing-plan-resize');
+                    }
+                };
+
+                const ensurePreviewLayer = () => {
+                    if (previewLayer || !grid || typeof document === 'undefined' || !document.createElement) return previewLayer;
+                    previewLayer = document.createElement('div');
+                    previewLayer.className = 'plan-segment-resize-preview-layer';
+                    previewLayer.setAttribute('aria-hidden', 'true');
+                    if (previewLayer.style) {
+                        const unitCount = Math.max(6, Math.ceil(blockMinutes / 10));
+                        previewLayer.style.gridTemplateColumns = `repeat(${unitCount}, 1fr)`;
+                        previewLayer.style.pointerEvents = 'none';
+                    }
+                    grid.appendChild(previewLayer);
+                    if (grid.classList && grid.classList.add) {
+                        grid.classList.add('is-previewing-plan-resize');
+                    }
+                    return previewLayer;
+                };
+
+                const appendPreviewSegment = (layer, segment) => {
+                    const startMinuteForSegment = Number.isFinite(segment.startMinute) ? Math.max(0, Math.floor(segment.startMinute)) : 0;
+                    const durationMinutesForSegment = Number.isFinite(segment.durationMinutes)
+                        ? Math.max(0, Math.floor(segment.durationMinutes))
+                        : Math.max(0, Math.floor(((Number(segment.seconds) || 0) / 60)));
+                    if (durationMinutesForSegment <= 0) return;
+                    const startUnit = Math.max(0, Math.floor(startMinuteForSegment / 10));
+                    const span = Math.max(1, Math.ceil(durationMinutesForSegment / 10));
+                    const isVirtualRest = Boolean(segment.virtual || segment.kind === 'virtual-rest');
+                    const previewSegment = document.createElement('div');
+                    previewSegment.className = isVirtualRest
+                        ? 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
+                        : 'plan-segment-resize-preview-segment';
+                    if (previewSegment.style) {
+                        previewSegment.style.gridColumn = `${startUnit + 1} / span ${span}`;
+                    }
+                    const label = document.createElement('span');
+                    label.className = 'plan-segment-resize-preview-label';
+                    label.textContent = isVirtualRest ? '휴식' : String(segment.activityText || segment.label || '');
+                    const duration = document.createElement('span');
+                    duration.className = 'plan-segment-resize-preview-duration';
+                    duration.textContent = `${durationMinutesForSegment}m`;
+                    previewSegment.appendChild(label);
+                    previewSegment.appendChild(duration);
+                    layer.appendChild(previewSegment);
+                };
+
+                const updatePreview = (clientX) => {
+                    const unitsPerRow = 6;
+                    const unitWidth = gridWidth / unitsPerRow;
+                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+                    const deltaUnits = Math.round((clientX - originX) / unitWidth);
+                    if (deltaUnits === lastPreviewDeltaUnits) return;
+                    lastPreviewDeltaUnits = deltaUnits;
+                    const layer = ensurePreviewLayer();
+                    const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
+                    if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
+                    const deltaMinutes = deltaUnits * 10;
+                    const targetMinute = edge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
+                    const resized = planSegmentCore.resizePlanSegmentInList(
+                        originalPlanActivities.map(item => ({ ...item })),
+                        segmentIndex,
+                        edge,
+                        targetMinute,
+                        { startMinute: 0, endMinute: blockMinutes }
+                    );
+                    const gaps = (typeof planSegmentCore.calculateVirtualRestGaps === 'function')
+                        ? planSegmentCore.calculateVirtualRestGaps(resized, { startMinute: 0, endMinute: blockMinutes })
+                        : [];
+                    const previewSegments = resized.concat(gaps)
+                        .filter(item => item && Number.isFinite(item.durationMinutes) && item.durationMinutes > 0)
+                        .sort((a, b) => (a.startMinute || 0) - (b.startMinute || 0));
+                    layer.innerHTML = '';
+                    previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
+                };
+
                 const cleanup = () => {
                     if (cleanedUp) return;
                     cleanedUp = true;
+                    removePreview();
                     if (segmentEl.classList && segmentEl.classList.remove) segmentEl.classList.remove('is-resizing-plan-segment');
                     document.removeEventListener(moveType, update, true);
                     document.removeEventListener(upType, finish, true);
@@ -6191,6 +6288,7 @@ class TimeTracker {
                     if (Number.isFinite(moveEvent && moveEvent.clientX)) {
                         lastClientX = moveEvent.clientX;
                     }
+                    updatePreview(lastClientX);
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
                 };
