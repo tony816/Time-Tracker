@@ -796,6 +796,44 @@ test('rendered DOM drag consumes adjacent gap but clamps before next real segmen
     }
 });
 
+test('rendered DOM drag moves adjacent planned segment boundary without opening title edit', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: '샤워', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+        { label: '이동/저녁준비', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
+    ]);
+    const calls = [];
+    ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        calls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        return applyPlanSegmentResize.call(this, baseIndex, segmentIndex, edge, targetMinute);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const firstRightHandle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(firstRightHandle);
+
+        const dragState = dragResizeHandle(document, firstRightHandle, 0, 10);
+        assert.deepEqual(dragState, { prevented: true, stopped: true });
+        assert.deepEqual(calls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 40 }]);
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            label: item.label,
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+            seconds: item.seconds,
+        })), [
+            { label: '샤워', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 40 * 60 },
+            { label: '이동/저녁준비', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 20 * 60 },
+        ]);
+        assert.equal(container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]'), null);
+        assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('plan segment resize uses pointer drag movement, base index, and suppresses synthetic mouse', () => {
     const originalDocument = globalThis.document;
     const documentListeners = {};

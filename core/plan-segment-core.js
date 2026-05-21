@@ -231,8 +231,54 @@
     }
 
     function resizePlanSegmentInList(segments = [], segmentIndex = 0, edge = 'right', targetMinute = 0, rangeInput = {}) {
-        const resize = canResizePlanSegment(segments, segmentIndex, edge, targetMinute, rangeInput);
         const source = Array.isArray(segments) ? segments : [];
+        const normalized = normalizePlanSegmentListForResize(source);
+        const target = normalized.find((item) => item.index === segmentIndex);
+        if (target) {
+            const range = normalizePlanSegmentRange({
+                startMinute: Number.isFinite(rangeInput.startMinute) ? rangeInput.startMinute : 0,
+                endMinute: Number.isFinite(rangeInput.endMinute) ? rangeInput.endMinute : Math.max(60, target.endMinute),
+            });
+            const position = normalized.indexOf(target);
+            const previous = position > 0 ? normalized[position - 1] : null;
+            const next = position >= 0 && position < normalized.length - 1 ? normalized[position + 1] : null;
+            const snappedTarget = snapToTenMinutes(targetMinute, { min: range.startMinute, max: range.endMinute });
+            const isRightSharedBoundary = edge !== 'left'
+                && next
+                && next.startMinute === target.endMinute;
+            const isLeftSharedBoundary = edge === 'left'
+                && previous
+                && previous.endMinute === target.startMinute;
+
+            if (isRightSharedBoundary || isLeftSharedBoundary) {
+                const left = isRightSharedBoundary ? target : previous;
+                const right = isRightSharedBoundary ? next : target;
+                const minBoundary = left.startMinute + TEN_MINUTES;
+                const maxBoundary = right.endMinute - TEN_MINUTES;
+                const boundaryMinute = Math.max(minBoundary, Math.min(maxBoundary, snappedTarget));
+                return source
+                    .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+                    .map((item, index) => {
+                        const result = { ...item };
+                        delete result.kind;
+                        delete result.virtual;
+                        if (index === left.index) {
+                            result.startMinute = left.startMinute;
+                            result.endMinute = boundaryMinute;
+                            result.durationMinutes = boundaryMinute - left.startMinute;
+                            result.seconds = result.durationMinutes * 60;
+                        } else if (index === right.index) {
+                            result.startMinute = boundaryMinute;
+                            result.endMinute = right.endMinute;
+                            result.durationMinutes = right.endMinute - boundaryMinute;
+                            result.seconds = result.durationMinutes * 60;
+                        }
+                        return result;
+                    });
+            }
+        }
+
+        const resize = canResizePlanSegment(segments, segmentIndex, edge, targetMinute, rangeInput);
         if (!resize.allowed) {
             return source
                 .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)

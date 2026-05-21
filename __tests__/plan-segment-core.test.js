@@ -268,6 +268,166 @@ test('resizePlanSegmentInList expands left edge only into the adjacent gap', () 
     assert.equal(blocked[1].seconds, 40 * 60);
 });
 
+test('resizePlanSegmentInList moves adjacent right boundary to the right', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: '샤워', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: '이동/저녁준비', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ], 0, 'right', 50, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', startMinute: 0, endMinute: 50, durationMinutes: 50, seconds: 3000 },
+        { label: '이동/저녁준비', startMinute: 50, endMinute: 60, durationMinutes: 10, seconds: 600 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result, { startMinute: 0, endMinute: 60 }), []);
+});
+
+test('resizePlanSegmentInList moves adjacent right boundary to the left', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: '샤워', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: '이동/저녁준비', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ], 0, 'right', 30, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: '이동/저녁준비', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ]);
+});
+
+test('resizePlanSegmentInList moves adjacent left boundary to the left', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: '샤워', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: '이동/저녁준비', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ], 1, 'left', 30, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: '이동/저녁준비', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ]);
+});
+
+test('resizePlanSegmentInList moves adjacent left boundary to the right', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: '샤워', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: '이동/저녁준비', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ], 1, 'left', 50, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', startMinute: 0, endMinute: 50, durationMinutes: 50, seconds: 3000 },
+        { label: '이동/저녁준비', startMinute: 50, endMinute: 60, durationMinutes: 10, seconds: 600 },
+    ]);
+});
+
+test('resizePlanSegmentInList clamps adjacent boundary to ten minute minimums', () => {
+    const segments = [
+        { label: 'A', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ];
+
+    const rightClamp = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 55, { startMinute: 0, endMinute: 60 });
+    const leftClamp = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 5, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(rightClamp[0].endMinute, 50);
+    assert.equal(rightClamp[1].startMinute, 50);
+    assert.equal(rightClamp[1].durationMinutes, 10);
+    assert.equal(leftClamp[0].endMinute, 10);
+    assert.equal(leftClamp[0].durationMinutes, 10);
+    assert.equal(leftClamp[1].startMinute, 10);
+});
+
+test('resizePlanSegmentInList preserves adjacent boundary metadata', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        {
+            label: '복습',
+            activityText: '복습',
+            activityId: 'child-review',
+            titleText: '공부',
+            titleActivityId: 'parent-study',
+            timer: { status: 'paused', elapsed: 120 },
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+            seconds: 1800,
+        },
+        {
+            label: '정리',
+            activityText: '정리',
+            activityId: 'child-cleanup',
+            titleText: '공부',
+            titleActivityId: 'parent-study',
+            timer: { status: 'idle', elapsed: 0 },
+            startMinute: 30,
+            endMinute: 60,
+            durationMinutes: 30,
+            seconds: 1800,
+        },
+    ], 0, 'right', 40, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result[0], {
+        label: '복습',
+        activityText: '복습',
+        activityId: 'child-review',
+        titleText: '공부',
+        titleActivityId: 'parent-study',
+        timer: { status: 'paused', elapsed: 120 },
+        startMinute: 0,
+        endMinute: 40,
+        durationMinutes: 40,
+        seconds: 2400,
+    });
+    assert.deepEqual(result[1], {
+        label: '정리',
+        activityText: '정리',
+        activityId: 'child-cleanup',
+        titleText: '공부',
+        titleActivityId: 'parent-study',
+        timer: { status: 'idle', elapsed: 0 },
+        startMinute: 40,
+        endMinute: 60,
+        durationMinutes: 20,
+        seconds: 1200,
+    });
+});
+
+test('resizePlanSegmentInList keeps non-adjacent resize behavior', () => {
+    const segments = [
+        { label: 'A', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ];
+
+    const allowed = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 40, { startMinute: 0, endMinute: 60 });
+    const blocked = planSegmentCore.resizePlanSegmentInList(segments, 0, 'right', 50, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(allowed[0].endMinute, 40);
+    assert.equal(allowed[1].startMinute, 40);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(allowed, { startMinute: 0, endMinute: 60 }), []);
+    assert.equal(blocked[0].endMinute, 40);
+    assert.equal(blocked[1].startMinute, 40);
+});
+
 test('resizePlanSegmentInList enforces minimum duration and strips virtual metadata', () => {
     const result = planSegmentCore.resizePlanSegmentInList([
         { label: 'A', startMinute: 0, durationMinutes: 30, seconds: 30 * 60 },
