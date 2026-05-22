@@ -6248,15 +6248,17 @@ class TimeTracker {
                 ? this.normalizeActivityText(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '')
                 : String(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '').trim())
             : '';
+        const nextActivityId = String(activityItem.id || '').trim();
+        const nextParentId = parentItem ? String(parentItem.id || '').trim() : '';
         const nextSegment = {
             ...current,
             label: activityText,
             activityText,
-            activityId: String(activityItem.id || '').trim() || current.activityId || null,
+            activityId: nextActivityId || null,
         };
         if (parentItem && parentText) {
             nextSegment.titleText = parentText;
-            nextSegment.titleActivityId = String(parentItem.id || '').trim() || nextSegment.titleActivityId || null;
+            nextSegment.titleActivityId = nextParentId || null;
         } else {
             delete nextSegment.titleText;
             delete nextSegment.titleActivityId;

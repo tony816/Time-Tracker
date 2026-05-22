@@ -852,6 +852,65 @@ test('inline text add applies plan segment target without whole-slot replacement
     assert.equal(harness.ctx.inlinePlanTarget, null);
 });
 
+test('segment inline target replacement clears stale id when replacement has no id', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            anchor: {},
+        },
+        timeSlots: [
+            {
+                planned: 'First, Second',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: 'First', activityText: 'First', activityId: 'first-id', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                    { label: 'Second', activityText: 'Second', activityId: 'stale-second-id', seconds: 2400, startMinute: 20, endMinute: 60, durationMinutes: 40 },
+                ],
+            },
+        ],
+        plannedActivities: [
+            { name: 'No Id Replacement', label: 'No Id Replacement', normalizedName: 'No Id Replacement', parentId: null, pinned: true, archived: false },
+        ],
+        ctx: {
+            replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem) {
+                const current = this.timeSlots[baseIndex].planActivities[segmentIndex];
+                this.timeSlots[baseIndex].planActivities[segmentIndex] = {
+                    ...current,
+                    label: activityItem.label,
+                    activityText: activityItem.label,
+                    activityId: String(activityItem.id || '').trim() || null,
+                };
+                this.timeSlots[baseIndex].planned = this.formatActivitiesSummary(this.timeSlots[baseIndex].planActivities);
+                return true;
+            },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness, 'No Id Replacement');
+    harness.calls.length = 0;
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.deepEqual(harness.ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'First', activityText: 'First', activityId: 'first-id', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: 'No Id Replacement', activityText: 'No Id Replacement', activityId: null, startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
+    ]);
+    assert.notEqual(harness.ctx.timeSlots[0].planActivities[1].activityId, 'stale-second-id');
+    assert.equal(harness.ctx.inlinePlanTarget, null);
+});
+
 test('activity chip selection uses regular inline target before selected segment replacement', () => {
     const harness = createInlineSelectionHarness({
         selectedPlanSegment: { baseIndex: 0, segmentIndex: 0 },

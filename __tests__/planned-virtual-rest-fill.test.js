@@ -1042,6 +1042,133 @@ test('selected planned segment activity replacement preserves range and neighbor
     assert.deepEqual(parentItem, { id: 'parent-study', label: 'Study' });
 });
 
+test('plan segment replacement without id clears stale activity id', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'Shower', activityText: 'Shower', activityId: 'shower', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+    ]);
+
+    assert.equal(replacePlanSegmentActivity.call(ctx, 0, 0, { label: 'Reading', name: 'Reading', activityText: 'Reading' }), true);
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Reading', activityText: 'Reading', activityId: null, startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+    ]);
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'shower');
+});
+
+test('plan segment replacement with id uses new activity id', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'Shower', activityText: 'Shower', activityId: 'shower', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+    ]);
+
+    assert.equal(replacePlanSegmentActivity.call(ctx, 0, 0, { id: 'reading', label: 'Reading', name: 'Reading' }), true);
+
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, 'Reading');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityText, 'Reading');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityId, 'reading');
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'shower');
+    assert.equal(ctx.timeSlots[0].planActivities[0].startMinute, 0);
+    assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 20);
+    assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 20);
+    assert.equal(ctx.timeSlots[0].planActivities[0].seconds, 1200);
+});
+
+test('child plan segment replacement clears stale child and parent ids when new items lack ids', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: 'Squat',
+            activityText: 'Squat',
+            activityId: 'squat',
+            titleText: 'Exercise',
+            titleActivityId: 'exercise',
+            seconds: 30 * 60,
+            startMinute: 0,
+            durationMinutes: 30,
+            endMinute: 30,
+        },
+    ]);
+
+    assert.equal(
+        replacePlanSegmentActivity.call(ctx, 0, 0, { label: 'Reading Notes', name: 'Reading Notes' }, { label: 'Reading', name: 'Reading' }),
+        true
+    );
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        titleText: item.titleText,
+        titleActivityId: item.titleActivityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        {
+            label: 'Reading Notes',
+            activityText: 'Reading Notes',
+            activityId: null,
+            titleText: 'Reading',
+            titleActivityId: null,
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+            seconds: 1800,
+        },
+    ]);
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'squat');
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].titleActivityId, 'exercise');
+});
+
+test('parent plan segment replacement clears previous child metadata', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: 'Squat',
+            activityText: 'Squat',
+            activityId: 'squat',
+            titleText: 'Exercise',
+            titleActivityId: 'exercise',
+            seconds: 30 * 60,
+            startMinute: 0,
+            durationMinutes: 30,
+            endMinute: 30,
+        },
+    ]);
+
+    assert.equal(replacePlanSegmentActivity.call(ctx, 0, 0, { id: 'study', label: 'Study', name: 'Study' }), true);
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        titleText: item.titleText,
+        titleActivityId: item.titleActivityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        {
+            label: 'Study',
+            activityText: 'Study',
+            activityId: 'study',
+            titleText: undefined,
+            titleActivityId: undefined,
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+            seconds: 1800,
+        },
+    ]);
+});
+
 test('plan segment resize preview updates adjacent boundary without mutating data on pointermove', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([
