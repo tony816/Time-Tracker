@@ -310,7 +310,7 @@ test('pressing Enter saves the new segment title', () => {
 
         assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Deep Work');
         assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Deep Work');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityId, 'focus');
+        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityId, undefined);
         assert.equal(harness.ctx.timeSlots[0].planned, 'Deep Work');
         assert.deepEqual(harness.calls.slice(-3), ['render', 'totals', 'save']);
     });
@@ -380,7 +380,30 @@ test('plan segment title edit does not mutate catalog activity names', () => {
     assert.equal(ctx.timeSlots[0].planActivities[0].label, 'Renamed Segment');
 });
 
-test('child segment title edit preserves parent metadata and activity ids', () => {
+test('plan segment title edit clears stale activity identity metadata', () => {
+    const ctx = createTitleEditHarness().ctx;
+    ctx.timeSlots[0].planActivities = [
+        {
+            label: '샤워',
+            seconds: 1800,
+            titleActivityId: 'routine',
+            titleText: 'Morning',
+            activityId: 'shower',
+            activityText: '샤워',
+        },
+    ];
+    ctx.timeSlots[0].planned = '샤워';
+
+    applyPlanSegmentTitleEdit.call(ctx, 0, 0, '공부');
+
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, '공부');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityText, '공부');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityId, undefined);
+    assert.equal(ctx.timeSlots[0].planActivities[0].titleActivityId, undefined);
+    assert.equal(ctx.timeSlots[0].planActivities[0].titleText, undefined);
+});
+
+test('child segment title edit preserves title band state while clearing stale ids', () => {
     const ctx = createTitleEditHarness().ctx;
     ctx.timeSlots[0].planActivities = [
         {
@@ -400,9 +423,6 @@ test('child segment title edit preserves parent metadata and activity ids', () =
     assert.deepEqual(ctx.timeSlots[0].planActivities[0], {
         label: 'Leg Day',
         seconds: 1800,
-        titleActivityId: 'exercise',
-        titleText: 'Exercise',
-        activityId: 'squat',
         activityText: 'Leg Day',
     });
     assert.equal(ctx.timeSlots[0].planTitle, 'Exercise');
@@ -465,6 +485,10 @@ function createRealisticPlanSegmentDom() {
     const main = createElementNode('div');
     main.className = 'plan-segment-graphic-main';
 
+    const title = createElementNode('span');
+    title.className = 'plan-segment-graphic-title';
+    title.textContent = 'Parent';
+
     const labelContainer = createElementNode('span');
     labelContainer.className = 'plan-segment-graphic-label';
 
@@ -483,6 +507,7 @@ function createRealisticPlanSegmentDom() {
     attachDomParent(graphic, segment);
     attachDomParent(timerButton, graphic);
     attachDomParent(main, graphic);
+    attachDomParent(title, main);
     attachDomParent(labelContainer, main);
     attachDomParent(label, labelContainer);
     attachDomParent(timerTime, main);
@@ -504,7 +529,7 @@ function createRealisticPlanSegmentDom() {
         },
     }).ctx;
 
-    return { ctx, entryDiv, segment, timerButton, resizeHandle, labelContainer, label, timerTime, calls };
+    return { ctx, entryDiv, segment, timerButton, resizeHandle, title, labelContainer, label, timerTime, calls };
 }
 
 test('real planned segment DOM only opens title editing from the label trigger', () => {
@@ -611,7 +636,44 @@ test('clicking label container space opens segment dropdown instead of title edi
         });
 
         assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
-        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
+        assert.equal(ctx.selectedPlanSegment, undefined);
+        assert.equal(dropdownCalls.length, 1);
+        assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
+        assert.equal(dropdownCalls[0].options.segmentIndex, 0);
+    });
+});
+
+test('clicking parent title band opens segment dropdown instead of title editing', () => {
+    withDocument(() => {
+        const { ctx, entryDiv, title } = createRealisticPlanSegmentDom();
+        const dropdownCalls = [];
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', titleText: 'Parent', titleActivityId: 'parent', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        };
+        ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
+            dropdownCalls.push({ startIndex, anchor, endIndex, options });
+        };
+        attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
+        attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
+
+        title.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: title,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
         assert.equal(dropdownCalls.length, 1);
         assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
         assert.equal(dropdownCalls[0].options.segmentIndex, 0);

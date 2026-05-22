@@ -54,7 +54,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment-virtual-rest\s*\{[^}]*opacity:\s*0;/s);
     assert.match(interactionsSource, /\.plan-segment-resize-handle\s*\{[^}]*width:\s*18px;[^}]*opacity:\s*1;/s);
     assert.match(interactionsSource, /\.plan-segment-boundary-resize-handle-line,\s*\.plan-segment-resize-handle::after\s*\{[^}]*width:\s*2px;/s);
-    assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
+    assert.doesNotMatch(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;/s);
     assert.match(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*3ch;/s);

@@ -6010,6 +6010,9 @@ class TimeTracker {
                 label: nextTitle,
                 activityText: nextTitle,
             };
+            delete planActivities[segmentIndex].activityId;
+            delete planActivities[segmentIndex].titleActivityId;
+            delete planActivities[segmentIndex].titleText;
             slot.planActivities = planActivities;
             slot.planned = this.formatActivitiesSummary
                 ? this.formatActivitiesSummary(slot.planActivities)
@@ -6179,9 +6182,6 @@ class TimeTracker {
             || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
             || (segmentEl.closest && segmentEl.closest('.planned-input'));
         if (!anchor || typeof this.openInlinePlanDropdown !== 'function') return false;
-        if (typeof this.setSelectedPlanSegment === 'function') {
-            this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: false });
-        }
         this.openInlinePlanDropdown(baseIndex, anchor, baseIndex, {
             mode: 'plan-segment-replace',
             segmentIndex,
@@ -6218,7 +6218,7 @@ class TimeTracker {
             segmentEl.dataset.selectionListenerAttached = 'true';
             segmentEl.addEventListener('click', (event) => {
                 if (event.button != null && event.button !== 0) return;
-                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, [data-title-edit-trigger="true"], .plan-segment-graphic-title, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, [data-title-edit-trigger="true"], .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
                     return;
                 }
                 event.preventDefault();
@@ -6263,7 +6263,6 @@ class TimeTracker {
         }
         slot.planActivities = slot.planActivities.map((item, idx) => idx === segmentIndex ? nextSegment : item);
         slot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(slot.planActivities) : activityText;
-        this.selectedPlanSegment = { baseIndex, segmentIndex };
         return true;
     }
         replaceSelectedPlanSegmentActivity(activityItem, parentItem = null) {
@@ -6271,6 +6270,7 @@ class TimeTracker {
         if (!selected || !activityItem) return false;
         const replaced = this.replacePlanSegmentActivity(selected.baseIndex, selected.segmentIndex, activityItem, parentItem);
         if (!replaced) return false;
+        this.selectedPlanSegment = { baseIndex: selected.baseIndex, segmentIndex: selected.segmentIndex };
         this.renderTimeEntries(true);
         this.calculateTotals();
         this.autoSave();

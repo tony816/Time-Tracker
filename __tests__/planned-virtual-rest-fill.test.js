@@ -981,7 +981,7 @@ test('clicking real planned segment background opens segment-scoped inline dropd
         assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
         assert.equal(dropdownCalls[0].options.segmentIndex, 0);
         assert.equal(dropdownCalls[0].options.segmentId, firstSegment.dataset.segmentId);
-        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
+        assert.equal(ctx.selectedPlanSegment, undefined);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
     } finally {
         globalThis.document = originalDocument;

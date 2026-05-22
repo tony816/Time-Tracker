@@ -1100,14 +1100,6 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             this.renderTimeEntries(Boolean(options.keepOpen));
             this.calculateTotals();
             this.autoSave();
-            if (options.keepOpen && this.inlinePlanTarget) {
-                const anchor = this.inlinePlanTarget.anchor || null;
-                if (anchor) {
-                    setInlinePlanAnchorState.call(this, anchor);
-                    this.positionInlinePlanDropdown(anchor);
-                }
-                return;
-            }
             this.closeInlinePlanDropdown();
             return;
         }
@@ -2074,6 +2066,12 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             this.currentPlanSource = 'local';
             this.renderInlinePlanDropdownOptions();
             const target = this.inlinePlanTarget;
+            if (target && target.mode === 'plan-segment-replace') {
+                const activityItem = (this.plannedActivities || []).find((item) => getCatalogItemLabel.call(this, item) === val)
+                    || { label: val, name: val, activityText: val };
+                applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: false });
+                return;
+            }
             const startIndex = target && Number.isInteger(target.startIndex) ? target.startIndex : 0;
             const endIndex = target && Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
             const rangeStart = Math.min(startIndex, endIndex);
@@ -2391,6 +2389,7 @@ function applyInlinePlanBackgroundContext() {
     }
 
 function closeInlinePlanDropdown() {
+        const closingTarget = this.inlinePlanTarget || null;
         this.closeInlinePriorityMenu();
         this.closeRoutineMenu();
         this.closePlanActivityMenu();
@@ -2457,6 +2456,9 @@ function closeInlinePlanDropdown() {
             timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
         }
         this.inlinePlanDropdown = null;
+        if (closingTarget && closingTarget.mode === 'plan-segment-replace') {
+            this.selectedPlanSegment = null;
+        }
         this.inlinePlanTarget = null;
         this.inlinePlanHighlightRange = null;
         this.modalPlanSectionOpen = false;
@@ -2478,6 +2480,13 @@ function applyInlinePlanSelection(label, options = {}) {
         if (!this.inlinePlanTarget) return;
         const normalized = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
         if (!normalized) return;
+
+        if (this.inlinePlanTarget.mode === 'plan-segment-replace') {
+            const activityItem = (this.plannedActivities || []).find((item) => getCatalogItemLabel.call(this, item) === normalized)
+                || { label: normalized, name: normalized, activityText: normalized };
+            applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: false });
+            return;
+        }
 
         const safeStart = Number.isInteger(this.inlinePlanTarget.startIndex) ? this.inlinePlanTarget.startIndex : 0;
         const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;

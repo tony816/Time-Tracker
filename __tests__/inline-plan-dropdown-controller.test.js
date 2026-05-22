@@ -430,6 +430,40 @@ test('openInlinePlanDropdown keeps exact same virtual rest gap as toggle-close b
     assert.equal(closed, true);
 });
 
+test('closeInlinePlanDropdown clears selected segment for segment replacement target', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const dropdown = { parentNode: { removeChild() {} }, querySelector() { return null; }, removeEventListener() {} };
+    const childLayer = { parentNode: { removeChild() {} } };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanChildPopoverLayer: childLayer,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, mode: 'plan-segment-replace', segmentIndex: 1 },
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 1 },
+        closeInlinePriorityMenu() {},
+        closeRoutineMenu() {},
+        closePlanActivityMenu() {},
+        closePlanTitleMenu() {},
+        cleanupInlinePlanSheetTouchDismiss() {},
+    };
+    globalThis.document = {
+        removeEventListener() {},
+        body: { classList: { remove() {} } },
+        getElementById() { return null; },
+    };
+    globalThis.window = { removeEventListener() {}, visualViewport: null };
+
+    try {
+        controller.closeInlinePlanDropdown.call(ctx);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+    }
+
+    assert.equal(ctx.selectedPlanSegment, null);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
 function createInlineSelectionNode(tagName) {
     const listeners = {};
     const attributes = {};
@@ -750,7 +784,72 @@ test('activity chip selection replaces plan segment inline target only', () => {
         { label: '샤워', activityText: '샤워', activityId: 'shower', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
         { label: '공부', activityText: '공부', activityId: 'study', startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
     ]);
-    assert.deepEqual(harness.calls, [['render', true], ['totals'], ['save'], ['position']]);
+    assert.deepEqual(harness.calls, [['render', true], ['totals'], ['save'], ['close']]);
+    assert.equal(harness.ctx.inlinePlanTarget, null);
+    assert.equal(harness.ctx.selectedPlanSegment, null);
+});
+
+test('inline text add applies plan segment target without whole-slot replacement', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            anchor: {},
+        },
+        selectedPlanSegment: { baseIndex: 0, segmentIndex: 1 },
+        timeSlots: [
+            {
+                planned: '샤워, 이동/저녁준비',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: '샤워', activityText: '샤워', activityId: 'shower', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                    { label: '이동/저녁준비', activityText: '이동/저녁준비', activityId: 'prep', seconds: 2400, startMinute: 20, endMinute: 60, durationMinutes: 40 },
+                ],
+            },
+        ],
+        plannedActivities: [
+            { id: 'reading', name: '독서', label: '독서', normalizedName: '독서', parentId: null, pinned: true, archived: false },
+        ],
+        ctx: {
+            replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem) {
+                const current = this.timeSlots[baseIndex].planActivities[segmentIndex];
+                this.timeSlots[baseIndex].planActivities[segmentIndex] = {
+                    ...current,
+                    label: activityItem.label,
+                    activityText: activityItem.label,
+                    activityId: activityItem.id || null,
+                };
+                this.timeSlots[baseIndex].planned = this.formatActivitiesSummary(this.timeSlots[baseIndex].planActivities);
+                return true;
+            },
+            closeInlinePlanDropdown() {
+                this.selectedPlanSegment = null;
+                this.inlinePlanTarget = null;
+                harness.calls.push(['close']);
+            },
+        },
+    });
+
+    applyInlinePlanSelectionWrapper.call(harness.ctx, '독서', { keepOpen: true });
+
+    assert.deepEqual(harness.ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', activityText: '샤워', activityId: 'shower', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: '독서', activityText: '독서', activityId: 'reading', startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
+    ]);
+    assert.equal(harness.ctx.selectedPlanSegment, null);
+    assert.equal(harness.ctx.inlinePlanTarget, null);
 });
 
 test('activity chip selection uses regular inline target before selected segment replacement', () => {
