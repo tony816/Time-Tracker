@@ -41,6 +41,8 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /background-clip:\s*padding-box\s*!important;/);
     assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\s*\{[^}]*overflow:\s*hidden;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper \.split-visualization\s*\{[^}]*top:\s*6px;[^}]*bottom:\s*6px;[^}]*left:\s*0;[^}]*right:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
+    assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-planned\.split-has-data \.input-field\s*\{[^}]*pointer-events:\s*none;/s);
+    assert.match(interactionsSource, /\.split-visualization-planned\s*\{[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /\.split-title-band\s*\{[^}]*margin-left:\s*6px\s*!important;[^}]*margin-right:\s*6px\s*!important;/s);
     assert.match(interactionsSource, /\.split-grid\s*\{[^}]*margin-left:\s*6px\s*!important;[^}]*margin-right:\s*6px\s*!important;/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment-virtual-rest\s*\{[^}]*align-self:\s*start;[^}]*border-bottom:\s*1px dashed rgba\(126,\s*140,\s*154,\s*0\.42\)\s*!important;[^}]*height:\s*calc\(100% - 3px\);/s);
@@ -53,6 +55,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.plan-segment-resize-handle\s*\{[^}]*width:\s*18px;[^}]*opacity:\s*1;/s);
     assert.match(interactionsSource, /\.plan-segment-boundary-resize-handle-line,\s*\.plan-segment-resize-handle::after\s*\{[^}]*width:\s*2px;/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
+    assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;/s);
     assert.match(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*3ch;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-graphic-label\.is-editing\s*\{[^}]*width:\s*100%;/s);

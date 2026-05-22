@@ -1081,6 +1081,37 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
         if (!activityItem) return;
 
+        if (this.inlinePlanTarget && this.inlinePlanTarget.mode === 'plan-segment-replace') {
+            const baseIndex = Number(this.inlinePlanTarget.startIndex);
+            const segmentIndex = Number(this.inlinePlanTarget.segmentIndex);
+            const replaced = Number.isInteger(baseIndex)
+                && Number.isInteger(segmentIndex)
+                && typeof this.replacePlanSegmentActivity === 'function'
+                && this.replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem || null);
+            if (!replaced) return;
+            const touched = this.touchPlannedActivityUsage ? this.touchPlannedActivityUsage(activityItem, parentItem || null) : null;
+            if (touched) {
+                this.dedupeAndSortPlannedActivities();
+                this.savePlannedActivities();
+                if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+                    this.renderInlinePlanDropdownOptions();
+                }
+            }
+            this.renderTimeEntries(Boolean(options.keepOpen));
+            this.calculateTotals();
+            this.autoSave();
+            if (options.keepOpen && this.inlinePlanTarget) {
+                const anchor = this.inlinePlanTarget.anchor || null;
+                if (anchor) {
+                    setInlinePlanAnchorState.call(this, anchor);
+                    this.positionInlinePlanDropdown(anchor);
+                }
+                return;
+            }
+            this.closeInlinePlanDropdown();
+            return;
+        }
+
         if (!this.inlinePlanTarget) {
             if (this.selectedPlanSegment && typeof this.replaceSelectedPlanSegmentActivity === 'function') {
                 const replaced = this.replaceSelectedPlanSegmentActivity(activityItem, parentItem || null);
@@ -1902,6 +1933,10 @@ function isSameInlinePlanTarget(range, anchorEl = null) {
                 && currentGapStart === nextGapStart
                 && currentGapDuration === nextGapDuration;
         }
+        if (currentMode === 'plan-segment-replace') {
+            return Number(current.segmentIndex) === Number(range.segmentIndex)
+                && String(current.segmentId || '') === String(range.segmentId || '');
+        }
         return true;
     }
 
@@ -1943,6 +1978,13 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             range.gapStartMinute = Math.max(0, Math.floor(gapStartMinute));
             range.gapDurationMinutes = Math.max(0, Math.floor(gapDurationMinutes));
         }
+        const segmentReplaceTarget = options && options.mode === 'plan-segment-replace'
+            && Number.isInteger(Number(options.segmentIndex));
+        if (segmentReplaceTarget) {
+            range.mode = 'plan-segment-replace';
+            range.segmentIndex = Number(options.segmentIndex);
+            range.segmentId = String(options.segmentId || '');
+        }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
@@ -1962,6 +2004,14 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 gapStartMinute: range.gapStartMinute,
                 gapDurationMinutes: range.gapDurationMinutes,
             }
+            : segmentReplaceTarget
+                ? {
+                    ...range,
+                    anchor,
+                    mode: 'plan-segment-replace',
+                    segmentIndex: range.segmentIndex,
+                    segmentId: range.segmentId,
+                }
             : { ...range, anchor };
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }

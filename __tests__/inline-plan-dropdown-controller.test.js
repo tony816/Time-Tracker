@@ -692,6 +692,67 @@ test('activity chip selection replaces selected segment only when inline target 
     ]);
 });
 
+test('activity chip selection replaces plan segment inline target only', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            anchor: {},
+        },
+        timeSlots: [
+            {
+                planned: '샤워, 이동/저녁준비',
+                planTitle: '',
+                planTitleBandOn: false,
+                planActivities: [
+                    { label: '샤워', activityText: '샤워', activityId: 'shower', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                    { label: '이동/저녁준비', activityText: '이동/저녁준비', activityId: 'prep', seconds: 2400, startMinute: 20, endMinute: 60, durationMinutes: 40 },
+                ],
+            },
+        ],
+        plannedActivities: [
+            { id: 'study', name: '공부', label: '공부', normalizedName: '공부', parentId: null, pinned: true, archived: false },
+        ],
+        ctx: {
+            replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null) {
+                assert.equal(baseIndex, 0);
+                assert.equal(segmentIndex, 1);
+                assert.equal(parentItem, null);
+                const current = this.timeSlots[baseIndex].planActivities[segmentIndex];
+                this.timeSlots[baseIndex].planActivities[segmentIndex] = {
+                    ...current,
+                    label: activityItem.label,
+                    activityText: activityItem.label,
+                    activityId: activityItem.id,
+                };
+                this.timeSlots[baseIndex].planned = this.formatActivitiesSummary(this.timeSlots[baseIndex].planActivities);
+                return true;
+            },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness, '공부');
+    harness.calls.length = 0;
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.deepEqual(harness.ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: '샤워', activityText: '샤워', activityId: 'shower', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: '공부', activityText: '공부', activityId: 'study', startMinute: 20, endMinute: 60, durationMinutes: 40, seconds: 2400 },
+    ]);
+    assert.deepEqual(harness.calls, [['render', true], ['totals'], ['save'], ['position']]);
+});
+
 test('activity chip selection uses regular inline target before selected segment replacement', () => {
     const harness = createInlineSelectionHarness({
         selectedPlanSegment: { baseIndex: 0, segmentIndex: 0 },

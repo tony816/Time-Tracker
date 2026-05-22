@@ -55,6 +55,14 @@ const setSelectedPlanSegment = buildMethod(
     'setSelectedPlanSegment(baseIndex, segmentIndex, options = {})',
     '(baseIndex, segmentIndex, options = {})'
 );
+const openPlanSegmentReplacementDropdown = buildMethod(
+    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
+    '(baseIndex, segmentIndex, segmentEl)'
+);
+const replacePlanSegmentActivity = buildMethod(
+    'replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null)',
+    '(baseIndex, segmentIndex, activityItem, parentItem = null)'
+);
 const replaceSelectedPlanSegmentActivity = buildMethod(
     'replaceSelectedPlanSegmentActivity(activityItem, parentItem = null)',
     '(activityItem, parentItem = null)'
@@ -925,12 +933,21 @@ test('rendered DOM drag moves adjacent planned segment boundary without opening 
     }
 });
 
-test('clicking real planned segment background selects only that segment', () => {
+test('clicking real planned segment background opens segment-scoped inline dropdown', () => {
     const originalDocument = globalThis.document;
+    const dropdownCalls = [];
     const { ctx, container, document } = createRenderedResizeContext([
         { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
         { label: 'B', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
-    ]);
+    ], { overrides: {
+        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            dropdownCalls.push({ startIndex, anchor, endIndex, options });
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+        },
+    } });
     globalThis.document = document;
 
     try {
@@ -947,6 +964,7 @@ test('clicking real planned segment background selects only that segment', () =>
             stopPropagation() {},
         });
         assert.equal(ctx.selectedPlanSegment, undefined);
+        assert.equal(dropdownCalls.length, 0);
 
         firstSegment.dispatchEvent({
             type: 'click',
@@ -956,11 +974,14 @@ test('clicking real planned segment background selects only that segment', () =>
             stopPropagation() {},
         });
 
+        assert.equal(dropdownCalls.length, 1);
+        assert.equal(dropdownCalls[0].startIndex, 0);
+        assert.equal(dropdownCalls[0].endIndex, 0);
+        assert.equal(dropdownCalls[0].anchor, firstSegment);
+        assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
+        assert.equal(dropdownCalls[0].options.segmentIndex, 0);
+        assert.equal(dropdownCalls[0].options.segmentId, firstSegment.dataset.segmentId);
         assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
-        const selected = container.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]')
-            .filter((node) => String(node.className).includes('is-selected-plan-segment'));
-        assert.equal(selected.length, 1);
-        assert.equal(selected[0].dataset.segmentIndex, '0');
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
     } finally {
         globalThis.document = originalDocument;
@@ -978,6 +999,9 @@ test('selected planned segment activity replacement preserves range and neighbor
             this.renderCalls += 1;
         },
     });
+    ctx.replacePlanSegmentActivity = function(baseIndex, segmentIndex, activityItem, parentItem = null) {
+        return replacePlanSegmentActivity.call(this, baseIndex, segmentIndex, activityItem, parentItem);
+    };
     ctx.replaceSelectedPlanSegmentActivity = function(activityItem, parentItem = null) {
         return replaceSelectedPlanSegmentActivity.call(this, activityItem, parentItem);
     };

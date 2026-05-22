@@ -2351,6 +2351,7 @@ button.activity-chip,
   color: transparent;
   caret-color: transparent;
   opacity: 0;
+  pointer-events: none;
 }
 
 .split-cell-wrapper.split-type-planned.split-has-data
@@ -2420,6 +2421,7 @@ button.activity-chip,
   box-shadow: none;
   background: transparent;
   z-index: 3;
+  pointer-events: auto;
 }
 
 .split-visualization-actual {
@@ -2740,6 +2742,7 @@ button.activity-chip,
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"] {
   position: relative;
+  pointer-events: auto;
 }
 
 .split-visualization-planned .split-grid-segment.is-selected-plan-segment {

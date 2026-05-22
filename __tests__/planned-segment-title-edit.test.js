@@ -18,6 +18,10 @@ const attachPlanSegmentSelectionListeners = buildMethod(
     'attachPlanSegmentSelectionListeners(entryDiv, index)',
     '(entryDiv, index)'
 );
+const openPlanSegmentReplacementDropdown = buildMethod(
+    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
+    '(baseIndex, segmentIndex, segmentEl)'
+);
 
 function createElementNode(tagName = 'span') {
     const listeners = {};
@@ -576,9 +580,24 @@ test('real planned segment DOM only opens title editing from the label trigger',
     });
 });
 
-test('clicking label container space selects segment instead of opening title editing', () => {
+test('clicking label container space opens segment dropdown instead of title editing', () => {
     withDocument(() => {
         const { ctx, entryDiv, labelContainer } = createRealisticPlanSegmentDom();
+        const dropdownCalls = [];
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        };
+        ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
+            dropdownCalls.push({ startIndex, anchor, endIndex, options });
+        };
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
         attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
 
@@ -593,6 +612,9 @@ test('clicking label container space selects segment instead of opening title ed
 
         assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
         assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
+        assert.equal(dropdownCalls.length, 1);
+        assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
+        assert.equal(dropdownCalls[0].options.segmentIndex, 0);
     });
 });
 

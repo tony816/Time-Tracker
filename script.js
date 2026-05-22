@@ -6170,6 +6170,25 @@ class TimeTracker {
         }
         return true;
     }
+        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !segmentEl) return false;
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
+        if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
+        const anchor = segmentEl
+            || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
+            || (segmentEl.closest && segmentEl.closest('.planned-input'));
+        if (!anchor || typeof this.openInlinePlanDropdown !== 'function') return false;
+        if (typeof this.setSelectedPlanSegment === 'function') {
+            this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: false });
+        }
+        this.openInlinePlanDropdown(baseIndex, anchor, baseIndex, {
+            mode: 'plan-segment-replace',
+            segmentIndex,
+            segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId || '') : '',
+        });
+        return true;
+    }
         ensurePlanSegmentSelectionGlobalListeners() {
         if (this.planSegmentSelectionGlobalListenersAttached || typeof document === 'undefined') return;
         this.planSegmentSelectionGlobalListenersAttached = true;
@@ -6206,21 +6225,24 @@ class TimeTracker {
                 event.stopPropagation();
                 const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                 const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
-                this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+                if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                    this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                } else {
+                    this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+                }
             }, true);
         });
     }
-        replaceSelectedPlanSegmentActivity(activityItem, parentItem = null) {
-        const selected = this.getSelectedPlanSegment();
-        if (!selected || !activityItem) return false;
+        replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null) {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !activityItem) return false;
         const activityText = this.normalizeActivityText
             ? this.normalizeActivityText(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '')
             : String(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '').trim();
         if (!activityText) return false;
-        const slot = this.timeSlots && this.timeSlots[selected.baseIndex];
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
         if (!slot || !Array.isArray(slot.planActivities)) return false;
-        const current = slot.planActivities[selected.segmentIndex];
-        if (!current) return false;
+        const current = slot.planActivities[segmentIndex];
+        if (!current || current.kind === 'virtual-rest' || current.virtual === true) return false;
         const parentText = parentItem
             ? (this.normalizeActivityText
                 ? this.normalizeActivityText(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '')
@@ -6239,9 +6261,16 @@ class TimeTracker {
             delete nextSegment.titleText;
             delete nextSegment.titleActivityId;
         }
-        slot.planActivities = slot.planActivities.map((item, idx) => idx === selected.segmentIndex ? nextSegment : item);
+        slot.planActivities = slot.planActivities.map((item, idx) => idx === segmentIndex ? nextSegment : item);
         slot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(slot.planActivities) : activityText;
-        this.selectedPlanSegment = { baseIndex: selected.baseIndex, segmentIndex: selected.segmentIndex };
+        this.selectedPlanSegment = { baseIndex, segmentIndex };
+        return true;
+    }
+        replaceSelectedPlanSegmentActivity(activityItem, parentItem = null) {
+        const selected = this.getSelectedPlanSegment();
+        if (!selected || !activityItem) return false;
+        const replaced = this.replacePlanSegmentActivity(selected.baseIndex, selected.segmentIndex, activityItem, parentItem);
+        if (!replaced) return false;
         this.renderTimeEntries(true);
         this.calculateTotals();
         this.autoSave();
