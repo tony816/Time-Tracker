@@ -46,6 +46,77 @@ const touchPlannedActivityUsageWrapper = buildMethod(
     '(activityItem, parentItem = null)'
 );
 
+function createInlinePlanPositionHarness({ viewport, sheet = false } = {}) {
+    const dropdownClasses = new Set(['inline-plan-dropdown']);
+    if (sheet) dropdownClasses.add('inline-plan-dropdown-sheet');
+    const dropdown = {
+        style: {},
+        scrollHeight: 260,
+        offsetHeight: 260,
+        classList: {
+            contains(name) {
+                return dropdownClasses.has(name);
+            },
+        },
+        querySelector() {
+            return null;
+        },
+    };
+    const metrics = viewport || { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        getInlinePlanViewportMetrics() {
+            return metrics;
+        },
+        getInlinePlanMinimumInteractiveHeight(dropdownEl) {
+            return controller.getInlinePlanMinimumInteractiveHeight.call(this, dropdownEl);
+        },
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+        positionInlinePlanChildPopover() {},
+    };
+    return { ctx, dropdown, viewport: metrics };
+}
+
+function createInlinePlanAnchor({ left = 100, top = 100, width = 80, height = 30 } = {}) {
+    return {
+        isConnected: true,
+        getBoundingClientRect() {
+            return {
+                left,
+                top,
+                right: left + width,
+                bottom: top + height,
+                width,
+                height,
+            };
+        },
+    };
+}
+
+function installInlinePlanPositionGlobals() {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    globalThis.document = {
+        documentElement: {
+            scrollLeft: 0,
+            scrollTop: 0,
+        },
+    };
+    globalThis.window = {
+        scrollX: 0,
+        scrollY: 0,
+    };
+    return () => {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+    };
+}
+
 test('inline-plan-dropdown-controller exports and global attach are available', () => {
     assert.ok(controller);
     assert.equal(typeof controller.buildPlannedActivityOptions, 'function');
@@ -142,6 +213,78 @@ test('script inline plan wrapper methods delegate to controller helpers', () => 
         ['apply', ctx, 'A', options],
         ['touchUsage', ctx, activityItem, parentItem],
     ]);
+});
+
+test('positionInlinePlanDropdown keeps desktop width independent of anchor width', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness();
+    const narrowAnchor = createInlinePlanAnchor({ width: 80 });
+    const wideAnchor = createInlinePlanAnchor({ width: 720 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, narrowAnchor);
+        const narrowWidth = dropdown.style.width;
+        const narrowMinWidth = dropdown.style.minWidth;
+
+        controller.positionInlinePlanDropdown.call(ctx, wideAnchor);
+
+        assert.equal(narrowWidth, '420px');
+        assert.equal(narrowMinWidth, '420px');
+        assert.equal(dropdown.style.width, '420px');
+        assert.equal(dropdown.style.minWidth, '420px');
+        assert.equal(dropdown.style.width, narrowWidth);
+        assert.notEqual(dropdown.style.width, '112px');
+        assert.notEqual(dropdown.style.width, '752px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown clamps desktop width when viewport is narrow', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 360, bottom: 800, width: 360, height: 800 },
+    });
+    const anchor = createInlinePlanAnchor({ left: 40, width: 720 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '336px');
+        assert.equal(dropdown.style.minWidth, '336px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown shifts right-edge desktop anchors inside viewport margin', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown, viewport } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    const anchor = createInlinePlanAnchor({ left: 900, width: 80 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        const left = Number.parseInt(dropdown.style.left, 10);
+        assert.equal(dropdown.style.width, '420px');
+        assert.ok(left <= viewport.right - 420 - 12);
+        assert.ok(left + 420 <= viewport.right - 12);
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown keeps mobile sheet sizing unchanged', () => {
+    const { ctx, dropdown } = createInlinePlanPositionHarness({ sheet: true });
+
+    controller.positionInlinePlanDropdown.call(ctx, createInlinePlanAnchor());
+
+    assert.equal(dropdown.style.width, '100vw');
+    assert.equal(dropdown.style.maxWidth, '100vw');
+    assert.equal(dropdown.style.left, '0px');
+    assert.equal(dropdown.style.bottom, '0px');
 });
 
 test('isSameInlinePlanTarget can read the current range through shared controller state access', () => {

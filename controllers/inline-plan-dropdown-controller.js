@@ -469,7 +469,9 @@ function positionInlinePlanDropdown(anchorEl) {
         const viewport = this.getInlinePlanViewportMetrics();
         const margin = 12;
         const gap = 6;
+        const preferredWidth = 420;
         const maxWidth = Math.max(240, viewport.width - (margin * 2));
+        const dropdownWidth = Math.min(preferredWidth, maxWidth);
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
         if (getInlinePlanTargetState.call(this) && getInlinePlanAnchorState.call(this) !== anchor) {
@@ -483,12 +485,11 @@ function positionInlinePlanDropdown(anchorEl) {
         const anchorLeft = layoutScrollX + rect.left;
         const anchorTop = layoutScrollY + rect.top;
         const anchorBottom = layoutScrollY + rect.bottom;
-        const minWidth = Math.min(Math.max(240, rect.width + 32), maxWidth);
-        dropdown.style.minWidth = `${minWidth}px`;
-        dropdown.style.width = `${minWidth}px`;
+        dropdown.style.minWidth = `${dropdownWidth}px`;
+        dropdown.style.width = `${dropdownWidth}px`;
 
         let left = anchorLeft;
-        const maxLeft = viewport.right - minWidth - margin;
+        const maxLeft = viewport.right - dropdownWidth - margin;
         if (left > maxLeft) {
             left = Math.max(viewport.left + margin, maxLeft);
         }
