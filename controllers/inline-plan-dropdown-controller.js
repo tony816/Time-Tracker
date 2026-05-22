@@ -488,7 +488,12 @@ function positionInlinePlanDropdown(anchorEl) {
         dropdown.style.minWidth = `${dropdownWidth}px`;
         dropdown.style.width = `${dropdownWidth}px`;
 
-        let left = anchorLeft;
+        const target = getInlinePlanTargetState.call(this);
+        const alignToCenter = target?.mode === 'plan-segment-replace'
+            && target?.anchorAlign === 'center';
+        let left = alignToCenter
+            ? anchorLeft + (rect.width / 2) - (dropdownWidth / 2)
+            : anchorLeft;
         const maxLeft = viewport.right - dropdownWidth - margin;
         if (left > maxLeft) {
             left = Math.max(viewport.left + margin, maxLeft);
@@ -1977,6 +1982,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             range.mode = 'plan-segment-replace';
             range.segmentIndex = Number(options.segmentIndex);
             range.segmentId = String(options.segmentId || '');
+            range.anchorAlign = options.anchorAlign === 'center' ? 'center' : '';
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
@@ -2004,6 +2010,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                     mode: 'plan-segment-replace',
                     segmentIndex: range.segmentIndex,
                     segmentId: range.segmentId,
+                    anchorAlign: range.anchorAlign,
                 }
             : { ...range, anchor };
         this.inlinePlanHighlightRange = isMobileInputContext

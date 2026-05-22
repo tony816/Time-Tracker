@@ -6178,7 +6178,14 @@ class TimeTracker {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
         if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
-        const anchor = segmentEl
+        const labelAnchor = segmentEl.querySelector
+            ? (
+                segmentEl.querySelector('.plan-segment-label-text')
+                || segmentEl.querySelector('.plan-segment-graphic-label')
+            )
+            : null;
+        const anchor = labelAnchor
+            || segmentEl
             || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
             || (segmentEl.closest && segmentEl.closest('.planned-input'));
         if (!anchor || typeof this.openInlinePlanDropdown !== 'function') return false;
@@ -6186,7 +6193,40 @@ class TimeTracker {
             mode: 'plan-segment-replace',
             segmentIndex,
             segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId || '') : '',
+            anchorAlign: 'center',
         });
+        return true;
+    }
+        findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;
+        const row = document.querySelector(`[data-index="${baseIndex}"]`);
+        if (!row || typeof row.querySelector !== 'function') return null;
+        const segmentSelector = `.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${segmentIndex}"]`;
+        const candidates = Array.from(row.querySelectorAll ? row.querySelectorAll(segmentSelector) : []);
+        const expectedId = String(segmentId || '');
+        const segmentEl = expectedId
+            ? candidates.find((candidate) => String((candidate.dataset && candidate.dataset.segmentId) || '') === expectedId)
+            : candidates[0];
+        if (!segmentEl) return null;
+        return (segmentEl.querySelector && (
+            segmentEl.querySelector('.plan-segment-label-text')
+            || segmentEl.querySelector('.plan-segment-graphic-label')
+        )) || segmentEl;
+    }
+        repositionOpenInlinePlanDropdown() {
+        const target = this.inlinePlanTarget || null;
+        if (!target || target.mode !== 'plan-segment-replace' || !this.inlinePlanDropdown) return false;
+        const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : null;
+        const segmentIndex = Number.isInteger(Number(target.segmentIndex)) ? Number(target.segmentIndex) : null;
+        if (!Number.isInteger(startIndex) || !Number.isInteger(segmentIndex)) return false;
+        const anchor = this.findPlanSegmentDropdownAnchor
+            ? this.findPlanSegmentDropdownAnchor(startIndex, segmentIndex, target.segmentId)
+            : null;
+        if (!anchor || typeof this.positionInlinePlanDropdown !== 'function') return false;
+        this.inlinePlanAnchor = anchor;
+        this.inlinePlanTarget.anchor = anchor;
+        this.inlinePlanTarget.anchorAlign = 'center';
+        this.positionInlinePlanDropdown(anchor);
         return true;
     }
         ensurePlanSegmentSelectionGlobalListeners() {
@@ -6300,6 +6340,9 @@ class TimeTracker {
         });
         slot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(slot.planActivities) : (slot.planned || '');
         this.renderTimeEntries(true);
+        if (typeof this.repositionOpenInlinePlanDropdown === 'function') {
+            this.repositionOpenInlinePlanDropdown();
+        }
         this.calculateTotals();
         this.autoSave();
         return true;

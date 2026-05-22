@@ -276,6 +276,61 @@ test('positionInlinePlanDropdown shifts right-edge desktop anchors inside viewpo
     }
 });
 
+test('positionInlinePlanDropdown centers segment replacement dropdown on anchor center', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'plan-segment-replace', anchorAlign: 'center' };
+    const anchor = createInlinePlanAnchor({ left: 300, width: 100 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '420px');
+        assert.equal(dropdown.style.left, '140px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown keeps non-segment dropdowns left aligned', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'planned-slot', anchorAlign: 'center' };
+    const anchor = createInlinePlanAnchor({ left: 300, width: 100 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.left, '300px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown clamps centered segment dropdown at viewport edges', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown, viewport } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'plan-segment-replace', anchorAlign: 'center' };
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, createInlinePlanAnchor({ left: 900, width: 100 }));
+        const rightLeft = Number.parseInt(dropdown.style.left, 10);
+        assert.ok(rightLeft <= viewport.right - 420 - 12);
+
+        controller.positionInlinePlanDropdown.call(ctx, createInlinePlanAnchor({ left: 0, width: 40 }));
+        const leftLeft = Number.parseInt(dropdown.style.left, 10);
+        assert.ok(leftLeft >= viewport.left + 12);
+    } finally {
+        restoreGlobals();
+    }
+});
+
 test('positionInlinePlanDropdown keeps mobile sheet sizing unchanged', () => {
     const { ctx, dropdown } = createInlinePlanPositionHarness({ sheet: true });
 

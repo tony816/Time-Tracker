@@ -22,6 +22,10 @@ const openPlanSegmentReplacementDropdown = buildMethod(
     'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
     '(baseIndex, segmentIndex, segmentEl)'
 );
+const repositionOpenInlinePlanDropdown = buildMethod(
+    'repositionOpenInlinePlanDropdown()',
+    '()'
+);
 
 function createElementNode(tagName = 'span') {
     const listeners = {};
@@ -607,7 +611,7 @@ test('real planned segment DOM only opens title editing from the label trigger',
 
 test('clicking label container space opens segment dropdown instead of title editing', () => {
     withDocument(() => {
-        const { ctx, entryDiv, labelContainer } = createRealisticPlanSegmentDom();
+        const { ctx, entryDiv, labelContainer, label } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
         ctx.timeSlots = [
             {
@@ -638,9 +642,76 @@ test('clicking label container space opens segment dropdown instead of title edi
         assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
         assert.equal(ctx.selectedPlanSegment, undefined);
         assert.equal(dropdownCalls.length, 1);
+        assert.equal(dropdownCalls[0].anchor, label);
         assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
         assert.equal(dropdownCalls[0].options.segmentIndex, 0);
+        assert.equal(dropdownCalls[0].options.segmentId, 'planned-0-0');
+        assert.equal(dropdownCalls[0].options.anchorAlign, 'center');
     });
+});
+
+test('segment replacement dropdown falls back from label text to graphic label and segment', () => {
+    withDocument(() => {
+        const { ctx, segment, labelContainer, label } = createRealisticPlanSegmentDom();
+        const calls = [];
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
+            calls.push({ startIndex, anchor, endIndex, options });
+        };
+
+        labelContainer.children = labelContainer.children.filter(child => child !== label);
+        label.parentNode = null;
+        openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment);
+        assert.equal(calls[0].anchor, labelContainer);
+        assert.equal(calls[0].options.anchorAlign, 'center');
+
+        labelContainer.className = '';
+        openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment);
+        assert.equal(calls[1].anchor, segment);
+        assert.equal(calls[1].options.anchorAlign, 'center');
+    });
+});
+
+test('repositionOpenInlinePlanDropdown refreshes segment label anchor after render', () => {
+    const oldAnchor = { id: 'old-anchor' };
+    const newAnchor = { id: 'new-label-anchor' };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: { id: 'dropdown' },
+        inlinePlanTarget: {
+            startIndex: 2,
+            endIndex: 2,
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'segment-1',
+            anchor: oldAnchor,
+            anchorAlign: 'center',
+        },
+        findPlanSegmentDropdownAnchor(startIndex, segmentIndex, segmentId) {
+            calls.push(['find', startIndex, segmentIndex, segmentId]);
+            return newAnchor;
+        },
+        positionInlinePlanDropdown(anchor) {
+            calls.push(['position', anchor]);
+        },
+    };
+
+    assert.equal(repositionOpenInlinePlanDropdown.call(ctx), true);
+    assert.equal(ctx.inlinePlanAnchor, newAnchor);
+    assert.equal(ctx.inlinePlanTarget.anchor, newAnchor);
+    assert.equal(ctx.inlinePlanTarget.anchorAlign, 'center');
+    assert.equal(ctx.inlinePlanTarget.mode, 'plan-segment-replace');
+    assert.deepEqual(calls, [
+        ['find', 2, 1, 'segment-1'],
+        ['position', newAnchor],
+    ]);
 });
 
 test('clicking parent title band opens segment dropdown instead of title editing', () => {
