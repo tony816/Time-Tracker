@@ -6248,8 +6248,8 @@ class TimeTracker {
                 ? this.normalizeActivityText(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '')
                 : String(parentItem.activityText || parentItem.label || parentItem.name || parentItem.title || '').trim())
             : '';
-        const nextActivityId = String(activityItem.id || '').trim();
-        const nextParentId = parentItem ? String(parentItem.id || '').trim() : '';
+        const nextActivityId = String(activityItem.id ?? '').trim();
+        const nextParentId = parentItem ? String(parentItem.id ?? '').trim() : '';
         const nextSegment = {
             ...current,
             label: activityText,

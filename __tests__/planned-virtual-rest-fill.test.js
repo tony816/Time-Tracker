@@ -1080,6 +1080,28 @@ test('plan segment replacement with id uses new activity id', () => {
     assert.equal(ctx.timeSlots[0].planActivities[0].seconds, 1200);
 });
 
+test('plan segment replacement preserves numeric zero activity id', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'Old', activityText: 'Old', activityId: 'old-id', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+    ]);
+
+    assert.equal(replacePlanSegmentActivity.call(ctx, 0, 0, { id: 0, label: 'Zero Id Activity', name: 'Zero Id Activity' }), true);
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Zero Id Activity', activityText: 'Zero Id Activity', activityId: '0', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+    ]);
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, null);
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'old-id');
+});
+
 test('child plan segment replacement clears stale child and parent ids when new items lack ids', () => {
     const ctx = createPlannedRenderContext([
         {
@@ -1125,6 +1147,53 @@ test('child plan segment replacement clears stale child and parent ids when new 
     ]);
     assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'squat');
     assert.notEqual(ctx.timeSlots[0].planActivities[0].titleActivityId, 'exercise');
+});
+
+test('child plan segment replacement preserves numeric zero child and parent ids', () => {
+    const ctx = createPlannedRenderContext([
+        {
+            label: 'Old Child',
+            activityText: 'Old Child',
+            activityId: 'old-child-id',
+            titleText: 'Old Parent',
+            titleActivityId: 'old-parent-id',
+            seconds: 30 * 60,
+            startMinute: 0,
+            durationMinutes: 30,
+            endMinute: 30,
+        },
+    ]);
+
+    assert.equal(
+        replacePlanSegmentActivity.call(ctx, 0, 0, { id: 0, label: 'Zero Child', name: 'Zero Child' }, { id: 0, label: 'Zero Parent', name: 'Zero Parent' }),
+        true
+    );
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityText: item.activityText,
+        activityId: item.activityId,
+        titleText: item.titleText,
+        titleActivityId: item.titleActivityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        {
+            label: 'Zero Child',
+            activityText: 'Zero Child',
+            activityId: '0',
+            titleText: 'Zero Parent',
+            titleActivityId: '0',
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+            seconds: 1800,
+        },
+    ]);
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].activityId, 'old-child-id');
+    assert.notEqual(ctx.timeSlots[0].planActivities[0].titleActivityId, 'old-parent-id');
 });
 
 test('parent plan segment replacement clears previous child metadata', () => {
