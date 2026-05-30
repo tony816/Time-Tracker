@@ -612,7 +612,7 @@ test('clicking a virtual rest gap opens the existing inline plan dropdown with g
         gapStartMinute: '20',
         gapDurationMinutes: '20',
     };
-    gap.closest = () => ({ id: 'planned-wrapper' });
+    gap.getBoundingClientRect = () => ({ width: 620 });
     const entryDiv = {
         querySelectorAll(selector) {
             assert.equal(selector, '.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
@@ -640,9 +640,11 @@ test('clicking a virtual rest gap opens the existing inline plan dropdown with g
     assert.equal(calls.length, 1);
     assert.equal(calls[0].startIndex, 0);
     assert.equal(calls[0].endIndex, 0);
+    assert.equal(calls[0].anchor, gap);
     assert.equal(calls[0].options.mode, 'virtual-rest-gap');
     assert.equal(calls[0].options.gapStartMinute, 20);
     assert.equal(calls[0].options.gapDurationMinutes, 20);
+    assert.equal(calls[0].options.anchorMinWidth, 620);
 });
 
 test('selecting a parent activity fills the clicked virtual gap duration at the correct position', () => {

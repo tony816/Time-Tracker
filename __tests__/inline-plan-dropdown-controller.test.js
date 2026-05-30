@@ -311,6 +311,63 @@ test('positionInlinePlanDropdown keeps non-segment dropdowns left aligned', () =
     }
 });
 
+test('positionInlinePlanDropdown keeps the default width for a narrow segment replacement', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'plan-segment-replace', anchorAlign: 'center', anchorMinWidth: 160 };
+    const anchor = createInlinePlanAnchor({ left: 300, width: 100 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '420px');
+        assert.equal(dropdown.style.minWidth, '420px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown expands to a wide segment replacement width', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'plan-segment-replace', anchorAlign: 'center', anchorMinWidth: 640 };
+    const anchor = createInlinePlanAnchor({ left: 300, width: 100 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '640px');
+        assert.equal(dropdown.style.minWidth, '640px');
+        assert.equal(dropdown.style.left, '30px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown clamps a wide segment replacement width to the viewport', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown, viewport } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 760, bottom: 800, width: 760, height: 800 },
+    });
+    ctx.inlinePlanTarget = { mode: 'plan-segment-replace', anchorAlign: 'center', anchorMinWidth: 900 };
+    const anchor = createInlinePlanAnchor({ left: 620, width: 80 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '736px');
+        assert.equal(dropdown.style.minWidth, '736px');
+        assert.ok(Number.parseInt(dropdown.style.left, 10) >= viewport.left + 12);
+        assert.ok(Number.parseInt(dropdown.style.left, 10) <= viewport.right - 736 - 12);
+    } finally {
+        restoreGlobals();
+    }
+});
+
 test('positionInlinePlanDropdown clamps centered segment dropdown at viewport edges', () => {
     const restoreGlobals = installInlinePlanPositionGlobals();
     const { ctx, dropdown, viewport } = createInlinePlanPositionHarness({

@@ -5962,11 +5962,18 @@ class TimeTracker {
                 event.preventDefault();
                 event.stopPropagation();
                 const range = this.getPlannedRangeInfo(index);
-                const anchor = gapEl.closest('.split-cell-wrapper.split-type-planned') || gapEl;
+                const gapRect = gapEl.getBoundingClientRect
+                    ? gapEl.getBoundingClientRect()
+                    : null;
+                const anchorMinWidth = gapRect && Number.isFinite(gapRect.width)
+                    ? Math.floor(gapRect.width)
+                    : 0;
+                const anchor = gapEl;
                 this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                     mode: 'virtual-rest-gap',
                     gapStartMinute,
                     gapDurationMinutes,
+                    anchorMinWidth,
                 });
             };
             gapEl.addEventListener('click', openGap);
@@ -6189,11 +6196,18 @@ class TimeTracker {
             || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
             || (segmentEl.closest && segmentEl.closest('.planned-input'));
         if (!anchor || typeof this.openInlinePlanDropdown !== 'function') return false;
+        const segmentRect = segmentEl.getBoundingClientRect
+            ? segmentEl.getBoundingClientRect()
+            : null;
+        const anchorMinWidth = segmentRect && Number.isFinite(segmentRect.width)
+            ? Math.floor(segmentRect.width)
+            : 0;
         this.openInlinePlanDropdown(baseIndex, anchor, baseIndex, {
             mode: 'plan-segment-replace',
             segmentIndex,
-            segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId || '') : '',
+            segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId ?? '') : '',
             anchorAlign: 'center',
+            anchorMinWidth,
         });
         return true;
     }

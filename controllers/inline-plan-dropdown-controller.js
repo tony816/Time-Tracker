@@ -470,8 +470,13 @@ function positionInlinePlanDropdown(anchorEl) {
         const margin = 12;
         const gap = 6;
         const preferredWidth = 420;
+        const inlineTarget = getInlinePlanTargetState.call(this);
+        const requestedMinWidth = Number(inlineTarget && inlineTarget.anchorMinWidth);
+        const expandedWidth = Number.isFinite(requestedMinWidth) && requestedMinWidth > preferredWidth
+            ? requestedMinWidth
+            : preferredWidth;
         const maxWidth = Math.max(240, viewport.width - (margin * 2));
-        const dropdownWidth = Math.min(preferredWidth, maxWidth);
+        const dropdownWidth = Math.min(expandedWidth, maxWidth);
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
         if (getInlinePlanTargetState.call(this) && getInlinePlanAnchorState.call(this) !== anchor) {
@@ -1978,11 +1983,19 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         }
         const segmentReplaceTarget = options && options.mode === 'plan-segment-replace'
             && Number.isInteger(Number(options.segmentIndex));
+        const anchorMinWidth = Number(options && options.anchorMinWidth);
         if (segmentReplaceTarget) {
             range.mode = 'plan-segment-replace';
             range.segmentIndex = Number(options.segmentIndex);
             range.segmentId = String(options.segmentId || '');
             range.anchorAlign = options.anchorAlign === 'center' ? 'center' : '';
+            if (Number.isFinite(anchorMinWidth) && anchorMinWidth > 0) {
+                range.anchorMinWidth = Math.floor(anchorMinWidth);
+            }
+        } else if (virtualGapTarget) {
+            if (Number.isFinite(anchorMinWidth) && anchorMinWidth > 0) {
+                range.anchorMinWidth = Math.floor(anchorMinWidth);
+            }
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;

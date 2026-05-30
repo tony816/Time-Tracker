@@ -611,8 +611,9 @@ test('real planned segment DOM only opens title editing from the label trigger',
 
 test('clicking label container space opens segment dropdown instead of title editing', () => {
     withDocument(() => {
-        const { ctx, entryDiv, labelContainer, label } = createRealisticPlanSegmentDom();
+        const { ctx, entryDiv, segment, labelContainer, label } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
+        segment.getBoundingClientRect = () => ({ width: 640 });
         ctx.timeSlots = [
             {
                 planned: 'Focus',
@@ -647,6 +648,7 @@ test('clicking label container space opens segment dropdown instead of title edi
         assert.equal(dropdownCalls[0].options.segmentIndex, 0);
         assert.equal(dropdownCalls[0].options.segmentId, 'planned-0-0');
         assert.equal(dropdownCalls[0].options.anchorAlign, 'center');
+        assert.equal(dropdownCalls[0].options.anchorMinWidth, 640);
     });
 });
 
