@@ -6620,7 +6620,7 @@ class TimeTracker {
             }, true);
         });
     }
-        replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null) {
+    replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null) {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !activityItem) return false;
         const activityText = this.normalizeActivityText
             ? this.normalizeActivityText(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '')
