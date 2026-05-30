@@ -6444,6 +6444,60 @@ class TimeTracker {
             anchorAlign: 'center',
             anchorMinWidth,
         });
+        if (segmentEl.classList && typeof segmentEl.classList.add === 'function') {
+            segmentEl.classList.add('inline-plan-segment-context-target');
+        }
+        return true;
+    }
+    preparePlanSegmentReplacementViewport(segmentEl) {
+        if (!segmentEl || typeof segmentEl.getBoundingClientRect !== 'function') return false;
+        const isCoarseContext = this.isCoarsePlanSegmentPointerContext
+            ? this.isCoarsePlanSegmentPointerContext()
+            : false;
+        if (!isCoarseContext) return false;
+        const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+        const doc = (typeof document !== 'undefined') ? document : null;
+        const viewportHeight = root && (Number(root.innerHeight) || (doc && doc.documentElement && Number(doc.documentElement.clientHeight)) || 0);
+        if (!Number.isFinite(viewportHeight) || viewportHeight <= 0 || !root || typeof root.scrollBy !== 'function') {
+            return false;
+        }
+        const rect = segmentEl.getBoundingClientRect();
+        if (!rect) return false;
+        const rectTop = Number(rect.top);
+        const rectBottom = Number(rect.bottom);
+        const rectHeight = Number(rect.height);
+        if (![rectTop, rectBottom, rectHeight].every(Number.isFinite)) return false;
+
+        const minSheetHeight = Math.min(viewportHeight * 0.56, 520);
+        const maxSheetHeight = Math.min(viewportHeight * 0.82, 720);
+        const expectedSheetHeight = Math.max(minSheetHeight, maxSheetHeight);
+        const sheetTop = viewportHeight - expectedSheetHeight;
+        const topPadding = 16;
+        const bottomPadding = 16;
+        const visibleTop = topPadding;
+        const visibleBottom = Math.max(topPadding, sheetTop - bottomPadding);
+        const shouldScroll = rectBottom > visibleBottom || rectTop < visibleTop;
+        if (!shouldScroll) return false;
+
+        if (doc && doc.body && typeof doc.createElement === 'function') {
+            let spacer = doc.getElementById ? doc.getElementById('inline-plan-sheet-scroll-spacer') : null;
+            if (!spacer) {
+                spacer = doc.createElement('div');
+                spacer.id = 'inline-plan-sheet-scroll-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                spacer.style.pointerEvents = 'none';
+                spacer.style.flex = '0 0 auto';
+                doc.body.appendChild(spacer);
+            }
+            spacer.style.display = 'block';
+            spacer.style.height = `${Math.ceil(expectedSheetHeight + bottomPadding)}px`;
+        }
+
+        const segmentCenter = rectTop + (rectHeight / 2);
+        const safeCenter = visibleTop + ((visibleBottom - visibleTop) / 2);
+        const delta = segmentCenter - safeCenter;
+        if (!Number.isFinite(delta) || Math.abs(delta) < 1) return false;
+        root.scrollBy({ top: delta, behavior: 'auto' });
         return true;
     }
     findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
@@ -6578,6 +6632,19 @@ class TimeTracker {
                         return;
                     }
                     if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                        const delayed = this.preparePlanSegmentReplacementViewport
+                            ? this.preparePlanSegmentReplacementViewport(segmentEl)
+                            : false;
+                        if (delayed) {
+                            const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+                            const schedule = root && typeof root.requestAnimationFrame === 'function'
+                                ? root.requestAnimationFrame.bind(root)
+                                : (callback) => callback();
+                            schedule(() => {
+                                this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                            });
+                            return;
+                        }
                         this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
                     } else {
                         this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });

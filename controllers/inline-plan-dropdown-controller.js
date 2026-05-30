@@ -2466,11 +2466,16 @@ function closeInlinePlanDropdown() {
             this.inlinePlanBackdrop.parentNode.removeChild(this.inlinePlanBackdrop);
         }
         this.inlinePlanBackdrop = null;
+        const sheetScrollSpacer = document.getElementById ? document.getElementById('inline-plan-sheet-scroll-spacer') : null;
+        if (sheetScrollSpacer && sheetScrollSpacer.parentNode) {
+            sheetScrollSpacer.parentNode.removeChild(sheetScrollSpacer);
+        }
         document.body.classList.remove('inline-plan-sheet-open');
         const timeEntries = document.getElementById('timeEntries');
         if (timeEntries) {
             timeEntries.classList.remove('inline-plan-context-active');
             timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
+            timeEntries.querySelectorAll('.inline-plan-segment-context-target').forEach((el) => el.classList.remove('inline-plan-segment-context-target'));
         }
         this.inlinePlanDropdown = null;
         if (closingTarget && closingTarget.mode === 'plan-segment-replace') {

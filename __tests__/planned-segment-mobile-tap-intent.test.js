@@ -35,6 +35,10 @@ const isPointInRect = buildMethod(
     'isPointInRect(clientX, clientY, rect)',
     '(clientX, clientY, rect)'
 );
+const preparePlanSegmentReplacementViewport = buildMethod(
+    'preparePlanSegmentReplacementViewport(segmentEl)',
+    '(segmentEl)'
+);
 const applyPlanSegmentTitleTextEdit = buildMethod(
     'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
@@ -123,6 +127,20 @@ function createElementNode(tagName = 'div', className = '', dataset = {}) {
         parentNode: null,
         textContent: '',
         style: {},
+        classList: {
+            add(...classNames) {
+                const classes = new Set(getNodeClasses(node));
+                classNames.forEach((className) => classes.add(className));
+                node.className = Array.from(classes).join(' ');
+            },
+            remove(...classNames) {
+                const removeSet = new Set(classNames);
+                node.className = getNodeClasses(node).filter((className) => !removeSet.has(className)).join(' ');
+            },
+            contains(className) {
+                return hasNodeClass(node, className);
+            },
+        },
         addEventListener(type, handler) {
             listeners[type] = handler;
         },
@@ -232,6 +250,7 @@ function createHarness(options = {}) {
         getPlanSegmentTapTextRect,
         expandRectWithinBounds,
         isPointInRect,
+        preparePlanSegmentReplacementViewport: options.preparePlanSegmentReplacementViewport || preparePlanSegmentReplacementViewport,
         startPlanSegmentParentTitleEdit(el, index, event) {
             calls.push(['title-edit', el, index, event.defaultPrevented, event.propagationStopped]);
             return true;
@@ -268,12 +287,51 @@ function createHarness(options = {}) {
     };
 }
 
+function withMockWindow(overrides, callback) {
+    const previousWindow = global.window;
+    const previousDocument = global.document;
+    global.window = {
+        innerHeight: 600,
+        scrollBy() {},
+        requestAnimationFrame(callback) {
+            callback();
+        },
+        ...overrides,
+    };
+    global.document = {
+        documentElement: {
+            clientHeight: 600,
+        },
+    };
+    try {
+        callback();
+    } finally {
+        if (previousWindow === undefined) {
+            delete global.window;
+        } else {
+            global.window = previousWindow;
+        }
+        if (previousDocument === undefined) {
+            delete global.document;
+        } else {
+            global.document = previousDocument;
+        }
+    }
+}
+
 test('mobile title hit area tap starts title inline edit without opening replacement dropdown', () => {
-    const harness = createHarness();
+    const prepareCalls = [];
+    const harness = createHarness({
+        preparePlanSegmentReplacementViewport(segmentEl) {
+            prepareCalls.push(segmentEl);
+            return true;
+        },
+    });
     const event = createClickEvent(harness.segment, 112, 14);
 
     harness.segment.dispatchEvent(event);
 
+    assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
         ['title-edit', harness.title, 0, true, true],
     ]);
@@ -282,11 +340,18 @@ test('mobile title hit area tap starts title inline edit without opening replace
 });
 
 test('mobile activity hit area tap starts activity inline edit without opening replacement dropdown', () => {
-    const harness = createHarness();
+    const prepareCalls = [];
+    const harness = createHarness({
+        preparePlanSegmentReplacementViewport(segmentEl) {
+            prepareCalls.push(segmentEl);
+            return true;
+        },
+    });
     const event = createClickEvent(harness.segment, 118, 42);
 
     harness.segment.dispatchEvent(event);
 
+    assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
         ['activity-edit', harness.label, 0, true, true],
     ]);
@@ -305,6 +370,59 @@ test('mobile segment background tap outside text hit areas opens replacement dro
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
+});
+
+test('mobile segment background tap pre-scrolls before opening replacement sheet when segment would be covered', () => {
+    const scrollCalls = [];
+    const rafCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+        requestAnimationFrame(callback) {
+            rafCalls.push(callback);
+        },
+    }, () => {
+        const harness = createHarness();
+        harness.segment.getBoundingClientRect = () => rect(0, 500, 300, 590);
+        const event = createClickEvent(harness.segment, 260, 560);
+
+        harness.segment.dispatchEvent(event);
+
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].behavior, 'auto');
+        assert.equal(scrollCalls[0].top > 0, true);
+        assert.deepEqual(harness.calls, []);
+        assert.equal(rafCalls.length, 1);
+
+        rafCalls[0]();
+
+        assert.deepEqual(harness.calls, [
+            ['dropdown', 0, 0, harness.segment],
+        ]);
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(event.propagationStopped, true);
+    });
+});
+
+test('mobile segment background tap opens replacement sheet without pre-scroll when segment is already safe', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const harness = createHarness();
+        harness.segment.getBoundingClientRect = () => rect(0, 20, 300, 80);
+        const event = createClickEvent(harness.segment, 260, 78);
+
+        harness.segment.dispatchEvent(event);
+
+        assert.deepEqual(scrollCalls, []);
+        assert.deepEqual(harness.calls, [
+            ['dropdown', 0, 0, harness.segment],
+        ]);
+    });
 });
 
 test('mobile plan segment tap intent keeps existing interactive exceptions ignored', () => {
@@ -355,11 +473,19 @@ test('desktop activity label click starts activity edit without opening replacem
 });
 
 test('desktop segment background click still opens replacement dropdown', () => {
-    const backgroundHarness = createHarness({ coarse: false });
+    const prepareCalls = [];
+    const backgroundHarness = createHarness({
+        coarse: false,
+        preparePlanSegmentReplacementViewport(segmentEl) {
+            prepareCalls.push(segmentEl);
+            return true;
+        },
+    });
     const event = createClickEvent(backgroundHarness.segment, 260, 78);
 
     backgroundHarness.segment.dispatchEvent(event);
 
+    assert.deepEqual(prepareCalls, []);
     assert.deepEqual(backgroundHarness.calls, [
         ['dropdown', 0, 0, backgroundHarness.segment],
     ]);

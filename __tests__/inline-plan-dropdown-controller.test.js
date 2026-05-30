@@ -728,6 +728,19 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
     const originalWindow = globalThis.window;
     const dropdown = { parentNode: { removeChild() {} }, querySelector() { return null; }, removeEventListener() {} };
     const childLayer = { parentNode: { removeChild() {} } };
+    const removedContextClasses = [];
+    const timeEntries = {
+        classList: { remove(name) { removedContextClasses.push(['root', name]); } },
+        querySelectorAll(selector) {
+            if (selector === '.inline-plan-context-keep-clear') {
+                return [{ classList: { remove(name) { removedContextClasses.push(['row', name]); } } }];
+            }
+            if (selector === '.inline-plan-segment-context-target') {
+                return [{ classList: { remove(name) { removedContextClasses.push(['segment', name]); } } }];
+            }
+            return [];
+        },
+    };
     const ctx = {
         inlinePlanDropdown: dropdown,
         inlinePlanChildPopoverLayer: childLayer,
@@ -742,7 +755,7 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
     globalThis.document = {
         removeEventListener() {},
         body: { classList: { remove() {} } },
-        getElementById() { return null; },
+        getElementById(id) { return id === 'timeEntries' ? timeEntries : null; },
     };
     globalThis.window = { removeEventListener() {}, visualViewport: null };
 
@@ -755,6 +768,11 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
 
     assert.equal(ctx.selectedPlanSegment, null);
     assert.equal(ctx.inlinePlanTarget, null);
+    assert.deepEqual(removedContextClasses, [
+        ['root', 'inline-plan-context-active'],
+        ['row', 'inline-plan-context-keep-clear'],
+        ['segment', 'inline-plan-segment-context-target'],
+    ]);
 });
 
 function createInlineSelectionNode(tagName) {
