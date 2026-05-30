@@ -111,7 +111,12 @@ test('createStateSnapshot deep-clones slots and serializes merged fields', () =>
 
 test('openScheduleModal routes planned edits to inline dropdown anchor', async () => {
     const calls = [];
-    const plannedAnchor = { id: 'planned-anchor' };
+    const plannedAnchor = {
+        id: 'planned-anchor',
+        getBoundingClientRect() {
+            return { width: 876 };
+        },
+    };
 
     await withPatchedGlobal('document', {
         querySelector(selector) {
@@ -120,8 +125,8 @@ test('openScheduleModal routes planned edits to inline dropdown anchor', async (
         },
     }, () => {
         const ctx = {
-            openInlinePlanDropdown(startIndex, anchor, endIndex) {
-                calls.push([startIndex, anchor, endIndex]);
+            openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+                calls.push([startIndex, anchor, endIndex, options]);
             },
         };
 
@@ -131,8 +136,8 @@ test('openScheduleModal routes planned edits to inline dropdown anchor', async (
     });
 
     assert.deepEqual(calls, [
-        [5, plannedAnchor, 7],
-        [9, plannedAnchor, 9],
+        [5, plannedAnchor, 7, { anchorMinWidth: 876 }],
+        [9, plannedAnchor, 9, { anchorMinWidth: 876 }],
     ]);
 });
 

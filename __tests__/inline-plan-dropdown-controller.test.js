@@ -311,6 +311,44 @@ test('positionInlinePlanDropdown keeps non-segment dropdowns left aligned', () =
     }
 });
 
+test('positionInlinePlanDropdown expands a normal planned dropdown to the clicked slot width', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1400, bottom: 800, width: 1400, height: 800 },
+    });
+    ctx.inlinePlanTarget = { startIndex: 10, endIndex: 10, anchorMinWidth: 876 };
+    const anchor = createInlinePlanAnchor({ left: 200, width: 120 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '876px');
+        assert.equal(dropdown.style.minWidth, '876px');
+        assert.equal(dropdown.style.left, '200px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown keeps a narrow planned slot dropdown at the default width', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { startIndex: 10, endIndex: 10, anchorMinWidth: 220 };
+    const anchor = createInlinePlanAnchor({ left: 200, width: 120 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '420px');
+        assert.equal(dropdown.style.minWidth, '420px');
+        assert.equal(dropdown.style.left, '200px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
 test('positionInlinePlanDropdown keeps the default width for a narrow segment replacement', () => {
     const restoreGlobals = installInlinePlanPositionGlobals();
     const { ctx, dropdown } = createInlinePlanPositionHarness({

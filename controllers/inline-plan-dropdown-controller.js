@@ -1984,18 +1984,14 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         const segmentReplaceTarget = options && options.mode === 'plan-segment-replace'
             && Number.isInteger(Number(options.segmentIndex));
         const anchorMinWidth = Number(options && options.anchorMinWidth);
+        if (Number.isFinite(anchorMinWidth) && anchorMinWidth > 0) {
+            range.anchorMinWidth = Math.floor(anchorMinWidth);
+        }
         if (segmentReplaceTarget) {
             range.mode = 'plan-segment-replace';
             range.segmentIndex = Number(options.segmentIndex);
             range.segmentId = String(options.segmentId || '');
             range.anchorAlign = options.anchorAlign === 'center' ? 'center' : '';
-            if (Number.isFinite(anchorMinWidth) && anchorMinWidth > 0) {
-                range.anchorMinWidth = Math.floor(anchorMinWidth);
-            }
-        } else if (virtualGapTarget) {
-            if (Number.isFinite(anchorMinWidth) && anchorMinWidth > 0) {
-                range.anchorMinWidth = Math.floor(anchorMinWidth);
-            }
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;

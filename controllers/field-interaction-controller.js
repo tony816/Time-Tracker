@@ -12,6 +12,15 @@
         root.TimeTrackerFieldInteractionController = Object.assign(existing, api);
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function buildTimeTrackerFieldInteractionController(root) {
+    function getAnchorMinWidthFromElement(el) {
+        const rect = el && typeof el.getBoundingClientRect === 'function'
+            ? el.getBoundingClientRect()
+            : null;
+        return rect && Number.isFinite(rect.width) && rect.width > 0
+            ? Math.floor(rect.width)
+            : 0;
+    }
+
     function handleMergedClickCapture(e) {
         const target = e.target;
         if (e.type === 'click') {
@@ -109,7 +118,9 @@
                 const safeStart = range.start;
                 const safeEnd = range.end;
                 const anchor = document.querySelector(`[data-index="${safeStart}"] .planned-input`) || plannedEl;
-                this.openInlinePlanDropdown(safeStart, anchor, safeEnd);
+                this.openInlinePlanDropdown(safeStart, anchor, safeEnd, {
+                    anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedEl),
+                });
             }
             return;
         }
@@ -143,7 +154,9 @@
                             const range = this.activateMergedPlannedSelection(mk, index);
                             if (!range) return;
                             const anchor = document.querySelector(`[data-index="${range.start}"] .planned-input`) || prEl;
-                            this.openInlinePlanDropdown(range.start, anchor, range.end);
+                            this.openInlinePlanDropdown(range.start, anchor, range.end, {
+                                anchorMinWidth: getAnchorMinWidthFromElement(anchor || prEl),
+                            });
                         }
                         return;
                     }
@@ -195,7 +208,9 @@
             const mergeStart = range.start;
             const mergeEnd = range.end;
             const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-            this.openInlinePlanDropdown(mergeStart, anchor, mergeEnd);
+            this.openInlinePlanDropdown(mergeStart, anchor, mergeEnd, {
+                anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+            });
         });
 
         let plannedMouseMoved = false;
@@ -274,7 +289,9 @@
                         }
                         if (!e.ctrlKey && !e.metaKey) {
                             const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                            this.openInlinePlanDropdown(base.start, anchor);
+                            this.openInlinePlanDropdown(base.start, anchor, undefined, {
+                                anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+                            });
                         }
                         this.suppressInlinePlanClickOnce = index;
                     }
@@ -457,7 +474,11 @@
                         const range = this.activateMergedPlannedSelection(mk, index);
                         if (!range) return;
                         const anchor = entryDiv.querySelector('.planned-input') || document.querySelector(`[data-index="${range.start}"] .planned-input`);
-                        if (anchor) this.openInlinePlanDropdown(range.start, anchor, range.end);
+                        if (anchor) {
+                            this.openInlinePlanDropdown(range.start, anchor, range.end, {
+                                anchorMinWidth: getAnchorMinWidthFromElement(anchor),
+                            });
+                        }
                         return;
                     }
                 }
@@ -496,12 +517,15 @@
                 }
 
                 const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex);
+                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
+                    anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+                });
             });
         }
     }
 
     return {
+        getAnchorMinWidthFromElement,
         handleMergedClickCapture,
         attachPlannedFieldSelectionListeners,
         attachRowWideClickTargets,

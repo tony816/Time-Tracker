@@ -680,7 +680,15 @@ class TimeTracker {
                 }
 
                 const anchor = planned.closest('.split-cell-wrapper.split-type-planned') || planned;
-                this.openInlinePlanDropdown(start, anchor, end);
+                const anchorRect = anchor && typeof anchor.getBoundingClientRect === 'function'
+                    ? anchor.getBoundingClientRect()
+                    : null;
+                const anchorMinWidth = anchorRect && Number.isFinite(anchorRect.width) && anchorRect.width > 0
+                    ? Math.floor(anchorRect.width)
+                    : 0;
+                this.openInlinePlanDropdown(start, anchor, end, {
+                    anchorMinWidth,
+                });
             });
         }
 
@@ -5081,7 +5089,15 @@ class TimeTracker {
         if (type !== 'planned') return;
         const end = endIndex != null ? endIndex : startIndex;
         const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`) || document.querySelector(`[data-index="${startIndex}"]`);
-        this.openInlinePlanDropdown(startIndex, anchor, end);
+        const anchorRect = anchor && typeof anchor.getBoundingClientRect === 'function'
+            ? anchor.getBoundingClientRect()
+            : null;
+        const anchorMinWidth = anchorRect && Number.isFinite(anchorRect.width) && anchorRect.width > 0
+            ? Math.floor(anchorRect.width)
+            : 0;
+        this.openInlinePlanDropdown(startIndex, anchor, end, {
+            anchorMinWidth,
+        });
     }
 
     closeScheduleModal() {

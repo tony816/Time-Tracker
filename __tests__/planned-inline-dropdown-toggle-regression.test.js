@@ -107,7 +107,7 @@ test('planned selection overlay click closes same-range inline dropdown on mouse
 test('planned mouseup path suppresses reopen when same-slot toggle close is armed', () => {
     assert.match(fieldInteractionControllerSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
     assert.match(fieldInteractionControllerSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
-    assert.match(fieldInteractionControllerSource, /if \(!e\.ctrlKey && !e\.metaKey\) \{\s+const anchor = plannedField\.closest\('\.split-cell-wrapper\.split-type-planned'\) \|\| plannedField;\s+this\.openInlinePlanDropdown\(base\.start, anchor\);\s+\}/);
+    assert.match(fieldInteractionControllerSource, /if \(!e\.ctrlKey && !e\.metaKey\) \{\s+const anchor = plannedField\.closest\('\.split-cell-wrapper\.split-type-planned'\) \|\| plannedField;\s+this\.openInlinePlanDropdown\(base\.start, anchor, undefined, \{\s+anchorMinWidth:/);
 });
 
 test('external page scroll closes inline plan dropdown while visual viewport scroll only repositions it', () => {

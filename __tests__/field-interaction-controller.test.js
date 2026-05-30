@@ -18,6 +18,20 @@ const attachCellClickListenersWrapper = buildMethod(
     '(entryDiv, index)'
 );
 
+function createListenerNode() {
+    const listeners = {};
+    return {
+        dataset: {},
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        dispatchEvent(event) {
+            const handler = listeners[event.type];
+            if (handler) handler(event);
+        },
+    };
+}
+
 test('field-interaction-controller exports and global attach are available', () => {
     assert.ok(controller);
     assert.equal(typeof controller.handleMergedClickCapture, 'function');
@@ -87,4 +101,45 @@ test('script field interaction wrapper methods delegate to controller helpers', 
         ['row', ctx, entryDiv, 4],
         ['cell', ctx, entryDiv, 4],
     ]);
+});
+
+test('attachCellClickListeners passes planned slot width to empty slot dropdowns', () => {
+    const plannedField = createListenerNode();
+    const wrapper = createListenerNode();
+    wrapper.getBoundingClientRect = () => ({ width: 876 });
+    plannedField.closest = (selector) => selector === '.split-cell-wrapper.split-type-planned' ? wrapper : null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 4);
+            return { startIndex: 4, endIndex: 4 };
+        },
+        inlinePlanDropdown: null,
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push({ startIndex, anchor, endIndex, options });
+        },
+    };
+
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent({
+        type: 'click',
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].startIndex, 4);
+    assert.equal(calls[0].anchor, wrapper);
+    assert.equal(calls[0].endIndex, 4);
+    assert.equal(calls[0].options.anchorMinWidth, 876);
+    assert.equal(calls[0].options.anchorAlign, undefined);
+    assert.equal(calls[0].options.mode, undefined);
 });
