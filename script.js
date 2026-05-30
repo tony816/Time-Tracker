@@ -5999,10 +5999,156 @@ class TimeTracker {
             });
         });
     }
-        isPlanSegmentRunning(baseIndex, segmentId) {
+    isPlanSegmentRunning(baseIndex, segmentId) {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         const timer = slot && slot.planSegmentTimers && slot.planSegmentTimers[segmentId];
         return Boolean(timer && (timer.running === true || timer.status === 'running'));
+    }
+        isCoarsePlanSegmentPointerContext() {
+        if (typeof this.planSegmentPointerContextMatcher === 'function') {
+            return Boolean(this.planSegmentPointerContextMatcher('(hover: none), (pointer: coarse)'));
+        }
+        if (typeof this.coarsePlanSegmentPointerContext === 'boolean') {
+            return this.coarsePlanSegmentPointerContext;
+        }
+        if (typeof this.isCoarsePointerContext === 'function') {
+            return Boolean(this.isCoarsePointerContext());
+        }
+        const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+        if (!root || typeof root.matchMedia !== 'function') return false;
+        try {
+            return Boolean(root.matchMedia('(hover: none), (pointer: coarse)').matches);
+        } catch (_) {
+            return false;
+        }
+    }
+        getPlanSegmentTitleEditElement(segmentEl) {
+        if (!segmentEl || typeof segmentEl.querySelector !== 'function') return null;
+        return segmentEl.querySelector('[data-segment-title-edit-trigger="true"]')
+            || segmentEl.querySelector('.plan-segment-graphic-title');
+    }
+        getPlanSegmentActivityEditElement(segmentEl) {
+        if (!segmentEl || typeof segmentEl.querySelector !== 'function') return null;
+        return segmentEl.querySelector('[data-activity-edit-trigger="true"]')
+            || segmentEl.querySelector('.plan-segment-label-text')
+            || segmentEl.querySelector('[data-title-edit-trigger="true"]');
+    }
+        isPointInRect(clientX, clientY, rect) {
+        if (!rect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const left = Number.isFinite(rect.left) ? rect.left : Number(rect.x);
+        const top = Number.isFinite(rect.top) ? rect.top : Number(rect.y);
+        const right = Number.isFinite(rect.right)
+            ? rect.right
+            : (Number.isFinite(left) && Number.isFinite(rect.width) ? left + rect.width : NaN);
+        const bottom = Number.isFinite(rect.bottom)
+            ? rect.bottom
+            : (Number.isFinite(top) && Number.isFinite(rect.height) ? top + rect.height : NaN);
+        if (![left, top, right, bottom].every(Number.isFinite)) return false;
+        return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+    }
+        expandRectWithinBounds(rect, bounds, padding = {}) {
+        if (!rect || !bounds) return null;
+        const normalizeRect = (value) => {
+            const left = Number.isFinite(value.left) ? value.left : Number(value.x);
+            const top = Number.isFinite(value.top) ? value.top : Number(value.y);
+            const right = Number.isFinite(value.right)
+                ? value.right
+                : (Number.isFinite(left) && Number.isFinite(value.width) ? left + value.width : NaN);
+            const bottom = Number.isFinite(value.bottom)
+                ? value.bottom
+                : (Number.isFinite(top) && Number.isFinite(value.height) ? top + value.height : NaN);
+            if (![left, top, right, bottom].every(Number.isFinite)) return null;
+            return { left, top, right, bottom };
+        };
+        const source = normalizeRect(rect);
+        const limit = normalizeRect(bounds);
+        if (!source || !limit) return null;
+        const padX = Number.isFinite(padding.x) ? Math.max(0, padding.x) : 0;
+        const padY = Number.isFinite(padding.y) ? Math.max(0, padding.y) : 0;
+        const left = Math.max(limit.left, source.left - padX);
+        const top = Math.max(limit.top, source.top - padY);
+        const right = Math.min(limit.right, source.right + padX);
+        const bottom = Math.min(limit.bottom, source.bottom + padY);
+        return {
+            left,
+            top,
+            right,
+            bottom,
+            x: left,
+            y: top,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top),
+        };
+    }
+        getPlanSegmentTapTextRect(textEl) {
+        if (!textEl) return null;
+        if (typeof document !== 'undefined' && document && typeof document.createRange === 'function') {
+            try {
+                const range = document.createRange();
+                range.selectNodeContents(textEl);
+                const rect = range.getBoundingClientRect();
+                if (typeof range.detach === 'function') range.detach();
+                if (rect && Number.isFinite(rect.width) && Number.isFinite(rect.height) && (rect.width > 0 || rect.height > 0)) {
+                    return rect;
+                }
+            } catch (_) {}
+        }
+        return typeof textEl.getBoundingClientRect === 'function' ? textEl.getBoundingClientRect() : null;
+    }
+        resolvePlanSegmentTapIntent(event, segmentEl) {
+        if (!event || !segmentEl) return 'ignore';
+        const target = event.target || null;
+        const ignoredSelector = '.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-title-edit-input, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection, .plan-segment-timer-time';
+        if (target && target.closest && target.closest(ignoredSelector)) {
+            return 'ignore';
+        }
+        const getPoint = () => {
+            if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+                return { clientX: event.clientX, clientY: event.clientY };
+            }
+            const touch = event.changedTouches && event.changedTouches[0];
+            if (touch && Number.isFinite(touch.clientX) && Number.isFinite(touch.clientY)) {
+                return { clientX: touch.clientX, clientY: touch.clientY };
+            }
+            return null;
+        };
+        const point = getPoint();
+        const titleEl = this.getPlanSegmentTitleEditElement
+            ? this.getPlanSegmentTitleEditElement(segmentEl)
+            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-graphic-title') : null);
+        const activityEl = this.getPlanSegmentActivityEditElement
+            ? this.getPlanSegmentActivityEditElement(segmentEl)
+            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
+        if (!point) {
+            if (target && target.closest && titleEl && target.closest('.plan-segment-graphic-title')) return 'title-edit';
+            if (target && target.closest && activityEl && target.closest('.plan-segment-label-text, [data-activity-edit-trigger="true"], [data-title-edit-trigger="true"]')) {
+                return 'activity-edit';
+            }
+            return 'dropdown';
+        }
+        const bounds = typeof segmentEl.getBoundingClientRect === 'function'
+            ? segmentEl.getBoundingClientRect()
+            : null;
+        if (!bounds) return 'dropdown';
+        const titleRect = titleEl && this.getPlanSegmentTapTextRect
+            ? this.getPlanSegmentTapTextRect(titleEl)
+            : null;
+        const expandedTitleRect = titleRect && this.expandRectWithinBounds
+            ? this.expandRectWithinBounds(titleRect, bounds, { x: 12, y: 8 })
+            : null;
+        if (expandedTitleRect && this.isPointInRect(point.clientX, point.clientY, expandedTitleRect)) {
+            return 'title-edit';
+        }
+        const activityRect = activityEl && this.getPlanSegmentTapTextRect
+            ? this.getPlanSegmentTapTextRect(activityEl)
+            : null;
+        const expandedActivityRect = activityRect && this.expandRectWithinBounds
+            ? this.expandRectWithinBounds(activityRect, bounds, { x: 12, y: 8 })
+            : null;
+        if (expandedActivityRect && this.isPointInRect(point.clientX, point.clientY, expandedActivityRect)) {
+            return 'activity-edit';
+        }
+        return 'dropdown';
     }
         applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
@@ -6056,6 +6202,164 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+        applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle) {
+        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        if (!slot) return false;
+        const nextTitle = this.normalizeActivityText
+            ? this.normalizeActivityText(rawTitle || '')
+            : String(rawTitle || '').trim();
+        if (!nextTitle) return false;
+
+        const normalizePlanActivities = this.normalizePlanActivitiesPreservingSegments
+            || this.normalizePlanActivitiesArray;
+        const planActivities = normalizePlanActivities
+            ? normalizePlanActivities.call(this, slot.planActivities).map(item => ({ ...item }))
+            : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
+
+        if (planActivities.length > 0) {
+            if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= planActivities.length) {
+                return false;
+            }
+            const current = planActivities[segmentIndex];
+            if (!current) return false;
+            const previousTitle = this.normalizeActivityText
+                ? this.normalizeActivityText(current.titleText || '')
+                : String(current.titleText || '').trim();
+            if (previousTitle === nextTitle) return false;
+            planActivities[segmentIndex] = {
+                ...current,
+                titleText: nextTitle,
+            };
+            delete planActivities[segmentIndex].titleActivityId;
+            slot.planActivities = planActivities;
+            slot.planned = this.formatActivitiesSummary
+                ? this.formatActivitiesSummary(slot.planActivities)
+                : (slot.planned || nextTitle);
+            const previousPlanTitle = this.normalizeActivityText
+                ? this.normalizeActivityText(slot.planTitle || '')
+                : String(slot.planTitle || '').trim();
+            if (previousTitle && previousPlanTitle === previousTitle) {
+                slot.planTitle = nextTitle;
+            }
+        } else {
+            const previousTitle = this.normalizeActivityText
+                ? this.normalizeActivityText(slot.planTitle || slot.planned || '')
+                : String(slot.planTitle || slot.planned || '').trim();
+            if (previousTitle === nextTitle) return false;
+            slot.planTitle = nextTitle;
+            slot.planTitleBandOn = true;
+        }
+
+        this.renderTimeEntries(true);
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
+        startPlanSegmentInlineTextEdit(labelEl, index, event, options = {}) {
+        if (!labelEl) return false;
+        if (event && event.type === 'click' && event.button != null && event.button !== 0) return false;
+        const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
+        if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return false;
+        if (event && event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection')) {
+            return false;
+        }
+        if (labelEl.querySelector && labelEl.querySelector('.plan-segment-title-edit-input')) return false;
+        if (event && event.preventDefault) event.preventDefault();
+        if (event && event.stopPropagation) event.stopPropagation();
+
+        const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+        const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+        const previousTitle = String(labelEl.textContent || '').trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'plan-segment-title-edit-input';
+        input.value = previousTitle;
+        input.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
+        const measuredWidth = labelEl.getBoundingClientRect && labelEl.getBoundingClientRect().width;
+        const fallbackCh = Math.max(3, Math.min(previousTitle.length + 1, 18));
+        input.style.minWidth = `${fallbackCh}ch`;
+        if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
+            input.style.width = `${Math.ceil(measuredWidth + 12)}px`;
+        }
+        const setLabelEditing = (editing) => {
+            const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
+            const hasEditingClass = classes.includes('is-editing');
+            if (labelEl.classList && typeof labelEl.classList.add === 'function' && typeof labelEl.classList.remove === 'function') {
+                if (editing) {
+                    labelEl.classList.add('is-editing');
+                } else {
+                    labelEl.classList.remove('is-editing');
+                }
+                return;
+            }
+            if (editing && !hasEditingClass) {
+                classes.push('is-editing');
+            } else if (!editing && hasEditingClass) {
+                const filtered = classes.filter((className) => className !== 'is-editing');
+                labelEl.className = filtered.join(' ');
+                return;
+            }
+            labelEl.className = classes.join(' ');
+        };
+        setLabelEditing(true);
+        labelEl.textContent = '';
+        labelEl.appendChild(input);
+        input.focus();
+        if (typeof input.select === 'function') input.select();
+
+        let finished = false;
+        const cleanup = () => {
+            if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
+                input.parentNode.removeChild(input);
+            }
+            setLabelEditing(false);
+            labelEl.textContent = previousTitle;
+        };
+        const finish = (save) => {
+            if (finished) return;
+            finished = true;
+            const rawValue = input.value;
+            cleanup();
+            if (!save) return;
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(rawValue || '')
+                : String(rawValue || '').trim();
+            if (!normalized) return;
+            const applyMethod = options.applyMethod || 'applyPlanSegmentTitleEdit';
+            if (typeof this[applyMethod] === 'function') {
+                this[applyMethod](baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, normalized);
+            }
+        };
+
+        input.addEventListener('keydown', (keyEvent) => {
+            if (keyEvent.key === 'Enter') {
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                finish(true);
+            } else if (keyEvent.key === 'Escape') {
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                finish(false);
+            }
+        });
+        input.addEventListener('blur', () => finish(true));
+        input.addEventListener('click', (clickEvent) => {
+            clickEvent.stopPropagation();
+        });
+        return true;
+    }
+        startPlanSegmentActivityEdit(labelEl, index, event) {
+        return this.startPlanSegmentInlineTextEdit(labelEl, index, event, {
+            ariaLabel: 'Edit planned segment activity',
+            applyMethod: 'applyPlanSegmentTitleEdit',
+        });
+    }
+        startPlanSegmentParentTitleEdit(titleEl, index, event) {
+        return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
+            ariaLabel: 'Edit planned segment title',
+            applyMethod: 'applyPlanSegmentTitleTextEdit',
+        });
+    }
         attachPlanSegmentTitleEditListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
         const labels = entryDiv.querySelectorAll('[data-title-edit-trigger="true"]');
@@ -6063,92 +6367,7 @@ class TimeTracker {
             if (!labelEl || labelEl.dataset.titleEditListenerAttached === 'true') return;
             labelEl.dataset.titleEditListenerAttached = 'true';
             const startEdit = (event) => {
-                if (event && event.type === 'click' && event.button != null && event.button !== 0) return;
-                const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
-                if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return;
-                if (event && event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection')) {
-                    return;
-                }
-                if (labelEl.querySelector && labelEl.querySelector('.plan-segment-title-edit-input')) return;
-                if (event && event.preventDefault) event.preventDefault();
-                if (event && event.stopPropagation) event.stopPropagation();
-
-                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
-                const previousTitle = String(labelEl.textContent || '').trim();
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'plan-segment-title-edit-input';
-                input.value = previousTitle;
-                input.setAttribute('aria-label', 'Edit planned segment title');
-                const measuredWidth = labelEl.getBoundingClientRect && labelEl.getBoundingClientRect().width;
-                const fallbackCh = Math.max(3, Math.min(previousTitle.length + 1, 18));
-                input.style.minWidth = `${fallbackCh}ch`;
-                if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
-                    input.style.width = `${Math.ceil(measuredWidth + 12)}px`;
-                }
-                const setLabelEditing = (editing) => {
-                    const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
-                    const hasEditingClass = classes.includes('is-editing');
-                    if (labelEl.classList && typeof labelEl.classList.add === 'function' && typeof labelEl.classList.remove === 'function') {
-                        if (editing) {
-                            labelEl.classList.add('is-editing');
-                        } else {
-                            labelEl.classList.remove('is-editing');
-                        }
-                        return;
-                    }
-                    if (editing && !hasEditingClass) {
-                        classes.push('is-editing');
-                    } else if (!editing && hasEditingClass) {
-                        const filtered = classes.filter((className) => className !== 'is-editing');
-                        labelEl.className = filtered.join(' ');
-                        return;
-                    }
-                    labelEl.className = classes.join(' ');
-                };
-                setLabelEditing(true);
-                labelEl.textContent = '';
-                labelEl.appendChild(input);
-                input.focus();
-                if (typeof input.select === 'function') input.select();
-
-                let finished = false;
-                const cleanup = () => {
-                    if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
-                        input.parentNode.removeChild(input);
-                    }
-                    setLabelEditing(false);
-                    labelEl.textContent = previousTitle;
-                };
-                const finish = (save) => {
-                    if (finished) return;
-                    finished = true;
-                    const rawValue = input.value;
-                    cleanup();
-                    if (!save) return;
-                    const normalized = this.normalizeActivityText
-                        ? this.normalizeActivityText(rawValue || '')
-                        : String(rawValue || '').trim();
-                    if (!normalized) return;
-                    this.applyPlanSegmentTitleEdit(baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, normalized);
-                };
-
-                input.addEventListener('keydown', (keyEvent) => {
-                    if (keyEvent.key === 'Enter') {
-                        keyEvent.preventDefault();
-                        keyEvent.stopPropagation();
-                        finish(true);
-                    } else if (keyEvent.key === 'Escape') {
-                        keyEvent.preventDefault();
-                        keyEvent.stopPropagation();
-                        finish(false);
-                    }
-                });
-                input.addEventListener('blur', () => finish(true));
-                input.addEventListener('click', (clickEvent) => {
-                    clickEvent.stopPropagation();
-                });
+                this.startPlanSegmentActivityEdit(labelEl, index, event);
             };
 
             labelEl.addEventListener('click', startEdit);
@@ -6328,13 +6547,48 @@ class TimeTracker {
             segmentEl.dataset.selectionListenerAttached = 'true';
             segmentEl.addEventListener('click', (event) => {
                 if (event.button != null && event.button !== 0) return;
+                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+                const isCoarseContext = this.isCoarsePlanSegmentPointerContext
+                    ? this.isCoarsePlanSegmentPointerContext()
+                    : false;
+                if (isCoarseContext) {
+                    const intent = this.resolvePlanSegmentTapIntent
+                        ? this.resolvePlanSegmentTapIntent(event, segmentEl)
+                        : 'dropdown';
+                    if (intent === 'ignore') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (intent === 'title-edit') {
+                        const titleEl = this.getPlanSegmentTitleEditElement
+                            ? this.getPlanSegmentTitleEditElement(segmentEl)
+                            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-graphic-title') : null);
+                        if (titleEl && typeof this.startPlanSegmentParentTitleEdit === 'function') {
+                            this.startPlanSegmentParentTitleEdit(titleEl, index, event);
+                        }
+                        return;
+                    }
+                    if (intent === 'activity-edit') {
+                        const activityEl = this.getPlanSegmentActivityEditElement
+                            ? this.getPlanSegmentActivityEditElement(segmentEl)
+                            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
+                        if (activityEl && typeof this.startPlanSegmentActivityEdit === 'function') {
+                            this.startPlanSegmentActivityEdit(activityEl, index, event);
+                        }
+                        return;
+                    }
+                    if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                        this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                    } else {
+                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+                    }
+                    return;
+                }
                 if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, [data-title-edit-trigger="true"], .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
                     return;
                 }
                 event.preventDefault();
                 event.stopPropagation();
-                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
                 if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
                     this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
                 } else {

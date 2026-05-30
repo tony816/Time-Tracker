@@ -10,6 +10,14 @@ const attachPlanSegmentTitleEditListeners = buildMethod(
     'attachPlanSegmentTitleEditListeners(entryDiv, index)',
     '(entryDiv, index)'
 );
+const startPlanSegmentInlineTextEdit = buildMethod(
+    'startPlanSegmentInlineTextEdit(labelEl, index, event, options = {})',
+    '(labelEl, index, event, options = {})'
+);
+const startPlanSegmentActivityEdit = buildMethod(
+    'startPlanSegmentActivityEdit(labelEl, index, event)',
+    '(labelEl, index, event)'
+);
 const applyPlanSegmentTitleEdit = buildMethod(
     'applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
@@ -223,6 +231,12 @@ function createTitleEditHarness(options = {}) {
         applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
             calls.push({ baseIndex, segmentIndex, rawTitle });
             return applyPlanSegmentTitleEdit.call(this, baseIndex, segmentIndex, rawTitle);
+        },
+        startPlanSegmentInlineTextEdit(labelEl, rowIndex, event, options = {}) {
+            return startPlanSegmentInlineTextEdit.call(this, labelEl, rowIndex, event, options);
+        },
+        startPlanSegmentActivityEdit(labelEl, rowIndex, event) {
+            return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event);
         },
         ...options.ctx,
     };

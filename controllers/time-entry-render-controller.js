@@ -290,9 +290,9 @@ function buildSplitVisualization(type, index) {
                                       data-segment-id="${escapedSegmentId}">
                                     ${buttonHtml}
                                     <div class="${graphicMainClass}">
-                                        ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}">${safeTitleLabel}</span>` : ''}
+                                        ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}" data-segment-title-edit-trigger="true">${safeTitleLabel}</span>` : ''}
                                         <span class="plan-segment-graphic-label" title="${safeLabel}">
-                                            <span class="plan-segment-label-text" role="button" tabindex="0" data-title-edit-trigger="true">${safeLabel}</span>
+                                            <span class="plan-segment-label-text" role="button" tabindex="0" data-title-edit-trigger="true" data-activity-edit-trigger="true">${safeLabel}</span>
                                         </span>
                                         <span class="plan-segment-timer-time tone-${tone}"
                                               data-index="${baseIndex}"
