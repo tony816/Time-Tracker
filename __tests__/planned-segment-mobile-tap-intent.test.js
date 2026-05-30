@@ -328,22 +328,43 @@ test('mobile plan segment tap intent keeps existing interactive exceptions ignor
     assert.deepEqual(harness.calls, []);
 });
 
-test('desktop plan segment click behavior stays on existing selection and trigger rules', () => {
+test('desktop title click starts parent title edit without opening replacement dropdown', () => {
     const titleHarness = createHarness({ coarse: false });
-    titleHarness.segment.dispatchEvent(createClickEvent(titleHarness.title, 112, 14));
+    const event = createClickEvent(titleHarness.title, 112, 14);
+
+    titleHarness.segment.dispatchEvent(event);
+
     assert.deepEqual(titleHarness.calls, [
-        ['dropdown', 0, 0, titleHarness.segment],
+        ['title-edit', titleHarness.title, 0, true, true],
     ]);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true);
+});
 
+test('desktop activity label click starts activity edit without opening replacement dropdown', () => {
     const labelHarness = createHarness({ coarse: false });
-    labelHarness.segment.dispatchEvent(createClickEvent(labelHarness.label, 118, 42));
-    assert.deepEqual(labelHarness.calls, []);
+    const event = createClickEvent(labelHarness.label, 118, 42);
 
+    labelHarness.segment.dispatchEvent(event);
+
+    assert.deepEqual(labelHarness.calls, [
+        ['activity-edit', labelHarness.label, 0, true, true],
+    ]);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true);
+});
+
+test('desktop segment background click still opens replacement dropdown', () => {
     const backgroundHarness = createHarness({ coarse: false });
-    backgroundHarness.segment.dispatchEvent(createClickEvent(backgroundHarness.segment, 260, 78));
+    const event = createClickEvent(backgroundHarness.segment, 260, 78);
+
+    backgroundHarness.segment.dispatchEvent(event);
+
     assert.deepEqual(backgroundHarness.calls, [
         ['dropdown', 0, 0, backgroundHarness.segment],
     ]);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true);
 });
 
 test('mobile text hit area expansion is clamped to the segment bounds', () => {

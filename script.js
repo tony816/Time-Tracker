@@ -6004,7 +6004,7 @@ class TimeTracker {
         const timer = slot && slot.planSegmentTimers && slot.planSegmentTimers[segmentId];
         return Boolean(timer && (timer.running === true || timer.status === 'running'));
     }
-        isCoarsePlanSegmentPointerContext() {
+    isCoarsePlanSegmentPointerContext() {
         if (typeof this.planSegmentPointerContextMatcher === 'function') {
             return Boolean(this.planSegmentPointerContextMatcher('(hover: none), (pointer: coarse)'));
         }
@@ -6022,18 +6022,18 @@ class TimeTracker {
             return false;
         }
     }
-        getPlanSegmentTitleEditElement(segmentEl) {
+    getPlanSegmentTitleEditElement(segmentEl) {
         if (!segmentEl || typeof segmentEl.querySelector !== 'function') return null;
         return segmentEl.querySelector('[data-segment-title-edit-trigger="true"]')
             || segmentEl.querySelector('.plan-segment-graphic-title');
     }
-        getPlanSegmentActivityEditElement(segmentEl) {
+    getPlanSegmentActivityEditElement(segmentEl) {
         if (!segmentEl || typeof segmentEl.querySelector !== 'function') return null;
         return segmentEl.querySelector('[data-activity-edit-trigger="true"]')
             || segmentEl.querySelector('.plan-segment-label-text')
             || segmentEl.querySelector('[data-title-edit-trigger="true"]');
     }
-        isPointInRect(clientX, clientY, rect) {
+    isPointInRect(clientX, clientY, rect) {
         if (!rect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
         const left = Number.isFinite(rect.left) ? rect.left : Number(rect.x);
         const top = Number.isFinite(rect.top) ? rect.top : Number(rect.y);
@@ -6046,7 +6046,7 @@ class TimeTracker {
         if (![left, top, right, bottom].every(Number.isFinite)) return false;
         return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
     }
-        expandRectWithinBounds(rect, bounds, padding = {}) {
+    expandRectWithinBounds(rect, bounds, padding = {}) {
         if (!rect || !bounds) return null;
         const normalizeRect = (value) => {
             const left = Number.isFinite(value.left) ? value.left : Number(value.x);
@@ -6080,7 +6080,7 @@ class TimeTracker {
             height: Math.max(0, bottom - top),
         };
     }
-        getPlanSegmentTapTextRect(textEl) {
+    getPlanSegmentTapTextRect(textEl) {
         if (!textEl) return null;
         if (typeof document !== 'undefined' && document && typeof document.createRange === 'function') {
             try {
@@ -6095,7 +6095,7 @@ class TimeTracker {
         }
         return typeof textEl.getBoundingClientRect === 'function' ? textEl.getBoundingClientRect() : null;
     }
-        resolvePlanSegmentTapIntent(event, segmentEl) {
+    resolvePlanSegmentTapIntent(event, segmentEl) {
         if (!event || !segmentEl) return 'ignore';
         const target = event.target || null;
         const ignoredSelector = '.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-title-edit-input, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection, .plan-segment-timer-time';
@@ -6150,7 +6150,7 @@ class TimeTracker {
         }
         return 'dropdown';
     }
-        applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
+    applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         if (!slot) return false;
         const nextTitle = this.normalizeActivityText
@@ -6202,7 +6202,7 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
-        applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle) {
+    applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle) {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         if (!slot) return false;
         const nextTitle = this.normalizeActivityText
@@ -6255,7 +6255,7 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
-        startPlanSegmentInlineTextEdit(labelEl, index, event, options = {}) {
+    startPlanSegmentInlineTextEdit(labelEl, index, event, options = {}) {
         if (!labelEl) return false;
         if (event && event.type === 'click' && event.button != null && event.button !== 0) return false;
         const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
@@ -6348,19 +6348,19 @@ class TimeTracker {
         });
         return true;
     }
-        startPlanSegmentActivityEdit(labelEl, index, event) {
+    startPlanSegmentActivityEdit(labelEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(labelEl, index, event, {
             ariaLabel: 'Edit planned segment activity',
             applyMethod: 'applyPlanSegmentTitleEdit',
         });
     }
-        startPlanSegmentParentTitleEdit(titleEl, index, event) {
+    startPlanSegmentParentTitleEdit(titleEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
             ariaLabel: 'Edit planned segment title',
             applyMethod: 'applyPlanSegmentTitleTextEdit',
         });
     }
-        attachPlanSegmentTitleEditListeners(entryDiv, index) {
+    attachPlanSegmentTitleEditListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
         const labels = entryDiv.querySelectorAll('[data-title-edit-trigger="true"]');
         labels.forEach((labelEl) => {
@@ -6377,7 +6377,7 @@ class TimeTracker {
             });
         });
     }
-        getSelectedPlanSegment() {
+    getSelectedPlanSegment() {
         const selected = this.selectedPlanSegment || null;
         if (!selected) return null;
         const baseIndex = Number(selected.baseIndex);
@@ -6388,7 +6388,7 @@ class TimeTracker {
         if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return null;
         return { baseIndex, segmentIndex, segment };
     }
-        validateSelectedPlanSegment() {
+    validateSelectedPlanSegment() {
         if (!this.selectedPlanSegment) return true;
         if (!this.getSelectedPlanSegment()) {
             this.selectedPlanSegment = null;
@@ -6396,7 +6396,7 @@ class TimeTracker {
         }
         return true;
     }
-        setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
+    setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return false;
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
@@ -6407,7 +6407,7 @@ class TimeTracker {
         }
         return true;
     }
-        clearSelectedPlanSegment(options = {}) {
+    clearSelectedPlanSegment(options = {}) {
         if (!this.selectedPlanSegment) return false;
         this.selectedPlanSegment = null;
         if (options.render !== false && typeof this.renderTimeEntries === 'function') {
@@ -6415,7 +6415,7 @@ class TimeTracker {
         }
         return true;
     }
-        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
+    openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !segmentEl) return false;
         const slot = this.timeSlots && this.timeSlots[baseIndex];
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
@@ -6446,7 +6446,7 @@ class TimeTracker {
         });
         return true;
     }
-        findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
+    findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;
         const row = document.querySelector(`[data-index="${baseIndex}"]`);
         if (!row || typeof row.querySelector !== 'function') return null;
@@ -6462,7 +6462,7 @@ class TimeTracker {
             || segmentEl.querySelector('.plan-segment-graphic-label')
         )) || segmentEl;
     }
-        findPlanSegmentDropdownAnchorInfo(baseIndex, segmentIndex, segmentId = '') {
+    findPlanSegmentDropdownAnchorInfo(baseIndex, segmentIndex, segmentId = '') {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;
         const row = document.querySelector(`[data-index="${baseIndex}"]`);
         if (!row || typeof row.querySelector !== 'function') return null;
@@ -6489,7 +6489,7 @@ class TimeTracker {
             anchorMinWidth,
         };
     }
-        repositionOpenInlinePlanDropdown() {
+    repositionOpenInlinePlanDropdown() {
         const target = this.inlinePlanTarget || null;
         if (!target || target.mode !== 'plan-segment-replace' || !this.inlinePlanDropdown) return false;
         const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : null;
@@ -6518,7 +6518,7 @@ class TimeTracker {
         this.positionInlinePlanDropdown(anchor);
         return true;
     }
-        ensurePlanSegmentSelectionGlobalListeners() {
+    ensurePlanSegmentSelectionGlobalListeners() {
         if (this.planSegmentSelectionGlobalListenersAttached || typeof document === 'undefined') return;
         this.planSegmentSelectionGlobalListenersAttached = true;
         document.addEventListener('keydown', (event) => {
@@ -6538,7 +6538,7 @@ class TimeTracker {
             this.clearSelectedPlanSegment();
         });
     }
-        attachPlanSegmentSelectionListeners(entryDiv, index) {
+    attachPlanSegmentSelectionListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
         this.ensurePlanSegmentSelectionGlobalListeners();
         const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
@@ -6584,7 +6584,30 @@ class TimeTracker {
                     }
                     return;
                 }
-                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, [data-title-edit-trigger="true"], .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                const target = event.target || null;
+                if (target && target.closest && target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
+                    return;
+                }
+                const titleTarget = target && target.closest
+                    ? target.closest('[data-segment-title-edit-trigger="true"], .plan-segment-graphic-title')
+                    : null;
+                if (titleTarget) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (typeof this.startPlanSegmentParentTitleEdit === 'function') {
+                        this.startPlanSegmentParentTitleEdit(titleTarget, index, event);
+                    }
+                    return;
+                }
+                const activityTarget = target && target.closest
+                    ? target.closest('[data-activity-edit-trigger="true"], [data-title-edit-trigger="true"], .plan-segment-label-text')
+                    : null;
+                if (activityTarget) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (typeof this.startPlanSegmentActivityEdit === 'function') {
+                        this.startPlanSegmentActivityEdit(activityTarget, index, event);
+                    }
                     return;
                 }
                 event.preventDefault();

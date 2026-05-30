@@ -18,8 +18,16 @@ const startPlanSegmentActivityEdit = buildMethod(
     'startPlanSegmentActivityEdit(labelEl, index, event)',
     '(labelEl, index, event)'
 );
+const startPlanSegmentParentTitleEdit = buildMethod(
+    'startPlanSegmentParentTitleEdit(titleEl, index, event)',
+    '(titleEl, index, event)'
+);
 const applyPlanSegmentTitleEdit = buildMethod(
     'applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle)',
+    '(baseIndex, segmentIndex, rawTitle)'
+);
+const applyPlanSegmentTitleTextEdit = buildMethod(
+    'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
 );
 const attachPlanSegmentSelectionListeners = buildMethod(
@@ -232,11 +240,18 @@ function createTitleEditHarness(options = {}) {
             calls.push({ baseIndex, segmentIndex, rawTitle });
             return applyPlanSegmentTitleEdit.call(this, baseIndex, segmentIndex, rawTitle);
         },
+        applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle) {
+            calls.push({ baseIndex, segmentIndex, rawTitle, kind: 'titleText' });
+            return applyPlanSegmentTitleTextEdit.call(this, baseIndex, segmentIndex, rawTitle);
+        },
         startPlanSegmentInlineTextEdit(labelEl, rowIndex, event, options = {}) {
             return startPlanSegmentInlineTextEdit.call(this, labelEl, rowIndex, event, options);
         },
         startPlanSegmentActivityEdit(labelEl, rowIndex, event) {
             return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event);
+        },
+        startPlanSegmentParentTitleEdit(titleEl, rowIndex, event) {
+            return startPlanSegmentParentTitleEdit.call(this, titleEl, rowIndex, event);
         },
         ...options.ctx,
     };
@@ -770,7 +785,7 @@ test('repositionOpenInlinePlanDropdown refreshes segment width when the rendered
     assert.equal(ctx.inlinePlanTarget.anchorMinWidth, 720);
 });
 
-test('clicking parent title band opens segment dropdown instead of title editing', () => {
+test('clicking parent title band opens parent title inline editing UI', () => {
     withDocument(() => {
         const { ctx, entryDiv, title } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
@@ -800,10 +815,11 @@ test('clicking parent title band opens segment dropdown instead of title editing
             stopPropagation() {},
         });
 
-        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
-        assert.equal(dropdownCalls.length, 1);
-        assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
-        assert.equal(dropdownCalls[0].options.segmentIndex, 0);
+        const input = entryDiv.querySelector('.plan-segment-title-edit-input');
+        assert.ok(input);
+        assert.equal(input.parentNode, title);
+        assert.equal(input.value, 'Parent');
+        assert.equal(dropdownCalls.length, 0);
     });
 });
 
