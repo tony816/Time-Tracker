@@ -143,3 +143,108 @@ test('attachCellClickListeners passes planned slot width to empty slot dropdowns
     assert.equal(calls[0].options.anchorAlign, undefined);
     assert.equal(calls[0].options.mode, undefined);
 });
+
+test('attachCellClickListeners pre-scrolls mobile empty planned slots before opening dropdown', () => {
+    const previousWindow = global.window;
+    const plannedField = createListenerNode();
+    const wrapper = createListenerNode();
+    wrapper.getBoundingClientRect = () => ({ width: 640 });
+    plannedField.closest = (selector) => selector === '.split-cell-wrapper.split-type-planned' ? wrapper : null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const rafCalls = [];
+    const calls = [];
+    const ctx = {
+        getPlannedRangeInfo() {
+            return { startIndex: 4, endIndex: 4 };
+        },
+        inlinePlanDropdown: null,
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        preparePlannedSlotReplacementViewport(targetEl) {
+            calls.push(['prepare', targetEl]);
+            return true;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push(['open', startIndex, anchor, endIndex, options]);
+        },
+    };
+
+    global.window = {
+        requestAnimationFrame(callback) {
+            rafCalls.push(callback);
+        },
+    };
+
+    try {
+        controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+        plannedField.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(calls, [['prepare', plannedField]]);
+        assert.equal(rafCalls.length, 1);
+
+        rafCalls[0]();
+
+        assert.equal(calls.length, 2);
+        assert.equal(calls[1][0], 'open');
+        assert.equal(calls[1][1], 4);
+        assert.equal(calls[1][2], wrapper);
+        assert.equal(calls[1][3], 4);
+        assert.equal(calls[1][4].anchorMinWidth, 640);
+    } finally {
+        if (previousWindow === undefined) {
+            delete global.window;
+        } else {
+            global.window = previousWindow;
+        }
+    }
+});
+
+test('attachCellClickListeners keeps desktop empty planned slot open immediate when no pre-scroll occurs', () => {
+    const plannedField = createListenerNode();
+    const wrapper = createListenerNode();
+    wrapper.getBoundingClientRect = () => ({ width: 420 });
+    plannedField.closest = (selector) => selector === '.split-cell-wrapper.split-type-planned' ? wrapper : null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        getPlannedRangeInfo() {
+            return { startIndex: 4, endIndex: 4 };
+        },
+        inlinePlanDropdown: null,
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        preparePlannedSlotReplacementViewport(targetEl) {
+            calls.push(['prepare', targetEl]);
+            return false;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push(['open', startIndex, anchor, endIndex, options]);
+        },
+    };
+
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent({
+        type: 'click',
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0], ['prepare', plannedField]);
+    assert.equal(calls[1][0], 'open');
+    assert.equal(calls[1][2], wrapper);
+});

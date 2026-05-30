@@ -421,10 +421,19 @@
         z-index: 2099;
     }
 
-    body.inline-plan-sheet-open .split-grid-segment.inline-plan-segment-context-target {
-        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.28);
+    body.inline-plan-sheet-open .inline-plan-sheet-context-target {
         position: relative;
         z-index: 2;
+        box-shadow:
+            0 0 0 2px rgba(52, 152, 219, 0.42),
+            0 8px 18px rgba(52, 152, 219, 0.12);
+    }
+
+    body.inline-plan-sheet-open .split-grid-segment.inline-plan-sheet-context-target,
+    body.inline-plan-sheet-open .planned-input.inline-plan-sheet-context-target,
+    body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-sheet-context-target .planned-input {
+        background-image:
+            linear-gradient(rgba(52, 152, 219, 0.08), rgba(52, 152, 219, 0.08));
     }
 
     .inline-plan-dropdown.inline-plan-dropdown-sheet::before {

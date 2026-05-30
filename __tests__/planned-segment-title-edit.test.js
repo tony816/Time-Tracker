@@ -38,6 +38,10 @@ const openPlanSegmentReplacementDropdown = buildMethod(
     'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
     '(baseIndex, segmentIndex, segmentEl)'
 );
+const addInlinePlanSheetTargetClasses = buildMethod(
+    'addInlinePlanSheetTargetClasses(targetEl, specificClass = \'\')',
+    '(targetEl, specificClass = \'\')'
+);
 const repositionOpenInlinePlanDropdown = buildMethod(
     'repositionOpenInlinePlanDropdown()',
     '()'
@@ -654,6 +658,7 @@ test('clicking label container space opens segment dropdown instead of title edi
         ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl) {
             return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
         };
+        ctx.addInlinePlanSheetTargetClasses = addInlinePlanSheetTargetClasses;
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
             dropdownCalls.push({ startIndex, anchor, endIndex, options });
         };
@@ -678,6 +683,8 @@ test('clicking label container space opens segment dropdown instead of title edi
         assert.equal(dropdownCalls[0].options.segmentId, 'planned-0-0');
         assert.equal(dropdownCalls[0].options.anchorAlign, 'center');
         assert.equal(dropdownCalls[0].options.anchorMinWidth, 640);
+        assert.equal(hasNodeClass(segment, 'inline-plan-sheet-context-target'), true);
+        assert.equal(hasNodeClass(segment, 'inline-plan-segment-context-target'), true);
     });
 });
 

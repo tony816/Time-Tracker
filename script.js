@@ -6444,13 +6444,28 @@ class TimeTracker {
             anchorAlign: 'center',
             anchorMinWidth,
         });
-        if (segmentEl.classList && typeof segmentEl.classList.add === 'function') {
-            segmentEl.classList.add('inline-plan-segment-context-target');
+        if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
+            this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
         }
         return true;
     }
-    preparePlanSegmentReplacementViewport(segmentEl) {
-        if (!segmentEl || typeof segmentEl.getBoundingClientRect !== 'function') return false;
+    addInlinePlanSheetTargetClasses(targetEl, specificClass = '') {
+        if (!targetEl) return false;
+        const classes = ['inline-plan-sheet-context-target'];
+        if (specificClass) classes.push(specificClass);
+        if (targetEl.classList && typeof targetEl.classList.add === 'function') {
+            targetEl.classList.add(...classes);
+            return true;
+        }
+        const current = String(targetEl.className || '').split(/\s+/).filter(Boolean);
+        classes.forEach((className) => {
+            if (!current.includes(className)) current.push(className);
+        });
+        targetEl.className = current.join(' ');
+        return true;
+    }
+    prepareInlinePlanSheetTargetViewport(targetEl) {
+        if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
         const isCoarseContext = this.isCoarsePlanSegmentPointerContext
             ? this.isCoarsePlanSegmentPointerContext()
             : false;
@@ -6461,7 +6476,7 @@ class TimeTracker {
         if (!Number.isFinite(viewportHeight) || viewportHeight <= 0 || !root || typeof root.scrollBy !== 'function') {
             return false;
         }
-        const rect = segmentEl.getBoundingClientRect();
+        const rect = targetEl.getBoundingClientRect();
         if (!rect) return false;
         const rectTop = Number(rect.top);
         const rectBottom = Number(rect.bottom);
@@ -6497,6 +6512,30 @@ class TimeTracker {
 
         root.scrollBy({ top: delta, behavior: 'auto' });
         return true;
+    }
+    preparePlanSegmentReplacementViewport(segmentEl) {
+        return this.prepareInlinePlanSheetTargetViewport(segmentEl);
+    }
+    preparePlannedSlotReplacementViewport(slotEl) {
+        const hasUsableRect = (el) => {
+            if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+            const rect = el.getBoundingClientRect();
+            return rect
+                && Number.isFinite(Number(rect.width))
+                && Number.isFinite(Number(rect.height))
+                && (Number(rect.width) > 0 || Number(rect.height) > 0);
+        };
+        let targetEl = slotEl || null;
+        if (!hasUsableRect(targetEl) && slotEl && slotEl.closest) {
+            const candidates = [
+                slotEl.closest('.planned-input'),
+                slotEl.closest('.split-cell-wrapper.split-type-planned'),
+                slotEl.closest('.time-entry'),
+                slotEl,
+            ];
+            targetEl = candidates.find(candidate => hasUsableRect(candidate)) || targetEl;
+        }
+        return this.prepareInlinePlanSheetTargetViewport(targetEl);
     }
     findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;

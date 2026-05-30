@@ -723,6 +723,108 @@ test('openInlinePlanDropdown keeps exact same virtual rest gap as toggle-close b
     assert.equal(closed, true);
 });
 
+test('openInlinePlanDropdown marks mobile empty planned slot as sheet context target', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const plannedInput = createInlineSelectionNode('input');
+    plannedInput.className = 'planned-input';
+    const anchor = {
+        isConnected: true,
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedInput : null;
+        },
+    };
+    const input = { value: '', addEventListener() {}, focus() {}, select() {} };
+    const addBtn = { addEventListener() {} };
+    const closeBtn = { addEventListener() {} };
+    const board = { innerHTML: '', appendChild() {}, querySelector() { return null; }, querySelectorAll() { return []; } };
+    const dropdown = {
+        className: '',
+        innerHTML: '',
+        style: {},
+        parentNode: null,
+        addEventListener() {},
+        contains() { return false; },
+        querySelector(selector) {
+            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-add-btn') return addBtn;
+            if (selector === '.inline-plan-close-btn') return closeBtn;
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+        querySelectorAll() { return []; },
+    };
+    const ctx = {
+        inlinePlanDropdown: null,
+        timeSlots: [{}],
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        closeInlinePlanDropdown() {},
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return true; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        renderInlinePlanDropdownOptions() {},
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+    };
+
+    let createdDivs = 0;
+    globalThis.document = {
+        createElement(tagName) {
+            if (tagName === 'div') {
+                createdDivs += 1;
+                return createdDivs === 1 ? dropdown : createInlineSelectionNode('div');
+            }
+            return createInlineSelectionNode(tagName);
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = {
+        addEventListener() {},
+        removeEventListener() {},
+        visualViewport: null,
+    };
+    globalThis.requestAnimationFrame = () => {};
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 0, anchor, 0);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+
+    assert.equal(plannedInput.classList.contains('inline-plan-sheet-context-target'), true);
+    assert.equal(plannedInput.classList.contains('inline-plan-slot-context-target'), true);
+});
+
 test('closeInlinePlanDropdown clears selected segment for segment replacement target', () => {
     const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;
@@ -735,8 +837,14 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
             if (selector === '.inline-plan-context-keep-clear') {
                 return [{ classList: { remove(name) { removedContextClasses.push(['row', name]); } } }];
             }
-            if (selector === '.inline-plan-segment-context-target') {
-                return [{ classList: { remove(name) { removedContextClasses.push(['segment', name]); } } }];
+            if (selector === '.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target') {
+                return [{
+                    classList: {
+                        remove(...names) {
+                            removedContextClasses.push(['target', ...names]);
+                        },
+                    },
+                }];
             }
             return [];
         },
@@ -771,7 +879,12 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
     assert.deepEqual(removedContextClasses, [
         ['root', 'inline-plan-context-active'],
         ['row', 'inline-plan-context-keep-clear'],
-        ['segment', 'inline-plan-segment-context-target'],
+        [
+            'target',
+            'inline-plan-sheet-context-target',
+            'inline-plan-segment-context-target',
+            'inline-plan-slot-context-target',
+        ],
     ]);
 });
 

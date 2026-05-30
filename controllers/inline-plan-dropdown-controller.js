@@ -1063,7 +1063,7 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
         return nextActivities;
     }
 
-function touchPlannedActivityUsage(activityItem, parentItem = null) {
+    function touchPlannedActivityUsage(activityItem, parentItem = null) {
         if (!activityItem || !Array.isArray(this.plannedActivities)) return null;
         const activityId = String(activityItem.id || '').trim();
         const parentId = parentItem ? String(parentItem.id || '').trim() || null : null;
@@ -1087,6 +1087,54 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             lastUsedAt,
         };
         return this.plannedActivities[idx];
+    }
+
+    function addInlinePlanClass(el, ...classNames) {
+        if (!el) return false;
+        const classes = classNames.filter(Boolean);
+        if (!classes.length) return false;
+        if (el.classList && typeof el.classList.add === 'function') {
+            el.classList.add(...classes);
+            return true;
+        }
+        const current = String(el.className || '').split(/\s+/).filter(Boolean);
+        classes.forEach((className) => {
+            if (!current.includes(className)) current.push(className);
+        });
+        el.className = current.join(' ');
+        return true;
+    }
+
+    function removeInlinePlanClass(el, ...classNames) {
+        if (!el) return;
+        const classes = classNames.filter(Boolean);
+        if (!classes.length) return;
+        if (el.classList && typeof el.classList.remove === 'function') {
+            el.classList.remove(...classes);
+            return;
+        }
+        const removeSet = new Set(classes);
+        el.className = String(el.className || '')
+            .split(/\s+/)
+            .filter(className => className && !removeSet.has(className))
+            .join(' ');
+    }
+
+    function getInlinePlanSlotContextTarget(anchor) {
+        if (!anchor) return null;
+        if (anchor.classList && anchor.classList.contains('planned-input')) return anchor;
+        if (typeof anchor.matches === 'function' && anchor.matches('.planned-input')) return anchor;
+        if (typeof anchor.querySelector === 'function') {
+            const plannedInput = anchor.querySelector('.planned-input');
+            if (plannedInput) return plannedInput;
+        }
+        if (typeof anchor.closest === 'function') {
+            return anchor.closest('.planned-input')
+                || anchor.closest('.split-cell-wrapper.split-type-planned')
+                || anchor.closest('.time-entry')
+                || anchor;
+        }
+        return anchor;
     }
 
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
@@ -2000,7 +2048,12 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             this.closeInlinePlanDropdown();
             return;
         }
+        const preserveSheetScrollSpacer = typeof document !== 'undefined'
+            && document.getElementById
+            && document.getElementById('inline-plan-sheet-scroll-spacer');
+        if (preserveSheetScrollSpacer) this.preserveInlinePlanSheetScrollSpacer = true;
         this.closeInlinePlanDropdown();
+        this.preserveInlinePlanSheetScrollSpacer = false;
         this.currentPlanSource = this.getActivePlanSource();
 
         const isMobileInputContext = this.isInlinePlanMobileInputContext();
@@ -2049,6 +2102,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             document.body.appendChild(backdrop);
             this.inlinePlanBackdrop = backdrop;
             document.body.classList.add('inline-plan-sheet-open');
+            if (!segmentReplaceTarget && !virtualGapTarget) {
+                const slotTarget = getInlinePlanSlotContextTarget(anchor);
+                addInlinePlanClass(slotTarget, 'inline-plan-sheet-context-target', 'inline-plan-slot-context-target');
+            }
         }
         document.body.appendChild(dropdown);
         this.inlinePlanDropdown = dropdown;
@@ -2467,7 +2524,7 @@ function closeInlinePlanDropdown() {
         }
         this.inlinePlanBackdrop = null;
         const sheetScrollSpacer = document.getElementById ? document.getElementById('inline-plan-sheet-scroll-spacer') : null;
-        if (sheetScrollSpacer && sheetScrollSpacer.parentNode) {
+        if (!this.preserveInlinePlanSheetScrollSpacer && sheetScrollSpacer && sheetScrollSpacer.parentNode) {
             sheetScrollSpacer.parentNode.removeChild(sheetScrollSpacer);
         }
         document.body.classList.remove('inline-plan-sheet-open');
@@ -2475,7 +2532,14 @@ function closeInlinePlanDropdown() {
         if (timeEntries) {
             timeEntries.classList.remove('inline-plan-context-active');
             timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
-            timeEntries.querySelectorAll('.inline-plan-segment-context-target').forEach((el) => el.classList.remove('inline-plan-segment-context-target'));
+            timeEntries.querySelectorAll('.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target').forEach((el) => {
+                removeInlinePlanClass(
+                    el,
+                    'inline-plan-sheet-context-target',
+                    'inline-plan-segment-context-target',
+                    'inline-plan-slot-context-target'
+                );
+            });
         }
         this.inlinePlanDropdown = null;
         if (closingTarget && closingTarget.mode === 'plan-segment-replace') {

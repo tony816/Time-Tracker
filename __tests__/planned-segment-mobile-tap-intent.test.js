@@ -39,6 +39,14 @@ const preparePlanSegmentReplacementViewport = buildMethod(
     'preparePlanSegmentReplacementViewport(segmentEl)',
     '(segmentEl)'
 );
+const prepareInlinePlanSheetTargetViewport = buildMethod(
+    'prepareInlinePlanSheetTargetViewport(targetEl)',
+    '(targetEl)'
+);
+const preparePlannedSlotReplacementViewport = buildMethod(
+    'preparePlannedSlotReplacementViewport(slotEl)',
+    '(slotEl)'
+);
 const applyPlanSegmentTitleTextEdit = buildMethod(
     'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
@@ -250,7 +258,9 @@ function createHarness(options = {}) {
         getPlanSegmentTapTextRect,
         expandRectWithinBounds,
         isPointInRect,
+        prepareInlinePlanSheetTargetViewport,
         preparePlanSegmentReplacementViewport: options.preparePlanSegmentReplacementViewport || preparePlanSegmentReplacementViewport,
+        preparePlannedSlotReplacementViewport,
         startPlanSegmentParentTitleEdit(el, index, event) {
             calls.push(['title-edit', el, index, event.defaultPrevented, event.propagationStopped]);
             return true;
@@ -447,6 +457,72 @@ test('mobile segment background tap opens replacement sheet without pre-scroll w
         assert.deepEqual(harness.calls, [
             ['dropdown', 0, 0, harness.segment],
         ]);
+    });
+});
+
+test('mobile empty planned slot pre-scroll uses the shared sheet target viewport helper', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const slot = createElementNode('input', 'planned-input');
+        slot.getBoundingClientRect = () => rect(0, 500, 300, 590);
+        const ctx = {
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+            prepareInlinePlanSheetTargetViewport,
+        };
+
+        assert.equal(preparePlannedSlotReplacementViewport.call(ctx, slot), true);
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 382);
+        assert.equal(scrollCalls[0].behavior, 'auto');
+    });
+});
+
+test('mobile empty planned slot pre-scroll falls back to row rect when slot rect is unusable', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const row = createElementNode('div', 'time-entry');
+        const slot = createElementNode('input', 'planned-input');
+        row.appendChild(slot);
+        slot.getBoundingClientRect = () => rect(0, 0, 0, 0);
+        row.getBoundingClientRect = () => rect(0, 500, 300, 590);
+        const ctx = {
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+            prepareInlinePlanSheetTargetViewport,
+        };
+
+        assert.equal(preparePlannedSlotReplacementViewport.call(ctx, slot), true);
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 382);
+    });
+});
+
+test('mobile empty planned slot already safe does not pre-scroll', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const slot = createElementNode('input', 'planned-input');
+        slot.getBoundingClientRect = () => rect(0, 20, 300, 80);
+        const ctx = {
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+            prepareInlinePlanSheetTargetViewport,
+        };
+
+        assert.equal(preparePlannedSlotReplacementViewport.call(ctx, slot), false);
+        assert.deepEqual(scrollCalls, []);
     });
 });
 

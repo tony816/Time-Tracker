@@ -21,6 +21,15 @@
             : 0;
     }
 
+    function scheduleAfterAnimationFrame(callback) {
+        const rootWindow = typeof window !== 'undefined' ? window : root;
+        if (rootWindow && typeof rootWindow.requestAnimationFrame === 'function') {
+            rootWindow.requestAnimationFrame(callback);
+            return;
+        }
+        callback();
+    }
+
     function handleMergedClickCapture(e) {
         const target = e.target;
         if (e.type === 'click') {
@@ -517,6 +526,18 @@
                 }
 
                 const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
+                const openPlannedDropdown = () => {
+                    this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
+                        anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+                    });
+                };
+                const delayed = this.preparePlannedSlotReplacementViewport
+                    ? this.preparePlannedSlotReplacementViewport(plannedField)
+                    : false;
+                if (delayed) {
+                    scheduleAfterAnimationFrame(openPlannedDropdown);
+                    return;
+                }
                 this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                     anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
                 });
