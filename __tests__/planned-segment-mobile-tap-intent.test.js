@@ -391,7 +391,7 @@ test('mobile segment background tap pre-scrolls before opening replacement sheet
 
         assert.equal(scrollCalls.length, 1);
         assert.equal(scrollCalls[0].behavior, 'auto');
-        assert.equal(scrollCalls[0].top > 0, true);
+        assert.equal(scrollCalls[0].top, 382);
         assert.deepEqual(harness.calls, []);
         assert.equal(rafCalls.length, 1);
 
@@ -402,6 +402,31 @@ test('mobile segment background tap pre-scrolls before opening replacement sheet
         ]);
         assert.equal(event.defaultPrevented, true);
         assert.equal(event.propagationStopped, true);
+    });
+});
+
+test('mobile segment background tap uses minimal pre-scroll when segment is slightly covered', () => {
+    const scrollCalls = [];
+    const rafCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+        requestAnimationFrame(callback) {
+            rafCalls.push(callback);
+        },
+    }, () => {
+        const harness = createHarness();
+        harness.segment.getBoundingClientRect = () => rect(0, 180, 300, 220);
+        const event = createClickEvent(harness.segment, 260, 190);
+
+        harness.segment.dispatchEvent(event);
+
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 12);
+        assert.equal(scrollCalls[0].behavior, 'auto');
+        assert.deepEqual(harness.calls, []);
+        assert.equal(rafCalls.length, 1);
     });
 });
 

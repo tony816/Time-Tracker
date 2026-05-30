@@ -6465,19 +6465,21 @@ class TimeTracker {
         if (!rect) return false;
         const rectTop = Number(rect.top);
         const rectBottom = Number(rect.bottom);
-        const rectHeight = Number(rect.height);
-        if (![rectTop, rectBottom, rectHeight].every(Number.isFinite)) return false;
+        if (![rectTop, rectBottom].every(Number.isFinite)) return false;
 
-        const minSheetHeight = Math.min(viewportHeight * 0.56, 520);
-        const maxSheetHeight = Math.min(viewportHeight * 0.82, 720);
-        const expectedSheetHeight = Math.max(minSheetHeight, maxSheetHeight);
+        const expectedSheetHeight = Math.min(viewportHeight * 0.62, 520);
         const sheetTop = viewportHeight - expectedSheetHeight;
         const topPadding = 16;
-        const bottomPadding = 16;
+        const bottomPadding = 20;
         const visibleTop = topPadding;
         const visibleBottom = Math.max(topPadding, sheetTop - bottomPadding);
-        const shouldScroll = rectBottom > visibleBottom || rectTop < visibleTop;
-        if (!shouldScroll) return false;
+        let delta = 0;
+        if (rectBottom > visibleBottom) {
+            delta = rectBottom - visibleBottom;
+        } else if (rectTop < visibleTop) {
+            delta = rectTop - visibleTop;
+        }
+        if (!Number.isFinite(delta) || Math.abs(delta) < 1) return false;
 
         if (doc && doc.body && typeof doc.createElement === 'function') {
             let spacer = doc.getElementById ? doc.getElementById('inline-plan-sheet-scroll-spacer') : null;
@@ -6493,10 +6495,6 @@ class TimeTracker {
             spacer.style.height = `${Math.ceil(expectedSheetHeight + bottomPadding)}px`;
         }
 
-        const segmentCenter = rectTop + (rectHeight / 2);
-        const safeCenter = visibleTop + ((visibleBottom - visibleTop) / 2);
-        const delta = segmentCenter - safeCenter;
-        if (!Number.isFinite(delta) || Math.abs(delta) < 1) return false;
         root.scrollBy({ top: delta, behavior: 'auto' });
         return true;
     }
