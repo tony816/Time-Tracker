@@ -695,10 +695,15 @@ test('repositionOpenInlinePlanDropdown refreshes segment label anchor after rend
             segmentId: 'segment-1',
             anchor: oldAnchor,
             anchorAlign: 'center',
+            anchorMinWidth: 640,
         },
-        findPlanSegmentDropdownAnchor(startIndex, segmentIndex, segmentId) {
+        findPlanSegmentDropdownAnchorInfo(startIndex, segmentIndex, segmentId) {
             calls.push(['find', startIndex, segmentIndex, segmentId]);
-            return newAnchor;
+            return {
+                anchor: newAnchor,
+                segmentEl: { id: 'segment-el' },
+                anchorMinWidth: 480,
+            };
         },
         positionInlinePlanDropdown(anchor) {
             calls.push(['position', anchor]);
@@ -709,11 +714,46 @@ test('repositionOpenInlinePlanDropdown refreshes segment label anchor after rend
     assert.equal(ctx.inlinePlanAnchor, newAnchor);
     assert.equal(ctx.inlinePlanTarget.anchor, newAnchor);
     assert.equal(ctx.inlinePlanTarget.anchorAlign, 'center');
+    assert.equal(ctx.inlinePlanTarget.anchorMinWidth, 480);
     assert.equal(ctx.inlinePlanTarget.mode, 'plan-segment-replace');
     assert.deepEqual(calls, [
         ['find', 2, 1, 'segment-1'],
         ['position', newAnchor],
     ]);
+});
+
+test('repositionOpenInlinePlanDropdown refreshes segment width when the rendered segment grows', () => {
+    const newAnchor = { id: 'label-anchor' };
+    const ctx = {
+        inlinePlanDropdown: { id: 'dropdown' },
+        inlinePlanTarget: {
+            startIndex: 4,
+            endIndex: 4,
+            mode: 'plan-segment-replace',
+            segmentIndex: 2,
+            segmentId: 'segment-2',
+            anchor: { id: 'old-anchor' },
+            anchorAlign: 'center',
+            anchorMinWidth: 420,
+        },
+        findPlanSegmentDropdownAnchorInfo(startIndex, segmentIndex, segmentId) {
+            assert.equal(startIndex, 4);
+            assert.equal(segmentIndex, 2);
+            assert.equal(segmentId, 'segment-2');
+            return {
+                anchor: newAnchor,
+                segmentEl: { id: 'segment-el' },
+                anchorMinWidth: 720,
+            };
+        },
+        positionInlinePlanDropdown(anchor) {
+            assert.equal(anchor, newAnchor);
+        },
+    };
+
+    assert.equal(repositionOpenInlinePlanDropdown.call(ctx), true);
+    assert.equal(ctx.inlinePlanTarget.anchor, newAnchor);
+    assert.equal(ctx.inlinePlanTarget.anchorMinWidth, 720);
 });
 
 test('clicking parent title band opens segment dropdown instead of title editing', () => {

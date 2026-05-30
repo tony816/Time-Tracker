@@ -6227,19 +6227,59 @@ class TimeTracker {
             || segmentEl.querySelector('.plan-segment-graphic-label')
         )) || segmentEl;
     }
+        findPlanSegmentDropdownAnchorInfo(baseIndex, segmentIndex, segmentId = '') {
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;
+        const row = document.querySelector(`[data-index="${baseIndex}"]`);
+        if (!row || typeof row.querySelector !== 'function') return null;
+        const segmentSelector = `.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${segmentIndex}"]`;
+        const candidates = Array.from(row.querySelectorAll ? row.querySelectorAll(segmentSelector) : []);
+        const expectedId = String(segmentId || '');
+        const segmentEl = expectedId
+            ? candidates.find((candidate) => String((candidate.dataset && candidate.dataset.segmentId) || '') === expectedId)
+            : candidates[0];
+        if (!segmentEl) return null;
+        const anchor = (segmentEl.querySelector && (
+            segmentEl.querySelector('.plan-segment-label-text')
+            || segmentEl.querySelector('.plan-segment-graphic-label')
+        )) || segmentEl;
+        const segmentRect = typeof segmentEl.getBoundingClientRect === 'function'
+            ? segmentEl.getBoundingClientRect()
+            : null;
+        const anchorMinWidth = segmentRect && Number.isFinite(segmentRect.width) && segmentRect.width > 0
+            ? Math.floor(segmentRect.width)
+            : 0;
+        return {
+            anchor,
+            segmentEl,
+            anchorMinWidth,
+        };
+    }
         repositionOpenInlinePlanDropdown() {
         const target = this.inlinePlanTarget || null;
         if (!target || target.mode !== 'plan-segment-replace' || !this.inlinePlanDropdown) return false;
         const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : null;
         const segmentIndex = Number.isInteger(Number(target.segmentIndex)) ? Number(target.segmentIndex) : null;
         if (!Number.isInteger(startIndex) || !Number.isInteger(segmentIndex)) return false;
-        const anchor = this.findPlanSegmentDropdownAnchor
-            ? this.findPlanSegmentDropdownAnchor(startIndex, segmentIndex, target.segmentId)
+        const anchorInfo = this.findPlanSegmentDropdownAnchorInfo
+            ? this.findPlanSegmentDropdownAnchorInfo(startIndex, segmentIndex, target.segmentId)
             : null;
+        const anchor = anchorInfo && anchorInfo.anchor
+            ? anchorInfo.anchor
+            : (this.findPlanSegmentDropdownAnchor
+                ? this.findPlanSegmentDropdownAnchor(startIndex, segmentIndex, target.segmentId)
+                : null);
         if (!anchor || typeof this.positionInlinePlanDropdown !== 'function') return false;
+        const anchorMinWidth = anchorInfo && Number.isFinite(anchorInfo.anchorMinWidth) && anchorInfo.anchorMinWidth > 0
+            ? anchorInfo.anchorMinWidth
+            : 0;
         this.inlinePlanAnchor = anchor;
         this.inlinePlanTarget.anchor = anchor;
         this.inlinePlanTarget.anchorAlign = 'center';
+        if (anchorMinWidth > 0) {
+            this.inlinePlanTarget.anchorMinWidth = anchorMinWidth;
+        } else {
+            delete this.inlinePlanTarget.anchorMinWidth;
+        }
         this.positionInlinePlanDropdown(anchor);
         return true;
     }
