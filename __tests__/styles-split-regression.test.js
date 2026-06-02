@@ -51,6 +51,8 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*3ch;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-graphic-label\.is-editing\s*\{[^}]*width:\s*100%;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*\n\s{2}width:\s*100%;/s);
+    assert.match(interactionsSource, /\.inline-plan-backdrop\s*\{[^}]*z-index:\s*49;/s);
+    assert.match(interactionsSource, /body\.inline-plan-sheet-open #timeEntries\.inline-plan-context-active \.time-entry\.inline-plan-context-keep-clear\s*\{[^}]*z-index:\s*60;/s);
     assert.doesNotMatch(foundationSource, /actual-label|actual-input|summary-actual/);
     assert.doesNotMatch(modalSource, /activity-log-btn|actual-sub-activities|actual-edit-badge/);
     assert.doesNotMatch(interactionsSource, /activity-log-btn|split-type-actual|split-visualization-actual|actual-field-container|merged-actual|actual-row|actual-time|actual-input|actual-label|summary-actual/);

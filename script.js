@@ -6281,10 +6281,18 @@ class TimeTracker {
     }
     prepareInlinePlanSheetTargetViewport(targetEl) {
         if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
-        const isCoarseContext = this.isCoarsePlanSegmentPointerContext
-            ? this.isCoarsePlanSegmentPointerContext()
-            : false;
-        if (!isCoarseContext) return false;
+        const shouldCorrect = typeof this.shouldUseInlinePlanSheetViewportCorrection === 'function'
+            ? this.shouldUseInlinePlanSheetViewportCorrection()
+            : (
+                typeof this.isInlinePlanMobileInputContext === 'function'
+                    ? this.isInlinePlanMobileInputContext()
+                    : (
+                        this.isCoarsePlanSegmentPointerContext
+                            ? this.isCoarsePlanSegmentPointerContext()
+                            : false
+                    )
+            );
+        if (!shouldCorrect) return false;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         const doc = (typeof document !== 'undefined') ? document : null;
         const visualViewport = root && root.visualViewport ? root.visualViewport : null;
@@ -6341,10 +6349,18 @@ class TimeTracker {
         if (!this.inlinePlanDropdown || !this.inlinePlanDropdown.classList || !this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
             return false;
         }
-        const isCoarseContext = this.isCoarsePlanSegmentPointerContext
-            ? this.isCoarsePlanSegmentPointerContext()
-            : false;
-        if (!isCoarseContext) return false;
+        const shouldCorrect = typeof this.shouldUseInlinePlanSheetViewportCorrection === 'function'
+            ? this.shouldUseInlinePlanSheetViewportCorrection()
+            : (
+                typeof this.isInlinePlanMobileInputContext === 'function'
+                    ? this.isInlinePlanMobileInputContext()
+                    : (
+                        this.isCoarsePlanSegmentPointerContext
+                            ? this.isCoarsePlanSegmentPointerContext()
+                            : false
+                    )
+            );
+        if (!shouldCorrect) return false;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         if (!root || typeof root.scrollBy !== 'function') return false;
         const targetRect = targetEl.getBoundingClientRect();

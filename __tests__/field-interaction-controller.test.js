@@ -23,11 +23,12 @@ function createListenerNode() {
     return {
         dataset: {},
         addEventListener(type, handler) {
-            listeners[type] = handler;
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
         },
         dispatchEvent(event) {
-            const handler = listeners[event.type];
-            if (handler) handler(event);
+            const handlers = listeners[event.type] || [];
+            handlers.forEach((handler) => handler(event));
         },
     };
 }
@@ -269,6 +270,81 @@ test('attachCellClickListeners keeps an open mobile sheet on same empty slot ret
         ['stop'],
         ['sync', plannedField],
     ]);
+});
+
+test('planned mousedown retap keeps open mobile inline plan sheet', () => {
+    const plannedField = createListenerNode();
+    plannedField.closest = () => null;
+    plannedField.matches = () => false;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        currentColumnType: null,
+        selectedPlannedFields: new Set(),
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 4);
+            return { startIndex: 4, endIndex: 4 };
+        },
+        isSameInlinePlanTarget(range) {
+            assert.deepEqual(range, { startIndex: 4, endIndex: 4 });
+            return true;
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        findMergeKey() {
+            return null;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            calls.push(['sync', targetEl]);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        openInlinePlanDropdown() {
+            calls.push(['open']);
+        },
+    };
+    const makeEvent = (type) => ({
+        type,
+        target: plannedField,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent', type]);
+        },
+        stopPropagation() {
+            calls.push(['stop', type]);
+        },
+    });
+
+    controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 4, plannedField);
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent(makeEvent('mousedown'));
+    plannedField.dispatchEvent(makeEvent('mouseup'));
+    plannedField.dispatchEvent(makeEvent('click'));
+
+    assert.equal(calls.some((call) => call[0] === 'close'), false);
+    assert.equal(calls.some((call) => call[0] === 'open'), false);
+    assert.ok(calls.some((call) => call[0] === 'sync' && call[1] === plannedField));
+    assert.ok(calls.some((call) => call[0] === 'prevent' && call[1] === 'mousedown'));
+    assert.ok(calls.some((call) => call[0] === 'stop' && call[1] === 'mousedown'));
+    assert.equal(ctx.suppressInlinePlanClickOnce, null);
 });
 
 test('merged planned click capture keeps logical range but opens against the clicked field target', () => {

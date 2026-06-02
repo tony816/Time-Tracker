@@ -250,6 +250,15 @@
         plannedField.addEventListener('mousedown', (e) => {
             const mouseRange = this.getPlannedRangeInfo(index);
             const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(mouseRange);
+            if (sameInlineTarget && isMobileInlinePlanSheetContext(this)) {
+                this.suppressInlinePlanClickOnce = index;
+                if (e.preventDefault) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+                syncOpenInlinePlanSheetTarget(this, plannedField);
+                plannedMouseMoved = false;
+                plannedMouseBaseRange = null;
+                return;
+            }
             if (sameInlineTarget) {
                 this.suppressInlinePlanClickOnce = index;
                 this.clearSelection('planned');

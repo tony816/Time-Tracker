@@ -685,7 +685,7 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   opacity: 1;
   transform: none;
   position: relative;
-  z-index: 1;
+  z-index: 60;
 }
 
 body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear .planned-input {

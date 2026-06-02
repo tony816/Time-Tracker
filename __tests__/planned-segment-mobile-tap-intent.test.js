@@ -518,6 +518,39 @@ test('mobile pre-scroll prefers visualViewport metrics when available', () => {
     });
 });
 
+test('inline plan sheet correction follows mobile input predicate at 700px', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        innerWidth: 700,
+        matchMedia() {
+            return { matches: false };
+        },
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const slot = createElementNode('input', 'planned-input');
+        slot.getBoundingClientRect = () => rect(0, 500, 300, 590);
+        const dropdown = createElementNode('div', 'inline-plan-dropdown inline-plan-dropdown-sheet');
+        dropdown.getBoundingClientRect = () => rect(0, 260, 300, 600);
+        const ctx = {
+            inlinePlanDropdown: dropdown,
+            isInlinePlanMobileInputContext() {
+                return true;
+            },
+            isCoarsePlanSegmentPointerContext() {
+                return false;
+            },
+        };
+
+        assert.equal(prepareInlinePlanSheetTargetViewport.call(ctx, slot), true);
+        assert.equal(correctInlinePlanSheetTargetViewport.call(ctx, slot), true);
+        assert.equal(scrollCalls.length, 2);
+        assert.equal(scrollCalls[0].top, 382);
+        assert.equal(scrollCalls[1].top, 350);
+    });
+});
+
 test('mobile empty planned slot pre-scroll uses wrapper and input as one target area', () => {
     const scrollCalls = [];
     withMockWindow({
