@@ -50,6 +50,7 @@ The order matters because modules attach globals consumed by `script.js`.
 start index.html
 python -m http.server 8000
 npm start
+npm run test:plan-only
 npm run test:actual-lock
 npm test
 ```

@@ -9,7 +9,8 @@
     "dev": "node server.js",
     "build": "echo \"no build step\"",
     "test": "node --test __tests__/*.test.js",
-    "test:actual-lock": "node --test __tests__/plan-only-actual-removal.test.js",
+    "test:plan-only": "node --test __tests__/plan-only-actual-removal.test.js",
+    "test:actual-lock": "npm run test:plan-only",
     "check:env": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){console.error('Missing .env. Copy from .env.example'); process.exit(1)} console.log('.env present')\""
   },
   "dependencies": {
