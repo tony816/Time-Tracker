@@ -29,19 +29,9 @@
         spinner.dataset.index = String(index);
         spinner.dataset.seconds = String(seconds);
 
-        const display = (kind === 'actual') ? documentRef.createElement('input') : documentRef.createElement('div');
-        if (kind === 'actual') {
-            display.type = 'text';
-            display.inputMode = 'numeric';
-            display.autocomplete = 'off';
-            display.placeholder = '\uBD84';
-            display.className = 'spinner-display actual-duration-input';
-            display.value = formatSpinnerValue(kind, seconds);
-            display.setAttribute('aria-label', '\uBD84 \uC785\uB825');
-        } else {
-            display.className = 'spinner-display';
-            display.textContent = formatSpinnerValue(kind, seconds);
-        }
+        const display = documentRef.createElement('div');
+        display.className = 'spinner-display';
+        display.textContent = formatSpinnerValue(kind, seconds);
 
         const controls = documentRef.createElement('div');
         controls.className = 'spinner-controls';
@@ -68,70 +58,6 @@
         spinner.appendChild(controls);
 
         return spinner;
-    }
-
-    function createActualTimeControl(options = {}) {
-        const documentRef = options.document;
-        if (!documentRef || typeof documentRef.createElement !== 'function') return null;
-
-        const kind = options.kind;
-        const index = options.index;
-        const seconds = Number.isFinite(options.seconds) ? options.seconds : 0;
-        const label = options.label;
-        const disabled = options.disabled === true;
-        const formatSecondsForInput = (typeof options.formatSecondsForInput === 'function')
-            ? options.formatSecondsForInput
-            : ((value) => String(value || 0));
-
-        const control = documentRef.createElement('div');
-        control.className = `actual-time-control actual-time-${kind}`;
-        control.dataset.kind = kind;
-        control.dataset.index = String(index);
-        if (label) control.dataset.label = label;
-        if (disabled) control.classList.add('is-disabled');
-
-        const caption = documentRef.createElement('div');
-        caption.className = 'actual-time-caption';
-        caption.textContent = kind === 'grid' ? '\uAE30\uB85D' : '\uBC30\uC815';
-
-        const upBtn = documentRef.createElement('button');
-        upBtn.type = 'button';
-        upBtn.className = 'actual-time-btn actual-time-up';
-        upBtn.dataset.kind = kind;
-        upBtn.dataset.direction = 'up';
-        upBtn.dataset.index = String(index);
-        upBtn.textContent = '\u25B2';
-
-        const input = documentRef.createElement('input');
-        input.type = 'text';
-        input.inputMode = 'numeric';
-        input.autocomplete = 'off';
-        input.className = `actual-time-input actual-${kind}-input`;
-        input.dataset.kind = kind;
-        input.dataset.index = String(index);
-        input.value = formatSecondsForInput(seconds);
-        input.readOnly = true;
-        input.setAttribute('aria-label', kind === 'grid' ? '\uAE30\uB85D \uC2DC\uAC04' : '\uBC30\uC815 \uC2DC\uAC04');
-
-        const downBtn = documentRef.createElement('button');
-        downBtn.type = 'button';
-        downBtn.className = 'actual-time-btn actual-time-down';
-        downBtn.dataset.kind = kind;
-        downBtn.dataset.direction = 'down';
-        downBtn.dataset.index = String(index);
-        downBtn.textContent = '\u25BC';
-
-        if (disabled) {
-            input.disabled = true;
-            upBtn.disabled = true;
-            downBtn.disabled = true;
-        }
-
-        control.appendChild(caption);
-        control.appendChild(upBtn);
-        control.appendChild(input);
-        control.appendChild(downBtn);
-        return control;
     }
 
     function updateSpinnerDisplay(options = {}) {
@@ -166,7 +92,6 @@
 
     return Object.freeze({
         createDurationSpinner,
-        createActualTimeControl,
         updateSpinnerDisplay,
     });
 });

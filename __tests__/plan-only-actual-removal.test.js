@@ -30,6 +30,7 @@ test('server no longer serves deleted actual-only controllers', () => {
     assert.doesNotMatch(serverSource, /controllers\/actual-input-controller\.js/);
     assert.doesNotMatch(serverSource, /controllers\/actual-modal-controller\.js/);
     assert.doesNotMatch(serverSource, /ui\/actual-activity-list-renderer\.js/);
+    assert.doesNotMatch(serverSource, /actual-grid-palette-test\.html/);
 });
 
 test('legacy actual fields and actual merge keys are ignored by row renderer', () => {

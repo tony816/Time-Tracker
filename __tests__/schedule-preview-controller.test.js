@@ -4,18 +4,34 @@ const assert = require('node:assert/strict');
 const controller = require('../controllers/schedule-preview-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 
-const showActivityLogButtonOnHoverWrapper = buildMethod('showActivityLogButtonOnHover(index)', '(index)');
-const attachActualActivityHoverWrapper = buildMethod('attachActualActivityHover(entryDiv, index)', '(entryDiv, index)');
-const hideHoverActivityLogButtonWrapper = buildMethod('hideHoverActivityLogButton()', '()');
 const getSchedulePreviewDataWrapper = buildMethod('getSchedulePreviewData()', '()');
 const resetSchedulePreviewWrapper = buildMethod('resetSchedulePreview()', '()');
 const updateSchedulePreviewWrapper = buildMethod('updateSchedulePreview()', '()');
 
+function createFakeElement(tagName) {
+    return {
+        tagName: String(tagName || '').toUpperCase(),
+        children: [],
+        dataset: {},
+        style: {},
+        textContent: '',
+        innerHTML: '',
+        value: '',
+        className: '',
+        appendChild(child) {
+            this.children.push(child);
+            return child;
+        },
+    };
+}
+
+function collectHtml(node) {
+    if (!node) return '';
+    return `${node.innerHTML || ''}${(node.children || []).map(collectHtml).join('')}`;
+}
+
 test('schedule-preview-controller exports and global attach are available', () => {
     assert.ok(controller);
-    assert.equal(typeof controller.attachActualActivityHover, 'function');
-    assert.equal(typeof controller.showActivityLogButtonOnHover, 'function');
-    assert.equal(typeof controller.hideHoverActivityLogButton, 'function');
     assert.equal(typeof controller.getSchedulePreviewData, 'function');
     assert.equal(typeof controller.resetSchedulePreview, 'function');
     assert.equal(typeof controller.updateSchedulePreview, 'function');
@@ -30,18 +46,6 @@ test('script schedule preview wrapper methods delegate to controller helpers', (
     const calls = [];
 
     globalThis.TimeTrackerSchedulePreviewController = {
-        attachActualActivityHover(entryDiv, index) {
-            calls.push(['attach-hover', this, entryDiv, index]);
-            return 'attach-hover-result';
-        },
-        showActivityLogButtonOnHover(index) {
-            calls.push(['hover', this, index]);
-            return 'hover-result';
-        },
-        hideHoverActivityLogButton() {
-            calls.push(['hide-hover', this]);
-            return 'hide-hover-result';
-        },
         getSchedulePreviewData() {
             calls.push(['get', this]);
             return { ok: true };
@@ -59,9 +63,6 @@ test('script schedule preview wrapper methods delegate to controller helpers', (
     const ctx = { id: 'tracker' };
 
     try {
-        assert.equal(attachActualActivityHoverWrapper.call(ctx, { id: 'row' }, 4), 'attach-hover-result');
-        assert.equal(showActivityLogButtonOnHoverWrapper.call(ctx, 4), 'hover-result');
-        assert.equal(hideHoverActivityLogButtonWrapper.call(ctx), 'hide-hover-result');
         assert.deepEqual(getSchedulePreviewDataWrapper.call(ctx), { ok: true });
         assert.equal(resetSchedulePreviewWrapper.call(ctx), 'reset-result');
         assert.equal(updateSchedulePreviewWrapper.call(ctx), 'update-result');
@@ -70,51 +71,92 @@ test('script schedule preview wrapper methods delegate to controller helpers', (
     }
 
     assert.deepEqual(calls, [
-        ['attach-hover', ctx, { id: 'row' }, 4],
-        ['hover', ctx, 4],
-        ['hide-hover', ctx],
         ['get', ctx],
         ['reset', ctx],
         ['update', ctx],
     ]);
 });
 
-test('attachActualActivityHover binds hover handlers to actual surfaces', () => {
-    const listeners = [];
-    const createHoverNode = () => ({
-        addEventListener(type, handler) {
-            listeners.push(type);
-            this[type] = handler;
+test('updateSchedulePreview renders plan-only preview without actual column', () => {
+    const originalDocument = global.document;
+    const modal = createFakeElement('div');
+    modal.style.display = 'flex';
+    modal.dataset.startIndex = '0';
+    modal.dataset.endIndex = '0';
+    modal.dataset.type = 'planned';
+
+    const list = createFakeElement('div');
+    const meta = createFakeElement('div');
+    const note = createFakeElement('div');
+    const timeField = createFakeElement('input');
+    timeField.value = '09:00';
+    const elements = {
+        scheduleModal: modal,
+        schedulePreviewList: list,
+        schedulePreviewMeta: meta,
+        schedulePreviewNote: note,
+        scheduleTime: timeField,
+    };
+
+    global.document = {
+        getElementById(id) {
+            return elements[id] || null;
         },
-        closest(selector) {
-            return selector === '.split-cell-wrapper.split-type-actual.split-has-data' ? { id: 'wrapper' } : null;
+        createElement(tagName) {
+            return createFakeElement(tagName);
         },
-    });
-    const actualContainer = createHoverNode();
-    const actualOverlay = createHoverNode();
-    const actualSplitViz = createHoverNode();
-    const calls = [];
-    const entryDiv = {
-        querySelector(selector) {
-            if (selector === '.actual-field-container') return actualContainer;
-            if (selector === '.actual-merged-overlay') return actualOverlay;
-            if (selector === '.split-visualization-actual') return actualSplitViz;
+    };
+
+    const ctx = {
+        timeSlots: [{ time: '09:00', planned: 'Focus', actual: 'Legacy actual', timer: {} }],
+        mergedFields: new Map([['actual-0-0', 'Legacy actual']]),
+        modalSelectedActivities: ['Focus'],
+        modalPlanActivities: [{ label: 'Focus', seconds: 3600 }],
+        modalPlanTitle: '',
+        modalPlanTitleBandOn: false,
+        modalPlanTotalSeconds: 3600,
+        formatDurationSummary() {
+            return '1시간';
+        },
+        formatActivitiesSummary(items) {
+            return items.map((item) => item.label).join(', ');
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        getSchedulePreviewData: controller.getSchedulePreviewData,
+        resetSchedulePreview: controller.resetSchedulePreview,
+        findMergeKey(type) {
+            if (type === 'actual') return 'actual-0-0';
             return null;
         },
-    };
-    const ctx = {
-        showActivityLogButtonOnHover(index) {
-            calls.push(['show', index]);
+        createMergedField() {
+            return '<div class="merged-field">merged</div>';
         },
-        hideHoverActivityLogButton() {
-            calls.push(['hide']);
+        wrapWithSplitVisualization(type, index, content) {
+            return `<div class="split-cell-wrapper split-type-${type}">${content}</div>`;
         },
+        createTimerControls() {
+            return '<div class="timer-controls"></div>';
+        },
+        createMergedTimeField() {
+            return '<div class="time-slot-container"></div>';
+        },
+        escapeAttribute(value) {
+            return String(value || '');
+        },
+        centerMergedTimeContent() {},
+        resizeMergedPlannedContent() {},
     };
 
-    controller.attachActualActivityHover.call(ctx, entryDiv, 2);
-    actualContainer.mouseenter();
-    actualOverlay.mouseleave({ relatedTarget: null });
+    try {
+        controller.updateSchedulePreview.call(ctx);
+    } finally {
+        global.document = originalDocument;
+    }
 
-    assert.deepEqual(listeners, ['mouseenter', 'mouseleave', 'mouseenter', 'mouseleave', 'mouseenter', 'mouseleave']);
-    assert.deepEqual(calls, [['show', 2], ['hide']]);
+    const rendered = collectHtml(list);
+    assert.match(rendered, /planned-label/);
+    assert.match(rendered, /time-label/);
+    assert.doesNotMatch(rendered, /actual-label|actual-input|split-type-actual|Legacy actual|activity-log-btn/);
 });

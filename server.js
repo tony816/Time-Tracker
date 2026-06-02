@@ -52,7 +52,6 @@ const STATIC_FILE_MAP = Object.freeze({
     '/controllers/timer-controller.js': 'controllers/timer-controller.js',
     '/ui/time-control-renderer.js': 'ui/time-control-renderer.js',
     '/ui/time-entry-renderer.js': 'ui/time-entry-renderer.js',
-    '/actual-grid-palette-test.html': 'actual-grid-palette-test.html',
 });
 
 app.use((req, res, next) => {
@@ -277,7 +276,6 @@ app.get([
     '/controllers/timer-controller.js',
     '/ui/time-control-renderer.js',
     '/ui/time-entry-renderer.js',
-    '/actual-grid-palette-test.html',
 ], sendStaticFileByRequestPath);
 
 app.use('/api', (_req, res) => {

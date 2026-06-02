@@ -709,14 +709,12 @@ class TimeTracker {
             this.hideUndoButton();
             this.centerMergedTimeContent(document.getElementById('timeEntries'));
             this.hideHoverScheduleButton && this.hideHoverScheduleButton();
-            this.hideHoverActivityLogButton && this.hideHoverActivityLogButton();
         });
         window.addEventListener('scroll', () => {
             this.updateSelectionOverlay('planned');
             this.updateSelectionOverlay('actual');
             this.hideUndoButton();
             this.hideHoverScheduleButton && this.hideHoverScheduleButton();
-            this.hideHoverActivityLogButton && this.hideHoverActivityLogButton();
             this.centerMergedTimeContent(document.getElementById('timeEntries'));
         });
     }
@@ -1582,10 +1580,7 @@ class TimeTracker {
             this.attachPlannedFieldSelectionListeners(entryDiv, index, plannedField);
         }
 
-        // No drag-selection listeners for actualField in the actual column
         if (actualField) {
-            this.attachActualActivityHover(entryDiv, index);
-
               const actualGrid = entryDiv.querySelector('.split-visualization-actual .split-grid');
               if (actualGrid) {
                   const resolveSegmentPayload = (target) => {
@@ -4355,18 +4350,6 @@ class TimeTracker {
         });
     }
 
-    createActualTimeControl({ kind, index, seconds, label, disabled = false }) {
-        return globalThis.TimeTrackerTimeControlRenderer.createActualTimeControl({
-            document,
-            kind,
-            index,
-            seconds,
-            label,
-            disabled,
-            formatSecondsForInput: (value) => this.formatSecondsForInput(value),
-        });
-    }
-
     updateSpinnerDisplay(spinner, seconds) {
         return globalThis.TimeTrackerTimeControlRenderer.updateSpinnerDisplay({
             spinner,
@@ -4869,18 +4852,6 @@ class TimeTracker {
     // 좌측 ???�??마우?��? ?�렸?????�일/병합 ?�?�의 ?��?�?버튼???�시
     showScheduleButtonOnHover(index) {
         return globalThis.TimeTrackerSelectionOverlayController.showScheduleButtonOnHover.call(this, index);
-    }
-
-        showActivityLogButtonOnHover(index) {
-        return globalThis.TimeTrackerSchedulePreviewController.showActivityLogButtonOnHover.call(this, index);
-    }
-
-    attachActualActivityHover(entryDiv, index) {
-        return globalThis.TimeTrackerSchedulePreviewController.attachActualActivityHover.call(this, entryDiv, index);
-    }
-
-    hideHoverActivityLogButton() {
-        return globalThis.TimeTrackerSchedulePreviewController.hideHoverActivityLogButton.call(this);
     }
 
     hideHoverScheduleButton() {

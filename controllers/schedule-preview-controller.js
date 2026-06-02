@@ -109,7 +109,6 @@ function updateSchedulePreview() {
         header.innerHTML = `
             <div class="planned-label">계획된 활동</div>
             <div class="time-label">시간</div>
-            <div class="actual-label">실제 활동</div>
         `;
         sheet.appendChild(header);
          const entries = document.createElement('div');
@@ -121,7 +120,6 @@ function updateSchedulePreview() {
             entryDiv.className = 'time-entry';
             entryDiv.dataset.index = String(index);
              const plannedMergeKey = this.findMergeKey('planned', index);
-            const actualMergeKey = this.findMergeKey('actual', index);
              let plannedContent = plannedMergeKey
                 ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
                 : `<input type="text" class="input-field planned-input"
@@ -130,10 +128,6 @@ function updateSchedulePreview() {
                         value="${this.escapeAttribute(slot.planned)}"
                         placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
              plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
-             let actualContent = actualMergeKey
-                ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
-            : this.createActualSlotField(index, slot);
-             actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
              const timeMergeKey = this.findMergeKey('time', index);
             const timerControls = this.createTimerControls(index, slot);
             let timeContent;
@@ -148,7 +142,6 @@ function updateSchedulePreview() {
              entryDiv.innerHTML = `
                 ${plannedContent}
                 ${timeContent}
-                ${actualContent}
             `;
              if (plannedMergeKey) {
                 const plannedStart = parseInt(plannedMergeKey.split('-')[1], 10);
@@ -157,19 +150,11 @@ function updateSchedulePreview() {
                     entryDiv.classList.add('has-planned-merge');
                 }
             }
-             if (actualMergeKey) {
-                const actualStart = parseInt(actualMergeKey.split('-')[1], 10);
-                const actualEnd = parseInt(actualMergeKey.split('-')[2], 10);
-                if (index >= actualStart && index < actualEnd) {
-                    entryDiv.classList.add('has-actual-merge');
-                }
-            }
              entries.appendChild(entryDiv);
         }
          sheet.appendChild(entries);
         list.appendChild(sheet);
          this.centerMergedTimeContent(entries);
-        this.resizeMergedActualContent(entries);
         this.resizeMergedPlannedContent(entries);
     } finally {
         this.timeSlots = originalSlots;
@@ -236,64 +221,8 @@ function getSchedulePreviewData() {
     };
 }
 
-function showActivityLogButtonOnHover(index) {
-    const wrapper = document.querySelector(`.time-entry[data-index="${index}"] .split-cell-wrapper.split-type-actual.split-has-data`);
-    if (!wrapper) return;
-     const inlineBtn = wrapper.querySelector('.activity-log-btn');
-    if (!inlineBtn) return;
-     this.hideHoverActivityLogButton();
-    inlineBtn.style.opacity = '1';
-    inlineBtn.style.pointerEvents = 'auto';
-    this.activityHoverButton = inlineBtn;
-}
-
-function hideHoverActivityLogButton() {
-    if (this.activityHoverHideTimer) {
-        clearTimeout(this.activityHoverHideTimer);
-        this.activityHoverHideTimer = null;
-    }
-    if (this.activityHoverButton) {
-        if (this.activityHoverButton.classList && this.activityHoverButton.classList.contains('activity-log-btn-floating')) {
-            if (this.activityHoverButton.parentNode) {
-                this.activityHoverButton.parentNode.removeChild(this.activityHoverButton);
-            }
-        } else {
-            this.activityHoverButton.style.opacity = '';
-            this.activityHoverButton.style.pointerEvents = '';
-        }
-    }
-    this.activityHoverButton = null;
-}
-
-function attachActualActivityHover(entryDiv, index) {
-    if (!entryDiv) return;
-    const actualContainer = entryDiv.querySelector('.actual-field-container');
-    const actualOverlay = entryDiv.querySelector('.actual-merged-overlay');
-    const actualSplitViz = entryDiv.querySelector('.split-visualization-actual');
-
-    const bindHover = (el) => {
-        if (!el) return;
-        el.addEventListener('mouseenter', () => {
-            const wrapper = el.closest('.split-cell-wrapper.split-type-actual.split-has-data');
-            if (!wrapper) return;
-            this.showActivityLogButtonOnHover(index);
-        });
-        el.addEventListener('mouseleave', (e) => {
-            const toEl = e.relatedTarget;
-            if (toEl && toEl.closest && toEl.closest('.activity-log-btn-floating')) return;
-            this.hideHoverActivityLogButton();
-        });
-    };
-
-    bindHover(actualContainer);
-    bindHover(actualOverlay);
-    bindHover(actualSplitViz);
-}
 
     return Object.freeze({
-        attachActualActivityHover,
-        showActivityLogButtonOnHover,
-        hideHoverActivityLogButton,
         getSchedulePreviewData,
         resetSchedulePreview,
         updateSchedulePreview,

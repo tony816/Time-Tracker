@@ -5,7 +5,6 @@ const renderer = require('../ui/time-control-renderer');
 const { buildMethod } = require('./helpers/script-method-builder');
 
 const createDurationSpinnerWrapper = buildMethod('createDurationSpinner({ kind, index, seconds })', '({ kind, index, seconds })');
-const createActualTimeControlWrapper = buildMethod('createActualTimeControl({ kind, index, seconds, label, disabled = false })', '({ kind, index, seconds, label, disabled = false })');
 const updateSpinnerDisplayWrapper = buildMethod('updateSpinnerDisplay(spinner, seconds)', '(spinner, seconds)');
 
 function createFakeElement(tagName) {
@@ -65,10 +64,9 @@ function createFakeDocument() {
 
 test('time-control-renderer exports and global attach are available', () => {
     assert.equal(typeof renderer.createDurationSpinner, 'function');
-    assert.equal(typeof renderer.createActualTimeControl, 'function');
     assert.equal(typeof renderer.updateSpinnerDisplay, 'function');
     assert.ok(globalThis.TimeTrackerTimeControlRenderer);
-    assert.equal(globalThis.TimeTrackerTimeControlRenderer.createActualTimeControl, renderer.createActualTimeControl);
+    assert.equal(globalThis.TimeTrackerTimeControlRenderer.createDurationSpinner, renderer.createDurationSpinner);
 });
 
 test('script time-control wrapper methods delegate to renderer helpers', () => {
@@ -79,10 +77,6 @@ test('script time-control wrapper methods delegate to renderer helpers', () => {
         createDurationSpinner(options) {
             calls.push(['spinner', this, options]);
             return 'spinner';
-        },
-        createActualTimeControl(options) {
-            calls.push(['actual', this, options]);
-            return 'actual';
         },
         updateSpinnerDisplay(options) {
             calls.push(['update', this, options]);
@@ -109,7 +103,6 @@ test('script time-control wrapper methods delegate to renderer helpers', () => {
 
     try {
         assert.equal(createDurationSpinnerWrapper.call(ctx, { kind: 'plan', index: 1, seconds: 600 }), 'spinner');
-        assert.equal(createActualTimeControlWrapper.call(ctx, { kind: 'grid', index: 2, seconds: 1200, label: 'A', disabled: true }), 'actual');
         assert.equal(updateSpinnerDisplayWrapper.call(ctx, spinner, 900), 'updated');
     } finally {
         globalThis.TimeTrackerTimeControlRenderer = original;
@@ -117,8 +110,7 @@ test('script time-control wrapper methods delegate to renderer helpers', () => {
     }
 
     assert.equal(calls[0][0], 'spinner');
-    assert.equal(calls[1][0], 'actual');
-    assert.equal(calls[2][0], 'update');
+    assert.equal(calls[1][0], 'update');
 });
 
 test('createDurationSpinner builds plan spinner DOM', () => {
@@ -138,26 +130,6 @@ test('createDurationSpinner builds plan spinner DOM', () => {
     assert.equal(spinner.dataset.seconds, '1200');
     assert.equal(spinner.children[0].className, 'spinner-display');
     assert.equal(spinner.children[0].textContent, 'plan:1200');
-});
-
-test('createActualTimeControl builds disabled actual control DOM', () => {
-    const control = renderer.createActualTimeControl({
-        document: createFakeDocument(),
-        kind: 'assign',
-        index: 2,
-        seconds: 1800,
-        label: 'Focus',
-        disabled: true,
-        formatSecondsForInput(seconds) {
-            return `00:${String(seconds / 60).padStart(2, '0')}`;
-        },
-    });
-
-    assert.equal(control.classList.contains('is-disabled'), true);
-    assert.equal(control.dataset.label, 'Focus');
-    assert.equal(control.children[1].disabled, true);
-    assert.equal(control.children[2].disabled, true);
-    assert.equal(control.children[3].disabled, true);
 });
 
 test('updateSpinnerDisplay rewrites display text and re-runs spinner state', () => {
