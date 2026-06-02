@@ -67,11 +67,13 @@
             ? plannedField.closest('.split-cell-wrapper.split-type-planned')
             : plannedField;
         const open = () => {
+            const sheetTargetEl = plannedField;
             ctx.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                 anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+                sheetTargetEl,
                 ...options,
             });
-            syncOpenInlinePlanSheetTarget(ctx, anchor || plannedField);
+            syncOpenInlinePlanSheetTarget(ctx, sheetTargetEl);
         };
         const delayed = typeof ctx.preparePlannedSlotReplacementViewport === 'function'
             ? ctx.preparePlannedSlotReplacementViewport(anchor || plannedField)
@@ -184,8 +186,7 @@
                 if (!range) return;
                 const safeStart = range.start;
                 const safeEnd = range.end;
-                const anchor = document.querySelector(`[data-index="${safeStart}"] .planned-input`) || plannedEl;
-                openPlannedFieldDropdownWithViewportPreparation(this, safeStart, anchor, safeEnd);
+                openPlannedFieldDropdownWithViewportPreparation(this, safeStart, plannedEl, safeEnd);
             }
             return;
         }
@@ -218,8 +219,7 @@
                             this.pendingMergedMouseSelection = null;
                             const range = this.activateMergedPlannedSelection(mk, index);
                             if (!range) return;
-                            const anchor = document.querySelector(`[data-index="${range.start}"] .planned-input`) || prEl;
-                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, anchor, range.end);
+                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, prEl, range.end);
                         }
                         return;
                     }

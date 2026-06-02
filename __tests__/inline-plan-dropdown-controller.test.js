@@ -876,6 +876,48 @@ test('openInlinePlanDropdown marks mobile empty planned slot as sheet context ta
     assert.equal(plannedInput.classList.contains('inline-plan-slot-context-target'), true);
 });
 
+test('openInlinePlanDropdown corrects an existing mobile sheet to the tapped slot target', () => {
+    const startAnchor = createInlinePlanAnchor({ top: 80 });
+    const tappedSlot = createInlinePlanAnchor({ top: 520 });
+    let correctionTarget = null;
+    let closed = false;
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: 4, mergeKey: 'planned-0-4' };
+        },
+        resolveInlinePlanAnchor() {
+            return startAnchor;
+        },
+        isSameInlinePlanTarget() {
+            return true;
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            correctionTarget = targetEl;
+        },
+        clearSelection() {},
+        closeInlinePlanDropdown() {
+            closed = true;
+        },
+    };
+
+    controller.openInlinePlanDropdown.call(ctx, 0, startAnchor, 4, {
+        sheetTargetEl: tappedSlot,
+    });
+
+    assert.equal(correctionTarget, tappedSlot);
+    assert.equal(closed, false);
+});
+
 test('closeInlinePlanDropdown clears selected segment for segment replacement target', () => {
     const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;

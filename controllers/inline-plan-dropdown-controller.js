@@ -2055,6 +2055,9 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
+        const sheetTargetEl = options && options.sheetTargetEl && typeof options.sheetTargetEl.getBoundingClientRect === 'function'
+            ? options.sheetTargetEl
+            : anchor;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
             if (
                 this.inlinePlanDropdown.classList
@@ -2062,7 +2065,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 && this.isInlinePlanMobileInputContext()
             ) {
                 if (typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
-                    this.scheduleInlinePlanSheetTargetViewportCorrection(anchor);
+                    this.scheduleInlinePlanSheetTargetViewportCorrection(sheetTargetEl);
                 } else if (typeof this.scheduleInlinePlanViewportSync === 'function') {
                     this.scheduleInlinePlanViewportSync();
                 }
@@ -2127,7 +2130,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             this.inlinePlanBackdrop = backdrop;
             document.body.classList.add('inline-plan-sheet-open');
             if (!segmentReplaceTarget && !virtualGapTarget) {
-                const slotTarget = getInlinePlanSlotContextTarget(anchor);
+                const slotTarget = getInlinePlanSlotContextTarget(sheetTargetEl);
                 addInlinePlanClass(slotTarget, 'inline-plan-sheet-context-target', 'inline-plan-slot-context-target');
             }
         }

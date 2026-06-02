@@ -140,6 +140,7 @@ test('attachCellClickListeners passes planned slot width to empty slot dropdowns
     assert.equal(calls[0].anchor, wrapper);
     assert.equal(calls[0].endIndex, 4);
     assert.equal(calls[0].options.anchorMinWidth, 876);
+    assert.equal(calls[0].options.sheetTargetEl, plannedField);
     assert.equal(calls[0].options.anchorAlign, undefined);
     assert.equal(calls[0].options.mode, undefined);
 });
@@ -204,6 +205,7 @@ test('attachCellClickListeners pre-scrolls mobile empty planned slots before ope
         assert.equal(calls[1][2], wrapper);
         assert.equal(calls[1][3], 4);
         assert.equal(calls[1][4].anchorMinWidth, 640);
+        assert.equal(calls[1][4].sheetTargetEl, plannedField);
     } finally {
         if (previousWindow === undefined) {
             delete global.window;
@@ -269,6 +271,63 @@ test('attachCellClickListeners keeps an open mobile sheet on same empty slot ret
     ]);
 });
 
+test('merged planned click capture keeps logical range but opens against the clicked field target', () => {
+    const wrapper = createListenerNode();
+    wrapper.getBoundingClientRect = () => ({ width: 520 });
+    const plannedField = createListenerNode();
+    plannedField.dataset.index = '14';
+    plannedField.getAttribute = (name) => name === 'data-merge-key' ? 'planned-8-14' : null;
+    plannedField.closest = (selector) => {
+        if (selector === '.planned-input') return plannedField;
+        if (selector === '.planned-input[data-merge-key]') return plannedField;
+        if (selector === '.split-cell-wrapper.split-type-planned') return wrapper;
+        return null;
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: null,
+        pendingMergedMouseSelection: { id: 'pending' },
+        getPlannedRangeInfo() {
+            return { startIndex: 8, endIndex: 14 };
+        },
+        activateMergedPlannedSelection(mergeKey, index) {
+            calls.push(['activate', mergeKey, index]);
+            return { start: 8, end: 14 };
+        },
+        preparePlannedSlotReplacementViewport(targetEl) {
+            calls.push(['prepare', targetEl]);
+            return false;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push(['open', startIndex, anchor, endIndex, options]);
+        },
+    };
+    const event = {
+        type: 'click',
+        target: plannedField,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    };
+
+    controller.handleMergedClickCapture.call(ctx, event);
+
+    const openCall = calls.find((call) => call[0] === 'open');
+    assert.ok(openCall);
+    assert.equal(openCall[1], 8);
+    assert.equal(openCall[2], wrapper);
+    assert.equal(openCall[3], 14);
+    assert.equal(openCall[4].sheetTargetEl, plannedField);
+    assert.deepEqual(calls.slice(0, 3), [
+        ['prevent'],
+        ['stop'],
+        ['activate', 'planned-8-14', 14],
+    ]);
+});
+
 test('attachCellClickListeners keeps desktop empty planned slot open immediate when no pre-scroll occurs', () => {
     const plannedField = createListenerNode();
     const wrapper = createListenerNode();
@@ -308,6 +367,7 @@ test('attachCellClickListeners keeps desktop empty planned slot open immediate w
     assert.deepEqual(calls[0], ['prepare', wrapper]);
     assert.equal(calls[1][0], 'open');
     assert.equal(calls[1][2], wrapper);
+    assert.equal(calls[1][4].sheetTargetEl, plannedField);
 });
 
 test('planned mouseup path pre-scrolls before opening empty planned slot sheet', () => {
@@ -390,6 +450,7 @@ test('planned mouseup path pre-scrolls before opening empty planned slot sheet',
         assert.equal(openCall[2], wrapper);
         assert.equal(openCall[3], 4);
         assert.equal(openCall[4].anchorMinWidth, 360);
+        assert.equal(openCall[4].sheetTargetEl, plannedField);
     } finally {
         if (previousWindow === undefined) {
             delete global.window;

@@ -637,6 +637,7 @@ class TimeTracker {
                     : 0;
                 this.openInlinePlanDropdown(start, anchor, end, {
                     anchorMinWidth,
+                    sheetTargetEl: planned,
                 });
             });
         }
