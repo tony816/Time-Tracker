@@ -150,7 +150,7 @@ test('normalizeMergeKey accepts valid keys and rejects malformed values', () => 
   assert.equal(normalizeMergeKey.call(ctx, 'actual-1.5-2'), null);
 });
 
-test('escapeHtml and createTimerField prevent script injection payload from being rendered raw', () => {
+test('escapeHtml escapes payloads and createTimerField emits no actual field markup', () => {
   const payload = `\"><img src=x onerror=alert('xss')><script>alert(1)</script>`;
   const ctx = { escapeHtml };
   ctx.escapeAttribute = function(text) { return escapeAttribute.call(ctx, text); };
@@ -162,9 +162,7 @@ test('escapeHtml and createTimerField prevent script injection payload from bein
   assert.match(escaped, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 
   const html = ctx.createTimerField(0, { actual: payload });
-  assert.ok(!html.includes('<script>'));
-  assert.ok(!html.includes('<img'));
-  assert.match(html, /&lt;img src=x onerror=alert\(&#39;xss&#39;\)&gt;/);
+  assert.equal(html, '');
 });
 
 test('updateRunningTimers transitions to today when midnight rollover detected with running timer', () => {

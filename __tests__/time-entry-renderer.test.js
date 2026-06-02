@@ -10,14 +10,13 @@ test('time-entry-renderer exports and global attach are available', () => {
     assert.equal(typeof globalThis.TimeEntryRenderer.buildRowRenderModel, 'function');
 });
 
-test('buildRowRenderModel renders non-merged row with wrapped planned/actual content', () => {
+test('buildRowRenderModel renders non-merged row with wrapped planned content only', () => {
     const row = renderer.buildRowRenderModel({
-        slot: { time: '4', planned: 'deep "work"', actual: '' },
+        slot: { time: '4', planned: 'deep "work"' },
         index: 3,
         currentDate: '2026-02-16',
         findMergeKey: () => null,
         createMergedField: () => '<div class="merged"></div>',
-        createTimerField: (index) => `<input class="input-field actual-input" data-index="${index}">`,
         wrapWithSplitVisualization: (type, _index, content) => `<div class="wrapped-${type}">${content}</div>`,
         createTimerControls: () => '<button class="timer-btn">run</button>',
         createMergedTimeField: () => '<div>merged-time</div>',
@@ -31,16 +30,17 @@ test('buildRowRenderModel renders non-merged row with wrapped planned/actual con
     assert.equal(row.routineMatch.id, 'routine-1');
 
     assert.match(row.innerHtml, /wrapped-planned/);
-    assert.match(row.innerHtml, /wrapped-actual/);
+    assert.doesNotMatch(row.innerHtml, /wrapped-actual/);
+    assert.doesNotMatch(row.innerHtml, /actual-input/);
     assert.match(row.innerHtml, /data-index="3"/);
     assert.match(row.innerHtml, /deep &quot;work&quot;/);
     assert.match(row.innerHtml, /<div class="time-label">04<\/div>/);
     assert.match(row.innerHtml, /timer-btn/);
 });
 
-test('buildRowRenderModel uses merged builders and continuation flags for merged ranges', () => {
+test('buildRowRenderModel uses planned/time merged builders and ignores actual merges', () => {
     const row = renderer.buildRowRenderModel({
-        slot: { time: '11', planned: 'plan', actual: 'actual' },
+        slot: { time: '11', planned: 'plan', actual: 'legacy actual' },
         index: 2,
         currentDate: '2026-02-16',
         findMergeKey: (type) => {
@@ -50,7 +50,6 @@ test('buildRowRenderModel uses merged builders and continuation flags for merged
             return null;
         },
         createMergedField: (mergeKey, type, index) => `[merged:${mergeKey}:${type}:${index}]`,
-        createTimerField: () => '[timer-field]',
         wrapWithSplitVisualization: (_type, _index, content) => content,
         createTimerControls: () => '[timer-controls]',
         createMergedTimeField: (mergeKey, index) => `[merged-time:${mergeKey}:${index}]`,
@@ -60,11 +59,11 @@ test('buildRowRenderModel uses merged builders and continuation flags for merged
     });
 
     assert.equal(row.hasPlannedMergeContinuation, true);
-    assert.equal(row.hasActualMergeContinuation, true);
+    assert.equal(row.hasActualMergeContinuation, false);
     assert.equal(row.plannedMergeKey, 'planned-2-4');
-    assert.equal(row.actualMergeKey, 'actual-1-3');
+    assert.equal(row.actualMergeKey, null);
 
     assert.match(row.innerHtml, /\[merged:planned-2-4:planned:2\]/);
-    assert.match(row.innerHtml, /\[merged:actual-1-3:actual:2\]/);
+    assert.doesNotMatch(row.innerHtml, /\[merged:actual-1-3:actual:2\]/);
     assert.match(row.innerHtml, /\[merged-time:time-2-4:2\]/);
 });

@@ -31,15 +31,6 @@ test('split css files exist and keep section anchors', () => {
 
     assert.ok(foundationSource.length > 0);
     assert.match(modalSource, /\.modal-overlay/);
-    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-off/);
-    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-locked/);
-    assert.match(interactionsSource, /cursor:\s*not-allowed;/);
-    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\.is-locked \.split-grid-label/);
-    assert.match(interactionsSource, /display:\s*none\s*!important;/);
-    assert.match(interactionsSource, /border-bottom-width:\s*3px\s*!important;/);
-    assert.match(interactionsSource, /border-bottom-color:\s*#fff\s*!important;/);
-    assert.match(interactionsSource, /background-clip:\s*padding-box\s*!important;/);
-    assert.match(interactionsSource, /\.split-visualization-actual \.split-grid-segment\s*\{[^}]*overflow:\s*hidden;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper \.split-visualization\s*\{[^}]*top:\s*6px;[^}]*bottom:\s*6px;[^}]*left:\s*0;[^}]*right:\s*0;[^}]*padding:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s);
     assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-planned\.split-has-data \.input-field\s*\{[^}]*pointer-events:\s*none;/s);
     assert.match(interactionsSource, /\.split-visualization-planned\s*\{[^}]*pointer-events:\s*auto;/s);
@@ -60,11 +51,10 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*3ch;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-graphic-label\.is-editing\s*\{[^}]*width:\s*100%;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*\n\s{2}width:\s*100%;/s);
-    assert.match(interactionsSource, /\.split-visualization-actual\s*\{[^}]*box-shadow:\s*none;[^}]*background:\s*transparent;/s);
-    assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.activity-log-btn/);
-    assert.match(interactionsSource, /\.split-cell-wrapper\.split-type-actual\.split-has-data \.actual-field-container\s*\{[^}]*pointer-events:\s*none;/s);
-    assert.match(interactionsSource, /\.actual-field-container\.merged-actual-main\s*\{[^}]*background-color:\s*transparent\s*!important;/s);
-    assert.match(interactionsSource, /\.activity-log-btn\s*\{[^}]*bottom:\s*2px;[^}]*min-width:\s*44px;[^}]*height:\s*18px;[^}]*padding:\s*0 10px;[^}]*font-size:\s*9px;/s);
+    assert.doesNotMatch(foundationSource, /actual-label|actual-input|summary-actual/);
+    assert.doesNotMatch(modalSource, /activity-log-btn|actual-sub-activities|actual-edit-badge/);
+    assert.doesNotMatch(interactionsSource, /activity-log-btn|split-type-actual|split-visualization-actual|actual-field-container|merged-actual|actual-row|actual-time|actual-input|actual-label|summary-actual/);
+    assert.doesNotMatch(responsiveSource, /activity-log-btn|split-type-actual|split-visualization-actual|actual-field-container|actual-row|actual-time|actual-input|actual-label|summary-actual/);
     assert.match(interactionsSource, /pointer-events:\s*none;/);
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*flex-direction:\s*column;/s);
     assert.match(interactionsSource, /\.timer-controls-container\s*\{[^}]*width:\s*100%;/s);
@@ -97,7 +87,6 @@ test('split css files exist and keep section anchors', () => {
     assert.match(responsiveSource, /Mobile responsive enhancements/);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-dropdown\.inline-plan-dropdown-sheet/s);
     assert.match(responsiveSource, /--- UX enhancement patch ---/);
-    assert.match(responsiveSource, /\.activity-log-btn\s*\{[^}]*min-width:\s*42px;[^}]*height:\s*18px;[^}]*padding:\s*0 8px;[^}]*font-size:\s*9px;[^}]*left:\s*50%;[^}]*bottom:\s*2px;/s);
 });
 
 test('index.html links split css files directly in order', () => {

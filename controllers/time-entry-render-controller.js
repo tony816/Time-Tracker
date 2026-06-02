@@ -24,7 +24,6 @@ function buildTimeEntryRowModel(slot, index) {
                 currentDate: this.currentDate,
                 findMergeKey: (type, rowIndex) => this.findMergeKey(type, rowIndex),
                 createMergedField: (mergeKey, type, rowIndex, value) => this.createMergedField(mergeKey, type, rowIndex, value),
-                createTimerField: (rowIndex, rowSlot) => this.createTimerField(rowIndex, rowSlot),
                 wrapWithSplitVisualization: (type, rowIndex, content) => this.wrapWithSplitVisualization(type, rowIndex, content),
                 createTimerControls: (rowIndex, rowSlot) => this.createTimerControls(rowIndex, rowSlot),
                 createMergedTimeField: (mergeKey, rowIndex, rowSlot) => this.createMergedTimeField(mergeKey, rowIndex, rowSlot),
@@ -35,8 +34,6 @@ function buildTimeEntryRowModel(slot, index) {
         }
 
         const plannedMergeKey = this.findMergeKey('planned', index);
-        const actualMergeKey = this.findMergeKey('actual', index);
-
         let plannedContent = plannedMergeKey
             ? this.createMergedField(plannedMergeKey, 'planned', index, slot.planned)
             : `<input type="text" class="input-field planned-input"
@@ -45,11 +42,6 @@ function buildTimeEntryRowModel(slot, index) {
                         value="${this.escapeAttribute(slot.planned)}"
                         placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
-
-        let actualContent = actualMergeKey
-            ? this.createMergedField(actualMergeKey, 'actual', index, slot.actual)
-            : this.createActualSlotField(index, slot);
-        actualContent = this.wrapWithSplitVisualization('actual', index, actualContent);
 
         const timeMergeKey = this.findMergeKey('time', index);
         const timerControls = this.createTimerControls(index, slot);
@@ -74,18 +66,16 @@ function buildTimeEntryRowModel(slot, index) {
         };
 
         const plannedRange = parseMergeRange(plannedMergeKey);
-        const actualRange = parseMergeRange(actualMergeKey);
 
         return {
             plannedMergeKey,
-            actualMergeKey,
+            actualMergeKey: null,
             routineMatch: this.getRoutineForPlannedIndex(index, this.currentDate),
             hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
-            hasActualMergeContinuation: Boolean(actualRange && index >= actualRange.start && index < actualRange.end),
+            hasActualMergeContinuation: false,
             innerHtml: `
                 ${plannedContent}
                 ${timeContent}
-                ${actualContent}
             `,
         };
     }
@@ -141,9 +131,8 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             }
 
             const plannedField = entryDiv.querySelector('.planned-input');
-            const actualField = entryDiv.querySelector('.actual-input');
 
-            if (plannedField || actualField) {
+            if (plannedField) {
                 this.attachFieldSelectionListeners(entryDiv, index);
                 this.attachCellClickListeners(entryDiv, index);
             }
@@ -162,16 +151,13 @@ function renderTimeEntries(preserveInlineDropdown = false) {
 
             // 타이머 이벤트 리스너 추가
             this.attachTimerListeners(entryDiv, index);
-            this.attachActivityLogListener(entryDiv, index);
-
             this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
         });
 
         // 병합된 시간열 컨텐츠를 병합 블록의 세로 중앙으로 정렬
         this.centerMergedTimeContent(container);
-        // 병합된 실제/계획 입력의 시각적 높이를 병합 범위에 맞게 설정
-        this.resizeMergedActualContent(container);
+        // 병합된 계획 입력의 시각적 높이를 병합 범위에 맞게 설정
         this.resizeMergedPlannedContent(container);
     }
 

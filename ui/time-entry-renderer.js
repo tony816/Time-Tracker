@@ -40,7 +40,6 @@
         const currentDate = options.currentDate || null;
         const findMergeKey = options.findMergeKey;
         const createMergedField = options.createMergedField;
-        const createTimerField = options.createTimerField;
         const wrapWithSplitVisualization = options.wrapWithSplitVisualization;
         const createTimerControls = options.createTimerControls;
         const createMergedTimeField = options.createMergedTimeField;
@@ -49,7 +48,6 @@
         const getRoutineForPlannedIndex = options.getRoutineForPlannedIndex;
 
         const plannedMergeKey = (typeof findMergeKey === 'function') ? findMergeKey('planned', index) : null;
-        const actualMergeKey = (typeof findMergeKey === 'function') ? findMergeKey('actual', index) : null;
 
         let plannedContent;
         if (plannedMergeKey && typeof createMergedField === 'function') {
@@ -59,18 +57,6 @@
         }
         if (typeof wrapWithSplitVisualization === 'function') {
             plannedContent = wrapWithSplitVisualization('planned', index, plannedContent);
-        }
-
-        let actualContent;
-        if (actualMergeKey && typeof createMergedField === 'function') {
-            actualContent = createMergedField(actualMergeKey, 'actual', index, slot.actual);
-        } else if (typeof createTimerField === 'function') {
-            actualContent = createTimerField(index, slot);
-        } else {
-            actualContent = '';
-        }
-        if (typeof wrapWithSplitVisualization === 'function') {
-            actualContent = wrapWithSplitVisualization('actual', index, actualContent);
         }
 
         const timeMergeKey = (typeof findMergeKey === 'function') ? findMergeKey('time', index) : null;
@@ -91,21 +77,19 @@
         }
 
         const plannedRange = parseMergeRange(plannedMergeKey);
-        const actualRange = parseMergeRange(actualMergeKey);
         const routineMatch = (typeof getRoutineForPlannedIndex === 'function')
             ? getRoutineForPlannedIndex(index, currentDate)
             : null;
 
         return {
             plannedMergeKey,
-            actualMergeKey,
+            actualMergeKey: null,
             routineMatch,
             hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
-            hasActualMergeContinuation: Boolean(actualRange && index >= actualRange.start && index < actualRange.end),
+            hasActualMergeContinuation: false,
             innerHtml: `
                 ${plannedContent}
                 ${timeContent}
-                ${actualContent}
             `,
         };
     }

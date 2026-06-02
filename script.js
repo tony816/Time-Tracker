@@ -1,21 +1,11 @@
 const UI_LABELS = Object.freeze({
     plannedHeader: '\uacc4\ud68d\ub41c \ud65c\ub3d9',
     timeHeader: '\uc2dc\uac04',
-    actualHeader: '\uc2e4\uc81c \ud65c\ub3d9',
     dateLabel: '\ub0a0\uc9dc:',
     todayButton: '\uc624\ub298',
     clearButton: '\ucd08\uae30\ud654',
     authRequired: '\ub85c\uadf8\uc778 \ud544\uc694',
     googleLogin: 'Google \ub85c\uadf8\uc778',
-    activityLogTitle: '\ud65c\ub3d9 \uc0c1\uc138 \uae30\ub85d',
-    timeFieldLabel: '\uc2dc\uac04',
-    memoFieldLabel: '\uba54\ubaa8',
-    actualDetailLabel: '\uc2e4\uc81c \uc138\ubd80 \ud65c\ub3d9',
-    actualEditBadge: '\uae30\ub85d \ud3b8\uc9d1',
-    addActualDetail: '+ \uc138\ubd80 \ud65c\ub3d9',
-    actualHint: '\uae30\ub85d/\ubc30\uc815\uc740 10\ubd84 \ub2e8\uc704\ub85c \uc870\uc808\ub429\ub2c8\ub2e4. \ud569\uacc4\ub294 \ubcd1\ud569 \uc2dc\uac04\uc5d0 \uc790\ub3d9 \ub9de\ucda4\ub429\ub2c8\ub2e4.',
-    saveButton: '\uc800\uc7a5',
-    cancelButton: '\ucde8\uc18c',
 });
 
 const PLANNED_ACTIVITY_CATALOG_CACHE_KEY = 'timeTracker.plannedActivityCatalog.v1';
@@ -25,9 +15,7 @@ class TimeTracker {
         this.timeSlots = [];
         this.currentDate = this.getTodayLocalDateString();
         this.lastKnownTodayDate = this.currentDate;
-        this.actualRecordingDisabled = Boolean(
-            typeof window !== 'undefined' && window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING
-        );
+        this.actualRecordingDisabled = true;
         this.selectedPlannedFields = new Set();
         this.selectedActualFields = new Set();
         this.isSelectingPlanned = false;
@@ -130,19 +118,6 @@ class TimeTracker {
         this.modalPlanStartIndex = null;
         this.modalPlanEndIndex = null;
         this.lastPlanOptionInput = 'activity';
-        this.modalActualActivities = [];
-        this.modalActualTotalSeconds = 0;
-        this.modalActualActiveRow = -1;
-        this.modalActualBaseIndex = null;
-        this.modalActualDirty = false;
-        this.modalActualHasPlanUnits = false;
-        this.modalActualPlanUnits = [];
-        this.modalActualGridUnits = [];
-        this.modalActualPlanLabelSet = new Set();
-        this.actualActivityMenu = null;
-        this.actualActivityMenuContext = null;
-        this.actualActivityMenuOutsideHandler = null;
-        this.actualActivityMenuEscHandler = null;
         this.splitColorRegistry = new Map();
         this.splitColorUsed = new Set();
         this.splitColorSeed = 0;
@@ -187,7 +162,6 @@ class TimeTracker {
         this.loadData();
         this.attachModalEventListeners();
         this.loadPlannedActivities();
-        this.attachActivityModalEventListeners();
         this.startChangeWatcher();
         this.updateAuthUI();
         this.handlePendingAuthAnalyticsCallback();
@@ -230,43 +204,18 @@ class TimeTracker {
 
         setText('.header-row .planned-label', UI_LABELS.plannedHeader);
         setText('.header-row .time-label', UI_LABELS.timeHeader);
-        setText('.header-row .actual-label', UI_LABELS.actualHeader);
         setText('label[for="date"]', UI_LABELS.dateLabel);
         setText('#todayBtn', UI_LABELS.todayButton);
         setText('#clearBtn', UI_LABELS.clearButton);
         setText('#authStatus', UI_LABELS.authRequired);
         setText('#googleAuthBtn', UI_LABELS.googleLogin);
-
-        setText('#activityLogModal .modal-header h3', UI_LABELS.activityLogTitle);
-        setText('#activityLogModal label[for="activityTime"]', UI_LABELS.timeFieldLabel);
-        setText('#activityLogModal label[for="activityDetails"]', UI_LABELS.memoFieldLabel);
-        setText('#activityLogModal .actual-sub-activities-header > label', UI_LABELS.actualDetailLabel);
-        setText('#activityLogModal .actual-edit-badge', UI_LABELS.actualEditBadge);
-        setText('#addActualActivityRow', UI_LABELS.addActualDetail);
-        setText('#activityLogModal .actual-sub-activities-hint', UI_LABELS.actualHint);
-        setText('#saveActivityLog', UI_LABELS.saveButton);
-        setText('#cancelActivityLog', UI_LABELS.cancelButton);
     }
 
     applyRecordingMode() {
-        const disabled = Boolean(this.actualRecordingDisabled);
         try {
-            document.documentElement.classList.toggle('actual-recording-disabled', disabled);
-            document.body.classList.toggle('actual-recording-disabled', disabled);
+            document.documentElement.classList.add('actual-recording-disabled');
+            document.body.classList.add('actual-recording-disabled');
         } catch (_) {}
-
-        const modeLink = document.getElementById('recordingModeLink');
-        if (!modeLink) return;
-
-        if (disabled) {
-            modeLink.href = 'index.html';
-            modeLink.textContent = '전체 기능 보기';
-            modeLink.setAttribute('aria-label', '모든 기능이 포함된 페이지로 이동');
-        } else {
-            modeLink.href = 'index.html?mode=plan-only';
-            modeLink.textContent = '실제활동 기록 제외';
-            modeLink.setAttribute('aria-label', '실제활동 기록 기능을 제외한 페이지로 이동');
-        }
     }
 
     // ?�버�?�??�의 ?�???�출 ?�퍼
@@ -702,27 +651,6 @@ class TimeTracker {
             }
         });
 
-        // Actual result input listeners share one normalization path.
-        document.getElementById('timeEntries').addEventListener('input', (e) => {
-            this.handleActualInputEvent('input', e.target, e);
-        });
-
-        document.getElementById('timeEntries').addEventListener('compositionend', (e) => {
-            this.handleActualInputEvent('compositionend', e.target, e);
-        });
-
-        document.getElementById('timeEntries').addEventListener('focusout', (e) => {
-            this.handleActualInputEvent('focusout', e.target, e);
-        });
-
-        document.getElementById('timeEntries').addEventListener('change', (e) => {
-            this.handleActualInputEvent('change', e.target, e);
-        });
-
-        document.getElementById('timeEntries').addEventListener('keyup', (e) => {
-            this.handleActualInputEvent('keyup', e.target, e);
-        });
-
         document.addEventListener('mousemove', (e) => {
             if (!this.isSelectingPlanned && this.pendingMergedMouseSelection) {
                 if (typeof e.buttons === 'number' && e.buttons === 0) {
@@ -877,11 +805,9 @@ class TimeTracker {
 
     calculateTotals() {
         let plannedSeconds = 0;
-        let actualSeconds = 0;
         const nowMs = Date.now();
 
         const handledPlannedMerges = new Set();
-        const handledActualMerges = new Set();
 
         const getTimerElapsedForSlot = (slot) => {
             if (!slot || !slot.timer) return 0;
@@ -944,74 +870,18 @@ class TimeTracker {
             }
         });
 
-        this.timeSlots.forEach((slot, index) => {
-            const actualMergeKey = this.findMergeKey('actual', index);
-            if (actualMergeKey) {
-                if (handledActualMerges.has(actualMergeKey)) return;
-                handledActualMerges.add(actualMergeKey);
-
-                const [, startStr, endStr] = actualMergeKey.split('-');
-                const start = parseInt(startStr, 10);
-                const end = parseInt(endStr, 10);
-                const baseSlot = this.timeSlots[start] || {};
-                const subActivities = this.normalizeActivitiesArray(baseSlot.activityLog && baseSlot.activityLog.subActivities);
-                let seconds = sumActivitiesSeconds(subActivities);
-                if (seconds <= 0) {
-                    const mergedValue = String((this.mergedFields.get(actualMergeKey) || baseSlot.actual || '')).trim();
-                    seconds = this.parseDurationFromText(mergedValue);
-                }
-                if (seconds == null || Number.isNaN(seconds) || seconds <= 0) {
-                    seconds = sumTimerElapsedInRange(start, end);
-                }
-                if (Number.isFinite(seconds) && seconds > 0) {
-                    actualSeconds += Math.floor(seconds);
-                }
-                return;
-            }
-
-            if (!slot) return;
-            const subActivities = this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities);
-            const subSeconds = sumActivitiesSeconds(subActivities);
-            if (subSeconds > 0) {
-                actualSeconds += subSeconds;
-                return;
-            }
-            const actualValue = String(slot.actual || '').trim();
-            if (actualValue) {
-                let seconds = this.parseDurationFromText(actualValue);
-                if (seconds == null || Number.isNaN(seconds)) {
-                    seconds = slot.timer && Number.isFinite(slot.timer.elapsed) ? slot.timer.elapsed : 0;
-                }
-                if (Number.isFinite(seconds) && seconds > 0) {
-                    actualSeconds += Math.floor(seconds);
-                }
-            } else if (slot.timer && Number.isFinite(slot.timer.elapsed) && slot.timer.elapsed > 0) {
-                actualSeconds += Math.floor(slot.timer.elapsed);
-            }
-        });
-
-        document.getElementById('totalPlanned').textContent = this.formatDurationSummary(plannedSeconds);
-        document.getElementById('totalActual').textContent = this.formatDurationSummary(actualSeconds);
-
-        const recordedSeconds = this.timeSlots.reduce((sum, slot) => sum + Math.floor(getTimerElapsedForSlot(slot)), 0);
-        this.updateAnalysis(plannedSeconds, actualSeconds, recordedSeconds);
-    }
-
-    updateAnalysis(plannedSeconds, actualSeconds, recordedSeconds) {
-        const executionRate = plannedSeconds > 0 ? Math.round((actualSeconds / plannedSeconds) * 100) : 0;
-        const executionRateElement = document.getElementById('executionRate');
-        executionRateElement.textContent = `${executionRate}%`;
-
-        executionRateElement.className = 'analysis-value';
-        if (executionRate >= 80) {
-            executionRateElement.classList.add('good');
-        } else if (executionRate >= 60) {
-            executionRateElement.classList.add('warning');
-        } else if (executionRate > 0) {
-            executionRateElement.classList.add('poor');
+        const totalPlannedEl = document.getElementById('totalPlanned');
+        if (totalPlannedEl) {
+            totalPlannedEl.textContent = this.formatDurationSummary(plannedSeconds);
         }
 
+        const recordedSeconds = this.timeSlots.reduce((sum, slot) => sum + Math.floor(getTimerElapsedForSlot(slot)), 0);
+        this.updateAnalysis(plannedSeconds, recordedSeconds);
+    }
+
+    updateAnalysis(plannedSeconds, recordedSeconds) {
         const timerUsageElement = document.getElementById('timerUsage');
+        if (!timerUsageElement) return;
         timerUsageElement.textContent = this.formatDurationSummary(recordedSeconds);
 
         timerUsageElement.className = 'analysis-value';
@@ -3947,36 +3817,15 @@ class TimeTracker {
     }
 
     createTimerField(index, slot) {
-        if (typeof this.createActualSlotField === 'function') {
-            return this.createActualSlotField(index, slot);
-        }
-        const safeValue = this.escapeHtml(slot && slot.actual);
-        const safeAttr = this.escapeAttribute(slot && slot.actual);
-        return `<div class="actual-field-container">
-                    <div class="input-field actual-input timer-result-input"
-                         data-index="${index}"
-                         data-type="actual"
-                         data-value="${safeAttr}"
-                         title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
-                </div>`;
+        return '';
     }
 
     createActualSlotField(index, slot) {
-        return this._buildActualSlotFieldMarkup(index, slot);
+        return '';
     }
 
     _buildActualSlotFieldMarkup(index, slot) {
-        const safeValue = this.escapeHtml(slot && slot.actual);
-        const safeAttr = this.escapeAttribute(slot && slot.actual);
-        return `<div class="actual-field-container">
-                    <div class="input-field actual-input timer-result-input"
-                         data-index="${index}"
-                         data-type="actual"
-                         data-value="${safeAttr}"
-                         title="${safeAttr}">${safeValue}</div>
-                    <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
-                </div>`;
+        return '';
     }
 
     createMergedTimeField(mergeKey, index, slot) {
@@ -4676,7 +4525,7 @@ class TimeTracker {
     // ?�스?�에???�간�?HH:MM(:SS) ?�는 1h/�?�??�기)??초로 ?�싱
     // 규칙: 문자???�디???�든 "마�?막으�??�장?? ?�간???�선 ?�용
     handleActualInputEvent(eventType, target, event = null) {
-        return globalThis.TimeTrackerActualInputController.handleActualInputEvent.call(this, eventType, target, event);
+        return false;
     }
 
     parseDurationFromText(text) {
@@ -4775,7 +4624,7 @@ class TimeTracker {
         const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
         if (!safeMergeKey) {
             if (type === 'actual') {
-                return this.createActualSlotField(index, { ...this.timeSlots[index], actual: value || '' });
+                return '';
             }
             return `<input type="text" class="input-field ${type}-input"
                            data-index="${index}"
@@ -4790,36 +4639,7 @@ class TimeTracker {
         const safeMergeValue = this.escapeAttribute(this.mergedFields.get(safeMergeKey) || '');
 
         if (type === 'actual') {
-            // ?�측 ?�제 ?�동 ?�의 경우 ?�력 ?�드?� 버튼???�함?�는 컨테?�너�?처리
-            if (index === start) {
-                return `<div class="actual-field-container merged-actual-main"
-                               data-merge-key="${safeMergeKey}"
-                               data-merge-start="${start}"
-                               data-merge-end="${end}">
-                            <div class="actual-merged-overlay">
-                                <div class="input-field actual-input timer-result-input merged-field"
-                                       data-index="${index}"
-                                       data-type="actual"
-                                       data-merge-key="${safeMergeKey}"
-                                       data-value="${safeMergeValue}"
-                                       title="${safeMergeValue}">${safeMergeValue}</div>
-                                <button class="activity-log-btn" data-index="${index}" aria-label="?�동 ?�세 기록 ?�기" title="?�세 기록 ?�기">기록</button>
-                            </div>
-                        </div>`;
-            } else {
-                const isLast = index === end;
-                return `<div class="actual-field-container merged-actual-secondary ${isLast ? 'merged-actual-last' : ''}"
-                               data-merge-key="${safeMergeKey}"
-                               data-merge-start="${start}"
-                               data-merge-end="${end}">
-                            <div class="input-field actual-input merged-secondary"
-                                   data-index="${index}"
-                                   data-type="actual"
-                                   data-merge-key="${safeMergeKey}"
-                                   data-value="${safeMergeValue}"
-                                   title="${safeMergeValue}">${safeMergeValue}
-                        </div>`;
-            }
+            return '';
         } else {
             // 좌측 계획 ?�도 ?��?배치 ?�버?�이�??�각??병합, ?�이?�웃 ?��?
             if (index === start) {
@@ -8191,19 +8011,19 @@ class TimeTracker {
     }
 
     attachActualModalEventHandlers() {
-        return globalThis.TimeTrackerActualModalController.attachActualModalEventHandlers.call(this);
+        return false;
     }
 
     handleActualModalListClick(event) {
-        return globalThis.TimeTrackerActualModalController.handleActualModalListClick.call(this, event);
+        return false;
     }
 
     handleActualModalListChange(event) {
-        return globalThis.TimeTrackerActualModalController.handleActualModalListChange.call(this, event);
+        return false;
     }
 
     handleActualModalListFocusIn(event) {
-        return globalThis.TimeTrackerActualModalController.handleActualModalListFocusIn.call(this, event);
+        return false;
     }
 
     addActualActivityRow(defaults = {}) {
@@ -8267,22 +8087,19 @@ class TimeTracker {
     }
 
         openActivityLogModal(index) {
-        if (this.actualRecordingDisabled) return false;
-        return globalThis.TimeTrackerActualModalController.openActivityLogModal.call(this, index);
+        return false;
     }
 
         closeActivityLogModal(options = {}) {
-        return globalThis.TimeTrackerActualModalController.closeActivityLogModal.call(this, options);
+        return false;
     }
 
-        saveActivityLogFromModal() {
-        if (this.actualRecordingDisabled) return false;
-        return globalThis.TimeTrackerActualModalController.saveActivityLogFromModal.call(this);
+    saveActivityLogFromModal() {
+        return false;
     }
 
-        attachActivityModalEventListeners() {
-        if (this.actualRecordingDisabled) return false;
-        return globalThis.TimeTrackerActualModalController.attachActivityModalEventListeners.call(this);
+    attachActivityModalEventListeners() {
+        return false;
     }
 }
 

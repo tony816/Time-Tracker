@@ -9,18 +9,6 @@
     <link rel="stylesheet" href="styles/modal.css" />
     <link rel="stylesheet" href="styles/interactions.css" />
     <link rel="stylesheet" href="styles/responsive.css" />
-    <script>
-      (function(){
-        try {
-          var params = new URLSearchParams(window.location.search || '');
-          var disabled = params.get('mode') === 'plan-only';
-          window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING = disabled;
-          document.documentElement.classList.toggle('actual-recording-disabled', disabled);
-        } catch (e) {
-          window.TIME_TRACKER_DISABLE_ACTUAL_RECORDING = false;
-        }
-      })();
-    </script>
   </head>
   <body>
     <div class="container">
@@ -37,7 +25,6 @@
               <input type="date" id="date" name="date" />
             </div>
             <div class="auth-controls">
-              <a id="recordingModeLink" class="mode-link-btn" href="index.html?mode=plan-only">실제활동 기록 제외</a>
               <span id="authStatus" class="auth-status">로그인 필요</span>
               <button id="googleAuthBtn" type="button" class="auth-btn">Google 로그인</button>
             </div>
@@ -50,7 +37,6 @@
           <div class="header-row">
             <div class="planned-label">계획된 활동</div>
             <div class="time-label">시간</div>
-            <div class="actual-label">실제 활동</div>
           </div>
 
           <div class="time-entries" id="timeEntries">
@@ -61,15 +47,10 @@
             <div class="summary-row">
               <div class="summary-planned" id="totalPlanned">0시간</div>
               <div class="summary-label">합계</div>
-              <div class="summary-actual" id="totalActual">0시간</div>
             </div>
             <div class="analysis-row">
               <div class="analysis-label">분석</div>
               <div class="analysis-content" id="analysisContent">
-                <div class="analysis-item">
-                  <span class="analysis-metric">실행률:</span>
-                  <span class="analysis-value" id="executionRate">0%</span>
-                </div>
                 <div class="analysis-item">
                   <span class="analysis-metric">타이머 기록:</span>
                   <span class="analysis-value" id="timerUsage">0시간</span>
@@ -82,49 +63,6 @@
 
       <div class="actions">
         <button id="clearBtn">초기화</button>
-      </div>
-    </div>
-
-    <!-- 활동 상세 기록 모달 -->
-    <div id="activityLogModal" class="modal-overlay" style="display: none;">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>활동 상세 기록</h3>
-          <button id="closeActivityModal" class="close-btn">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="activityTime">시간</label>
-            <input type="text" id="activityTime" readonly>
-          </div>
-          
-          <div class="form-group">
-            <label for="activityDetails">메모</label>
-            <textarea id="activityDetails" rows="8"></textarea>
-          </div>
-          <div class="form-group actual-sub-activities">
-            <div class="actual-sub-activities-header">
-              <label>실제 세부 활동</label>
-              <span class="actual-edit-badge">기록 편집</span>
-            </div>
-            <div class="sub-activities-group">
-              <div class="sub-activities-summary">
-                <div>총 시간: <span id="actualSplitTotalTime">0시간</span></div>
-                <div>배정 합계: <span id="actualSplitUsedTime">0시간</span></div>
-              </div>
-              <div id="actualActivitiesList" class="sub-activities-list"></div>
-              <div class="sub-activities-actions actual-sub-activities-actions">
-                <button type="button" id="addActualActivityRow" class="sub-activity-action-btn">+ 세부 활동</button>
-                <span id="actualActivitiesNotice" class="sub-activities-notice"></span>
-              </div>
-              <div class="actual-sub-activities-hint">기록/배정은 10분 단위로 조절됩니다. 합계는 병합 시간에 자동 맞춤됩니다.</div>
-            </div>
-          </div>
-          <div class="form-actions">
-            <button id="saveActivityLog" class="save-btn">저장</button>
-            <button id="cancelActivityLog" class="cancel-btn">취소</button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -160,11 +98,8 @@
     <script charset="UTF-8" src="controllers/timer-controller.js"></script>
     <script charset="UTF-8" src="infra/storage-adapter.js"></script>
     <script charset="UTF-8" src="ui/time-entry-renderer.js"></script>
-    <script charset="UTF-8" src="ui/actual-activity-list-renderer.js"></script>
     <script charset="UTF-8" src="ui/time-control-renderer.js"></script>
     <script charset="UTF-8" src="controllers/controller-state-access.js"></script>
-    <script charset="UTF-8" src="controllers/actual-input-controller.js"></script>
-    <script charset="UTF-8" src="controllers/actual-modal-controller.js"></script>
     <script charset="UTF-8" src="controllers/inline-plan-dropdown-controller.js"></script>
     <script charset="UTF-8" src="controllers/planned-catalog-routine-controller.js"></script>
     <script charset="UTF-8" src="controllers/planned-editor-controller.js"></script>

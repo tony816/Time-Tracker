@@ -57,7 +57,7 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 40px;
     }
 
     .header-row > div,
@@ -78,11 +78,6 @@
     .input-field {
         padding: 6px 8px;
         font-size: 14px;
-    }
-
-    .actual-field-container {
-        padding: 6px 8px;
-        gap: 6px;
     }
 
     .timer-result-input {
@@ -260,71 +255,13 @@
 
     .timesheet,
     .time-entries,
-    .time-entry,
-    .split-cell-wrapper.split-type-actual.split-has-data {
+    .time-entry {
         overflow: visible;
-    }
-
-    .activity-log-btn {
-        min-width: 42px;
-        height: 18px;
-        padding: 0 8px;
-        font-size: 9px;
-        left: 50%;
-        bottom: 2px;
-    }
-
-    .time-entry .activity-log-btn,
-    .actual-field-container .activity-log-btn,
-    .split-cell-wrapper.split-type-actual .activity-log-btn {
-        min-width: 22px;
-        height: 9px;
-        padding: 0 4px;
-        font-size: 6px;
-        border-radius: 6px 6px 3px 3px;
-    }
-
-    .split-cell-wrapper .split-visualization.split-visualization-actual {
-        top: 6px;
-        bottom: auto;
-        height: 44px;
-        justify-content: flex-start;
-        overflow: visible;
-        z-index: 14;
-        box-sizing: border-box;
-    }
-
-    .split-visualization-actual .split-title-band {
-        display: none;
-    }
-
-    .split-visualization-actual .split-grid {
-        width: auto;
-        flex: 0 0 auto;
-        height: 100%;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        grid-template-rows: repeat(2, minmax(0, 1fr));
-        grid-auto-rows: minmax(0, 1fr);
-        align-content: stretch;
-        row-gap: 0;
-        column-gap: 0;
-        margin: 0 6px !important;
-        box-sizing: border-box;
     }
 
     .split-visualization-planned .split-title-segment,
-    .split-visualization-planned .split-grid-segment,
-    .split-visualization-actual .split-grid-segment {
+    .split-visualization-planned .split-grid-segment {
         border-radius: 8px;
-    }
-
-    .split-visualization-actual .split-grid-segment {
-        aspect-ratio: auto;
-        height: 100%;
-        min-height: 0;
-        padding: 0;
-        border-bottom: none;
-        background-clip: border-box;
     }
 
     .analysis-row {
@@ -530,9 +467,6 @@
         grid-template-columns: minmax(0, 1fr) minmax(88px, 0.6fr) 56px;
     }
 
-    .sub-activity-row.actual-row {
-        grid-template-columns: minmax(0, 1fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) 48px;
-    }
 }
 
 @media (max-width: 480px) {
@@ -553,7 +487,7 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 40px;
     }
 
     .header-row > div,
@@ -608,10 +542,6 @@
         font-size: 8px;
     }
 
-    .activity-log-btn {
-        left: 50%;
-    }
-
     .analysis-row {
         grid-template-columns: 56px 1fr;
     }
@@ -635,20 +565,8 @@
         max-width: 92vw;
     }
 
-    .sub-activity-row,
-    .sub-activity-row.actual-row {
+    .sub-activity-row {
         grid-template-columns: 1fr;
-    }
-
-    .actual-row-actions {
-        flex-direction: row;
-        justify-content: flex-start;
-        gap: 6px;
-    }
-
-    .actual-row-actions .sub-activity-action-btn,
-    .actual-row-actions .actual-remove-btn {
-        width: auto;
     }
 }
 
@@ -656,7 +574,7 @@
     .header-row,
     .time-entry,
     .summary-row {
-        grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) 36px;
     }
 
     .time-slot-container .time-label {
@@ -714,10 +632,6 @@
 .timer-btn { min-width:0; width:100%; height:16px; border-radius:4px; font-size:8px; font-weight:700; padding:0; }
 .timer-display { width:100%; min-width:0; max-width:100%; font-size:7px; }
 
-@media (hover: none), (pointer: coarse) {
-  .activity-log-btn { opacity: 1; pointer-events: auto; left: 50%; }
-}
-
 .notification-region { position:fixed; top:14px; right:14px; z-index:5000; display:flex; flex-direction:column; gap:8px; }
 .toast { display:flex; align-items:center; gap:10px; min-width:220px; max-width:360px; padding:10px 12px; border-radius:10px; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.16); animation:toastIn .22s ease; }
 .toast-info { background:#2f7ad0; }
@@ -730,11 +644,11 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 .toast-action:focus-visible,
-.timer-btn:focus-visible,
-.activity-log-btn:focus-visible {
+.timer-btn:focus-visible {
   outline: 3px solid #1f6feb;
   outline-offset: 2px;
 }
+
 .toast-exit { animation:toastOut .22s ease forwards; }
 @keyframes toastIn { from { opacity:0; transform:translateY(-6px);} to { opacity:1; transform:translateY(0);} }
 @keyframes toastOut { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-5px);} }
@@ -826,22 +740,3 @@ textarea:focus-visible,
         padding: 14px 14px 12px;
     }
 }
-ex; align-items:center; gap:10px; min-width:220px; max-width:360px; padding:10px 12px; border-radius:10px; color:#fff; box-shadow:0 8px 20px rgba(0,0,0,.16); animation:toastIn .22s ease; }
-.toast-info { background:#2f7ad0; }
-.toast-success { background:#2d9d61; }
-.toast-warn { background:#b7791f; }
-.toast-error { background:#c0392b; }
-.toast-action { margin-left:auto; border:none; background:rgba(255,255,255,.2); color:#fff; border-radius:6px; padding:4px 8px; cursor:pointer; }
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-.toast-action:focus-visible,
-.timer-btn:focus-visible,
-.activity-log-btn:focus-visible {
-  outline: 3px solid #1f6feb;
-  outline-offset: 2px;
-}
-.toast-exit { animation:toastOut .22s ease forwards; }
-@keyframes toastIn { from { opacity:0; transform:translateY(-6px);} to { opacity:1; transform:translateY(0);} }
-@keyframes toastOut { from { opacity:1; transform:translateY(0);} to { opacity:0; transform:translateY(-5px);} }
