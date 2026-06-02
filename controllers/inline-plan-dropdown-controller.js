@@ -1149,8 +1149,37 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
         return anchor;
     }
 
+    function isMobileInlinePlanInputContext(ctx) {
+        return Boolean(
+            ctx
+            && typeof ctx.isInlinePlanMobileInputContext === 'function'
+            && ctx.isInlinePlanMobileInputContext()
+        );
+    }
+
+    function shouldKeepInlinePlanOpenAfterSelection(ctx, options = {}) {
+        if (!options || !options.keepOpen) return false;
+        if (!isMobileInlinePlanInputContext(ctx)) return true;
+        return Boolean(options.keepOpenOnMobile);
+    }
+
+    function blurInlinePlanActiveInput(ctx) {
+        if (!ctx || !ctx.inlinePlanDropdown || typeof document === 'undefined') return false;
+        const activeEl = document.activeElement || null;
+        if (!activeEl || typeof activeEl.blur !== 'function') return false;
+        const dropdown = ctx.inlinePlanDropdown;
+        if (dropdown.contains && !dropdown.contains(activeEl)) return false;
+        try {
+            activeEl.blur();
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
         if (!activityItem) return;
+        const keepOpenAfterSelection = shouldKeepInlinePlanOpenAfterSelection(this, options);
 
         if (this.inlinePlanTarget && this.inlinePlanTarget.mode === 'plan-segment-replace') {
             const baseIndex = Number(this.inlinePlanTarget.startIndex);
@@ -1168,7 +1197,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
                     this.renderInlinePlanDropdownOptions();
                 }
             }
-            this.renderTimeEntries(Boolean(options.keepOpen));
+            this.renderTimeEntries(keepOpenAfterSelection);
             this.calculateTotals();
             this.autoSave();
             this.closeInlinePlanDropdown();
@@ -1265,10 +1294,10 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             }
         }
 
-        this.renderTimeEntries(Boolean(options.keepOpen));
+        this.renderTimeEntries(keepOpenAfterSelection);
         this.calculateTotals();
         this.autoSave();
-        if (options.keepOpen && this.inlinePlanTarget) {
+        if (keepOpenAfterSelection && this.inlinePlanTarget) {
             const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
                 || document.querySelector(`[data-index="${startIndex}"]`);
             if (anchor) {
@@ -2491,6 +2520,7 @@ function applyInlinePlanBackgroundContext() {
 
 function closeInlinePlanDropdown() {
         const closingTarget = this.inlinePlanTarget || null;
+        blurInlinePlanActiveInput(this);
         this.closeInlinePriorityMenu();
         this.closeRoutineMenu();
         this.closePlanActivityMenu();
@@ -2594,6 +2624,7 @@ function applyInlinePlanSelection(label, options = {}) {
         if (!this.inlinePlanTarget) return;
         const normalized = this.normalizeActivityText ? this.normalizeActivityText(label) : String(label || '').trim();
         if (!normalized) return;
+        const keepOpenAfterSelection = shouldKeepInlinePlanOpenAfterSelection(this, options);
 
         if (this.inlinePlanTarget.mode === 'plan-segment-replace') {
             const activityItem = (this.plannedActivities || []).find((item) => getCatalogItemLabel.call(this, item) === normalized)
@@ -2650,10 +2681,10 @@ function applyInlinePlanSelection(label, options = {}) {
             }
         }
 
-        this.renderTimeEntries(Boolean(options.keepOpen));
+        this.renderTimeEntries(keepOpenAfterSelection);
         this.calculateTotals();
         this.autoSave();
-        if (options.keepOpen && this.inlinePlanTarget) {
+        if (keepOpenAfterSelection && this.inlinePlanTarget) {
             const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
                 || document.querySelector(`[data-index="${startIndex}"]`);
             if (anchor) {

@@ -14,6 +14,14 @@ const startPlanSegmentInlineTextEdit = buildMethod(
     'startPlanSegmentInlineTextEdit(labelEl, index, event, options = {})',
     '(labelEl, index, event, options = {})'
 );
+const openPlanSegmentMobileTextEditor = buildMethod(
+    'openPlanSegmentMobileTextEditor(labelEl, index, event, options = {})',
+    '(labelEl, index, event, options = {})'
+);
+const closePlanSegmentMobileTextEditor = buildMethod(
+    'closePlanSegmentMobileTextEditor(options = {})',
+    '(options = {})'
+);
 const startPlanSegmentActivityEdit = buildMethod(
     'startPlanSegmentActivityEdit(labelEl, index, event)',
     '(labelEl, index, event)'
@@ -80,6 +88,18 @@ function createElementNode(tagName = 'span') {
         querySelector(selector) {
             return findDescendant(this, selector);
         },
+        contains(target) {
+            if (target === this) return true;
+            const stack = Array.isArray(this.children) ? this.children.slice() : [];
+            while (stack.length) {
+                const candidate = stack.shift();
+                if (candidate === target) return true;
+                if (candidate && Array.isArray(candidate.children)) {
+                    stack.push(...candidate.children);
+                }
+            }
+            return false;
+        },
         insertAdjacentElement(position, child) {
             assert.equal(position, 'afterend');
             child.parentNode = this.parentNode || this;
@@ -108,6 +128,13 @@ function createElementNode(tagName = 'span') {
         },
         focus() {
             this.focused = true;
+            if (globalThis.document) globalThis.document.activeElement = this;
+        },
+        blur() {
+            this.focused = false;
+            if (globalThis.document && globalThis.document.activeElement === this) {
+                globalThis.document.activeElement = null;
+            }
         },
         select() {
             this.selected = true;
@@ -251,6 +278,12 @@ function createTitleEditHarness(options = {}) {
         startPlanSegmentInlineTextEdit(labelEl, rowIndex, event, options = {}) {
             return startPlanSegmentInlineTextEdit.call(this, labelEl, rowIndex, event, options);
         },
+        openPlanSegmentMobileTextEditor(labelEl, rowIndex, event, options = {}) {
+            return openPlanSegmentMobileTextEditor.call(this, labelEl, rowIndex, event, options);
+        },
+        closePlanSegmentMobileTextEditor(options = {}) {
+            return closePlanSegmentMobileTextEditor.call(this, options);
+        },
         startPlanSegmentActivityEdit(labelEl, rowIndex, event) {
             return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event);
         },
@@ -305,6 +338,128 @@ test('clicking plan segment title text opens inline editing UI', () => {
         assert.equal(hasNodeClass(harness.outerLabel, 'is-editing'), false);
         assert.equal(input.style.width, '52px');
         assert.equal(input.style.minWidth, '6ch');
+    });
+});
+
+function withMobileEditorDocument(run) {
+    const originalDocument = globalThis.document;
+    const body = createElementNode('body');
+    body.classList = {
+        add(name) {
+            const tokens = getNodeClasses(body);
+            if (!tokens.includes(name)) tokens.push(name);
+            body.className = tokens.join(' ');
+        },
+        remove(name) {
+            body.className = getNodeClasses(body).filter(token => token !== name).join(' ');
+        },
+        contains(name) {
+            return getNodeClasses(body).includes(name);
+        },
+    };
+    globalThis.document = {
+        activeElement: null,
+        body,
+        createElement(tagName) {
+            return createElementNode(tagName);
+        },
+    };
+    try {
+        return run(body);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+}
+
+test('mobile segment title tap opens sheet editor instead of inline cell input', () => {
+    withMobileEditorDocument((body) => {
+        const harness = createTitleEditHarness({
+            ctx: {
+                isInlinePlanMobileInputContext() {
+                    return true;
+                },
+                scheduleInlinePlanInputVisibilitySync(inputEl) {
+                    harness.calls.push(['visibility', inputEl]);
+                },
+            },
+        });
+
+        const opened = startPlanSegmentActivityEdit.call(harness.ctx, harness.label, 0, {
+            type: 'click',
+            button: 0,
+            target: harness.label,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(opened, true);
+        assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
+        assert.ok(harness.ctx.mobilePlanSegmentEditor);
+        assert.equal(body.children.length, 2);
+        const editor = harness.ctx.mobilePlanSegmentEditor.root;
+        const input = editor.querySelector('.plan-segment-mobile-editor-input');
+        assert.ok(input);
+        assert.equal(input.value, 'Focus');
+        assert.equal(input.focused, true);
+        assert.equal(input.selected, true);
+        assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), true);
+    });
+});
+
+test('mobile segment sheet editor saves and cancels without cell input', () => {
+    withMobileEditorDocument(() => {
+        const saveHarness = createTitleEditHarness({
+            ctx: {
+                isInlinePlanMobileInputContext() {
+                    return true;
+                },
+            },
+        });
+        startPlanSegmentActivityEdit.call(saveHarness.ctx, saveHarness.label, 0, {
+            type: 'click',
+            button: 0,
+            target: saveHarness.label,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        const saveInput = saveHarness.ctx.mobilePlanSegmentEditor.root.querySelector('.plan-segment-mobile-editor-input');
+        saveInput.value = 'Deep Work';
+        saveInput.dispatchEvent({
+            type: 'keydown',
+            key: 'Enter',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].label, 'Deep Work');
+        assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].activityText, 'Deep Work');
+        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, null);
+
+        const cancelHarness = createTitleEditHarness({
+            ctx: {
+                isInlinePlanMobileInputContext() {
+                    return true;
+                },
+            },
+        });
+        startPlanSegmentActivityEdit.call(cancelHarness.ctx, cancelHarness.label, 0, {
+            type: 'click',
+            button: 0,
+            target: cancelHarness.label,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        const cancelInput = cancelHarness.ctx.mobilePlanSegmentEditor.root.querySelector('.plan-segment-mobile-editor-input');
+        cancelInput.value = 'Canceled';
+        cancelInput.dispatchEvent({
+            type: 'keydown',
+            key: 'Escape',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(cancelHarness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
+        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, null);
     });
 });
 

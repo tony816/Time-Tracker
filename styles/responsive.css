@@ -740,3 +740,60 @@ textarea:focus-visible,
         padding: 14px 14px 12px;
     }
 }
+
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+    body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear {
+        pointer-events: none;
+    }
+
+    body.inline-plan-sheet-open .inline-plan-sheet-context-target {
+        z-index: 60;
+        pointer-events: auto;
+    }
+
+    body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-sheet-context-target .planned-input {
+        pointer-events: auto;
+    }
+
+    .inline-plan-input,
+    .plan-segment-title-edit-input,
+    .plan-segment-mobile-editor-input,
+    .activity-child-composer-input,
+    .sub-activity-row input,
+    .sub-activity-row select,
+    #planTitleInput,
+    .plan-title-input,
+    .timer-result-input,
+    .input-field {
+        font-size: 16px;
+    }
+
+    .activity-child-composer-input,
+    .sub-activity-row input,
+    .sub-activity-row select,
+    .timer-result-input,
+    .input-field {
+        min-height: 34px;
+    }
+
+    .plan-segment-resize-handle {
+        width: 40px;
+        opacity: 1;
+        touch-action: none;
+    }
+
+    .plan-segment-resize-handle-left {
+        left: -20px;
+    }
+
+    .plan-segment-resize-handle-right {
+        right: -20px;
+    }
+
+    .plan-segment-boundary-resize-handle-line,
+    .plan-segment-resize-handle::after {
+        left: 18px;
+        width: 4px;
+        background: rgba(30, 64, 175, 0.72);
+    }
+}

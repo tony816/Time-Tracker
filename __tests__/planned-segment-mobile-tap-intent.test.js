@@ -43,6 +43,10 @@ const prepareInlinePlanSheetTargetViewport = buildMethod(
     'prepareInlinePlanSheetTargetViewport(targetEl)',
     '(targetEl)'
 );
+const shouldUseInlinePlanSheetViewportCorrection = buildMethod(
+    'shouldUseInlinePlanSheetViewportCorrection()',
+    '()'
+);
 const preparePlannedSlotReplacementViewport = buildMethod(
     'preparePlannedSlotReplacementViewport(slotEl)',
     '(slotEl)'
@@ -259,6 +263,7 @@ function createHarness(options = {}) {
             return index;
         },
         isCoarsePlanSegmentPointerContext,
+        shouldUseInlinePlanSheetViewportCorrection,
         resolvePlanSegmentTapIntent,
         getPlanSegmentTitleEditElement,
         getPlanSegmentActivityEditElement,
@@ -483,6 +488,7 @@ test('mobile empty planned slot pre-scroll uses the shared sheet target viewport
         const ctx = {
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
             prepareInlinePlanSheetTargetViewport,
         };
 
@@ -509,6 +515,7 @@ test('mobile pre-scroll prefers visualViewport metrics when available', () => {
         const ctx = {
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
             prepareInlinePlanSheetTargetViewport,
         };
 
@@ -535,6 +542,7 @@ test('inline plan sheet correction follows mobile input predicate at 700px', () 
         dropdown.getBoundingClientRect = () => rect(0, 260, 300, 600);
         const ctx = {
             inlinePlanDropdown: dropdown,
+            shouldUseInlinePlanSheetViewportCorrection,
             isInlinePlanMobileInputContext() {
                 return true;
             },
@@ -566,6 +574,7 @@ test('mobile empty planned slot pre-scroll uses wrapper and input as one target 
         const ctx = {
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
             prepareInlinePlanSheetTargetViewport,
         };
 
@@ -590,6 +599,7 @@ test('mobile empty planned slot pre-scroll falls back to row rect when slot rect
         const ctx = {
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
             prepareInlinePlanSheetTargetViewport,
         };
 
@@ -611,6 +621,7 @@ test('mobile empty planned slot already safe does not pre-scroll', () => {
         const ctx = {
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
             prepareInlinePlanSheetTargetViewport,
         };
 
@@ -634,6 +645,7 @@ test('open mobile sheet correction uses actual sheet top for minimal target visi
             inlinePlanDropdown: dropdown,
             coarsePlanSegmentPointerContext: true,
             isCoarsePlanSegmentPointerContext,
+            shouldUseInlinePlanSheetViewportCorrection,
         };
 
         assert.equal(correctInlinePlanSheetTargetViewport.call(ctx, target), true);

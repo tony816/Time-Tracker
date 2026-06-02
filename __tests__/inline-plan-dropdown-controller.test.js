@@ -982,6 +982,60 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
     ]);
 });
 
+test('closeInlinePlanDropdown blurs active sheet input before teardown', () => {
+    const originalDocument = globalThis.document;
+    const activeInput = {
+        blurred: false,
+        blur() {
+            this.blurred = true;
+            if (globalThis.document) globalThis.document.activeElement = null;
+        },
+    };
+    const dropdown = {
+        contains(target) {
+            return target === activeInput;
+        },
+        querySelector() {
+            return null;
+        },
+        removeEventListener() {},
+    };
+    const removedBodyClasses = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        closeInlinePriorityMenu() {},
+        closeRoutineMenu() {},
+        closePlanActivityMenu() {},
+        closePlanTitleMenu() {},
+        cleanupInlinePlanSheetTouchDismiss() {},
+    };
+    globalThis.document = {
+        activeElement: activeInput,
+        removeEventListener() {},
+        body: {
+            classList: {
+                remove(name) {
+                    removedBodyClasses.push(name);
+                },
+            },
+        },
+        getElementById() {
+            return null;
+        },
+    };
+
+    try {
+        controller.closeInlinePlanDropdown.call(ctx);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(activeInput.blurred, true);
+    assert.equal(ctx.inlinePlanDropdown, null);
+    assert.deepEqual(removedBodyClasses, ['inline-plan-sheet-open']);
+});
+
 function createInlineSelectionNode(tagName) {
     const listeners = {};
     const attributes = {};
@@ -1465,6 +1519,72 @@ test('activity chip selection uses regular inline target before selected segment
     assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'A');
     assert.equal(harness.ctx.timeSlots[1].planned, 'Fill');
     assert.equal(harness.ctx.timeSlots[1].planActivities[0].label, 'Fill');
+});
+
+test('mobile activity chip selection closes sheet despite chip keep-open request', () => {
+    const harness = createInlineSelectionHarness({
+        ctx: {
+            isInlinePlanMobileInputContext() {
+                return true;
+            },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(harness.ctx.timeSlots[0].planned, 'Fill');
+    assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Fill');
+    assert.deepEqual(harness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+    assert.equal(harness.ctx.inlinePlanTarget, null);
+});
+
+test('mobile text selection closes sheet unless keep-open is explicit for mobile', () => {
+    const mobileHarness = createInlineSelectionHarness({
+        ctx: {
+            isInlinePlanMobileInputContext() {
+                return true;
+            },
+        },
+    });
+
+    applyInlinePlanSelectionWrapper.call(mobileHarness.ctx, 'Typed', { keepOpen: true });
+
+    assert.equal(mobileHarness.ctx.timeSlots[0].planned, 'Typed');
+    assert.deepEqual(mobileHarness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+    assert.equal(mobileHarness.ctx.inlinePlanTarget, null);
+
+    const explicitHarness = createInlineSelectionHarness({
+        ctx: {
+            isInlinePlanMobileInputContext() {
+                return true;
+            },
+            shouldAutofocusInlinePlanInput() {
+                return false;
+            },
+        },
+    });
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="0"] .planned-input') return null;
+            if (selector === '[data-index="0"]') return {};
+            return null;
+        },
+    };
+    try {
+        applyInlinePlanSelectionWrapper.call(explicitHarness.ctx, 'Typed', {
+            keepOpen: true,
+            keepOpenOnMobile: true,
+        });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(explicitHarness.ctx.timeSlots[0].planned, 'Typed');
+    assert.deepEqual(explicitHarness.calls, [['render', true], ['totals'], ['save'], ['position']]);
+    assert.notEqual(explicitHarness.ctx.inlinePlanTarget, null);
 });
 
 test('renderInlinePlanDropdownOptions uses split parent chips and keeps accessible labels', () => {

@@ -6081,6 +6081,16 @@ class TimeTracker {
         const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
         const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
         const previousTitle = String(labelEl.textContent || '').trim();
+        const isMobileInputContext = typeof this.isInlinePlanMobileInputContext === 'function'
+            && this.isInlinePlanMobileInputContext();
+        if (isMobileInputContext && typeof this.openPlanSegmentMobileTextEditor === 'function') {
+            return this.openPlanSegmentMobileTextEditor(labelEl, index, event, {
+                ...options,
+                baseIndex,
+                segmentIndex,
+                previousTitle,
+            });
+        }
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'plan-segment-title-edit-input';
@@ -6157,6 +6167,158 @@ class TimeTracker {
         input.addEventListener('click', (clickEvent) => {
             clickEvent.stopPropagation();
         });
+        return true;
+    }
+    openPlanSegmentMobileTextEditor(labelEl, index, event, options = {}) {
+        if (!labelEl || typeof document === 'undefined') return false;
+        const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
+        if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return false;
+        const baseIndex = Number.isInteger(options.baseIndex)
+            ? options.baseIndex
+            : (this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index);
+        const parsedSegmentIndex = Number.isInteger(options.segmentIndex)
+            ? options.segmentIndex
+            : parseInt(segmentEl.dataset.segmentIndex || '', 10);
+        const segmentIndex = Number.isInteger(parsedSegmentIndex) ? parsedSegmentIndex : null;
+        const previousTitle = String(
+            options.previousTitle != null
+                ? options.previousTitle
+                : (labelEl.textContent || '')
+        ).trim();
+        const applyMethod = options.applyMethod || 'applyPlanSegmentTitleEdit';
+
+        if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
+            this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
+        }
+        if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+            this.closeInlinePlanDropdown();
+        }
+
+        const backdrop = document.createElement('div');
+        backdrop.className = 'inline-plan-backdrop plan-segment-mobile-editor-backdrop';
+        const sheet = document.createElement('div');
+        sheet.className = 'plan-segment-mobile-editor inline-plan-dropdown inline-plan-dropdown-sheet';
+        sheet.setAttribute('role', 'dialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
+
+        const header = document.createElement('div');
+        header.className = 'plan-segment-mobile-editor-header';
+        const title = document.createElement('div');
+        title.className = 'plan-segment-mobile-editor-title';
+        title.textContent = options.ariaLabel || 'Edit planned segment text';
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'plan-segment-mobile-editor-close';
+        closeBtn.setAttribute('aria-label', 'Close');
+        closeBtn.textContent = '×';
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'plan-segment-mobile-editor-input';
+        input.value = previousTitle;
+        input.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
+
+        const actions = document.createElement('div');
+        actions.className = 'plan-segment-mobile-editor-actions';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'plan-segment-mobile-editor-cancel';
+        cancelBtn.textContent = 'Cancel';
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'plan-segment-mobile-editor-save';
+        saveBtn.textContent = 'Save';
+        actions.appendChild(cancelBtn);
+        actions.appendChild(saveBtn);
+
+        sheet.appendChild(header);
+        sheet.appendChild(input);
+        sheet.appendChild(actions);
+
+        const closeEditor = (save) => {
+            const rawValue = input.value;
+            if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
+                this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
+            }
+            if (!save) return;
+            const normalized = this.normalizeActivityText
+                ? this.normalizeActivityText(rawValue || '')
+                : String(rawValue || '').trim();
+            if (!normalized) return;
+            if (typeof this[applyMethod] === 'function') {
+                this[applyMethod](baseIndex, segmentIndex, normalized);
+            }
+        };
+
+        sheet.addEventListener('click', (sheetEvent) => {
+            sheetEvent.stopPropagation();
+        });
+        backdrop.addEventListener('click', () => closeEditor(false));
+        closeBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
+            closeEditor(false);
+        });
+        cancelBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
+            closeEditor(false);
+        });
+        saveBtn.addEventListener('click', (clickEvent) => {
+            clickEvent.preventDefault();
+            clickEvent.stopPropagation();
+            closeEditor(true);
+        });
+        input.addEventListener('keydown', (keyEvent) => {
+            if (keyEvent.key === 'Enter' && !keyEvent.isComposing) {
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                closeEditor(true);
+            } else if (keyEvent.key === 'Escape') {
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                closeEditor(false);
+            }
+        });
+
+        document.body.appendChild(backdrop);
+        document.body.appendChild(sheet);
+        document.body.classList.add('inline-plan-sheet-open');
+        this.mobilePlanSegmentEditor = { root: sheet, backdrop, input, labelEl };
+
+        if (typeof input.focus === 'function') {
+            input.focus();
+            if (typeof input.select === 'function') input.select();
+        }
+        if (typeof this.scheduleInlinePlanInputVisibilitySync === 'function') {
+            this.scheduleInlinePlanInputVisibilitySync(input);
+        }
+        return true;
+    }
+    closePlanSegmentMobileTextEditor(options = {}) {
+        const editor = this.mobilePlanSegmentEditor || null;
+        if (!editor) return false;
+        const doc = typeof document !== 'undefined' ? document : null;
+        const activeEl = doc && doc.activeElement ? doc.activeElement : null;
+        if (activeEl && editor.root && editor.root.contains && editor.root.contains(activeEl) && typeof activeEl.blur === 'function') {
+            try { activeEl.blur(); } catch (_) {}
+        }
+        if (editor.root && editor.root.parentNode) {
+            editor.root.parentNode.removeChild(editor.root);
+        }
+        if (editor.backdrop && editor.backdrop.parentNode) {
+            editor.backdrop.parentNode.removeChild(editor.backdrop);
+        }
+        this.mobilePlanSegmentEditor = null;
+        if (!this.inlinePlanDropdown && doc && doc.body) {
+            doc.body.classList.remove('inline-plan-sheet-open');
+        }
+        if (options.restoreFocus && editor.labelEl && typeof editor.labelEl.focus === 'function') {
+            editor.labelEl.focus();
+        }
         return true;
     }
     startPlanSegmentActivityEdit(labelEl, index, event) {
@@ -6279,20 +6441,17 @@ class TimeTracker {
         targetEl.className = current.join(' ');
         return true;
     }
+    shouldUseInlinePlanSheetViewportCorrection() {
+        if (typeof this.isInlinePlanMobileInputContext === 'function') {
+            return this.isInlinePlanMobileInputContext();
+        }
+        return this.isCoarsePlanSegmentPointerContext
+            ? this.isCoarsePlanSegmentPointerContext()
+            : false;
+    }
     prepareInlinePlanSheetTargetViewport(targetEl) {
         if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
-        const shouldCorrect = typeof this.shouldUseInlinePlanSheetViewportCorrection === 'function'
-            ? this.shouldUseInlinePlanSheetViewportCorrection()
-            : (
-                typeof this.isInlinePlanMobileInputContext === 'function'
-                    ? this.isInlinePlanMobileInputContext()
-                    : (
-                        this.isCoarsePlanSegmentPointerContext
-                            ? this.isCoarsePlanSegmentPointerContext()
-                            : false
-                    )
-            );
-        if (!shouldCorrect) return false;
+        if (!this.shouldUseInlinePlanSheetViewportCorrection()) return false;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         const doc = (typeof document !== 'undefined') ? document : null;
         const visualViewport = root && root.visualViewport ? root.visualViewport : null;
@@ -6349,18 +6508,7 @@ class TimeTracker {
         if (!this.inlinePlanDropdown || !this.inlinePlanDropdown.classList || !this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
             return false;
         }
-        const shouldCorrect = typeof this.shouldUseInlinePlanSheetViewportCorrection === 'function'
-            ? this.shouldUseInlinePlanSheetViewportCorrection()
-            : (
-                typeof this.isInlinePlanMobileInputContext === 'function'
-                    ? this.isInlinePlanMobileInputContext()
-                    : (
-                        this.isCoarsePlanSegmentPointerContext
-                            ? this.isCoarsePlanSegmentPointerContext()
-                            : false
-                    )
-            );
-        if (!shouldCorrect) return false;
+        if (!this.shouldUseInlinePlanSheetViewportCorrection()) return false;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         if (!root || typeof root.scrollBy !== 'function') return false;
         const targetRect = targetEl.getBoundingClientRect();

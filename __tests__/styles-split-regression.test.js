@@ -52,7 +52,12 @@ test('split css files exist and keep section anchors', () => {
     assert.doesNotMatch(interactionsSource, /\.plan-segment-graphic-label\.is-editing\s*\{[^}]*width:\s*100%;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*\n\s{2}width:\s*100%;/s);
     assert.match(interactionsSource, /\.inline-plan-backdrop\s*\{[^}]*z-index:\s*49;/s);
-    assert.match(interactionsSource, /body\.inline-plan-sheet-open #timeEntries\.inline-plan-context-active \.time-entry\.inline-plan-context-keep-clear\s*\{[^}]*z-index:\s*60;/s);
+    assert.match(interactionsSource, /body\.inline-plan-sheet-open #timeEntries\.inline-plan-context-active \.time-entry\.inline-plan-context-keep-clear\s*\{[^}]*pointer-events:\s*none;/s);
+    assert.match(interactionsSource, /body\.inline-plan-sheet-open \.inline-plan-sheet-context-target\s*\{[^}]*z-index:\s*60;[^}]*pointer-events:\s*auto;/s);
+    assert.match(interactionsSource, /body\.inline-plan-sheet-open \.split-cell-wrapper\.split-type-planned\.inline-plan-sheet-context-target \.planned-input\s*\{[^}]*pointer-events:\s*auto;/s);
+    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-input,[\s\S]*?\.plan-segment-mobile-editor-input,[\s\S]*?font-size:\s*16px;/s);
+    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-resize-handle\s*\{[^}]*width:\s*40px;[^}]*touch-action:\s*none;/s);
+    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-boundary-resize-handle-line,\s*\.plan-segment-resize-handle::after\s*\{[^}]*width:\s*4px;[^}]*background:\s*rgba\(30,\s*64,\s*175,\s*0\.72\);/s);
     assert.doesNotMatch(foundationSource, /actual-label|actual-input|summary-actual/);
     assert.doesNotMatch(modalSource, /activity-log-btn|actual-sub-activities|actual-edit-badge/);
     assert.doesNotMatch(interactionsSource, /activity-log-btn|split-type-actual|split-visualization-actual|actual-field-container|merged-actual|actual-row|actual-time|actual-input|actual-label|summary-actual/);
