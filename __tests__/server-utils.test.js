@@ -1,12 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 
 const {
+    app,
     parsePriorityValue,
     extractPriorityRank,
     extractTitleFromPage,
     isValidNotionDatabaseId,
     getStaticCacheControl,
+    isStaticAssetRequest,
+    isBlockedStandaloneHtml,
 } = require('../server');
 
 test('parsePriorityValue parses valid values', () => {
@@ -65,4 +69,56 @@ test('getStaticCacheControl uses no-cache for html and immutable cache for stati
     assert.equal(getStaticCacheControl('index.html'), 'no-cache');
     assert.equal(getStaticCacheControl('styles.css'), 'public, max-age=300, immutable');
     assert.equal(getStaticCacheControl('script.js'), 'public, max-age=300, immutable');
+});
+
+test('static asset request detection covers JS/CSS and standalone html blocks', () => {
+    assert.equal(isStaticAssetRequest('/controllers/field-interaction-controller.js'), true);
+    assert.equal(isStaticAssetRequest('/styles/foundation.css'), true);
+    assert.equal(isStaticAssetRequest('/dashboard'), false);
+    assert.equal(isBlockedStandaloneHtml('/actual-grid-palette-test.html'), true);
+    assert.equal(isBlockedStandaloneHtml('/index.html'), false);
+});
+
+test('server serves every local index script and stylesheet without html fallback', async () => {
+    const server = http.createServer(app);
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+    const baseUrl = `http://127.0.0.1:${port}`;
+    try {
+        const indexResponse = await fetch(`${baseUrl}/index.html`);
+        assert.equal(indexResponse.status, 200);
+        const html = await indexResponse.text();
+        const assetPaths = [
+            ...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g),
+            ...html.matchAll(/<link\b[^>]*\bhref="([^"]+)"/g),
+        ]
+            .map((match) => match[1])
+            .filter((src) => !/^https?:\/\//.test(src))
+            .filter((src) => !src.startsWith('//'));
+        assert.ok(assetPaths.includes('controllers/field-interaction-controller.js'));
+        assert.ok(assetPaths.includes('controllers/inline-plan-dropdown-controller.js'));
+        assert.ok(assetPaths.includes('styles/foundation.css'));
+
+        for (const assetPath of assetPaths) {
+            const response = await fetch(`${baseUrl}/${assetPath}`);
+            assert.equal(response.status, 200, assetPath);
+            const contentType = response.headers.get('content-type') || '';
+            if (assetPath.endsWith('.js')) {
+                assert.match(contentType, /javascript/, assetPath);
+            } else if (assetPath.endsWith('.css')) {
+                assert.match(contentType, /text\/css/, assetPath);
+            }
+            const body = await response.text();
+            assert.doesNotMatch(body.slice(0, 80), /<!DOCTYPE html>/i, assetPath);
+        }
+
+        const missingJs = await fetch(`${baseUrl}/controllers/not-real.js`);
+        assert.equal(missingJs.status, 404);
+        assert.doesNotMatch(await missingJs.text(), /<!DOCTYPE html>/i);
+
+        const blockedHtml = await fetch(`${baseUrl}/actual-grid-palette-test.html`);
+        assert.equal(blockedHtml.status, 404);
+    } finally {
+        await new Promise((resolve) => server.close(resolve));
+    }
 });

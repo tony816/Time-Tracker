@@ -2186,6 +2186,9 @@ button.activity-chip,
 
 .split-visualization-planned .split-grid-segment-virtual-rest {
   align-self: start;
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
   background: rgba(231, 236, 241, 0.42) !important;
   border: 1px dashed rgba(126, 140, 154, 0.42);
   border-bottom: 1px dashed rgba(126, 140, 154, 0.42) !important;

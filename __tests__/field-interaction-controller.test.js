@@ -165,6 +165,9 @@ test('attachCellClickListeners pre-scrolls mobile empty planned slots before ope
         isSameInlinePlanTarget() {
             return false;
         },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
         preparePlannedSlotReplacementViewport(targetEl) {
             calls.push(['prepare', targetEl]);
             return true;
@@ -188,7 +191,7 @@ test('attachCellClickListeners pre-scrolls mobile empty planned slots before ope
             stopPropagation() {},
         });
 
-        assert.deepEqual(calls, [['prepare', plannedField]]);
+        assert.deepEqual(calls, [['prepare', wrapper]]);
         assert.equal(rafCalls.length, 1);
 
         rafCalls[0]();
@@ -302,7 +305,96 @@ test('attachCellClickListeners keeps desktop empty planned slot open immediate w
     });
 
     assert.equal(calls.length, 2);
-    assert.deepEqual(calls[0], ['prepare', plannedField]);
+    assert.deepEqual(calls[0], ['prepare', wrapper]);
     assert.equal(calls[1][0], 'open');
     assert.equal(calls[1][2], wrapper);
+});
+
+test('planned mouseup path pre-scrolls before opening empty planned slot sheet', () => {
+    const previousWindow = global.window;
+    const plannedField = createListenerNode();
+    const wrapper = createListenerNode();
+    wrapper.getBoundingClientRect = () => ({ width: 360 });
+    plannedField.closest = (selector) => selector === '.split-cell-wrapper.split-type-planned' ? wrapper : null;
+    plannedField.matches = () => false;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const rafCalls = [];
+    const calls = [];
+    const ctx = {
+        currentColumnType: 'planned',
+        selectedPlannedFields: new Set(),
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo() {
+            return { startIndex: 4, endIndex: 4 };
+        },
+        findMergeKey() {
+            return null;
+        },
+        clearAllSelections() {
+            calls.push(['clearAll']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+            this.selectedPlannedFields.add(start);
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        preparePlannedSlotReplacementViewport(targetEl) {
+            calls.push(['prepare', targetEl]);
+            return true;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push(['open', startIndex, anchor, endIndex, options]);
+        },
+    };
+
+    global.window = {
+        requestAnimationFrame(callback) {
+            rafCalls.push(callback);
+        },
+    };
+
+    try {
+        controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 4, plannedField);
+        plannedField.dispatchEvent({
+            type: 'mousedown',
+            target: plannedField,
+            ctrlKey: false,
+            metaKey: false,
+            preventDefault() {},
+        });
+        plannedField.dispatchEvent({
+            type: 'mouseup',
+            target: plannedField,
+            ctrlKey: false,
+            metaKey: false,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(calls.filter((call) => call[0] === 'prepare'), [['prepare', wrapper]]);
+        assert.equal(rafCalls.length, 1);
+        rafCalls[0]();
+        rafCalls[1]();
+        const openCall = calls.find((call) => call[0] === 'open');
+        assert.ok(openCall);
+        assert.equal(openCall[1], 4);
+        assert.equal(openCall[2], wrapper);
+        assert.equal(openCall[3], 4);
+        assert.equal(openCall[4].anchorMinWidth, 360);
+    } finally {
+        if (previousWindow === undefined) {
+            delete global.window;
+        } else {
+            global.window = previousWindow;
+        }
+    }
 });

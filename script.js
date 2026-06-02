@@ -5776,12 +5776,31 @@ class TimeTracker {
                     ? Math.floor(gapRect.width)
                     : 0;
                 const anchor = gapEl;
-                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
-                    mode: 'virtual-rest-gap',
-                    gapStartMinute,
-                    gapDurationMinutes,
-                    anchorMinWidth,
-                });
+                const open = () => {
+                    this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
+                        mode: 'virtual-rest-gap',
+                        gapStartMinute,
+                        gapDurationMinutes,
+                        anchorMinWidth,
+                    });
+                    if (this.inlinePlanDropdown && this.inlinePlanDropdown.classList && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
+                        this.addInlinePlanSheetTargetClasses(anchor, 'inline-plan-slot-context-target', 'inline-plan-gap-context-target');
+                        this.scheduleInlinePlanSheetTargetViewportCorrection(anchor);
+                    }
+                };
+                const delayed = this.preparePlannedSlotReplacementViewport
+                    ? this.preparePlannedSlotReplacementViewport(anchor)
+                    : false;
+                if (delayed) {
+                    const rootWindow = typeof window !== 'undefined' ? window : globalThis;
+                    if (rootWindow && typeof rootWindow.requestAnimationFrame === 'function') {
+                        rootWindow.requestAnimationFrame(() => rootWindow.requestAnimationFrame(open));
+                    } else {
+                        open();
+                    }
+                    return;
+                }
+                open();
             };
             gapEl.addEventListener('click', openGap);
             gapEl.addEventListener('keydown', (event) => {
@@ -6246,7 +6265,8 @@ class TimeTracker {
     addInlinePlanSheetTargetClasses(targetEl, specificClass = '') {
         if (!targetEl) return false;
         const classes = ['inline-plan-sheet-context-target'];
-        if (specificClass) classes.push(specificClass);
+        const specificClasses = [specificClass].concat(Array.prototype.slice.call(arguments, 2));
+        specificClasses.filter(Boolean).forEach((className) => classes.push(className));
         if (targetEl.classList && typeof targetEl.classList.add === 'function') {
             targetEl.classList.add(...classes);
             return true;

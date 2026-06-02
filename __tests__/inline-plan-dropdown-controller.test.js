@@ -888,7 +888,7 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
             if (selector === '.inline-plan-context-keep-clear') {
                 return [{ classList: { remove(name) { removedContextClasses.push(['row', name]); } } }];
             }
-            if (selector === '.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target') {
+            if (selector === '.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target, .inline-plan-gap-context-target') {
                 return [{
                     classList: {
                         remove(...names) {
@@ -935,6 +935,7 @@ test('closeInlinePlanDropdown clears selected segment for segment replacement ta
             'inline-plan-sheet-context-target',
             'inline-plan-segment-context-target',
             'inline-plan-slot-context-target',
+            'inline-plan-gap-context-target',
         ],
     ]);
 });

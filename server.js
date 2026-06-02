@@ -1,5 +1,5 @@
 // Minimal Express server to bridge Notion API to the SPA
-// - Serves static files (index.html, script.js, styles.css + styles/*.css)
+// - Serves static files from the repository root
 // - Provides GET /api/notion/activities to return { activities: [{ id, title }] }
 
 try {
@@ -53,6 +53,25 @@ const STATIC_FILE_MAP = Object.freeze({
     '/ui/time-control-renderer.js': 'ui/time-control-renderer.js',
     '/ui/time-entry-renderer.js': 'ui/time-entry-renderer.js',
 });
+
+const STATIC_ASSET_EXTENSIONS = new Set([
+    '.css',
+    '.js',
+    '.mjs',
+    '.map',
+    '.json',
+    '.html',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.svg',
+    '.ico',
+    '.webp',
+    '.woff',
+    '.woff2',
+    '.ttf',
+]);
 
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -134,6 +153,17 @@ function getStaticCacheControl(mappedFileName) {
     return mappedFileName && mappedFileName.endsWith('.html')
         ? 'no-cache'
         : 'public, max-age=300, immutable';
+}
+
+function isStaticAssetRequest(requestPath) {
+    const ext = path.extname(String(requestPath || '').toLowerCase());
+    return STATIC_ASSET_EXTENSIONS.has(ext);
+}
+
+function isBlockedStandaloneHtml(requestPath) {
+    const normalized = String(requestPath || '').replace(/\\/g, '/');
+    if (!normalized.endsWith('.html')) return false;
+    return normalized !== '/index.html';
 }
 
 // Health check (useful for front-end detection if needed)
@@ -254,32 +284,26 @@ app.get('/favicon.ico', (_req, res) => {
     res.status(204).end();
 });
 
-app.get([
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/styles/foundation.css',
-    '/styles/modal.css',
-    '/styles/interactions.css',
-    '/styles/responsive.css',
-    '/script.js',
-    '/main.js',
-    '/core/actual-grid-core.js',
-    '/core/activity-core.js',
-    '/core/date-core.js',
-    '/core/duration-core.js',
-    '/core/grid-metrics-core.js',
-    '/core/input-format-core.js',
-    '/core/text-core.js',
-    '/core/time-core.js',
-    '/infra/storage-adapter.js',
-    '/controllers/timer-controller.js',
-    '/ui/time-control-renderer.js',
-    '/ui/time-entry-renderer.js',
-], sendStaticFileByRequestPath);
+app.get(['/', '/index.html'], sendStaticFileByRequestPath);
+
+app.use(express.static(staticDir, {
+    index: false,
+    fallthrough: true,
+    setHeaders(res, filePath) {
+        const relativePath = path.relative(staticDir, filePath).replace(/\\/g, '/');
+        res.setHeader('Cache-Control', getStaticCacheControl(relativePath));
+    },
+}));
 
 app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' });
+});
+
+app.get('*', (req, res, next) => {
+    if (!isStaticAssetRequest(req.path) && !isBlockedStandaloneHtml(req.path)) {
+        return next();
+    }
+    return res.status(404).send('Not found');
 });
 
 // SPA fallback (non-API routes only)
@@ -306,4 +330,6 @@ module.exports = {
     extractTitleFromPage,
     isValidNotionDatabaseId,
     getStaticCacheControl,
+    isStaticAssetRequest,
+    isBlockedStandaloneHtml,
 };

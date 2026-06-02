@@ -54,6 +54,35 @@
         }
     }
 
+    function openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex = null, options = {}) {
+        if (!ctx || !plannedField || typeof ctx.openInlinePlanDropdown !== 'function') return;
+        const range = typeof ctx.getPlannedRangeInfo === 'function'
+            ? ctx.getPlannedRangeInfo(index)
+            : { startIndex: index, endIndex: Number.isInteger(endIndex) ? endIndex : index };
+        if (Number.isInteger(endIndex)) {
+            range.startIndex = Math.min(range.startIndex, endIndex);
+            range.endIndex = Math.max(range.endIndex, endIndex);
+        }
+        const anchor = plannedField.closest && plannedField.closest('.split-cell-wrapper.split-type-planned')
+            ? plannedField.closest('.split-cell-wrapper.split-type-planned')
+            : plannedField;
+        const open = () => {
+            ctx.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
+                anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
+                ...options,
+            });
+            syncOpenInlinePlanSheetTarget(ctx, anchor || plannedField);
+        };
+        const delayed = typeof ctx.preparePlannedSlotReplacementViewport === 'function'
+            ? ctx.preparePlannedSlotReplacementViewport(anchor || plannedField)
+            : false;
+        if (delayed) {
+            scheduleAfterAnimationFrame(open);
+            return;
+        }
+        open();
+    }
+
     function handleMergedClickCapture(e) {
         const target = e.target;
         if (e.type === 'click') {
@@ -120,9 +149,6 @@
                 }
             }
         }
-        if (target.closest && target.closest('.activity-log-btn')) return;
-        if (target.closest && target.closest('.split-visualization-actual')) return;
-
         const timeMerged = target.closest && target.closest('.time-slot-container.merged-time-main, .time-slot-container.merged-time-secondary');
         if (timeMerged) {
             if (target.closest('.timer-controls-container') || target.closest('.timer-btn')) {
@@ -159,9 +185,7 @@
                 const safeStart = range.start;
                 const safeEnd = range.end;
                 const anchor = document.querySelector(`[data-index="${safeStart}"] .planned-input`) || plannedEl;
-                this.openInlinePlanDropdown(safeStart, anchor, safeEnd, {
-                    anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedEl),
-                });
+                openPlannedFieldDropdownWithViewportPreparation(this, safeStart, anchor, safeEnd);
             }
             return;
         }
@@ -195,38 +219,7 @@
                             const range = this.activateMergedPlannedSelection(mk, index);
                             if (!range) return;
                             const anchor = document.querySelector(`[data-index="${range.start}"] .planned-input`) || prEl;
-                            this.openInlinePlanDropdown(range.start, anchor, range.end, {
-                                anchorMinWidth: getAnchorMinWidthFromElement(anchor || prEl),
-                            });
-                        }
-                        return;
-                    }
-                }
-            }
-
-            const arEl = row.querySelector('.actual-input');
-            if (arEl) {
-                const ar = arEl.getBoundingClientRect();
-                const inActual = (x >= ar.left && x <= ar.right && y >= rowRect.top && y <= rowRect.bottom);
-                if (inActual) {
-                    const mk = this.findMergeKey('actual', index);
-                    if (mk) {
-                        const [, startStr] = mk.split('-');
-                        const startIdx = parseInt(startStr, 10);
-                        const mainContainer = target.closest && target.closest('.actual-field-container.merged-actual-main');
-
-                        if (mainContainer && index === startIdx && !this.isSelectingPlanned && !this.isSelectingActual) {
-                            return;
-                        }
-
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (e.type === 'click') {
-                            if (this.isMergeRangeSelected('actual', mk)) this.clearSelection('actual');
-                            else {
-                                this.clearAllSelections();
-                                this.selectMergedRange('actual', mk);
-                            }
+                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, anchor, range.end);
                         }
                         return;
                     }
@@ -248,10 +241,7 @@
             if (!range) return;
             const mergeStart = range.start;
             const mergeEnd = range.end;
-            const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-            this.openInlinePlanDropdown(mergeStart, anchor, mergeEnd, {
-                anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
-            });
+            openPlannedFieldDropdownWithViewportPreparation(this, mergeStart, plannedField, mergeEnd);
         });
 
         let plannedMouseMoved = false;
@@ -329,10 +319,7 @@
                             this.selectFieldRange('planned', nextStart, nextEnd);
                         }
                         if (!e.ctrlKey && !e.metaKey) {
-                            const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                            this.openInlinePlanDropdown(base.start, anchor, undefined, {
-                                anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
-                            });
+                            openPlannedFieldDropdownWithViewportPreparation(this, base.start, plannedField, base.end);
                         }
                         this.suppressInlinePlanClickOnce = index;
                     }
@@ -497,8 +484,7 @@
     function attachRowWideClickTargets(entryDiv, index) {
         entryDiv.addEventListener('click', (e) => {
             const plannedField = entryDiv.querySelector('.planned-input');
-            const actualField = entryDiv.querySelector('.actual-input');
-            if (!plannedField && !actualField) return;
+            if (!plannedField) return;
 
             const rowRect = entryDiv.getBoundingClientRect();
             const x = e.clientX;
@@ -516,9 +502,7 @@
                         if (!range) return;
                         const anchor = entryDiv.querySelector('.planned-input') || document.querySelector(`[data-index="${range.start}"] .planned-input`);
                         if (anchor) {
-                            this.openInlinePlanDropdown(range.start, anchor, range.end, {
-                                anchorMinWidth: getAnchorMinWidthFromElement(anchor),
-                            });
+                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, anchor, range.end);
                         }
                         return;
                     }
@@ -565,29 +549,14 @@
                     return;
                 }
 
-                const anchor = plannedField.closest('.split-cell-wrapper.split-type-planned') || plannedField;
-                const openPlannedDropdown = () => {
-                    this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
-                        anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
-                    });
-                    syncOpenInlinePlanSheetTarget(this, anchor || plannedField);
-                };
-                const delayed = this.preparePlannedSlotReplacementViewport
-                    ? this.preparePlannedSlotReplacementViewport(plannedField)
-                    : false;
-                if (delayed) {
-                    scheduleAfterAnimationFrame(openPlannedDropdown);
-                    return;
-                }
-                this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
-                    anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
-                });
+                openPlannedFieldDropdownWithViewportPreparation(this, range.startIndex, plannedField, range.endIndex);
             });
         }
     }
 
     return {
         getAnchorMinWidthFromElement,
+        openPlannedFieldDropdownWithViewportPreparation,
         handleMergedClickCapture,
         attachPlannedFieldSelectionListeners,
         attachRowWideClickTargets,
