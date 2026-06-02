@@ -192,6 +192,8 @@ test('attachCellClickListeners pre-scrolls mobile empty planned slots before ope
         assert.equal(rafCalls.length, 1);
 
         rafCalls[0]();
+        assert.equal(rafCalls.length, 2);
+        rafCalls[1]();
 
         assert.equal(calls.length, 2);
         assert.equal(calls[1][0], 'open');
@@ -206,6 +208,62 @@ test('attachCellClickListeners pre-scrolls mobile empty planned slots before ope
             global.window = previousWindow;
         }
     }
+});
+
+test('attachCellClickListeners keeps an open mobile sheet on same empty slot retap', () => {
+    const plannedField = createListenerNode();
+    plannedField.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        getPlannedRangeInfo() {
+            return { startIndex: 4, endIndex: 4 };
+        },
+        isSameInlinePlanTarget() {
+            return true;
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            calls.push(['sync', targetEl]);
+        },
+        clearSelection() {
+            calls.push(['clear']);
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+    };
+    const event = {
+        type: 'click',
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    };
+
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent(event);
+
+    assert.deepEqual(calls, [
+        ['prevent'],
+        ['stop'],
+        ['sync', plannedField],
+    ]);
 });
 
 test('attachCellClickListeners keeps desktop empty planned slot open immediate when no pre-scroll occurs', () => {

@@ -95,6 +95,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(responsiveSource, /\.timer-display\s*\{[^}]*min-width:\s*0;/s);
     assert.match(responsiveSource, /\.timer-display\s*\{[^}]*font-size:\s*7px;/s);
     assert.match(responsiveSource, /Mobile responsive enhancements/);
+    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-dropdown\.inline-plan-dropdown-sheet/s);
     assert.match(responsiveSource, /--- UX enhancement patch ---/);
     assert.match(responsiveSource, /\.activity-log-btn\s*\{[^}]*min-width:\s*42px;[^}]*height:\s*18px;[^}]*padding:\s*0 8px;[^}]*font-size:\s*9px;[^}]*left:\s*50%;[^}]*bottom:\s*2px;/s);
 });

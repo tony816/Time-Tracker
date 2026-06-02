@@ -6447,6 +6447,9 @@ class TimeTracker {
         if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
             this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
         }
+        if (typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
+            this.scheduleInlinePlanSheetTargetViewportCorrection(segmentEl);
+        }
         return true;
     }
     addInlinePlanSheetTargetClasses(targetEl, specificClass = '') {
@@ -6472,22 +6475,30 @@ class TimeTracker {
         if (!isCoarseContext) return false;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         const doc = (typeof document !== 'undefined') ? document : null;
-        const viewportHeight = root && (Number(root.innerHeight) || (doc && doc.documentElement && Number(doc.documentElement.clientHeight)) || 0);
+        const visualViewport = root && root.visualViewport ? root.visualViewport : null;
+        const viewportHeight = visualViewport && Number.isFinite(Number(visualViewport.height)) && Number(visualViewport.height) > 0
+            ? Number(visualViewport.height)
+            : (root && (Number(root.innerHeight) || (doc && doc.documentElement && Number(doc.documentElement.clientHeight)) || 0));
+        const viewportTop = visualViewport && Number.isFinite(Number(visualViewport.offsetTop))
+            ? Number(visualViewport.offsetTop)
+            : 0;
+        const viewportBottom = viewportTop + viewportHeight;
         if (!Number.isFinite(viewportHeight) || viewportHeight <= 0 || !root || typeof root.scrollBy !== 'function') {
             return false;
         }
-        const rect = targetEl.getBoundingClientRect();
+        const options = arguments.length > 1 && arguments[1] ? arguments[1] : {};
+        const rect = options.targetRect || targetEl.getBoundingClientRect();
         if (!rect) return false;
         const rectTop = Number(rect.top);
         const rectBottom = Number(rect.bottom);
         if (![rectTop, rectBottom].every(Number.isFinite)) return false;
 
         const expectedSheetHeight = Math.min(viewportHeight * 0.62, 520);
-        const sheetTop = viewportHeight - expectedSheetHeight;
+        const sheetTop = viewportBottom - expectedSheetHeight;
         const topPadding = 16;
         const bottomPadding = 20;
-        const visibleTop = topPadding;
-        const visibleBottom = Math.max(topPadding, sheetTop - bottomPadding);
+        const visibleTop = viewportTop + topPadding;
+        const visibleBottom = Math.max(visibleTop, sheetTop - bottomPadding);
         let delta = 0;
         if (rectBottom > visibleBottom) {
             delta = rectBottom - visibleBottom;
@@ -6513,29 +6524,111 @@ class TimeTracker {
         root.scrollBy({ top: delta, behavior: 'auto' });
         return true;
     }
+    correctInlinePlanSheetTargetViewport(targetEl) {
+        if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
+        if (!this.inlinePlanDropdown || !this.inlinePlanDropdown.classList || !this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
+            return false;
+        }
+        const isCoarseContext = this.isCoarsePlanSegmentPointerContext
+            ? this.isCoarsePlanSegmentPointerContext()
+            : false;
+        if (!isCoarseContext) return false;
+        const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+        if (!root || typeof root.scrollBy !== 'function') return false;
+        const targetRect = targetEl.getBoundingClientRect();
+        const sheetRect = typeof this.inlinePlanDropdown.getBoundingClientRect === 'function'
+            ? this.inlinePlanDropdown.getBoundingClientRect()
+            : null;
+        if (!targetRect || !sheetRect) return false;
+        const visualViewport = root.visualViewport || null;
+        const viewportTop = visualViewport && Number.isFinite(Number(visualViewport.offsetTop))
+            ? Number(visualViewport.offsetTop)
+            : 0;
+        const visibleTop = viewportTop + 16;
+        const sheetTop = Number(sheetRect.top);
+        const targetTop = Number(targetRect.top);
+        const targetBottom = Number(targetRect.bottom);
+        if (![sheetTop, targetTop, targetBottom].every(Number.isFinite)) return false;
+        const visibleBottom = Math.max(visibleTop, sheetTop - 20);
+        let delta = 0;
+        if (targetBottom > visibleBottom) {
+            delta = targetBottom - visibleBottom;
+        } else if (targetTop < visibleTop) {
+            delta = targetTop - visibleTop;
+        }
+        if (!Number.isFinite(delta) || Math.abs(delta) < 1) return false;
+        root.scrollBy({ top: delta, behavior: 'auto' });
+        return true;
+    }
+    scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+        if (!targetEl) return false;
+        const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+        const schedule = root && typeof root.requestAnimationFrame === 'function'
+            ? root.requestAnimationFrame.bind(root)
+            : (callback) => callback();
+        schedule(() => {
+            schedule(() => {
+                if (typeof this.correctInlinePlanSheetTargetViewport === 'function') {
+                    this.correctInlinePlanSheetTargetViewport(targetEl);
+                }
+            });
+        });
+        return true;
+    }
     preparePlanSegmentReplacementViewport(segmentEl) {
         return this.prepareInlinePlanSheetTargetViewport(segmentEl);
     }
     preparePlannedSlotReplacementViewport(slotEl) {
-        const hasUsableRect = (el) => {
+        const getUsableRect = (el) => {
             if (!el || typeof el.getBoundingClientRect !== 'function') return false;
             const rect = el.getBoundingClientRect();
             return rect
                 && Number.isFinite(Number(rect.width))
                 && Number.isFinite(Number(rect.height))
-                && (Number(rect.width) > 0 || Number(rect.height) > 0);
+                && (Number(rect.width) > 0 || Number(rect.height) > 0)
+                ? rect
+                : null;
+        };
+        const combineRects = (rects) => {
+            const usable = rects.filter(Boolean);
+            if (!usable.length) return null;
+            const left = Math.min(...usable.map(rect => Number(rect.left)));
+            const top = Math.min(...usable.map(rect => Number(rect.top)));
+            const right = Math.max(...usable.map(rect => Number(rect.right)));
+            const bottom = Math.max(...usable.map(rect => Number(rect.bottom)));
+            if (![left, top, right, bottom].every(Number.isFinite)) return usable[0];
+            return {
+                left,
+                top,
+                right,
+                bottom,
+                x: left,
+                y: top,
+                width: Math.max(0, right - left),
+                height: Math.max(0, bottom - top),
+            };
         };
         let targetEl = slotEl || null;
-        if (!hasUsableRect(targetEl) && slotEl && slotEl.closest) {
-            const candidates = [
-                slotEl.closest('.planned-input'),
-                slotEl.closest('.split-cell-wrapper.split-type-planned'),
-                slotEl.closest('.time-entry'),
-                slotEl,
-            ];
-            targetEl = candidates.find(candidate => hasUsableRect(candidate)) || targetEl;
+        let targetRect = getUsableRect(targetEl);
+        if (slotEl && slotEl.closest) {
+            const plannedInput = slotEl.closest('.planned-input');
+            const wrapper = slotEl.closest('.split-cell-wrapper.split-type-planned');
+            const row = slotEl.closest('.time-entry');
+            const inputRect = getUsableRect(plannedInput);
+            const wrapperRect = getUsableRect(wrapper);
+            const combinedPlannedRect = combineRects([inputRect, wrapperRect]);
+            if (combinedPlannedRect) {
+                targetEl = wrapper || plannedInput || targetEl;
+                targetRect = combinedPlannedRect;
+            } else if (!targetRect) {
+                const rowRect = getUsableRect(row);
+                if (rowRect) {
+                    targetEl = row;
+                    targetRect = rowRect;
+                }
+            }
         }
-        return this.prepareInlinePlanSheetTargetViewport(targetEl);
+        return this.prepareInlinePlanSheetTargetViewport(targetEl, { targetRect });
     }
     findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, segmentId = '') {
         if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || typeof document === 'undefined') return null;
@@ -6678,7 +6771,9 @@ class TimeTracker {
                                 ? root.requestAnimationFrame.bind(root)
                                 : (callback) => callback();
                             schedule(() => {
-                                this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                                schedule(() => {
+                                    this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                                });
                             });
                             return;
                         }

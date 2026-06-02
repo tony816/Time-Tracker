@@ -134,6 +134,57 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
         );
 });
 
+test('sheet touch dismiss does not arm from chip board interactions', () => {
+    const listeners = {};
+    const dropdown = {
+        scrollTop: 0,
+        style: {},
+        classList: {
+            contains(className) {
+                return className === 'inline-plan-dropdown-sheet';
+            },
+        },
+        querySelector() {
+            return null;
+        },
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        removeEventListener() {},
+    };
+    const chipTarget = {
+        closest(selector) {
+            return String(selector).includes('.activity-chip-board') ? { className: 'activity-chip-board' } : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanSheetTouchHandlers: null,
+        cleanupInlinePlanSheetTouchDismiss() {
+            controller.cleanupInlinePlanSheetTouchDismiss.call(this);
+        },
+        closeInlinePlanDropdown() {
+            calls.push('close');
+        },
+    };
+
+    controller.setupInlinePlanSheetTouchDismiss.call(ctx, dropdown);
+    listeners.touchstart({ target: chipTarget, touches: [{ clientY: 10 }] });
+    listeners.touchmove({
+        target: chipTarget,
+        touches: [{ clientY: 140 }],
+        cancelable: true,
+        preventDefault() {
+            calls.push('prevent');
+        },
+    });
+    listeners.touchend({ target: chipTarget, changedTouches: [{ clientY: 140 }] });
+
+    assert.equal(dropdown.style.transform || '', '');
+    assert.deepEqual(calls, []);
+});
+
 test('script inline plan wrapper methods delegate to controller helpers', () => {
     const calls = [];
     const original = globalThis.TimeTrackerInlinePlanDropdownController;

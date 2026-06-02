@@ -24,10 +24,34 @@
     function scheduleAfterAnimationFrame(callback) {
         const rootWindow = typeof window !== 'undefined' ? window : root;
         if (rootWindow && typeof rootWindow.requestAnimationFrame === 'function') {
-            rootWindow.requestAnimationFrame(callback);
+            rootWindow.requestAnimationFrame(() => {
+                rootWindow.requestAnimationFrame(callback);
+            });
             return;
         }
         callback();
+    }
+
+    function isMobileInlinePlanSheetContext(ctx) {
+        return Boolean(
+            ctx
+            && ctx.inlinePlanDropdown
+            && ctx.inlinePlanDropdown.classList
+            && ctx.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
+            && typeof ctx.isInlinePlanMobileInputContext === 'function'
+            && ctx.isInlinePlanMobileInputContext()
+        );
+    }
+
+    function syncOpenInlinePlanSheetTarget(ctx, targetEl) {
+        if (!isMobileInlinePlanSheetContext(ctx)) return;
+        if (typeof ctx.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
+            ctx.scheduleInlinePlanSheetTargetViewportCorrection(targetEl);
+            return;
+        }
+        if (typeof ctx.scheduleInlinePlanViewportSync === 'function') {
+            ctx.scheduleInlinePlanViewportSync();
+        }
     }
 
     function handleMergedClickCapture(e) {
@@ -47,6 +71,10 @@
                     if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(plannedRange)) {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (isMobileInlinePlanSheetContext(this)) {
+                            syncOpenInlinePlanSheetTarget(this, plannedInput);
+                            return;
+                        }
                         this.clearSelection('planned');
                         this.closeInlinePlanDropdown();
                         return;
@@ -78,6 +106,10 @@
                                 if (inPlannedColumn) {
                                     e.preventDefault();
                                     e.stopPropagation();
+                                    if (isMobileInlinePlanSheetContext(this)) {
+                                        syncOpenInlinePlanSheetTarget(this, plannedCell);
+                                        return;
+                                    }
                                     this.clearSelection('planned');
                                     this.closeInlinePlanDropdown();
                                     return;
@@ -362,7 +394,7 @@
                 } catch (_) {
                     // no-op
                 }
-            }, 280);
+            }, 340);
         }, { passive: true });
 
         plannedField.addEventListener('touchmove', (e) => {
@@ -505,6 +537,10 @@
                 e.preventDefault();
                 e.stopPropagation();
                 this.suppressInlinePlanClickOnce = index;
+                if (isMobileInlinePlanSheetContext(this)) {
+                    syncOpenInlinePlanSheetTarget(this, plannedField);
+                    return;
+                }
                 this.clearSelection('planned');
                 this.closeInlinePlanDropdown();
             });
@@ -520,6 +556,10 @@
 
                 const range = this.getPlannedRangeInfo(index);
                 if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range)) {
+                    if (isMobileInlinePlanSheetContext(this)) {
+                        syncOpenInlinePlanSheetTarget(this, plannedField);
+                        return;
+                    }
                     this.clearSelection('planned');
                     this.closeInlinePlanDropdown();
                     return;
@@ -530,6 +570,7 @@
                     this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                         anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
                     });
+                    syncOpenInlinePlanSheetTarget(this, anchor || plannedField);
                 };
                 const delayed = this.preparePlannedSlotReplacementViewport
                     ? this.preparePlannedSlotReplacementViewport(plannedField)

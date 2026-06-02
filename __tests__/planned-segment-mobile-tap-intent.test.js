@@ -47,6 +47,10 @@ const preparePlannedSlotReplacementViewport = buildMethod(
     'preparePlannedSlotReplacementViewport(slotEl)',
     '(slotEl)'
 );
+const correctInlinePlanSheetTargetViewport = buildMethod(
+    'correctInlinePlanSheetTargetViewport(targetEl)',
+    '(targetEl)'
+);
 const applyPlanSegmentTitleTextEdit = buildMethod(
     'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
@@ -101,7 +105,10 @@ function matchesSelector(node, selector) {
         return matchesDataSelector(node, selector);
     }
     if (selector.startsWith('.')) {
-        return hasNodeClass(node, selector.slice(1));
+        return selector
+            .slice(1)
+            .split('.')
+            .every(className => hasNodeClass(node, className));
     }
     return false;
 }
@@ -406,6 +413,8 @@ test('mobile segment background tap pre-scrolls before opening replacement sheet
         assert.equal(rafCalls.length, 1);
 
         rafCalls[0]();
+        assert.equal(rafCalls.length, 2);
+        rafCalls[1]();
 
         assert.deepEqual(harness.calls, [
             ['dropdown', 0, 0, harness.segment],
@@ -437,6 +446,8 @@ test('mobile segment background tap uses minimal pre-scroll when segment is slig
         assert.equal(scrollCalls[0].behavior, 'auto');
         assert.deepEqual(harness.calls, []);
         assert.equal(rafCalls.length, 1);
+        rafCalls[0]();
+        assert.equal(rafCalls.length, 2);
     });
 });
 
@@ -482,6 +493,55 @@ test('mobile empty planned slot pre-scroll uses the shared sheet target viewport
     });
 });
 
+test('mobile pre-scroll prefers visualViewport metrics when available', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        visualViewport: {
+            height: 500,
+            offsetTop: 100,
+        },
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const slot = createElementNode('input', 'planned-input');
+        slot.getBoundingClientRect = () => rect(0, 550, 300, 590);
+        const ctx = {
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+            prepareInlinePlanSheetTargetViewport,
+        };
+
+        assert.equal(prepareInlinePlanSheetTargetViewport.call(ctx, slot), true);
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 320);
+    });
+});
+
+test('mobile empty planned slot pre-scroll uses wrapper and input as one target area', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const wrapper = createElementNode('div', 'split-cell-wrapper split-type-planned');
+        const slot = createElementNode('input', 'planned-input');
+        wrapper.appendChild(slot);
+        slot.getBoundingClientRect = () => rect(0, 120, 300, 180);
+        wrapper.getBoundingClientRect = () => rect(0, 120, 300, 590);
+        const ctx = {
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+            prepareInlinePlanSheetTargetViewport,
+        };
+
+        assert.equal(preparePlannedSlotReplacementViewport.call(ctx, slot), true);
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 382);
+    });
+});
+
 test('mobile empty planned slot pre-scroll falls back to row rect when slot rect is unusable', () => {
     const scrollCalls = [];
     withMockWindow({
@@ -523,6 +583,30 @@ test('mobile empty planned slot already safe does not pre-scroll', () => {
 
         assert.equal(preparePlannedSlotReplacementViewport.call(ctx, slot), false);
         assert.deepEqual(scrollCalls, []);
+    });
+});
+
+test('open mobile sheet correction uses actual sheet top for minimal target visibility', () => {
+    const scrollCalls = [];
+    withMockWindow({
+        scrollBy(options) {
+            scrollCalls.push(options);
+        },
+    }, () => {
+        const target = createElementNode('div', 'split-grid-segment');
+        target.getBoundingClientRect = () => rect(0, 180, 300, 260);
+        const dropdown = createElementNode('div', 'inline-plan-dropdown inline-plan-dropdown-sheet');
+        dropdown.getBoundingClientRect = () => rect(0, 200, 300, 600);
+        const ctx = {
+            inlinePlanDropdown: dropdown,
+            coarsePlanSegmentPointerContext: true,
+            isCoarsePlanSegmentPointerContext,
+        };
+
+        assert.equal(correctInlinePlanSheetTargetViewport.call(ctx, target), true);
+        assert.equal(scrollCalls.length, 1);
+        assert.equal(scrollCalls[0].top, 80);
+        assert.equal(scrollCalls[0].behavior, 'auto');
     });
 });
 

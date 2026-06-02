@@ -235,9 +235,13 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             const scrollTop = dropdown.scrollTop || 0;
             if (scrollTop > 2) return false;
             const interactive = event.target && event.target.closest
-                ? event.target.closest('input, textarea, button, select, .inline-plan-options')
+                ? event.target.closest('input, textarea, button, select, .inline-plan-options, .activity-chip-board, .inline-plan-subsection, .inline-plan-sub-board, .inline-plan-input-row')
                 : null;
-            return !interactive || (interactive === dropdown.querySelector('.inline-plan-options') && scrollTop <= 2);
+            return !interactive || (
+                interactive === dropdown.querySelector('.inline-plan-options')
+                && event.target === interactive
+                && scrollTop <= 2
+            );
         };
         const start = (event) => {
             if (!shouldArm(event)) return;
@@ -1122,15 +1126,23 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
 
     function getInlinePlanSlotContextTarget(anchor) {
         if (!anchor) return null;
+        if (anchor.classList && anchor.classList.contains('split-cell-wrapper') && anchor.classList.contains('split-type-planned')) {
+            return anchor;
+        }
+        if (typeof anchor.matches === 'function' && anchor.matches('.split-cell-wrapper.split-type-planned')) {
+            return anchor;
+        }
         if (anchor.classList && anchor.classList.contains('planned-input')) return anchor;
         if (typeof anchor.matches === 'function' && anchor.matches('.planned-input')) return anchor;
         if (typeof anchor.querySelector === 'function') {
+            const plannedWrapper = anchor.querySelector('.split-cell-wrapper.split-type-planned');
+            if (plannedWrapper) return plannedWrapper;
             const plannedInput = anchor.querySelector('.planned-input');
             if (plannedInput) return plannedInput;
         }
         if (typeof anchor.closest === 'function') {
-            return anchor.closest('.planned-input')
-                || anchor.closest('.split-cell-wrapper.split-type-planned')
+            return anchor.closest('.split-cell-wrapper.split-type-planned')
+                || anchor.closest('.planned-input')
                 || anchor.closest('.time-entry')
                 || anchor;
         }
@@ -2044,6 +2056,18 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
+            if (
+                this.inlinePlanDropdown.classList
+                && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
+                && this.isInlinePlanMobileInputContext()
+            ) {
+                if (typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
+                    this.scheduleInlinePlanSheetTargetViewportCorrection(anchor);
+                } else if (typeof this.scheduleInlinePlanViewportSync === 'function') {
+                    this.scheduleInlinePlanViewportSync();
+                }
+                return;
+            }
             this.clearSelection('planned');
             this.closeInlinePlanDropdown();
             return;

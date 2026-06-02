@@ -91,7 +91,7 @@ test('merged click capture closes same planned target before bubble reopen', () 
 test('merged click capture closes dropdown when clicking planned column inside current range', () => {
     assert.match(fieldInteractionControllerSource, /const currentRow = target\.closest && target\.closest\('\.time-entry\[data-index\]'\);/);
     assert.match(fieldInteractionControllerSource, /const inPlannedColumn = e\.clientX >= plannedRect\.left/);
-    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+(?:this\.clearSelection\('planned'\);\s+)?this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
+    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(isMobileInlinePlanSheetContext\(this\)\) \{\s+syncOpenInlinePlanSheetTarget\(this, plannedCell\);\s+return;\s+\}\s+this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
 });
 
 test('inline add auto-apply on empty slots forces dropdown close', () => {
