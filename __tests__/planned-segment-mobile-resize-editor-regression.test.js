@@ -154,18 +154,28 @@ function createNode(tagName = 'div', className = '', dataset = {}) {
     return node;
 }
 
-function createResizeFixture() {
+function createResizeFixture(options = {}) {
     const entry = createNode('div', 'time-entry');
     const grid = createNode('div', 'split-grid');
+    const startMinute = Number.isFinite(options.startMinute) ? options.startMinute : 0;
+    const endMinute = Number.isFinite(options.endMinute) ? options.endMinute : 30;
     const segment = createNode('div', 'split-grid-segment', {
         segmentKind: 'real-plan',
         segmentIndex: '0',
-        segmentStartMinute: '0',
-        segmentEndMinute: '30',
+        segmentStartMinute: String(startMinute),
+        segmentEndMinute: String(endMinute),
     });
     const handle = createNode('span', 'plan-segment-resize-handle plan-segment-resize-handle-right', {
         resizeEdge: 'right',
     });
+    if (options.captureCalls) {
+        handle.setPointerCapture = (pointerId) => {
+            options.captureCalls.push(['set', pointerId]);
+        };
+        handle.releasePointerCapture = (pointerId) => {
+            options.captureCalls.push(['release', pointerId]);
+        };
+    }
     entry.appendChild(grid);
     grid.appendChild(segment);
     segment.appendChild(handle);
@@ -194,16 +204,31 @@ function withDocument(callback) {
     const previousDocument = global.document;
     const previousCore = global.TimeTrackerPlanSegmentCore;
     const listeners = {};
+    const listenerBuckets = {};
+    const listenerCounts = {};
+    const syncListener = (type) => {
+        listenerCounts[type] = (listenerBuckets[type] || []).length;
+        if (listenerCounts[type] > 0) {
+            listeners[type] = (event) => {
+                [...listenerBuckets[type]].forEach(handler => handler(event));
+            };
+        } else {
+            delete listeners[type];
+        }
+    };
     const body = createNode('body');
     global.document = {
         body,
         activeElement: null,
         createElement: (tagName) => createNode(tagName),
         addEventListener(type, handler) {
-            listeners[type] = handler;
+            listenerBuckets[type] = listenerBuckets[type] || [];
+            listenerBuckets[type].push(handler);
+            syncListener(type);
         },
         removeEventListener(type, handler) {
-            if (listeners[type] === handler) delete listeners[type];
+            listenerBuckets[type] = (listenerBuckets[type] || []).filter(item => item !== handler);
+            syncListener(type);
         },
     };
     global.TimeTrackerPlanSegmentCore = {
@@ -217,7 +242,7 @@ function withDocument(callback) {
         },
     };
     try {
-        callback({ listeners, body });
+        callback({ listeners, listenerCounts, body });
     } finally {
         if (previousDocument === undefined) {
             delete global.document;
@@ -278,6 +303,101 @@ test('plan segment resize cleans preview state and lets a newly rendered handle 
             ['resize', 0, 0, 'right', 40],
             ['resize', 0, 0, 'right', 40],
         ]);
+    });
+});
+
+test('plan segment resize remains interactive after renderTimeEntries replaces handles', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const container = createNode('div', 'time-entries');
+        const captureCalls = [];
+        const resizeCalls = [];
+        let current = null;
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            renderTimeEntries(preserveInlineDropdown) {
+                assert.equal(preserveInlineDropdown, true);
+                container.children.slice().forEach(child => container.removeChild(child));
+                const segment = this.timeSlots[0].planActivities[0];
+                current = createResizeFixture({
+                    captureCalls,
+                    startMinute: Number(segment.startMinute),
+                    endMinute: Number(segment.endMinute),
+                });
+                container.appendChild(current.entry);
+                attachPlanSegmentResizeListeners.call(this, current.entry, 0);
+            },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                this.timeSlots[baseIndex].planActivities[segmentIndex] = {
+                    ...this.timeSlots[baseIndex].planActivities[segmentIndex],
+                    endMinute: targetMinute,
+                    durationMinutes: targetMinute,
+                };
+                this.renderTimeEntries(true);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() {
+                return false;
+            },
+            closeInlinePlanDropdown() {},
+        };
+
+        ctx.renderTimeEntries(true);
+        const firstHandle = current.handle;
+        assert.equal(firstHandle.dataset.resizeListenerAttached, 'true');
+
+        firstHandle.dispatchEvent(createPointerEvent('pointerdown', firstHandle, 0));
+        assert.equal(listenerCounts.pointermove, 1);
+        assert.equal(listenerCounts.pointerup, 1);
+        assert.equal(listenerCounts.pointercancel, 1);
+        listeners.pointermove(createPointerEvent('pointermove', firstHandle, 100));
+        assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+        listeners.pointerup(createPointerEvent('pointerup', firstHandle, 100));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
+        assert.deepEqual(captureCalls.slice(0, 2), [['set', 7], ['release', 7]]);
+        assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
+        assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
+
+        const secondHandle = current.handle;
+        assert.notEqual(secondHandle, firstHandle);
+        assert.equal(secondHandle.dataset.resizeListenerAttached, 'true');
+        assert.equal(firstHandle.dataset.resizeListenerAttached, 'true');
+
+        secondHandle.dispatchEvent(createPointerEvent('pointerdown', secondHandle, 0));
+        assert.equal(listenerCounts.pointermove, 1);
+        assert.equal(listenerCounts.pointerup, 1);
+        assert.equal(listenerCounts.pointercancel, 1);
+        listeners.pointermove(createPointerEvent('pointermove', secondHandle, 100));
+        listeners.pointerup(createPointerEvent('pointerup', secondHandle, 100));
+
+        assert.deepEqual(resizeCalls, [
+            ['resize', 0, 0, 'right', 40],
+            ['resize', 0, 0, 'right', 50],
+        ]);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
+        assert.deepEqual(captureCalls, [
+            ['set', 7],
+            ['release', 7],
+            ['set', 7],
+            ['release', 7],
+        ]);
+        assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
+        assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
     });
 });
 

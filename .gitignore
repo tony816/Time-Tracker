@@ -9,5 +9,8 @@ node_modules/
 # SQLite data
 data/
 
+# Local smoke test artifacts
+artifacts/
+
 # macOS
 .DS_Store
