@@ -6930,7 +6930,7 @@ class TimeTracker {
         let cleared = false;
         root.querySelectorAll('.is-resizing-plan-segment').forEach((segment) => {
             if (segment && segment.classList && typeof segment.classList.remove === 'function') {
-                segment.classList.remove('is-resizing-plan-segment');
+                segment.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
                 cleared = true;
             }
         });
@@ -7074,7 +7074,9 @@ class TimeTracker {
             const cancelType = isPointerEvent ? 'pointercancel' : (isTouchEvent ? 'touchcancel' : null);
             const documentListenerOptions = isTouchEvent ? { capture: true, passive: false } : true;
             const captureEl = (handle && handle.setPointerCapture) ? handle : (event.target && event.target.setPointerCapture ? event.target : resizeSurfaceEl);
-            if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) resizeSurfaceEl.classList.add('is-resizing-plan-segment');
+            if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) {
+                resizeSurfaceEl.classList.add('is-resizing-plan-segment', `plan-segment-resize-edge-${effectiveEdge}`);
+            }
             const clickSuppressUntil = Date.now() + 700;
             this.planSegmentResizeClickSuppressUntil = clickSuppressUntil;
             if (segmentEl && segmentEl.dataset) segmentEl.dataset.planResizeClickSuppressUntil = String(clickSuppressUntil);
@@ -7193,7 +7195,9 @@ class TimeTracker {
                     if (cleanedUp) return;
                     cleanedUp = true;
                     removePreview();
-                    if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) resizeSurfaceEl.classList.remove('is-resizing-plan-segment');
+                    if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
+                        resizeSurfaceEl.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
+                    }
                     if (typeof this.clearActivePlanSegmentResizeClasses === 'function') {
                         this.clearActivePlanSegmentResizeClasses(grid || entryDiv);
                     }
