@@ -284,6 +284,8 @@ h1 {
 }
 
 .plan-segment-timer-button {
+  position: relative;
+  z-index: 13;
   align-self: stretch;
   border: 0;
   border-right: 1px solid rgba(0, 0, 0, 0.08);

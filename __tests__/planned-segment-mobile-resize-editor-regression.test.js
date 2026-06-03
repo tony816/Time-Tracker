@@ -182,13 +182,14 @@ function createResizeFixture(options = {}) {
     return { entry, grid, segment, handle };
 }
 
-function createPointerEvent(type, target, clientX) {
+function createPointerEvent(type, target, clientX, clientY = 40) {
     return {
         type,
         target,
         button: 0,
         pointerId: 7,
         clientX,
+        clientY,
         defaultPrevented: false,
         propagationStopped: false,
         preventDefault() {
@@ -395,6 +396,183 @@ test('plan segment resize remains interactive after renderTimeEntries replaces h
             ['set', 7],
             ['release', 7],
         ]);
+        assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
+        assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
+    });
+});
+
+test('mobile segment edge zone starts resize without targeting the handle', () => {
+    withDocument(({ listeners }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const down = createPointerEvent('pointerdown', fixture.segment, 590);
+        fixture.segment.dispatchEvent(down);
+
+        assert.equal(down.defaultPrevented, true);
+        assert.equal(down.propagationStopped, true);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), true);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.segment, 690));
+        listeners.pointerup(createPointerEvent('pointerup', fixture.segment, 690));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
+test('mobile segment edge zone does not steal clear label title or timer targets', () => {
+    withDocument(({ listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+        };
+        const fixture = createResizeFixture();
+        const label = createNode('span', 'plan-segment-label-text');
+        const title = createNode('span', 'plan-segment-graphic-title');
+        const timer = createNode('button', 'plan-segment-timer-button');
+        fixture.segment.appendChild(label);
+        fixture.segment.appendChild(title);
+        fixture.segment.appendChild(timer);
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        [
+            { target: label, clientX: 590 },
+            { target: title, clientX: 590 },
+            { target: timer, clientX: 20 },
+        ].forEach(({ target, clientX }) => {
+            const event = createPointerEvent('pointerdown', target, clientX);
+            fixture.segment.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, false);
+            assert.equal(event.propagationStopped, false);
+        });
+
+        assert.deepEqual(resizeCalls, []);
+        assert.equal(listenerCounts.pointermove || 0, 0);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
+test('desktop segment background edge does not start edge-zone resize but handle resize still works', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return false; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.segment.dispatchEvent(createPointerEvent('pointerdown', fixture.segment, 590));
+        assert.equal(listenerCounts.pointermove || 0, 0);
+
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+    });
+});
+
+test('edge-zone resize remains interactive after renderTimeEntries replaces segment nodes', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const container = createNode('div', 'time-entries');
+        const resizeCalls = [];
+        let current = null;
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            renderTimeEntries(preserveInlineDropdown) {
+                assert.equal(preserveInlineDropdown, true);
+                container.children.slice().forEach(child => container.removeChild(child));
+                const segment = this.timeSlots[0].planActivities[0];
+                current = createResizeFixture({
+                    startMinute: Number(segment.startMinute),
+                    endMinute: Number(segment.endMinute),
+                });
+                container.appendChild(current.entry);
+                attachPlanSegmentResizeListeners.call(this, current.entry, 0);
+            },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                this.timeSlots[baseIndex].planActivities[segmentIndex] = {
+                    ...this.timeSlots[baseIndex].planActivities[segmentIndex],
+                    endMinute: targetMinute,
+                    durationMinutes: targetMinute,
+                };
+                this.renderTimeEntries(true);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+
+        ctx.renderTimeEntries(true);
+        const firstSegment = current.segment;
+        firstSegment.dispatchEvent(createPointerEvent('pointerdown', firstSegment, 590));
+        listeners.pointermove(createPointerEvent('pointermove', firstSegment, 690));
+        listeners.pointerup(createPointerEvent('pointerup', firstSegment, 690));
+
+        const secondSegment = current.segment;
+        assert.notEqual(secondSegment, firstSegment);
+        secondSegment.dispatchEvent(createPointerEvent('pointerdown', secondSegment, 590));
+        listeners.pointermove(createPointerEvent('pointermove', secondSegment, 690));
+        listeners.pointerup(createPointerEvent('pointerup', secondSegment, 690));
+
+        assert.deepEqual(resizeCalls, [
+            ['resize', 0, 0, 'right', 40],
+            ['resize', 0, 0, 'right', 50],
+        ]);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
         assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
         assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
         assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);

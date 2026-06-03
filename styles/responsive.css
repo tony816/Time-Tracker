@@ -782,6 +782,34 @@ textarea:focus-visible,
         touch-action: none;
     }
 
+    .split-grid-segment[data-segment-kind="real-plan"]::before,
+    .split-grid-segment[data-segment-kind="real-plan"]::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 36px;
+        opacity: 0.42;
+        z-index: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease;
+    }
+
+    .split-grid-segment[data-segment-kind="real-plan"]::before {
+        left: 0;
+        background: linear-gradient(to right, rgba(30, 64, 175, 0.16), rgba(30, 64, 175, 0));
+    }
+
+    .split-grid-segment[data-segment-kind="real-plan"]::after {
+        right: 0;
+        background: linear-gradient(to left, rgba(30, 64, 175, 0.16), rgba(30, 64, 175, 0));
+    }
+
+    .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment::before,
+    .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment::after {
+        opacity: 0.82;
+    }
+
     .plan-segment-resize-handle-left {
         left: 0;
     }
@@ -792,8 +820,8 @@ textarea:focus-visible,
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        width: 4px;
-        background: rgba(30, 64, 175, 0.72);
+        width: 5px;
+        background: rgba(30, 64, 175, 0.74);
     }
 
     .plan-segment-resize-handle-left .plan-segment-boundary-resize-handle-line,

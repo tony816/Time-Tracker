@@ -394,6 +394,18 @@ test('mobile segment background tap outside text hit areas opens replacement dro
     assert.equal(event.propagationStopped, true);
 });
 
+test('mobile segment click immediately after edge resize is suppressed instead of opening replacement dropdown', () => {
+    const harness = createHarness();
+    harness.segment.dataset.planResizeClickSuppressUntil = String(Date.now() + 500);
+    const event = createClickEvent(harness.segment, 260, 78);
+
+    harness.segment.dispatchEvent(event);
+
+    assert.deepEqual(harness.calls, []);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true);
+});
+
 test('mobile segment background tap pre-scrolls before opening replacement sheet when segment would be covered', () => {
     const scrollCalls = [];
     const rafCalls = [];

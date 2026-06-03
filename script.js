@@ -6732,6 +6732,12 @@ class TimeTracker {
             segmentEl.dataset.selectionListenerAttached = 'true';
             segmentEl.addEventListener('click', (event) => {
                 if (event.button != null && event.button !== 0) return;
+                const suppressUntil = Number(segmentEl.dataset ? segmentEl.dataset.planResizeClickSuppressUntil : NaN);
+                if (Number.isFinite(suppressUntil) && Date.now() < suppressUntil) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
                 const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
                 const isCoarseContext = this.isCoarsePlanSegmentPointerContext
@@ -6941,86 +6947,121 @@ class TimeTracker {
     }
         attachPlanSegmentResizeListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
-        const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
-        handles.forEach((handle) => {
-            if (!handle || handle.dataset.resizeListenerAttached === 'true') return;
-            handle.dataset.resizeListenerAttached = 'true';
-            let suppressMouseDownUntil = 0;
-            const startResize = (event) => {
-                const isPointerEvent = event && event.type === 'pointerdown';
-                if (event && event.button != null && event.button !== 0) return;
-                if (!isPointerEvent && Date.now() < suppressMouseDownUntil) {
-                    return;
+        const interactiveResizeBlockSelector = '.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-label-text, .plan-segment-title-text, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection, button, input, select, textarea';
+        const getPointFromEvent = (event) => {
+            if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+                return { clientX: event.clientX, clientY: event.clientY };
+            }
+            const touch = event && event.changedTouches && event.changedTouches[0];
+            if (touch && Number.isFinite(touch.clientX) && Number.isFinite(touch.clientY)) {
+                return { clientX: touch.clientX, clientY: touch.clientY };
+            }
+            return null;
+        };
+        const resolveMobileEdgeResizeTarget = (event, segmentEl) => {
+            if (!event || !segmentEl || segmentEl.classList.contains('is-plan-segment-resize-disabled')) return null;
+            const target = event.target || null;
+            const point = getPointFromEvent(event);
+            const rect = typeof segmentEl.getBoundingClientRect === 'function'
+                ? segmentEl.getBoundingClientRect()
+                : null;
+            if (!point || !rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.right) || !Number.isFinite(rect.width) || rect.width <= 0) {
+                return null;
+            }
+            if (point.clientY < rect.top || point.clientY > rect.bottom || point.clientX < rect.left || point.clientX > rect.right) {
+                return null;
+            }
+            const baseWidth = Math.min(36, Math.max(24, rect.width * 0.28));
+            const edgeZoneWidth = Math.max(8, Math.min(baseWidth, rect.width * 0.4));
+            const boundaryRailWidth = Math.min(12, edgeZoneWidth);
+            const isOuterBoundaryRail = point.clientX <= rect.left + boundaryRailWidth
+                || point.clientX >= rect.right - boundaryRailWidth;
+            if (target && target.closest) {
+                if (target.closest('.plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-label-text, .plan-segment-title-text, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection, input, select, textarea')) {
+                    return null;
                 }
-                if (isPointerEvent) suppressMouseDownUntil = Date.now() + 500;
-                const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
-                const virtualRestEl = handle.closest && handle.closest('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
-                const resizeSurfaceEl = segmentEl || virtualRestEl;
-                if (!resizeSurfaceEl || (segmentEl && segmentEl.classList.contains('is-plan-segment-resize-disabled'))) return;
-                if (event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-timer-time, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection')) {
-                    return;
+                if (target.closest('.plan-segment-timer-button, button') && !isOuterBoundaryRail) {
+                    return null;
                 }
-                event.preventDefault();
-                event.stopPropagation();
-                const edge = handle.dataset.resizeEdge === 'left' ? 'left' : 'right';
-                let segmentIndex = parseInt(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentIndex || '' : '', 10);
-                let startMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentStartMinute : NaN);
-                let endMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentEndMinute : NaN);
-                const grid = resizeSurfaceEl.closest && resizeSurfaceEl.closest('.split-grid');
-                const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
-                const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
-                const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
-                const slot = this.timeSlots && this.timeSlots[baseIndex];
-                const originalPlanActivities = slot
-                    ? (this.normalizePlanActivitiesPreservingSegments
-                        ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
-                        : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
-                    : [];
-                if (typeof this.cleanupPlanSegmentResizeState === 'function') {
-                    this.cleanupPlanSegmentResizeState(grid || entryDiv);
-                }
-                if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
-                    this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
-                }
-                if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
-                    this.closeInlinePlanDropdown();
-                }
-                let effectiveEdge = edge;
-                if (!segmentEl && virtualRestEl) {
-                    const gapStartMinute = Number(virtualRestEl.dataset.gapStartMinute);
-                    const gapDurationMinutes = Number(virtualRestEl.dataset.gapDurationMinutes);
-                    const gapEndMinute = gapStartMinute + gapDurationMinutes;
-                    const indexedSegments = originalPlanActivities
-                        .map((item, itemIndex) => ({ item, itemIndex }))
-                        .filter(({ item }) => item && item.kind !== 'virtual-rest' && item.virtual !== true);
-                    const previous = indexedSegments.find(({ item }) => Number(item.endMinute) === gapStartMinute);
-                    const next = indexedSegments.find(({ item }) => Number(item.startMinute) === gapEndMinute);
-                    const target = edge === 'left'
-                        ? (previous ? { segmentIndex: previous.itemIndex, edge: 'right' } : null)
-                        : (next ? { segmentIndex: next.itemIndex, edge: 'left' } : null);
-                    if (!target) return;
-                    segmentIndex = target.segmentIndex;
-                    effectiveEdge = target.edge;
-                    const targetSegment = originalPlanActivities[segmentIndex];
-                    startMinute = Number(targetSegment && targetSegment.startMinute);
-                    endMinute = Number(targetSegment && targetSegment.endMinute);
-                }
-                if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return;
-                let previewLayer = null;
-                let lastPreviewDeltaUnits = null;
-                const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
-                let lastClientX = originX;
-                let cleanedUp = false;
-                const pointerId = event && event.pointerId;
-                const moveType = isPointerEvent ? 'pointermove' : 'mousemove';
-                const upType = isPointerEvent ? 'pointerup' : 'mouseup';
-                if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) resizeSurfaceEl.classList.add('is-resizing-plan-segment');
-                if (isPointerEvent && pointerId != null && handle.setPointerCapture) {
-                    try {
-                        handle.setPointerCapture(pointerId);
-                    } catch (_) {}
-                }
+            }
+            if (point.clientX <= rect.left + edgeZoneWidth) return 'left';
+            if (point.clientX >= rect.right - edgeZoneWidth) return 'right';
+            return null;
+        };
+        const startPlanSegmentResizeFromPointer = (event, context) => {
+            const isPointerEvent = event && event.type === 'pointerdown';
+            if (event && event.button != null && event.button !== 0) return false;
+            const handle = context && context.handleEl;
+            const segmentEl = context && context.segmentEl;
+            const virtualRestEl = context && context.virtualRestEl;
+            const resizeSurfaceEl = segmentEl || virtualRestEl;
+            if (!resizeSurfaceEl || (segmentEl && segmentEl.classList.contains('is-plan-segment-resize-disabled'))) return false;
+            if (!context.allowInteractiveEdge && event.target && event.target.closest && event.target.closest(interactiveResizeBlockSelector)) {
+                return false;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const edge = context && context.edge === 'left' ? 'left' : 'right';
+            let segmentIndex = parseInt(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentIndex || '' : '', 10);
+            let startMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentStartMinute : NaN);
+            let endMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentEndMinute : NaN);
+            const grid = resizeSurfaceEl.closest && resizeSurfaceEl.closest('.split-grid');
+            const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
+            const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+            const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
+            const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+            const slot = this.timeSlots && this.timeSlots[baseIndex];
+            const originalPlanActivities = slot
+                ? (this.normalizePlanActivitiesPreservingSegments
+                    ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
+                    : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
+                : [];
+            if (typeof this.cleanupPlanSegmentResizeState === 'function') {
+                this.cleanupPlanSegmentResizeState(grid || entryDiv);
+            }
+            if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
+                this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
+            }
+            if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+                this.closeInlinePlanDropdown();
+            }
+            let effectiveEdge = edge;
+            if (!segmentEl && virtualRestEl) {
+                const gapStartMinute = Number(virtualRestEl.dataset.gapStartMinute);
+                const gapDurationMinutes = Number(virtualRestEl.dataset.gapDurationMinutes);
+                const gapEndMinute = gapStartMinute + gapDurationMinutes;
+                const indexedSegments = originalPlanActivities
+                    .map((item, itemIndex) => ({ item, itemIndex }))
+                    .filter(({ item }) => item && item.kind !== 'virtual-rest' && item.virtual !== true);
+                const previous = indexedSegments.find(({ item }) => Number(item.endMinute) === gapStartMinute);
+                const next = indexedSegments.find(({ item }) => Number(item.startMinute) === gapEndMinute);
+                const target = edge === 'left'
+                    ? (previous ? { segmentIndex: previous.itemIndex, edge: 'right' } : null)
+                    : (next ? { segmentIndex: next.itemIndex, edge: 'left' } : null);
+                if (!target) return false;
+                segmentIndex = target.segmentIndex;
+                effectiveEdge = target.edge;
+                const targetSegment = originalPlanActivities[segmentIndex];
+                startMinute = Number(targetSegment && targetSegment.startMinute);
+                endMinute = Number(targetSegment && targetSegment.endMinute);
+            }
+            if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
+            let previewLayer = null;
+            let lastPreviewDeltaUnits = null;
+            const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
+            let lastClientX = originX;
+            let cleanedUp = false;
+            const pointerId = event && event.pointerId;
+            const moveType = isPointerEvent ? 'pointermove' : 'mousemove';
+            const upType = isPointerEvent ? 'pointerup' : 'mouseup';
+            const captureEl = (handle && handle.setPointerCapture) ? handle : (event.target && event.target.setPointerCapture ? event.target : resizeSurfaceEl);
+            if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) resizeSurfaceEl.classList.add('is-resizing-plan-segment');
+            if (segmentEl && segmentEl.dataset) segmentEl.dataset.planResizeClickSuppressUntil = String(Date.now() + 700);
+            if (isPointerEvent && pointerId != null && captureEl && captureEl.setPointerCapture) {
+                try {
+                    captureEl.setPointerCapture(pointerId);
+                } catch (_) {}
+            }
 
                 const removePreview = () => {
                     if (previewLayer && previewLayer.parentNode) {
@@ -7138,9 +7179,9 @@ class TimeTracker {
                     document.removeEventListener(moveType, update, true);
                     document.removeEventListener(upType, finish, true);
                     if (isPointerEvent) document.removeEventListener('pointercancel', cancel, true);
-                    if (isPointerEvent && pointerId != null && handle.releasePointerCapture) {
+                    if (isPointerEvent && pointerId != null && captureEl && captureEl.releasePointerCapture) {
                         try {
-                            handle.releasePointerCapture(pointerId);
+                            captureEl.releasePointerCapture(pointerId);
                         } catch (_) {}
                     }
                 };
@@ -7172,12 +7213,51 @@ class TimeTracker {
                 const cancel = () => {
                     cleanup();
                 };
+                updatePreview(originX);
                 document.addEventListener(moveType, update, true);
                 document.addEventListener(upType, finish, true);
                 if (isPointerEvent) document.addEventListener('pointercancel', cancel, true);
+                return true;
+            };
+        const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
+        handles.forEach((handle) => {
+            if (!handle || handle.dataset.resizeListenerAttached === 'true') return;
+            handle.dataset.resizeListenerAttached = 'true';
+            let suppressMouseDownUntil = 0;
+            const startResize = (event) => {
+                const isPointerEvent = event && event.type === 'pointerdown';
+                if (event && event.button != null && event.button !== 0) return;
+                if (!isPointerEvent && Date.now() < suppressMouseDownUntil) {
+                    return;
+                }
+                if (isPointerEvent) suppressMouseDownUntil = Date.now() + 500;
+                const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
+                const virtualRestEl = handle.closest && handle.closest('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
+                const edge = handle.dataset.resizeEdge === 'left' ? 'left' : 'right';
+                startPlanSegmentResizeFromPointer(event, { edge, segmentEl, virtualRestEl, handleEl: handle });
             };
             handle.addEventListener('pointerdown', startResize);
             handle.addEventListener('mousedown', startResize);
+        });
+        const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
+        segments.forEach((segmentEl) => {
+            if (!segmentEl || segmentEl.dataset.edgeResizeListenerAttached === 'true') return;
+            segmentEl.dataset.edgeResizeListenerAttached = 'true';
+            segmentEl.addEventListener('pointerdown', (event) => {
+                const isCoarseContext = this.isCoarsePlanSegmentPointerContext
+                    ? this.isCoarsePlanSegmentPointerContext()
+                    : false;
+                if (!isCoarseContext) return;
+                const edge = resolveMobileEdgeResizeTarget(event, segmentEl);
+                if (!edge) return;
+                startPlanSegmentResizeFromPointer(event, {
+                    edge,
+                    segmentEl,
+                    virtualRestEl: null,
+                    handleEl: null,
+                    allowInteractiveEdge: true,
+                });
+            }, true);
         });
     }
         applyInlinePlanBackgroundContext() {

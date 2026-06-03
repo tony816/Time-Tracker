@@ -1376,8 +1376,9 @@ test('plan segment resize uses pointer drag movement, base index, and suppresses
     };
     const entryDiv = {
         querySelectorAll(selector) {
-            assert.equal(selector, '.plan-segment-resize-handle');
-            return [handle];
+            if (selector === '.plan-segment-resize-handle') return [handle];
+            if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') return [];
+            assert.fail(`Unexpected selector: ${selector}`);
         },
     };
     const calls = [];
@@ -1491,8 +1492,10 @@ test('plan segment resize skips apply when drag does not cross a ten minute targ
         },
     };
     const entryDiv = {
-        querySelectorAll() {
-            return [handle];
+        querySelectorAll(selector) {
+            if (selector === '.plan-segment-resize-handle') return [handle];
+            if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') return [];
+            return [];
         },
     };
     const calls = [];
