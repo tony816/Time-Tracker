@@ -783,17 +783,27 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle-left {
-        left: -20px;
+        left: 0;
     }
 
     .plan-segment-resize-handle-right {
-        right: -20px;
+        right: 0;
     }
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        left: 18px;
         width: 4px;
         background: rgba(30, 64, 175, 0.72);
+    }
+
+    .plan-segment-resize-handle-left .plan-segment-boundary-resize-handle-line,
+    .plan-segment-resize-handle-left::after {
+        left: 0;
+    }
+
+    .plan-segment-resize-handle-right .plan-segment-boundary-resize-handle-line,
+    .plan-segment-resize-handle-right::after {
+        right: 0;
+        left: auto;
     }
 }

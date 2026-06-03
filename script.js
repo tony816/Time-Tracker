@@ -6200,18 +6200,19 @@ class TimeTracker {
         sheet.className = 'plan-segment-mobile-editor inline-plan-dropdown inline-plan-dropdown-sheet';
         sheet.setAttribute('role', 'dialog');
         sheet.setAttribute('aria-modal', 'true');
-        sheet.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
+        const dialogLabel = options.mobileAriaLabel || options.ariaLabel || '\uD65C\uB3D9\uBA85 \uC218\uC815';
+        sheet.setAttribute('aria-label', dialogLabel);
 
         const header = document.createElement('div');
         header.className = 'plan-segment-mobile-editor-header';
         const title = document.createElement('div');
         title.className = 'plan-segment-mobile-editor-title';
-        title.textContent = options.ariaLabel || 'Edit planned segment text';
+        title.textContent = dialogLabel;
         const closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'plan-segment-mobile-editor-close';
-        closeBtn.setAttribute('aria-label', 'Close');
-        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', '\uB2EB\uAE30');
+        closeBtn.textContent = '\u00D7';
         header.appendChild(title);
         header.appendChild(closeBtn);
 
@@ -6219,18 +6220,18 @@ class TimeTracker {
         input.type = 'text';
         input.className = 'plan-segment-mobile-editor-input';
         input.value = previousTitle;
-        input.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
+        input.setAttribute('aria-label', dialogLabel);
 
         const actions = document.createElement('div');
         actions.className = 'plan-segment-mobile-editor-actions';
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'plan-segment-mobile-editor-cancel';
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = '\uCDE8\uC18C';
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
         saveBtn.className = 'plan-segment-mobile-editor-save';
-        saveBtn.textContent = 'Save';
+        saveBtn.textContent = '\uC800\uC7A5';
         actions.appendChild(cancelBtn);
         actions.appendChild(saveBtn);
 
@@ -6283,6 +6284,28 @@ class TimeTracker {
                 closeEditor(false);
             }
         });
+        sheet.addEventListener('keydown', (keyEvent) => {
+            if (keyEvent.key === 'Escape') {
+                keyEvent.preventDefault();
+                keyEvent.stopPropagation();
+                closeEditor(false);
+                return;
+            }
+            if (keyEvent.key !== 'Tab') return;
+            const focusable = Array.from(sheet.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+                .filter((el) => !(el.disabled || (el.getAttribute && el.getAttribute('aria-hidden') === 'true')));
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = document.activeElement;
+            if (keyEvent.shiftKey && active === first) {
+                keyEvent.preventDefault();
+                last.focus();
+            } else if (!keyEvent.shiftKey && active === last) {
+                keyEvent.preventDefault();
+                first.focus();
+            }
+        });
 
         document.body.appendChild(backdrop);
         document.body.appendChild(sheet);
@@ -6323,13 +6346,15 @@ class TimeTracker {
     }
     startPlanSegmentActivityEdit(labelEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(labelEl, index, event, {
-            ariaLabel: 'Edit planned segment activity',
+            ariaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
+            mobileAriaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
             applyMethod: 'applyPlanSegmentTitleEdit',
         });
     }
     startPlanSegmentParentTitleEdit(titleEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
-            ariaLabel: 'Edit planned segment title',
+            ariaLabel: '\uC81C\uBAA9 \uC218\uC815',
+            mobileAriaLabel: '\uC81C\uBAA9 \uC218\uC815',
             applyMethod: 'applyPlanSegmentTitleTextEdit',
         });
     }
@@ -6869,6 +6894,51 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+        removePlanSegmentResizePreviewLayer(grid) {
+        if (!grid) return false;
+        let removed = false;
+        if (typeof grid.querySelectorAll === 'function') {
+            grid.querySelectorAll('.plan-segment-resize-preview-layer').forEach((layer) => {
+                if (layer && layer.parentNode) {
+                    if (typeof layer.parentNode.removeChild === 'function') {
+                        layer.parentNode.removeChild(layer);
+                    } else if (Array.isArray(layer.parentNode.children)) {
+                        layer.parentNode.children = layer.parentNode.children.filter(child => child !== layer);
+                    }
+                    removed = true;
+                }
+            });
+        }
+        if (grid.classList && typeof grid.classList.remove === 'function') {
+            grid.classList.remove('is-previewing-plan-resize');
+        }
+        return removed;
+    }
+        clearActivePlanSegmentResizeClasses(root) {
+        if (!root || typeof root.querySelectorAll !== 'function') return false;
+        let cleared = false;
+        root.querySelectorAll('.is-resizing-plan-segment').forEach((segment) => {
+            if (segment && segment.classList && typeof segment.classList.remove === 'function') {
+                segment.classList.remove('is-resizing-plan-segment');
+                cleared = true;
+            }
+        });
+        return cleared;
+    }
+        cleanupPlanSegmentResizeState(rootOrGrid) {
+        const root = rootOrGrid || (typeof document !== 'undefined' ? document : null);
+        if (!root) return false;
+        let changed = false;
+        if (root.classList && root.classList.contains && root.classList.contains('split-grid')) {
+            changed = this.removePlanSegmentResizePreviewLayer(root) || changed;
+        } else if (typeof root.querySelectorAll === 'function') {
+            root.querySelectorAll('.split-grid.is-previewing-plan-resize').forEach((grid) => {
+                changed = this.removePlanSegmentResizePreviewLayer(grid) || changed;
+            });
+        }
+        changed = this.clearActivePlanSegmentResizeClasses(root) || changed;
+        return changed;
+    }
         attachPlanSegmentResizeListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
         const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
@@ -6907,6 +6977,15 @@ class TimeTracker {
                         ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
                         : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
                     : [];
+                if (typeof this.cleanupPlanSegmentResizeState === 'function') {
+                    this.cleanupPlanSegmentResizeState(grid || entryDiv);
+                }
+                if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
+                    this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
+                }
+                if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+                    this.closeInlinePlanDropdown();
+                }
                 let effectiveEdge = edge;
                 if (!segmentEl && virtualRestEl) {
                     const gapStartMinute = Number(virtualRestEl.dataset.gapStartMinute);
@@ -6952,7 +7031,9 @@ class TimeTracker {
                         }
                     }
                     previewLayer = null;
-                    if (grid && grid.classList && grid.classList.remove) {
+                    if (typeof this.removePlanSegmentResizePreviewLayer === 'function') {
+                        this.removePlanSegmentResizePreviewLayer(grid);
+                    } else if (grid && grid.classList && grid.classList.remove) {
                         grid.classList.remove('is-previewing-plan-resize');
                     }
                 };
@@ -7051,6 +7132,9 @@ class TimeTracker {
                     cleanedUp = true;
                     removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) resizeSurfaceEl.classList.remove('is-resizing-plan-segment');
+                    if (typeof this.clearActivePlanSegmentResizeClasses === 'function') {
+                        this.clearActivePlanSegmentResizeClasses(grid || entryDiv);
+                    }
                     document.removeEventListener(moveType, update, true);
                     document.removeEventListener(upType, finish, true);
                     if (isPointerEvent) document.removeEventListener('pointercancel', cancel, true);
