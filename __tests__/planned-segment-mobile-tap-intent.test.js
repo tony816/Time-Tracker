@@ -406,6 +406,18 @@ test('mobile segment click immediately after edge resize is suppressed instead o
     assert.equal(event.propagationStopped, true);
 });
 
+test('mobile segment click after resize rerender is suppressed from controller state', () => {
+    const harness = createHarness();
+    harness.ctx.planSegmentResizeClickSuppressUntil = Date.now() + 500;
+    const event = createClickEvent(harness.segment, 260, 78);
+
+    harness.segment.dispatchEvent(event);
+
+    assert.deepEqual(harness.calls, []);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(event.propagationStopped, true);
+});
+
 test('mobile segment background tap pre-scrolls before opening replacement sheet when segment would be covered', () => {
     const scrollCalls = [];
     const rafCalls = [];

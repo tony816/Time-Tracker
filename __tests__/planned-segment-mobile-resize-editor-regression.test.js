@@ -96,13 +96,40 @@ function createNode(tagName = 'div', className = '', dataset = {}) {
         getAttribute(name) {
             return this.attributes ? this.attributes[name] : undefined;
         },
-        addEventListener(type, handler) {
+        addEventListener(type, handler, options = false) {
             listeners[type] = listeners[type] || [];
-            listeners[type].push(handler);
+            listeners[type].push({
+                handler,
+                capture: options === true || Boolean(options && options.capture),
+            });
+            node._listeners = listeners;
         },
         dispatchEvent(event) {
             if (!event.target) event.target = this;
-            (listeners[event.type] || []).forEach(handler => handler(event));
+            const getPath = (target) => {
+                const path = [];
+                let current = target;
+                while (current) {
+                    path.unshift(current);
+                    current = current.parentNode;
+                }
+                return path;
+            };
+            const invoke = (node, capture) => {
+                ((node && node._listeners && node._listeners[event.type]) || []).forEach((listener) => {
+                    if (event.propagationStopped || listener.capture !== capture) return;
+                    listener.handler(event);
+                });
+            };
+            const path = getPath(event.target);
+            path.slice(0, -1).forEach(ancestor => invoke(ancestor, true));
+            if (!event.propagationStopped) {
+                invoke(event.target, true);
+                invoke(event.target, false);
+            }
+            if (event.bubbles && !event.propagationStopped) {
+                path.slice(0, -1).reverse().forEach(ancestor => invoke(ancestor, false));
+            }
         },
         appendChild(child) {
             child.parentNode = this;
@@ -190,6 +217,24 @@ function createPointerEvent(type, target, clientX, clientY = 40) {
         pointerId: 7,
         clientX,
         clientY,
+        defaultPrevented: false,
+        propagationStopped: false,
+        preventDefault() {
+            this.defaultPrevented = true;
+        },
+        stopPropagation() {
+            this.propagationStopped = true;
+        },
+    };
+}
+
+function createTouchEvent(type, target, clientX, clientY = 40) {
+    const touch = { clientX, clientY };
+    return {
+        type,
+        target,
+        changedTouches: [touch],
+        touches: type === 'touchend' || type === 'touchcancel' ? [] : [touch],
         defaultPrevented: false,
         propagationStopped: false,
         preventDefault() {
@@ -402,6 +447,51 @@ test('plan segment resize remains interactive after renderTimeEntries replaces h
     });
 });
 
+test('handle target pointerdown is not intercepted by segment edge capture listener', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const pointerDown = createPointerEvent('pointerdown', fixture.handle, 0);
+        fixture.handle.dispatchEvent(pointerDown);
+
+        assert.equal(pointerDown.defaultPrevented, true);
+        assert.equal(pointerDown.propagationStopped, true);
+        assert.equal(listenerCounts.pointermove, 1);
+        assert.equal(listenerCounts.pointerup, 1);
+        assert.equal(listenerCounts.pointercancel, 1);
+
+        fixture.handle.dispatchEvent(createPointerEvent('mousedown', fixture.handle, 0));
+        assert.equal(listenerCounts.mousemove || 0, 0);
+        assert.equal(listenerCounts.mouseup || 0, 0);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
+    });
+});
+
 test('mobile segment edge zone starts resize without targeting the handle', () => {
     withDocument(({ listeners }) => {
         const resizeCalls = [];
@@ -436,6 +526,95 @@ test('mobile segment edge zone starts resize without targeting the handle', () =
         listeners.pointerup(createPointerEvent('pointerup', fixture.segment, 690));
 
         assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
+test('touch handle resize works without pointer events and cleans up', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const touchStart = createTouchEvent('touchstart', fixture.handle, 0);
+        fixture.handle.dispatchEvent(touchStart);
+
+        assert.equal(touchStart.defaultPrevented, true);
+        assert.equal(touchStart.propagationStopped, true);
+        assert.equal(listenerCounts.touchmove, 1);
+        assert.equal(listenerCounts.touchend, 1);
+        assert.equal(listenerCounts.touchcancel, 1);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+
+        listeners.touchmove(createTouchEvent('touchmove', fixture.handle, 100));
+        listeners.touchend(createTouchEvent('touchend', fixture.handle, 100));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(listenerCounts.touchmove, 0);
+        assert.equal(listenerCounts.touchend, 0);
+        assert.equal(listenerCounts.touchcancel, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+        assert.ok(Number(fixture.segment.dataset.planResizeClickSuppressUntil) >= Date.now());
+        assert.ok(Number(ctx.planSegmentResizeClickSuppressUntil) >= Date.now());
+    });
+});
+
+test('touch edge-zone resize works without pointer events and cleans up', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const touchStart = createTouchEvent('touchstart', fixture.segment, 590);
+        fixture.segment.dispatchEvent(touchStart);
+
+        assert.equal(touchStart.defaultPrevented, true);
+        assert.equal(touchStart.propagationStopped, true);
+        assert.equal(listenerCounts.touchmove, 1);
+        assert.equal(listenerCounts.touchend, 1);
+        assert.equal(listenerCounts.touchcancel, 1);
+
+        listeners.touchmove(createTouchEvent('touchmove', fixture.segment, 690));
+        listeners.touchend(createTouchEvent('touchend', fixture.segment, 690));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(listenerCounts.touchmove, 0);
+        assert.equal(listenerCounts.touchend, 0);
+        assert.equal(listenerCounts.touchcancel, 0);
         assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
         assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
     });
@@ -477,9 +656,20 @@ test('mobile segment edge zone does not steal clear label title or timer targets
             assert.equal(event.defaultPrevented, false);
             assert.equal(event.propagationStopped, false);
         });
+        [
+            { target: label, clientX: 590 },
+            { target: title, clientX: 590 },
+            { target: timer, clientX: 20 },
+        ].forEach(({ target, clientX }) => {
+            const event = createTouchEvent('touchstart', target, clientX);
+            fixture.segment.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, false);
+            assert.equal(event.propagationStopped, false);
+        });
 
         assert.deepEqual(resizeCalls, []);
         assert.equal(listenerCounts.pointermove || 0, 0);
+        assert.equal(listenerCounts.touchmove || 0, 0);
         assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
     });
 });

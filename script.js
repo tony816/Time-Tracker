@@ -6732,7 +6732,12 @@ class TimeTracker {
             segmentEl.dataset.selectionListenerAttached = 'true';
             segmentEl.addEventListener('click', (event) => {
                 if (event.button != null && event.button !== 0) return;
-                const suppressUntil = Number(segmentEl.dataset ? segmentEl.dataset.planResizeClickSuppressUntil : NaN);
+                const datasetSuppressUntil = Number(segmentEl.dataset ? segmentEl.dataset.planResizeClickSuppressUntil : NaN);
+                const stateSuppressUntil = Number(this.planSegmentResizeClickSuppressUntil);
+                const suppressUntil = Math.max(
+                    Number.isFinite(datasetSuppressUntil) ? datasetSuppressUntil : 0,
+                    Number.isFinite(stateSuppressUntil) ? stateSuppressUntil : 0
+                );
                 if (Number.isFinite(suppressUntil) && Date.now() < suppressUntil) {
                     event.preventDefault();
                     event.stopPropagation();
@@ -6949,23 +6954,33 @@ class TimeTracker {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
         const interactiveResizeBlockSelector = '.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-label-text, .plan-segment-title-text, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection, button, input, select, textarea';
         const getPointFromEvent = (event) => {
-            if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-                return { clientX: event.clientX, clientY: event.clientY };
+            if (event && Number.isFinite(event.clientX)) {
+                return {
+                    clientX: event.clientX,
+                    clientY: Number.isFinite(event.clientY) ? event.clientY : NaN,
+                };
             }
-            const touch = event && event.changedTouches && event.changedTouches[0];
-            if (touch && Number.isFinite(touch.clientX) && Number.isFinite(touch.clientY)) {
-                return { clientX: touch.clientX, clientY: touch.clientY };
+            const touch = event && (
+                (event.changedTouches && event.changedTouches[0])
+                || (event.touches && event.touches[0])
+            );
+            if (touch && Number.isFinite(touch.clientX)) {
+                return {
+                    clientX: touch.clientX,
+                    clientY: Number.isFinite(touch.clientY) ? touch.clientY : NaN,
+                };
             }
             return null;
         };
         const resolveMobileEdgeResizeTarget = (event, segmentEl) => {
             if (!event || !segmentEl || segmentEl.classList.contains('is-plan-segment-resize-disabled')) return null;
             const target = event.target || null;
+            if (target && target.closest && target.closest('.plan-segment-resize-handle')) return null;
             const point = getPointFromEvent(event);
             const rect = typeof segmentEl.getBoundingClientRect === 'function'
                 ? segmentEl.getBoundingClientRect()
                 : null;
-            if (!point || !rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.right) || !Number.isFinite(rect.width) || rect.width <= 0) {
+            if (!point || !Number.isFinite(point.clientY) || !rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.right) || !Number.isFinite(rect.width) || rect.width <= 0) {
                 return null;
             }
             if (point.clientY < rect.top || point.clientY > rect.bottom || point.clientX < rect.left || point.clientX > rect.right) {
@@ -6990,7 +7005,8 @@ class TimeTracker {
         };
         const startPlanSegmentResizeFromPointer = (event, context) => {
             const isPointerEvent = event && event.type === 'pointerdown';
-            if (event && event.button != null && event.button !== 0) return false;
+            const isTouchEvent = event && event.type === 'touchstart';
+            if (!isTouchEvent && event && event.button != null && event.button !== 0) return false;
             const handle = context && context.handleEl;
             const segmentEl = context && context.segmentEl;
             const virtualRestEl = context && context.virtualRestEl;
@@ -7048,15 +7064,20 @@ class TimeTracker {
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
             let previewLayer = null;
             let lastPreviewDeltaUnits = null;
-            const originX = Number.isFinite(event.clientX) ? event.clientX : 0;
+            const originPoint = getPointFromEvent(event);
+            const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
             let lastClientX = originX;
             let cleanedUp = false;
             const pointerId = event && event.pointerId;
-            const moveType = isPointerEvent ? 'pointermove' : 'mousemove';
-            const upType = isPointerEvent ? 'pointerup' : 'mouseup';
+            const moveType = isPointerEvent ? 'pointermove' : (isTouchEvent ? 'touchmove' : 'mousemove');
+            const upType = isPointerEvent ? 'pointerup' : (isTouchEvent ? 'touchend' : 'mouseup');
+            const cancelType = isPointerEvent ? 'pointercancel' : (isTouchEvent ? 'touchcancel' : null);
+            const documentListenerOptions = isTouchEvent ? { capture: true, passive: false } : true;
             const captureEl = (handle && handle.setPointerCapture) ? handle : (event.target && event.target.setPointerCapture ? event.target : resizeSurfaceEl);
             if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) resizeSurfaceEl.classList.add('is-resizing-plan-segment');
-            if (segmentEl && segmentEl.dataset) segmentEl.dataset.planResizeClickSuppressUntil = String(Date.now() + 700);
+            const clickSuppressUntil = Date.now() + 700;
+            this.planSegmentResizeClickSuppressUntil = clickSuppressUntil;
+            if (segmentEl && segmentEl.dataset) segmentEl.dataset.planResizeClickSuppressUntil = String(clickSuppressUntil);
             if (isPointerEvent && pointerId != null && captureEl && captureEl.setPointerCapture) {
                 try {
                     captureEl.setPointerCapture(pointerId);
@@ -7176,9 +7197,9 @@ class TimeTracker {
                     if (typeof this.clearActivePlanSegmentResizeClasses === 'function') {
                         this.clearActivePlanSegmentResizeClasses(grid || entryDiv);
                     }
-                    document.removeEventListener(moveType, update, true);
-                    document.removeEventListener(upType, finish, true);
-                    if (isPointerEvent) document.removeEventListener('pointercancel', cancel, true);
+                    document.removeEventListener(moveType, update, documentListenerOptions);
+                    document.removeEventListener(upType, finish, documentListenerOptions);
+                    if (cancelType) document.removeEventListener(cancelType, cancel, documentListenerOptions);
                     if (isPointerEvent && pointerId != null && captureEl && captureEl.releasePointerCapture) {
                         try {
                             captureEl.releasePointerCapture(pointerId);
@@ -7187,8 +7208,9 @@ class TimeTracker {
                 };
 
                 const update = (moveEvent) => {
-                    if (Number.isFinite(moveEvent && moveEvent.clientX)) {
-                        lastClientX = moveEvent.clientX;
+                    const point = getPointFromEvent(moveEvent);
+                    if (point && Number.isFinite(point.clientX)) {
+                        lastClientX = point.clientX;
                     }
                     updatePreview(lastClientX);
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
@@ -7196,8 +7218,9 @@ class TimeTracker {
                 };
 
                 const finish = (upEvent) => {
-                    if (Number.isFinite(upEvent && upEvent.clientX)) {
-                        lastClientX = upEvent.clientX;
+                    const point = getPointFromEvent(upEvent);
+                    if (point && Number.isFinite(point.clientX)) {
+                        lastClientX = point.clientX;
                     }
                     cleanup();
                     const unitsPerRow = 6;
@@ -7214,9 +7237,9 @@ class TimeTracker {
                     cleanup();
                 };
                 updatePreview(originX);
-                document.addEventListener(moveType, update, true);
-                document.addEventListener(upType, finish, true);
-                if (isPointerEvent) document.addEventListener('pointercancel', cancel, true);
+                document.addEventListener(moveType, update, documentListenerOptions);
+                document.addEventListener(upType, finish, documentListenerOptions);
+                if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);
                 return true;
             };
         const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
@@ -7224,13 +7247,19 @@ class TimeTracker {
             if (!handle || handle.dataset.resizeListenerAttached === 'true') return;
             handle.dataset.resizeListenerAttached = 'true';
             let suppressMouseDownUntil = 0;
+            let suppressPointerOrMouseDownUntil = 0;
             const startResize = (event) => {
                 const isPointerEvent = event && event.type === 'pointerdown';
+                const isTouchEvent = event && event.type === 'touchstart';
                 if (event && event.button != null && event.button !== 0) return;
+                if (!isTouchEvent && Date.now() < suppressPointerOrMouseDownUntil) {
+                    return;
+                }
                 if (!isPointerEvent && Date.now() < suppressMouseDownUntil) {
                     return;
                 }
                 if (isPointerEvent) suppressMouseDownUntil = Date.now() + 500;
+                if (isTouchEvent) suppressPointerOrMouseDownUntil = Date.now() + 700;
                 const segmentEl = handle.closest && handle.closest('.split-grid-segment[data-segment-kind="real-plan"]');
                 const virtualRestEl = handle.closest && handle.closest('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
                 const edge = handle.dataset.resizeEdge === 'left' ? 'left' : 'right';
@@ -7238,16 +7267,22 @@ class TimeTracker {
             };
             handle.addEventListener('pointerdown', startResize);
             handle.addEventListener('mousedown', startResize);
+            handle.addEventListener('touchstart', startResize, { passive: false });
         });
         const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
         segments.forEach((segmentEl) => {
             if (!segmentEl || segmentEl.dataset.edgeResizeListenerAttached === 'true') return;
             segmentEl.dataset.edgeResizeListenerAttached = 'true';
-            segmentEl.addEventListener('pointerdown', (event) => {
+            let suppressPointerEdgeDownUntil = 0;
+            const startEdgeResize = (event) => {
+                const isTouchEvent = event && event.type === 'touchstart';
+                if (event && event.target && event.target.closest && event.target.closest('.plan-segment-resize-handle')) return;
+                if (!isTouchEvent && Date.now() < suppressPointerEdgeDownUntil) return;
                 const isCoarseContext = this.isCoarsePlanSegmentPointerContext
                     ? this.isCoarsePlanSegmentPointerContext()
                     : false;
                 if (!isCoarseContext) return;
+                if (isTouchEvent) suppressPointerEdgeDownUntil = Date.now() + 700;
                 const edge = resolveMobileEdgeResizeTarget(event, segmentEl);
                 if (!edge) return;
                 startPlanSegmentResizeFromPointer(event, {
@@ -7257,7 +7292,9 @@ class TimeTracker {
                     handleEl: null,
                     allowInteractiveEdge: true,
                 });
-            }, true);
+            };
+            segmentEl.addEventListener('pointerdown', startEdgeResize, true);
+            segmentEl.addEventListener('touchstart', startEdgeResize, { capture: true, passive: false });
         });
     }
         applyInlinePlanBackgroundContext() {
