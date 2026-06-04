@@ -1386,7 +1386,7 @@ test('parent plan segment replacement clears previous child metadata', () => {
     ]);
 });
 
-test('plan segment resize preview updates adjacent boundary without mutating data on pointermove', () => {
+test('plan segment resize does not create preview overlay while preserving finish resize', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([
         { label: '샤워', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
@@ -1411,14 +1411,9 @@ test('plan segment resize preview updates adjacent boundary without mutating dat
 
         moveResizePreview(document, 10);
 
-        const layer = container.querySelector('.plan-segment-resize-preview-layer');
-        assert.ok(layer);
-        assert.equal(layer.ariaHidden, 'true');
-        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
-        assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 4', color: '#abcdef', label: '샤워', duration: '40m' },
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '5 / span 2', color: '#abcdef', label: '이동/저녁준비', duration: '20m' },
-        ]);
+        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
+        assert.deepEqual(getPreviewSegments(container), []);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
@@ -1433,7 +1428,7 @@ test('plan segment resize preview updates adjacent boundary without mutating dat
     }
 });
 
-test('plan segment resize preview shows virtual rest gap and cancels without applying', () => {
+test('plan segment resize cancel does not create preview rest or mutate data', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([
         { label: '샤워', seconds: 40 * 60, startMinute: 0, durationMinutes: 40, endMinute: 40 },
@@ -1457,10 +1452,9 @@ test('plan segment resize preview shows virtual rest gap and cancels without app
 
         moveResizePreview(document, -10);
 
-        assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: '1 / span 3', color: '#abcdef', label: '샤워', duration: '30m' },
-            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: '4 / span 3', color: '', label: '휴식', duration: '30m' },
-        ]);
+        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
+        assert.deepEqual(getPreviewSegments(container), []);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
 

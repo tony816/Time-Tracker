@@ -7012,24 +7012,7 @@ class TimeTracker {
         return true;
     }
         removePlanSegmentResizePreviewLayer(grid) {
-        if (!grid) return false;
-        let removed = false;
-        if (typeof grid.querySelectorAll === 'function') {
-            grid.querySelectorAll('.plan-segment-resize-preview-layer').forEach((layer) => {
-                if (layer && layer.parentNode) {
-                    if (typeof layer.parentNode.removeChild === 'function') {
-                        layer.parentNode.removeChild(layer);
-                    } else if (Array.isArray(layer.parentNode.children)) {
-                        layer.parentNode.children = layer.parentNode.children.filter(child => child !== layer);
-                    }
-                    removed = true;
-                }
-            });
-        }
-        if (grid.classList && typeof grid.classList.remove === 'function') {
-            grid.classList.remove('is-previewing-plan-resize');
-        }
-        return removed;
+        return false;
     }
         clearActivePlanSegmentResizeClasses(root) {
         if (!root || typeof root.querySelectorAll !== 'function') return false;
@@ -7046,13 +7029,6 @@ class TimeTracker {
         const root = rootOrGrid || (typeof document !== 'undefined' ? document : null);
         if (!root) return false;
         let changed = false;
-        if (root.classList && root.classList.contains && root.classList.contains('split-grid')) {
-            changed = this.removePlanSegmentResizePreviewLayer(root) || changed;
-        } else if (typeof root.querySelectorAll === 'function') {
-            root.querySelectorAll('.split-grid.is-previewing-plan-resize').forEach((grid) => {
-                changed = this.removePlanSegmentResizePreviewLayer(grid) || changed;
-            });
-        }
         changed = this.clearActivePlanSegmentResizeClasses(root) || changed;
         return changed;
     }
@@ -7201,8 +7177,6 @@ class TimeTracker {
                 endMinute = Number(targetSegment && targetSegment.endMinute);
             }
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
-            let previewLayer = null;
-            let lastPreviewDeltaUnits = null;
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
             let lastClientX = originX;
@@ -7225,115 +7199,9 @@ class TimeTracker {
                 } catch (_) {}
             }
 
-                const removePreview = () => {
-                    if (previewLayer && previewLayer.parentNode) {
-                        if (typeof previewLayer.parentNode.removeChild === 'function') {
-                            previewLayer.parentNode.removeChild(previewLayer);
-                        } else if (Array.isArray(previewLayer.parentNode.children)) {
-                            previewLayer.parentNode.children = previewLayer.parentNode.children.filter(child => child !== previewLayer);
-                        }
-                    }
-                    previewLayer = null;
-                    if (typeof this.removePlanSegmentResizePreviewLayer === 'function') {
-                        this.removePlanSegmentResizePreviewLayer(grid);
-                    } else if (grid && grid.classList && grid.classList.remove) {
-                        grid.classList.remove('is-previewing-plan-resize');
-                    }
-                };
-
-                const ensurePreviewLayer = () => {
-                    if (previewLayer || !grid || typeof document === 'undefined' || !document.createElement) return previewLayer;
-                    previewLayer = document.createElement('div');
-                    previewLayer.className = 'plan-segment-resize-preview-layer';
-                    previewLayer.setAttribute('aria-hidden', 'true');
-                    if (previewLayer.style) {
-                        const unitCount = Math.max(6, Math.ceil(blockMinutes / 10));
-                        previewLayer.style.gridTemplateColumns = `repeat(${unitCount}, 1fr)`;
-                        previewLayer.style.pointerEvents = 'none';
-                    }
-                    grid.appendChild(previewLayer);
-                    if (grid.classList && grid.classList.add) {
-                        grid.classList.add('is-previewing-plan-resize');
-                    }
-                    return previewLayer;
-                };
-
-                const appendPreviewSegment = (layer, segment) => {
-                    const startMinuteForSegment = Number.isFinite(segment.startMinute) ? Math.max(0, Math.floor(segment.startMinute)) : 0;
-                    const durationMinutesForSegment = Number.isFinite(segment.durationMinutes)
-                        ? Math.max(0, Math.floor(segment.durationMinutes))
-                        : Math.max(0, Math.floor(((Number(segment.seconds) || 0) / 60)));
-                    if (durationMinutesForSegment <= 0) return;
-                    const startUnit = Math.max(0, Math.floor(startMinuteForSegment / 10));
-                    const span = Math.max(1, Math.ceil(durationMinutesForSegment / 10));
-                    const isVirtualRest = Boolean(segment.virtual || segment.kind === 'virtual-rest');
-                    const previewSegment = document.createElement('div');
-                    previewSegment.className = isVirtualRest
-                        ? 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
-                        : 'plan-segment-resize-preview-segment';
-                    if (previewSegment.style) {
-                        previewSegment.style.gridColumn = `${startUnit + 1} / span ${span}`;
-                        if (!isVirtualRest && typeof this.getSplitColor === 'function') {
-                            const color = this.getSplitColor(
-                                'planned',
-                                segment.activityText || segment.label,
-                                segment.isExtra,
-                                segment.reservedIndices,
-                                'grid'
-                            );
-                            if (color) {
-                                if (typeof previewSegment.style.setProperty === 'function') {
-                                    previewSegment.style.setProperty('--split-segment-color', color);
-                                } else {
-                                    previewSegment.style['--split-segment-color'] = color;
-                                }
-                            }
-                        }
-                    }
-                    const label = document.createElement('span');
-                    label.className = 'plan-segment-resize-preview-label';
-                    label.textContent = isVirtualRest ? '휴식' : String(segment.activityText || segment.label || '');
-                    const duration = document.createElement('span');
-                    duration.className = 'plan-segment-resize-preview-duration';
-                    duration.textContent = `${durationMinutesForSegment}m`;
-                    previewSegment.appendChild(label);
-                    previewSegment.appendChild(duration);
-                    layer.appendChild(previewSegment);
-                };
-
-                const updatePreview = (clientX) => {
-                    const unitsPerRow = 6;
-                    const unitWidth = gridWidth / unitsPerRow;
-                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
-                    const deltaUnits = Math.round((clientX - originX) / unitWidth);
-                    if (deltaUnits === lastPreviewDeltaUnits) return;
-                    lastPreviewDeltaUnits = deltaUnits;
-                    const layer = ensurePreviewLayer();
-                    const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
-                    if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
-                    const deltaMinutes = deltaUnits * 10;
-                    const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    const resized = planSegmentCore.resizePlanSegmentInList(
-                        originalPlanActivities.map(item => ({ ...item })),
-                        segmentIndex,
-                        effectiveEdge,
-                        targetMinute,
-                        { startMinute: 0, endMinute: blockMinutes }
-                    );
-                    const gaps = (typeof planSegmentCore.calculateVirtualRestGaps === 'function')
-                        ? planSegmentCore.calculateVirtualRestGaps(resized, { startMinute: 0, endMinute: blockMinutes })
-                        : [];
-                    const previewSegments = resized.concat(gaps)
-                        .filter(item => item && Number.isFinite(item.durationMinutes) && item.durationMinutes > 0)
-                        .sort((a, b) => (a.startMinute || 0) - (b.startMinute || 0));
-                    layer.innerHTML = '';
-                    previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
-                };
-
                 const cleanup = () => {
                     if (cleanedUp) return;
                     cleanedUp = true;
-                    removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
                         resizeSurfaceEl.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
                     }
@@ -7355,7 +7223,6 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
                     }
-                    updatePreview(lastClientX);
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
                 };
@@ -7379,7 +7246,6 @@ class TimeTracker {
                 const cancel = () => {
                     cleanup();
                 };
-                updatePreview(originX);
                 document.addEventListener(moveType, update, documentListenerOptions);
                 document.addEventListener(upType, finish, documentListenerOptions);
                 if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);

@@ -39,11 +39,8 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment-virtual-rest\s*\{[^}]*align-self:\s*start;[^}]*pointer-events:\s*auto;[^}]*border-bottom:\s*1px dashed rgba\(126,\s*140,\s*154,\s*0\.42\)\s*!important;[^}]*height:\s*calc\(100% - 3px\);/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment-virtual-rest\[data-segment-kind="virtual-rest"\]\s*\{[^}]*overflow:\s*visible;/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment-virtual-rest:hover,\s*\.split-visualization-planned \.split-grid-segment-virtual-rest:focus-visible\s*\{[^}]*border-bottom-color:\s*rgba\(96,\s*110,\s*128,\s*0\.5\)\s*!important;/s);
-    assert.match(interactionsSource, /\.plan-segment-resize-preview-layer\s*\{[^}]*position:\s*absolute;[^}]*pointer-events:\s*none;[^}]*overflow:\s*hidden;/s);
-    assert.match(interactionsSource, /\.plan-segment-resize-preview-segment\s*\{[^}]*align-self:\s*stretch;[^}]*height:\s*100%;[^}]*max-height:\s*100%;[^}]*border-bottom:\s*3px solid #fff;[^}]*background:\s*var\(--split-segment-color,\s*rgba\(223,\s*228,\s*234,\s*0\.5\)\);/s);
-    assert.match(interactionsSource, /\.plan-segment-resize-preview-segment\.plan-segment-resize-preview-rest\s*\{[^}]*align-self:\s*start;[^}]*height:\s*calc\(100% - 3px\);[^}]*max-height:\s*calc\(100% - 3px\);/s);
-    assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*opacity:\s*0;/s);
-    assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment-virtual-rest\s*\{[^}]*opacity:\s*0;/s);
+    assert.doesNotMatch(interactionsSource, /plan-segment-resize-preview-layer|plan-segment-resize-preview-segment|plan-segment-resize-preview-rest|plan-segment-resize-preview-label|plan-segment-resize-preview-duration/);
+    assert.doesNotMatch(interactionsSource, /\.split-grid\.is-previewing-plan-resize/);
     assert.match(interactionsSource, /\.plan-segment-resize-handle\s*\{[^}]*width:\s*18px;[^}]*opacity:\s*1;/s);
     assert.match(interactionsSource, /\.plan-segment-boundary-resize-handle-line,\s*\.plan-segment-resize-handle::after\s*\{[^}]*width:\s*2px;/s);
     assert.doesNotMatch(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
