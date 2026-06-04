@@ -243,14 +243,21 @@ function buildSplitVisualization(type, index) {
                         : `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`;
                     planSegmentId = segmentId;
                     planSegmentIndex = segmentIndex;
+                    const timerSegmentContext = {
+                        segmentIndex,
+                        startMinute: Number(segment.startMinute),
+                        durationMinutes: Number(segment.durationMinutes),
+                        endMinute: Number(segment.endMinute),
+                        seconds: Number(segment.seconds),
+                    };
                     const model = this.buildPlanSegmentViewModel
-                        ? this.buildPlanSegmentViewModel(baseIndex, segmentId)
+                        ? this.buildPlanSegmentViewModel(baseIndex, segmentId, timerSegmentContext)
                         : {
                             id: segmentId,
                             display: {
                                 icon: this.getPlanSegmentTimerIcon ? this.getPlanSegmentTimerIcon(baseIndex, segmentId) : '▶',
-                                timeText: this.getPlanSegmentTimerText ? this.getPlanSegmentTimerText(baseIndex, segmentId) : '',
-                                tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex, segmentId) : 'under',
+                                timeText: this.getPlanSegmentTimerText ? this.getPlanSegmentTimerText(baseIndex, segmentId, timerSegmentContext) : '',
+                                tone: this.getPlanSegmentTimeTone ? this.getPlanSegmentTimeTone(baseIndex, segmentId, timerSegmentContext) : 'under',
                             },
                         };
                     isRunningPlanSegment = Boolean(

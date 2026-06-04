@@ -153,7 +153,9 @@
                         e.preventDefault();
                         e.stopPropagation();
                         if (isMobileInlinePlanSheetContext(this)) {
-                            syncOpenInlinePlanSheetTarget(this, plannedInput);
+                            const plannedContext = getPlannedContextForIndex(this, plannedIndex);
+                            const sheetTargetEl = getMergedPlannedBlockAnchor(this, plannedContext, plannedInput);
+                            syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
                             return;
                         }
                         this.clearSelection('planned');
@@ -188,7 +190,9 @@
                                     e.preventDefault();
                                     e.stopPropagation();
                                     if (isMobileInlinePlanSheetContext(this)) {
-                                        syncOpenInlinePlanSheetTarget(this, plannedCell);
+                                        const plannedContext = getPlannedContextForIndex(this, currentIndex);
+                                        const sheetTargetEl = getMergedPlannedBlockAnchor(this, plannedContext, plannedCell);
+                                        syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
                                         return;
                                     }
                                     this.clearSelection('planned');

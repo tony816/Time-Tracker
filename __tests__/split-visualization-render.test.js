@@ -203,6 +203,51 @@ test('buildSplitVisualization renders plan-only timer controls inside planned gr
     assert.match(html, /0m \/ 60m/);
 });
 
+test('buildSplitVisualization passes segment duration context to plan segment timers', () => {
+    const seen = [];
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: 'A', span: 2, segmentIndex: 0, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+                    { label: 'B', span: 3, segmentIndex: 1, startMinute: 60, durationMinutes: 80, endMinute: 140 },
+                    { label: 'C', span: 1, segmentIndex: 2, startMinute: 140, durationMinutes: 40, endMinute: 180 },
+                ],
+            };
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        getPlanSegmentId(baseIndex, segmentIndex) {
+            return `planned-${baseIndex}-2-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
+            seen.push({ baseIndex, segmentId, segmentContext });
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: {
+                    icon: 'play',
+                    timeText: `0m / ${segmentContext.durationMinutes}m`,
+                    tone: 'under',
+                },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 1);
+
+    assert.deepEqual(seen.map(item => item.segmentContext.durationMinutes), [60, 80, 40]);
+    assert.deepEqual(seen.map(item => item.segmentContext.segmentIndex), [0, 1, 2]);
+    assert.match(html, /0m \/ 60m/);
+    assert.match(html, /0m \/ 80m/);
+    assert.match(html, /0m \/ 40m/);
+    assert.doesNotMatch(html, /0m \/ 180m/);
+});
+
 test('buildSplitVisualization renders parent title above child activity inside plan segment', () => {
     const ctx = {
         actualRecordingDisabled: true,

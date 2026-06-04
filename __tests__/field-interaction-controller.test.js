@@ -272,6 +272,86 @@ test('attachCellClickListeners keeps an open mobile sheet on same empty slot ret
     ]);
 });
 
+test('merged secondary retap keeps mobile sheet synced to the base block anchor', () => {
+    const originalDocument = globalThis.document;
+    const baseAnchor = createListenerNode();
+    const secondaryField = createListenerNode();
+    secondaryField.dataset.index = '1';
+    secondaryField.closest = (selector) => selector === '.planned-input' ? secondaryField : null;
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 1);
+            return { startIndex: 0, endIndex: 2, mergeKey: 'planned-0-2' };
+        },
+        resolvePlannedSlotContext(index) {
+            assert.equal(index, 1);
+            return {
+                clickedIndex: 1,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 2,
+                mergeKey: 'planned-0-2',
+                isMerged: true,
+                slotCount: 3,
+                blockMinutes: 180,
+            };
+        },
+        isSameInlinePlanTarget(range) {
+            assert.deepEqual(range, { startIndex: 0, endIndex: 2, mergeKey: 'planned-0-2' });
+            return true;
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            calls.push(['sync', targetEl]);
+        },
+        clearSelection() {
+            calls.push(['clear']);
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+    };
+
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="0"] .planned-merged-main-container') return baseAnchor;
+            return null;
+        },
+    };
+
+    try {
+        controller.handleMergedClickCapture.call(ctx, {
+            type: 'click',
+            target: secondaryField,
+            preventDefault() {
+                calls.push(['prevent']);
+            },
+            stopPropagation() {
+                calls.push(['stop']);
+            },
+        });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.deepEqual(calls, [
+        ['prevent'],
+        ['stop'],
+        ['sync', baseAnchor],
+    ]);
+});
+
 test('planned mousedown retap keeps open mobile inline plan sheet', () => {
     const plannedField = createListenerNode();
     plannedField.closest = () => null;

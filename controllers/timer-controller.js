@@ -436,17 +436,50 @@ function getPlanSegmentRange(index) {
     return { start, end };
 }
 
-function getPlanSegmentPlannedSeconds(index) {
+function getPlanSegmentDurationSeconds(segmentContext = null) {
+    if (!segmentContext || typeof segmentContext !== 'object') return 0;
+    const durationMinutes = Number(segmentContext.durationMinutes);
+    if (Number.isFinite(durationMinutes) && durationMinutes > 0) {
+        return Math.max(0, Math.floor(durationMinutes * 60));
+    }
+    const endMinute = Number(segmentContext.endMinute);
+    const startMinute = Number(segmentContext.startMinute);
+    if (Number.isFinite(endMinute) && Number.isFinite(startMinute) && endMinute > startMinute) {
+        return Math.max(0, Math.floor((endMinute - startMinute) * 60));
+    }
+    const seconds = Number(segmentContext.seconds);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.max(0, Math.floor(seconds));
+    return 0;
+}
+
+function getPlanSegmentActivitySeconds(slot, segmentContext = null) {
+    const activities = typeof this.normalizePlanActivitiesArray === 'function'
+        ? this.normalizePlanActivitiesArray(slot && slot.planActivities)
+        : [];
+    const rawSegmentIndex = segmentContext && segmentContext.segmentIndex;
+    const segmentIndex = Number(rawSegmentIndex);
+    if (rawSegmentIndex !== null && rawSegmentIndex !== undefined && Number.isInteger(segmentIndex) && segmentIndex >= 0 && activities[segmentIndex]) {
+        const item = activities[segmentIndex];
+        const seconds = Number(item && item.seconds);
+        if (Number.isFinite(seconds) && seconds > 0) return Math.max(0, Math.floor(seconds));
+        const durationMinutes = Number(item && item.durationMinutes);
+        if (Number.isFinite(durationMinutes) && durationMinutes > 0) {
+            return Math.max(0, Math.floor(durationMinutes * 60));
+        }
+    }
+    return activities.reduce((sum, item) => {
+        const seconds = item && Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+        return sum + seconds;
+    }, 0);
+}
+
+function getPlanSegmentPlannedSeconds(index, segmentContext = null) {
+    const segmentSeconds = getPlanSegmentDurationSeconds(segmentContext);
+    if (segmentSeconds > 0) return segmentSeconds;
     if (typeof this.resolvePlannedSlotContext === 'function') {
         const context = this.resolvePlannedSlotContext(index);
         const slot = this.timeSlots[context.baseIndex] || {};
-        const activities = typeof this.normalizePlanActivitiesArray === 'function'
-            ? this.normalizePlanActivitiesArray(slot.planActivities)
-            : [];
-        const activitySeconds = activities.reduce((sum, item) => {
-            const seconds = item && Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-            return sum + seconds;
-        }, 0);
+        const activitySeconds = getPlanSegmentActivitySeconds.call(this, slot, segmentContext);
         if (activitySeconds > 0) return activitySeconds;
         return context.blockMinutes * 60;
     }
@@ -454,13 +487,7 @@ function getPlanSegmentPlannedSeconds(index) {
         ? this.getPlanSegmentRange(index)
         : getPlanSegmentRange.call(this, index);
     const slot = this.timeSlots[range.start] || {};
-    const activities = typeof this.normalizePlanActivitiesArray === 'function'
-        ? this.normalizePlanActivitiesArray(slot.planActivities)
-        : [];
-    const activitySeconds = activities.reduce((sum, item) => {
-        const seconds = item && Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
-        return sum + seconds;
-    }, 0);
+    const activitySeconds = getPlanSegmentActivitySeconds.call(this, slot, segmentContext);
     if (activitySeconds > 0) return activitySeconds;
     return Math.max(1, range.end - range.start + 1) * 3600;
 }
@@ -627,25 +654,25 @@ function handleSegmentTimerClick(segmentRef) {
     return true;
 }
 
-function getPlanSegmentTimerText(index, segmentId = null) {
+function getPlanSegmentTimerText(index, segmentId = null, segmentContext = null) {
     const core = this.getPlanSegmentTimerCore && this.getPlanSegmentTimerCore();
     const baseIndex = this.getPlanSegmentBaseIndex(index);
     const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
-    const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex);
+    const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex, segmentContext);
     if (core && typeof core.formatSegmentTimerText === 'function') {
         return core.formatSegmentTimerText(timer || {}, plannedSeconds);
     }
     return `0m / ${Math.floor(plannedSeconds / 60)}m`;
 }
 
-function getPlanSegmentTimeTone(index, segmentId = null) {
+function getPlanSegmentTimeTone(index, segmentId = null, segmentContext = null) {
     const core = this.getPlanSegmentTimerCore && this.getPlanSegmentTimerCore();
     if (!core || typeof core.getSegmentTimeTone !== 'function') return 'under';
     const baseIndex = this.getPlanSegmentBaseIndex(index);
     const timer = getPlanSegmentTimerState.call(this, baseIndex, segmentId);
     return core.getSegmentTimeTone({
         timer: timer || {},
-        plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex),
+        plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex, segmentContext),
     });
 }
 
@@ -867,6 +894,7 @@ function attachTimerListeners(entryDiv, index) {
         getPlanSegmentBaseIndex,
         getPlanSegmentIndexById,
         getPlanSegmentRange,
+        getPlanSegmentDurationSeconds,
         getPlanSegmentPlannedSeconds,
         getPlanSegmentId,
         resolvePlanSegmentBaseIndex,

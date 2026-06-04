@@ -379,6 +379,178 @@ test('plan segment timer from merged secondary row stores on base slot', () => {
     }
 });
 
+test('merged plan segment timer text uses each segment duration instead of the full block', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [
+                    { label: 'A', seconds: 3600 },
+                    { label: 'B', seconds: 4800 },
+                    { label: 'C', seconds: 2400 },
+                ],
+                planSegmentTimers: {},
+            },
+            {},
+            {},
+        ],
+        resolvePlannedSlotContext(index) {
+            return {
+                clickedIndex: index,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 2,
+                mergeKey: 'planned-0-2',
+                isMerged: true,
+                slotCount: 3,
+                blockMinutes: 180,
+            };
+        },
+        getPlanSegmentBaseIndex: timerController.getPlanSegmentBaseIndex,
+        getPlanSegmentPlannedSeconds: timerController.getPlanSegmentPlannedSeconds,
+        getPlanSegmentTimerCore() {
+            return {
+                formatSegmentTimerText(_timer, plannedSeconds) {
+                    return `0m / ${Math.floor(plannedSeconds / 60)}m`;
+                },
+            };
+        },
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value.map(item => ({ ...item })) : [];
+        },
+    };
+
+    assert.equal(timerController.getPlanSegmentTimerText.call(ctx, 0, 'planned-0-2-seg0', {
+        segmentIndex: 0,
+        startMinute: 0,
+        durationMinutes: 60,
+        endMinute: 60,
+    }), '0m / 60m');
+    assert.equal(timerController.getPlanSegmentTimerText.call(ctx, 0, 'planned-0-2-seg1', {
+        segmentIndex: 1,
+        startMinute: 60,
+        durationMinutes: 80,
+        endMinute: 140,
+    }), '0m / 80m');
+    assert.equal(timerController.getPlanSegmentTimerText.call(ctx, 0, 'planned-0-2-seg2', {
+        segmentIndex: 2,
+        startMinute: 140,
+        durationMinutes: 40,
+        endMinute: 180,
+    }), '0m / 40m');
+});
+
+test('plan segment planned seconds without segment context keeps the full activity sum', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [
+                    { label: 'A', seconds: 1200 },
+                    { label: 'B', seconds: 1800 },
+                ],
+            },
+        ],
+        resolvePlannedSlotContext() {
+            return {
+                clickedIndex: 0,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 0,
+                mergeKey: null,
+                isMerged: false,
+                slotCount: 1,
+                blockMinutes: 60,
+            };
+        },
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value.map(item => ({ ...item })) : [];
+        },
+    };
+
+    assert.equal(timerController.getPlanSegmentPlannedSeconds.call(ctx, 0), 3000);
+});
+
+test('plan segment planned seconds can fall back to the indexed activity duration', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [
+                    { label: 'A', seconds: 1200 },
+                    { label: 'B', durationMinutes: 45 },
+                ],
+            },
+        ],
+        resolvePlannedSlotContext() {
+            return {
+                clickedIndex: 0,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 0,
+                mergeKey: null,
+                isMerged: false,
+                slotCount: 1,
+                blockMinutes: 60,
+            };
+        },
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value.map(item => ({ ...item })) : [];
+        },
+    };
+
+    assert.equal(timerController.getPlanSegmentPlannedSeconds.call(ctx, 0, { segmentIndex: 1 }), 2700);
+});
+
+test('plan segment timer tone compares elapsed time against the segment duration', () => {
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [{ label: 'A', seconds: 1800 }],
+                planSegmentTimers: {
+                    'planned-0-2-seg0': {
+                        running: false,
+                        elapsed: 2400,
+                        elapsedSeconds: 2400,
+                        status: 'paused',
+                    },
+                },
+            },
+            {},
+            {},
+        ],
+        resolvePlannedSlotContext() {
+            return {
+                clickedIndex: 0,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 2,
+                mergeKey: 'planned-0-2',
+                isMerged: true,
+                slotCount: 3,
+                blockMinutes: 180,
+            };
+        },
+        getPlanSegmentBaseIndex: timerController.getPlanSegmentBaseIndex,
+        getPlanSegmentPlannedSeconds: timerController.getPlanSegmentPlannedSeconds,
+        getPlanSegmentTimerCore() {
+            return {
+                getSegmentTimeTone({ timer, plannedSeconds }) {
+                    const elapsed = Math.max(timer.elapsedSeconds || 0, timer.elapsed || 0);
+                    return elapsed >= plannedSeconds + 60 ? 'over' : 'under';
+                },
+            };
+        },
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value.map(item => ({ ...item })) : [];
+        },
+    };
+
+    assert.equal(timerController.getPlanSegmentTimeTone.call(ctx, 0, 'planned-0-2-seg0', {
+        segmentIndex: 0,
+        startMinute: 0,
+        durationMinutes: 30,
+        endMinute: 30,
+    }), 'over');
+});
+
 test('plan segment graphic clicks route to the inline plan dropdown anchor', () => {
     const calls = [];
     const plannedInput = {

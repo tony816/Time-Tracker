@@ -3944,8 +3944,8 @@ class TimeTracker {
         return globalThis.TimerController.getPlanSegmentRange.call(this, index);
     }
 
-    getPlanSegmentPlannedSeconds(index) {
-        return globalThis.TimerController.getPlanSegmentPlannedSeconds.call(this, index);
+    getPlanSegmentPlannedSeconds(index, segmentContext = null) {
+        return globalThis.TimerController.getPlanSegmentPlannedSeconds.call(this, index, segmentContext);
     }
 
     getPlanSegmentId(index, segmentIndex = null) {
@@ -3994,7 +3994,7 @@ class TimeTracker {
             : null;
     }
 
-    buildPlanSegmentViewModel(index, segmentId = null) {
+    buildPlanSegmentViewModel(index, segmentId = null, segmentContext = null) {
         const core = this.getPlanSegmentTimerCore();
         const baseIndex = this.getPlanSegmentBaseIndex(index);
         const slot = this.timeSlots[baseIndex] || {};
@@ -4005,7 +4005,7 @@ class TimeTracker {
         const segment = {
             id: resolvedSegmentId,
             title: this.getPlannedLabelForIndex(baseIndex) || slot.planned || '',
-            plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex),
+            plannedSeconds: this.getPlanSegmentPlannedSeconds(baseIndex, segmentContext),
             timer,
         };
         if (core && typeof core.buildPlanSegmentViewModel === 'function') {
@@ -4030,18 +4030,18 @@ class TimeTracker {
         };
     }
 
-    getPlanSegmentTimerText(index, segmentId = null) {
-        const model = this.buildPlanSegmentViewModel(index, segmentId);
+    getPlanSegmentTimerText(index, segmentId = null, segmentContext = null) {
+        const model = this.buildPlanSegmentViewModel(index, segmentId, segmentContext);
         if (model.display && typeof model.display.timeText === 'string') {
             return model.display.timeText;
         }
         const baseIndex = this.getPlanSegmentBaseIndex(index);
-        const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex);
+        const plannedSeconds = this.getPlanSegmentPlannedSeconds(baseIndex, segmentContext);
         return `0m / ${Math.ceil(plannedSeconds / 60)}m`;
     }
 
-    getPlanSegmentTimeTone(index, segmentId = null) {
-        const model = this.buildPlanSegmentViewModel(index, segmentId);
+    getPlanSegmentTimeTone(index, segmentId = null, segmentContext = null) {
+        const model = this.buildPlanSegmentViewModel(index, segmentId, segmentContext);
         return (model.display && model.display.tone) || 'under';
     }
 
