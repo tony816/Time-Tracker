@@ -97,6 +97,7 @@
         const effectiveRangeStart = Number.isInteger(range.startIndex) ? range.startIndex : context.rangeStart;
         const effectiveRangeEnd = Number.isInteger(range.endIndex) ? range.endIndex : effectiveRangeStart;
         const effectiveSlotCount = Math.max(1, effectiveRangeEnd - effectiveRangeStart + 1);
+        const effectiveIsMerged = Boolean(context.isMerged || (range.mergeKey && effectiveSlotCount > 1));
         const effectiveContext = context.isMerged
             ? context
             : {
@@ -104,6 +105,7 @@
                 baseIndex: effectiveRangeStart,
                 rangeStart: effectiveRangeStart,
                 rangeEnd: effectiveRangeEnd,
+                isMerged: effectiveIsMerged,
                 slotCount: effectiveSlotCount,
                 blockMinutes: effectiveSlotCount * 60,
             };
@@ -111,8 +113,9 @@
             ? plannedField.closest('.split-cell-wrapper.split-type-planned')
             : plannedField;
         const anchor = getMergedPlannedBlockAnchor(ctx, effectiveContext, rawAnchor);
+        const sheetTargetEl = effectiveContext.isMerged ? (rawAnchor || plannedField) : plannedField;
+        const viewportTargetEl = effectiveContext.isMerged ? sheetTargetEl : (anchor || plannedField);
         const open = () => {
-            const sheetTargetEl = getMergedPlannedBlockAnchor(ctx, effectiveContext, plannedField);
             ctx.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                 anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
                 sheetTargetEl,
@@ -126,7 +129,7 @@
             syncOpenInlinePlanSheetTarget(ctx, sheetTargetEl);
         };
         const delayed = typeof ctx.preparePlannedSlotReplacementViewport === 'function'
-            ? ctx.preparePlannedSlotReplacementViewport(anchor || plannedField)
+            ? ctx.preparePlannedSlotReplacementViewport(viewportTargetEl || sheetTargetEl || plannedField)
             : false;
         if (delayed) {
             scheduleAfterAnimationFrame(open);
@@ -153,8 +156,9 @@
                         e.preventDefault();
                         e.stopPropagation();
                         if (isMobileInlinePlanSheetContext(this)) {
-                            const plannedContext = getPlannedContextForIndex(this, plannedIndex);
-                            const sheetTargetEl = getMergedPlannedBlockAnchor(this, plannedContext, plannedInput);
+                            const sheetTargetEl = plannedInput.closest && plannedInput.closest('.split-cell-wrapper.split-type-planned')
+                                ? plannedInput.closest('.split-cell-wrapper.split-type-planned')
+                                : plannedInput;
                             syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
                             return;
                         }
@@ -190,8 +194,9 @@
                                     e.preventDefault();
                                     e.stopPropagation();
                                     if (isMobileInlinePlanSheetContext(this)) {
-                                        const plannedContext = getPlannedContextForIndex(this, currentIndex);
-                                        const sheetTargetEl = getMergedPlannedBlockAnchor(this, plannedContext, plannedCell);
+                                        const sheetTargetEl = plannedCell.closest && plannedCell.closest('.split-cell-wrapper.split-type-planned')
+                                            ? plannedCell.closest('.split-cell-wrapper.split-type-planned')
+                                            : plannedCell;
                                         syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
                                         return;
                                     }

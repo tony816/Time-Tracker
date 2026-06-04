@@ -626,6 +626,9 @@ class TimeTracker {
                 const anchor = document.querySelector(`[data-index="${context.baseIndex}"] .planned-merged-main-container`)
                     || planned.closest('.split-cell-wrapper.split-type-planned')
                     || planned;
+                const sheetTargetEl = context.mergeKey
+                    ? (planned.closest('.split-cell-wrapper.split-type-planned') || planned)
+                    : anchor;
                 const anchorRect = anchor && typeof anchor.getBoundingClientRect === 'function'
                     ? anchor.getBoundingClientRect()
                     : null;
@@ -634,7 +637,7 @@ class TimeTracker {
                     : 0;
                 this.openInlinePlanDropdown(start, anchor, end, {
                     anchorMinWidth,
-                    sheetTargetEl: anchor,
+                    sheetTargetEl,
                     baseIndex: context.baseIndex,
                     rangeStart: context.rangeStart,
                     rangeEnd: context.rangeEnd,

@@ -91,7 +91,7 @@ test('merged click capture closes same planned target before bubble reopen', () 
 test('merged click capture closes dropdown when clicking planned column inside current range', () => {
     assert.match(fieldInteractionControllerSource, /const currentRow = target\.closest && target\.closest\('\.time-entry\[data-index\]'\);/);
     assert.match(fieldInteractionControllerSource, /const inPlannedColumn = e\.clientX >= plannedRect\.left/);
-    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(isMobileInlinePlanSheetContext\(this\)\) \{\s+const plannedContext = getPlannedContextForIndex\(this, currentIndex\);\s+const sheetTargetEl = getMergedPlannedBlockAnchor\(this, plannedContext, plannedCell\);\s+syncOpenInlinePlanSheetTarget\(this, sheetTargetEl\);\s+return;\s+\}\s+this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
+    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(isMobileInlinePlanSheetContext\(this\)\) \{\s+const sheetTargetEl = plannedCell\.closest && plannedCell\.closest\('\.split-cell-wrapper\.split-type-planned'\)\s+\? plannedCell\.closest\('\.split-cell-wrapper\.split-type-planned'\)\s+: plannedCell;\s+syncOpenInlinePlanSheetTarget\(this, sheetTargetEl\);\s+return;\s+\}\s+this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
 });
 
 test('inline add auto-apply on empty slots forces dropdown close', () => {
@@ -108,7 +108,7 @@ test('planned mouseup path suppresses reopen when same-slot toggle close is arme
     assert.match(fieldInteractionControllerSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
     assert.match(fieldInteractionControllerSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
     assert.match(fieldInteractionControllerSource, /openPlannedFieldDropdownWithViewportPreparation\(this, base\.start, plannedField, base\.end\);/);
-    assert.match(fieldInteractionControllerSource, /ctx\.preparePlannedSlotReplacementViewport\(anchor \|\| plannedField\)/);
+    assert.match(fieldInteractionControllerSource, /ctx\.preparePlannedSlotReplacementViewport\(viewportTargetEl \|\| sheetTargetEl \|\| plannedField\)/);
     assert.match(fieldInteractionControllerSource, /scheduleAfterAnimationFrame\(open\);/);
 });
 

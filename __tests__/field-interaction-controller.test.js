@@ -272,7 +272,7 @@ test('attachCellClickListeners keeps an open mobile sheet on same empty slot ret
     ]);
 });
 
-test('merged secondary retap keeps mobile sheet synced to the base block anchor', () => {
+test('merged secondary retap keeps mobile sheet synced to the tapped row target', () => {
     const originalDocument = globalThis.document;
     const baseAnchor = createListenerNode();
     const secondaryField = createListenerNode();
@@ -348,7 +348,7 @@ test('merged secondary retap keeps mobile sheet synced to the base block anchor'
     assert.deepEqual(calls, [
         ['prevent'],
         ['stop'],
-        ['sync', baseAnchor],
+        ['sync', secondaryField],
     ]);
 });
 
@@ -444,7 +444,7 @@ test('merged planned click capture keeps logical range but opens against the cli
         inlinePlanDropdown: null,
         pendingMergedMouseSelection: { id: 'pending' },
         getPlannedRangeInfo() {
-            return { startIndex: 8, endIndex: 14 };
+            return { startIndex: 8, endIndex: 14, mergeKey: 'planned-8-14' };
         },
         activateMergedPlannedSelection(mergeKey, index) {
             calls.push(['activate', mergeKey, index]);
@@ -476,7 +476,7 @@ test('merged planned click capture keeps logical range but opens against the cli
     assert.equal(openCall[1], 8);
     assert.equal(openCall[2], wrapper);
     assert.equal(openCall[3], 14);
-    assert.equal(openCall[4].sheetTargetEl, plannedField);
+    assert.equal(openCall[4].sheetTargetEl, wrapper);
     assert.deepEqual(calls.slice(0, 3), [
         ['prevent'],
         ['stop'],
@@ -484,7 +484,7 @@ test('merged planned click capture keeps logical range but opens against the cli
     ]);
 });
 
-test('merged planned secondary click delegates inline dropdown target to base range anchor', () => {
+test('merged planned secondary click keeps dropdown anchored to base range but sheet target on tapped row', () => {
     const originalDocument = globalThis.document;
     const baseAnchor = createListenerNode();
     baseAnchor.getBoundingClientRect = () => ({ width: 640 });
@@ -565,7 +565,10 @@ test('merged planned secondary click delegates inline dropdown target to base ra
     assert.equal(openCall[1], 0);
     assert.equal(openCall[2], baseAnchor);
     assert.equal(openCall[3], 1);
-    assert.equal(openCall[4].sheetTargetEl, baseAnchor);
+    const prepareCall = calls.find((call) => call[0] === 'prepare');
+    assert.ok(prepareCall);
+    assert.equal(prepareCall[1], secondaryField);
+    assert.equal(openCall[4].sheetTargetEl, secondaryField);
     assert.equal(openCall[4].baseIndex, 0);
     assert.equal(openCall[4].rangeStart, 0);
     assert.equal(openCall[4].rangeEnd, 1);
