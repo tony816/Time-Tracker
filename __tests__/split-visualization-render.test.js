@@ -356,8 +356,10 @@ test('buildSplitVisualization renders one persistent shared handle at adjacent b
     const secondSegment = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-index="1"[\s\S]*?<\/div>/)[0];
 
     assert.match(firstSegment, /plan-segment-boundary-resize-handle-shared/);
+    assert.match(firstSegment, /has-shared-plan-boundary-handle/);
     assert.match(firstSegment, /plan-segment-resize-handle-right/);
     assert.doesNotMatch(secondSegment, /plan-segment-resize-handle-left/);
+    assert.doesNotMatch(secondSegment, /has-shared-plan-boundary-handle/);
     assert.doesNotMatch(secondSegment, /data-resize-edge="left"/);
     assert.equal((html.match(/plan-segment-boundary-resize-handle-shared/g) || []).length, 1);
 });

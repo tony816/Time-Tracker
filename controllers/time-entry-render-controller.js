@@ -324,11 +324,12 @@ function buildSplitVisualization(type, index) {
                 const nextTouches = nextSegment && getSegmentStartMinute(nextSegment) === endMinute;
                 const canResizeSegment = !isActual && this.actualRecordingDisabled && segment.label && (isVirtualRest || !isRunningPlanSegment);
                 const canRenderRightHandle = canResizeSegment && (!isVirtualRest || nextTouches);
+                const sharedBoundaryOwnerClass = canRenderRightHandle && nextTouches ? ' has-shared-plan-boundary-handle' : '';
                 const handleLine = '<span class="plan-segment-boundary-resize-handle-line" aria-hidden="true"></span>';
                 const resizeHandles = canResizeSegment
                     ? `${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
                     : '';
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}${selectedClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}${selectedClass}${sharedBoundaryOwnerClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

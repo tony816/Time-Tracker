@@ -2281,7 +2281,16 @@ button.activity-chip,
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"] {
   position: relative;
+  overflow: visible;
   pointer-events: auto;
+}
+
+.split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] {
+  overflow: visible;
+}
+
+.split-visualization-planned .split-grid-segment.has-shared-plan-boundary-handle {
+  z-index: 13;
 }
 
 .split-grid.is-previewing-plan-resize > .split-grid-segment[data-segment-kind="real-plan"] {
