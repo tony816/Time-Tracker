@@ -292,8 +292,10 @@ test('buildSplitVisualization renders resize handles only for idle real plan seg
 
     const idleHtml = buildSplitVisualization.call(idleCtx, 'planned', 0);
     assert.match(idleHtml, /data-segment-kind="real-plan"/);
-    assert.match(idleHtml, /plan-segment-resize-handle-left/);
+    assert.doesNotMatch(idleHtml, /plan-segment-resize-handle-left/);
+    assert.doesNotMatch(idleHtml, /data-resize-edge="left"/);
     assert.match(idleHtml, /plan-segment-resize-handle-right/);
+    assert.match(idleHtml, /data-resize-edge="right"/);
 
     const runningCtx = {
         ...idleCtx,
@@ -356,6 +358,7 @@ test('buildSplitVisualization renders one persistent shared handle at adjacent b
     assert.match(firstSegment, /plan-segment-boundary-resize-handle-shared/);
     assert.match(firstSegment, /plan-segment-resize-handle-right/);
     assert.doesNotMatch(secondSegment, /plan-segment-resize-handle-left/);
+    assert.doesNotMatch(secondSegment, /data-resize-edge="left"/);
     assert.equal((html.match(/plan-segment-boundary-resize-handle-shared/g) || []).length, 1);
 });
 

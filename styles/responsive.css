@@ -786,7 +786,6 @@ textarea:focus-visible,
         --plan-segment-mobile-edge-zone: 36px; /* Mirrors the 24-36px mobile JS edge-zone. */
     }
 
-    .split-grid-segment[data-segment-kind="real-plan"]::before,
     .split-grid-segment[data-segment-kind="real-plan"]::after {
         content: '';
         position: absolute;
@@ -799,13 +798,6 @@ textarea:focus-visible,
         transition: opacity 0.12s ease;
     }
 
-    .split-grid-segment[data-segment-kind="real-plan"]::before {
-        left: 0;
-        background:
-            linear-gradient(to right, rgba(30, 64, 175, 0.18), rgba(30, 64, 175, 0.06) 58%, rgba(30, 64, 175, 0)),
-            radial-gradient(circle at 18px 50%, rgba(255, 255, 255, 0.8) 0 1px, transparent 2px);
-    }
-
     .split-grid-segment[data-segment-kind="real-plan"]::after {
         right: 0;
         background:
@@ -813,18 +805,12 @@ textarea:focus-visible,
             radial-gradient(circle at calc(100% - 18px) 50%, rgba(255, 255, 255, 0.8) 0 1px, transparent 2px);
     }
 
-    .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment::before,
     .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment::after {
         opacity: 0.48;
     }
 
-    .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment.plan-segment-resize-edge-left::before,
     .split-grid-segment[data-segment-kind="real-plan"].is-resizing-plan-segment.plan-segment-resize-edge-right::after {
         opacity: 0.86;
-    }
-
-    .plan-segment-resize-handle-left {
-        left: 0;
     }
 
     .plan-segment-resize-handle-right {
@@ -835,11 +821,6 @@ textarea:focus-visible,
     .plan-segment-resize-handle::after {
         width: 5px;
         background: rgba(30, 64, 175, 0.74);
-    }
-
-    .plan-segment-resize-handle-left .plan-segment-boundary-resize-handle-line,
-    .plan-segment-resize-handle-left::after {
-        left: 17px;
     }
 
     .plan-segment-resize-handle-right .plan-segment-boundary-resize-handle-line,

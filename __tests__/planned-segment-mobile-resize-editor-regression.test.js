@@ -620,6 +620,90 @@ test('touch edge-zone resize works without pointer events and cleans up', () => 
     });
 });
 
+test('mobile left edge-zone on an adjacent segment uses the previous segment right boundary', () => {
+    withDocument(({ listeners }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [
+                { label: 'A', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+                { label: 'B', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+            ] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+        };
+        const entry = createNode('div', 'time-entry');
+        const grid = createNode('div', 'split-grid');
+        const firstSegment = createNode('div', 'split-grid-segment', {
+            segmentKind: 'real-plan',
+            segmentIndex: '0',
+            segmentStartMinute: '0',
+            segmentEndMinute: '30',
+        });
+        const secondSegment = createNode('div', 'split-grid-segment', {
+            segmentKind: 'real-plan',
+            segmentIndex: '1',
+            segmentStartMinute: '30',
+            segmentEndMinute: '60',
+        });
+        entry.appendChild(grid);
+        grid.appendChild(firstSegment);
+        grid.appendChild(secondSegment);
+
+        attachPlanSegmentResizeListeners.call(ctx, entry, 0);
+        const pointerStart = createPointerEvent('pointerdown', secondSegment, 20);
+        secondSegment.dispatchEvent(pointerStart);
+        assert.equal(pointerStart.defaultPrevented, true);
+        assert.equal(pointerStart.propagationStopped, true);
+        assert.equal(hasClass(firstSegment, 'is-resizing-plan-segment'), true);
+        assert.equal(hasClass(secondSegment, 'is-resizing-plan-segment'), false);
+
+        listeners.pointermove(createPointerEvent('pointermove', secondSegment, 120));
+        listeners.pointerup(createPointerEvent('pointerup', secondSegment, 120));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.equal(hasClass(firstSegment, 'is-resizing-plan-segment'), false);
+    });
+});
+
+test('mobile left edge-zone on the first segment does not create an independent resize target', () => {
+    withDocument(({ listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const pointerStart = createPointerEvent('pointerdown', fixture.segment, 20);
+        fixture.segment.dispatchEvent(pointerStart);
+
+        assert.equal(pointerStart.defaultPrevented, false);
+        assert.deepEqual(resizeCalls, []);
+        assert.equal(listenerCounts.pointermove || 0, 0);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
 test('mobile segment edge zone does not steal clear label title or timer targets', () => {
     withDocument(({ listenerCounts }) => {
         const resizeCalls = [];

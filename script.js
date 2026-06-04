@@ -7003,6 +7003,32 @@ class TimeTracker {
             if (point.clientX >= rect.right - edgeZoneWidth) return 'right';
             return null;
         };
+        const getSegmentMinute = (segmentEl, name) => {
+            const value = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset[name] : NaN);
+            return Number.isFinite(value) ? value : NaN;
+        };
+        const resolveSharedLeftBoundaryResizeContext = (segmentEl) => {
+            const grid = segmentEl && segmentEl.closest ? segmentEl.closest('.split-grid') : null;
+            if (!grid || typeof grid.querySelectorAll !== 'function') return null;
+            const startMinute = getSegmentMinute(segmentEl, 'segmentStartMinute');
+            if (!Number.isFinite(startMinute)) return null;
+            const segments = Array.from(grid.querySelectorAll('.split-grid-segment')).filter(item => {
+                const kind = item && item.dataset ? item.dataset.segmentKind : '';
+                return kind === 'real-plan' || kind === 'virtual-rest';
+            });
+            const currentIndex = segments.indexOf(segmentEl);
+            if (currentIndex <= 0) return null;
+            const previous = segments[currentIndex - 1];
+            const previousEndMinute = previous && previous.dataset && previous.dataset.segmentKind === 'virtual-rest'
+                ? getSegmentMinute(previous, 'gapStartMinute') + getSegmentMinute(previous, 'gapDurationMinutes')
+                : getSegmentMinute(previous, 'segmentEndMinute');
+            if (!Number.isFinite(previousEndMinute) || previousEndMinute !== startMinute) return null;
+            if (previous.dataset && previous.dataset.segmentKind === 'virtual-rest') {
+                return { edge: 'right', segmentEl: null, virtualRestEl: previous };
+            }
+            if (previous.classList && previous.classList.contains('is-plan-segment-resize-disabled')) return null;
+            return { edge: 'right', segmentEl: previous, virtualRestEl: null };
+        };
         const startPlanSegmentResizeFromPointer = (event, context) => {
             const isPointerEvent = event && event.type === 'pointerdown';
             const isTouchEvent = event && event.type === 'touchstart';
@@ -7289,10 +7315,12 @@ class TimeTracker {
                 if (isTouchEvent) suppressPointerEdgeDownUntil = Date.now() + 700;
                 const edge = resolveMobileEdgeResizeTarget(event, segmentEl);
                 if (!edge) return;
+                const resizeContext = edge === 'left'
+                    ? resolveSharedLeftBoundaryResizeContext(segmentEl)
+                    : { edge, segmentEl, virtualRestEl: null };
+                if (!resizeContext) return;
                 startPlanSegmentResizeFromPointer(event, {
-                    edge,
-                    segmentEl,
-                    virtualRestEl: null,
+                    ...resizeContext,
                     handleEl: null,
                     allowInteractiveEdge: true,
                 });

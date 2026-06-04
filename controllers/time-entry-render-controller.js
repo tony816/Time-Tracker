@@ -323,11 +323,10 @@ function buildSplitVisualization(type, index) {
                 const previousTouches = previousSegment && getSegmentEndMinute(previousSegment) === startMinute;
                 const nextTouches = nextSegment && getSegmentStartMinute(nextSegment) === endMinute;
                 const canResizeSegment = !isActual && this.actualRecordingDisabled && segment.label && (isVirtualRest || !isRunningPlanSegment);
-                const canRenderLeftHandle = canResizeSegment && !previousTouches && !isVirtualRest;
                 const canRenderRightHandle = canResizeSegment && (!isVirtualRest || nextTouches);
                 const handleLine = '<span class="plan-segment-boundary-resize-handle-line" aria-hidden="true"></span>';
                 const resizeHandles = canResizeSegment
-                    ? `${canRenderLeftHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-left plan-segment-boundary-resize-handle-left" data-resize-edge="left" aria-hidden="true">${handleLine}</span>` : ''}${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
+                    ? `${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
                     : '';
                 return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}${selectedClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
