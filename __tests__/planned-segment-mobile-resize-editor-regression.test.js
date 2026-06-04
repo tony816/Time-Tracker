@@ -331,7 +331,7 @@ test('plan segment resize cleans preview state and lets a newly rendered handle 
         attachPlanSegmentResizeListeners.call(ctx, first.entry, 0);
         first.handle.dispatchEvent(createPointerEvent('pointerdown', first.handle, 0));
         listeners.pointermove(createPointerEvent('pointermove', first.handle, 100));
-        assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
         listeners.pointerup(createPointerEvent('pointerup', first.handle, 100));
 
         assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
@@ -403,7 +403,7 @@ test('plan segment resize remains interactive after renderTimeEntries replaces h
         assert.equal(listenerCounts.pointerup, 1);
         assert.equal(listenerCounts.pointercancel, 1);
         listeners.pointermove(createPointerEvent('pointermove', firstHandle, 100));
-        assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
         listeners.pointerup(createPointerEvent('pointerup', firstHandle, 100));
 
         assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
@@ -520,7 +520,7 @@ test('mobile segment edge zone starts resize without targeting the handle', () =
         assert.equal(down.defaultPrevented, true);
         assert.equal(down.propagationStopped, true);
         assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), true);
-        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.segment, 690));
         listeners.pointerup(createPointerEvent('pointerup', fixture.segment, 690));
@@ -561,7 +561,7 @@ test('touch handle resize works without pointer events and cleans up', () => {
         assert.equal(listenerCounts.touchmove, 1);
         assert.equal(listenerCounts.touchend, 1);
         assert.equal(listenerCounts.touchcancel, 1);
-        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
 
         listeners.touchmove(createTouchEvent('touchmove', fixture.handle, 100));
         listeners.touchend(createTouchEvent('touchend', fixture.handle, 100));

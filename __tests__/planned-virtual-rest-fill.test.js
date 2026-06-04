@@ -1386,7 +1386,7 @@ test('parent plan segment replacement clears previous child metadata', () => {
     ]);
 });
 
-test('plan segment resize does not create preview overlay while preserving finish resize', () => {
+test('plan segment resize preview updates adjacent boundary without mutating data on pointermove', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([
         { label: '샤워', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
@@ -1411,9 +1411,15 @@ test('plan segment resize does not create preview overlay while preserving finis
 
         moveResizePreview(document, 10);
 
-        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
-        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
-        assert.deepEqual(getPreviewSegments(container), []);
+        const layer = container.querySelector('.plan-segment-resize-preview-layer');
+        assert.ok(layer);
+        assert.equal(layer.ariaHidden, 'true');
+        assert.equal(layer.style.gridTemplateColumns, 'repeat(6, 1fr)');
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
+        assert.deepEqual(getPreviewSegments(container), [
+            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 4', color: '#abcdef', label: '샤워', duration: '40m' },
+            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 2', color: '#abcdef', label: '이동/저녁준비', duration: '20m' },
+        ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
@@ -1428,7 +1434,89 @@ test('plan segment resize does not create preview overlay while preserving finis
     }
 });
 
-test('plan segment resize cancel does not create preview rest or mutate data', () => {
+test('merged plan segment resize preview uses the same six-unit row wrap as rendered segments', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+        { label: 'B', seconds: 80 * 60, startMinute: 60, durationMinutes: 80, endMinute: 140 },
+        { label: 'C', seconds: 40 * 60, startMinute: 140, durationMinutes: 40, endMinute: 180 },
+    ], {
+        overrides: {
+            timeSlots: [
+                {
+                    planned: 'A, B, C',
+                    planTitle: '',
+                    planTitleBandOn: false,
+                    planActivities: [
+                        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+                        { label: 'B', seconds: 80 * 60, startMinute: 60, durationMinutes: 80, endMinute: 140 },
+                        { label: 'C', seconds: 40 * 60, startMinute: 140, durationMinutes: 40, endMinute: 180 },
+                    ],
+                },
+                { planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] },
+                { planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] },
+            ],
+            mergedFields: new Map([['planned-0-2', 'A, B, C']]),
+            findMergeKey(type, index) {
+                return type === 'planned' && index >= 0 && index <= 2 ? 'planned-0-2' : null;
+            },
+            resolvePlannedSlotContext(index) {
+                return resolvePlannedSlotContext.call(this, index);
+            },
+            getSplitBaseIndex(type, index) {
+                assert.equal(type, 'planned');
+                return this.resolvePlannedSlotContext(index).baseIndex;
+            },
+            getSplitRange(type, index) {
+                assert.equal(type, 'planned');
+                const context = this.resolvePlannedSlotContext(index);
+                return { start: context.rangeStart, end: context.rangeEnd };
+            },
+            getPlanSegmentBaseIndex(index) {
+                return this.resolvePlannedSlotContext(index).baseIndex;
+            },
+            getBlockLength(type, index) {
+                assert.equal(type, 'planned');
+                assert.equal(index, 0);
+                return 3;
+            },
+        },
+    });
+    const applyCalls = [];
+    ctx.applyPlanSegmentResize = function(baseIndex, segmentIndex, edge, targetMinute) {
+        applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+        return true;
+    };
+    ctx.renderTimeEntries = function(preserveInlineDropdown = false) {
+        return renderController.renderTimeEntries.call(this, preserveInlineDropdown);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const handle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(handle);
+        assert.deepEqual(startResizePreview(handle, 0), { prevented: true, stopped: true });
+        moveResizePreview(document, 10);
+
+        const layer = container.querySelector('.plan-segment-resize-preview-layer');
+        assert.ok(layer);
+        assert.equal(layer.style.gridTemplateColumns, 'repeat(6, 1fr)');
+        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
+        const preview = getPreviewSegments(container);
+        assert.deepEqual(preview.map(segment => segment.gridColumn), ['span 6', 'span 1', 'span 5', 'span 2', 'span 4']);
+        assert.deepEqual(preview.map(segment => segment.label), ['A', 'A', 'B', 'B', 'C']);
+        assert.deepEqual(applyCalls, []);
+
+        finishResizePreview(document, 10);
+        assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 70 }]);
+        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('plan segment resize preview shows virtual rest gap and cancels without applying', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([
         { label: '샤워', seconds: 40 * 60, startMinute: 0, durationMinutes: 40, endMinute: 40 },
@@ -1452,9 +1540,10 @@ test('plan segment resize cancel does not create preview rest or mutate data', (
 
         moveResizePreview(document, -10);
 
-        assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
-        assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), false);
-        assert.deepEqual(getPreviewSegments(container), []);
+        assert.deepEqual(getPreviewSegments(container), [
+            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 3', color: '#abcdef', label: '샤워', duration: '30m' },
+            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: 'span 3', color: '', label: '휴식', duration: '30m' },
+        ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
 
