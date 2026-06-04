@@ -399,6 +399,9 @@ function commitRunningTimers(options = {}) {
 }
 
 function getPlanSegmentBaseIndex(index) {
+    if (typeof this.resolvePlannedSlotContext === 'function') {
+        return this.resolvePlannedSlotContext(index).baseIndex;
+    }
     const plannedMergeKey = this.findMergeKey('planned', index);
     if (!plannedMergeKey) return index;
     const [, startStr] = plannedMergeKey.split('-');
@@ -415,6 +418,10 @@ function getPlanSegmentIndexById(segmentId) {
 }
 
 function getPlanSegmentRange(index) {
+    if (typeof this.resolvePlannedSlotContext === 'function') {
+        const context = this.resolvePlannedSlotContext(index);
+        return { start: context.rangeStart, end: context.rangeEnd };
+    }
     const baseIndex = typeof this.getPlanSegmentBaseIndex === 'function'
         ? this.getPlanSegmentBaseIndex(index)
         : getPlanSegmentBaseIndex.call(this, index);
@@ -430,6 +437,19 @@ function getPlanSegmentRange(index) {
 }
 
 function getPlanSegmentPlannedSeconds(index) {
+    if (typeof this.resolvePlannedSlotContext === 'function') {
+        const context = this.resolvePlannedSlotContext(index);
+        const slot = this.timeSlots[context.baseIndex] || {};
+        const activities = typeof this.normalizePlanActivitiesArray === 'function'
+            ? this.normalizePlanActivitiesArray(slot.planActivities)
+            : [];
+        const activitySeconds = activities.reduce((sum, item) => {
+            const seconds = item && Number.isFinite(item.seconds) ? Math.max(0, Math.floor(item.seconds)) : 0;
+            return sum + seconds;
+        }, 0);
+        if (activitySeconds > 0) return activitySeconds;
+        return context.blockMinutes * 60;
+    }
     const range = typeof this.getPlanSegmentRange === 'function'
         ? this.getPlanSegmentRange(index)
         : getPlanSegmentRange.call(this, index);
@@ -457,7 +477,9 @@ function getPlanSegmentId(index) {
 
 function resolvePlanSegmentBaseIndex(segmentRef) {
     if (typeof segmentRef === 'number' && Number.isInteger(segmentRef)) {
-        return segmentRef;
+        return typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(segmentRef).baseIndex
+            : segmentRef;
     }
     if (typeof segmentRef === 'string') {
         const byId = getPlanSegmentIndexById.call(this, segmentRef);

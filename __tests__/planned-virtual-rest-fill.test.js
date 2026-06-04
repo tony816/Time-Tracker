@@ -23,6 +23,10 @@ const computeSplitSegments = buildMethod(
     'computeSplitSegments(type, index)',
     '(type, index)'
 );
+const resolvePlannedSlotContext = buildMethod(
+    'resolvePlannedSlotContext(index)',
+    '(index)'
+);
 const getSplitActivities = buildMethod(
     'getSplitActivities(type, baseIndex)',
     '(type, baseIndex)'
@@ -285,6 +289,148 @@ function summarizeGridSegments(context) {
         virtual: segment.virtual,
     }));
 }
+
+test('resolvePlannedSlotContext maps merged planned secondary rows to the base range', () => {
+    const ctx = {
+        mergedFields: new Map([['planned-0-1', 'Focus']]),
+        findMergeKey(type, index) {
+            if (type !== 'planned') return null;
+            return index >= 0 && index <= 1 ? 'planned-0-1' : null;
+        },
+    };
+
+    assert.deepEqual(resolvePlannedSlotContext.call(ctx, 1), {
+        clickedIndex: 1,
+        baseIndex: 0,
+        rangeStart: 0,
+        rangeEnd: 1,
+        mergeKey: 'planned-0-1',
+        isMerged: true,
+        slotCount: 2,
+        blockMinutes: 120,
+    });
+});
+
+test('merged planned visualization uses base planActivities across the full merged block', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+        { label: 'B', seconds: 30 * 60, startMinute: 60, durationMinutes: 30, endMinute: 90 },
+    ]);
+    ctx.timeSlots.push({ planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] });
+    ctx.mergedFields = new Map([['planned-0-1', 'A, B']]);
+    ctx.findMergeKey = (type, index) => (type === 'planned' && index >= 0 && index <= 1 ? 'planned-0-1' : null);
+    ctx.resolvePlannedSlotContext = function(index) {
+        return resolvePlannedSlotContext.call(this, index);
+    };
+    ctx.getPlanSegmentBaseIndex = function(index) {
+        return this.resolvePlannedSlotContext(index).baseIndex;
+    };
+
+    const baseResult = computeSplitSegments.call(ctx, 'planned', 0);
+    const secondaryResult = computeSplitSegments.call(ctx, 'planned', 1);
+
+    assert.equal(secondaryResult, null);
+    assert.equal(baseResult.gridSegments.reduce((sum, segment) => sum + segment.span, 0), 12);
+    const virtualGaps = baseResult.gridSegments.filter((segment) => segment.kind === 'virtual-rest');
+    assert.deepEqual(virtualGaps.map((segment) => segment.durationMinutes), [30, 30]);
+});
+
+test('merged planned virtual rest fill writes only to the base slot timeline', () => {
+    const { ctx, subBoard, anchor } = createGapFillContext();
+    ctx.inlinePlanTarget = {
+        startIndex: 0,
+        endIndex: 1,
+        baseIndex: 0,
+        rangeStart: 0,
+        rangeEnd: 1,
+        mergeKey: 'planned-0-1',
+        anchor,
+        mode: 'virtual-rest-gap',
+        gapStartMinute: 20,
+        gapDurationMinutes: 20,
+        blockMinutes: 120,
+    };
+    ctx.timeSlots.push({
+        planned: 'stale secondary',
+        planTitle: 'stale',
+        planTitleBandOn: true,
+        planActivities: [{ label: 'stale', seconds: 3600 }],
+    });
+    ctx.mergedFields.set('planned-0-1', 'A, B');
+
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createNode,
+        querySelector() {
+            return anchor;
+        },
+    };
+
+    try {
+        inlineController.openPlanActivityChildMenu.call(ctx, { id: 'fill', label: 'Fill' }, anchor, []);
+        const selfRow = subBoard.children.find((node) => node.children[0] && String(node.children[0].className).includes('activity-chip-self'));
+        selfRow.children[0].dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        seconds: item.seconds,
+    })), [
+        { label: 'A', seconds: 20 * 60 },
+        { label: 'Fill', seconds: 20 * 60 },
+        { label: 'B', seconds: 20 * 60 },
+    ]);
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
+    assert.equal(ctx.timeSlots[1].planned, '');
+});
+
+test('merged planned segment resize uses merged blockMinutes and stores on base slot', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    ctx.timeSlots.push({ planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] });
+    ctx.mergedFields = new Map([['planned-0-1', 'A']]);
+    ctx.findMergeKey = (type, index) => (type === 'planned' && index >= 0 && index <= 1 ? 'planned-0-1' : null);
+    ctx.resolvePlannedSlotContext = function(index) {
+        return resolvePlannedSlotContext.call(this, index);
+    };
+    ctx.getPlanSegmentBaseIndex = function(index) {
+        return this.resolvePlannedSlotContext(index).baseIndex;
+    };
+
+    const result = applyPlanSegmentResize.call(ctx, 1, 0, 'right', 90);
+
+    assert.equal(result, true);
+    assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 90);
+    assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 90);
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
+    assert.equal(ctx.lastRenderContext.gridSegments.reduce((sum, segment) => sum + segment.span, 0), 12);
+});
+
+test('merged planned segment replacement from secondary row stores on base slot', () => {
+    const ctx = createPlannedRenderContext([
+        { label: 'A', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    ctx.timeSlots.push({ planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] });
+    ctx.mergedFields = new Map([['planned-0-1', 'A']]);
+    ctx.findMergeKey = (type, index) => (type === 'planned' && index >= 0 && index <= 1 ? 'planned-0-1' : null);
+    ctx.resolvePlannedSlotContext = function(index) {
+        return resolvePlannedSlotContext.call(this, index);
+    };
+
+    const replaced = replacePlanSegmentActivity.call(ctx, 1, 0, { id: 'b', label: 'B' });
+
+    assert.equal(replaced, true);
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, 'B');
+    assert.equal(ctx.timeSlots[0].planActivities[0].activityId, 'b');
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
+});
 
 function toDatasetKey(name) {
     return String(name || '').replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());

@@ -383,6 +383,7 @@
             const slotActualActivities = Array.isArray(actualBySlot[rel]) ? actualBySlot[rel] : [];
 
             slot.planActivities = slotPlanActivities.map(item => ({ ...item }));
+            slot.planSegmentTimers = {};
             slot.activityLog.subActivities = slotActualActivities.map(item => ({ ...item }));
 
             slot.planned = summarizeLabel(slotPlanActivities, mergedPlannedText);
@@ -683,61 +684,7 @@
 
     function showScheduleButtonForSelection(type) {
         this.hideScheduleButton();
-        return;
-
-        // 스케줄 입력 버튼은 계획(planned) 컬럼에서만 표시
-        if (type !== 'planned') return;
-
-        const overlay = getSelectionOverlayElement.call(this, type);
-        if (!overlay) return;
-
-        const selectedSet = getSelectionSetForType.call(this, type);
-        if (selectedSet.size === 0) return;
-
-        // 병합 버튼과 동시 표시는 하지 않음: 멀티 선택(병합 후보)에서는 스케줄 버튼 숨김
-        // 단, 이미 병합된 범위를 선택한 경우(Undo 가능)는 예외로 스케줄 버튼 표시
-        if (selectedSet.size > 1) {
-            const indices = Array.from(selectedSet).sort((a,b)=>a-b);
-            const firstIndex = indices[0];
-            const mk = this.findMergeKey('planned', firstIndex);
-            const isMergedSelection = mk ? this.isMergeRangeSelected('planned', mk) : false;
-            if (!isMergedSelection) {
-                // 멀티 선택이지만 병합 범위가 아닌 경우 → 병합 버튼만 필요
-                return;
-            }
-        }
-
-        const rect = overlay.getBoundingClientRect();
-
-        this.scheduleButton = document.createElement('button');
-        this.scheduleButton.className = 'schedule-button';
-        this.scheduleButton.textContent = '📅';
-        this.scheduleButton.title = '스케줄 입력';
-        this.scheduleButton.setAttribute('aria-label', '스케줄 입력');
-        // 위치는 CSS로 오버레이 정중앙에 표시 (hover 시 노출)
-
-            this.scheduleButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-                const firstIndex = selectedIndices[0];
-                const lastIndex = selectedIndices[selectedIndices.length - 1];
-                const anchor = document.querySelector(`[data-index="${firstIndex}"] .planned-input`) || document.querySelector(`[data-index="${firstIndex}"]`);
-                this.openInlinePlanDropdown(firstIndex, anchor, lastIndex);
-            });
-
-        // 스케줄 버튼은 오버레이 내부에 배치
-        overlay.appendChild(this.scheduleButton);
-        // 되돌리기 버튼(병합된 범위 선택 시)이 있으면 스케줄 버튼 우측으로 정렬
-        this.repositionButtonsNextToSchedule();
-
-        // 클릭 시 현재 선택 범위에 대해 모달 오픈
-        this.scheduleButton.onclick = (e) => {
-            e.stopPropagation();
-            const selectedIndices = Array.from(selectedSet).sort((a, b) => a - b);
-            const firstIndex = selectedIndices[0];
-            const lastIndex = selectedIndices[selectedIndices.length - 1];
-            this.openScheduleModal(type, firstIndex, lastIndex);
-        };
+        return false;
     }
 
     function showScheduleButtonOnHover(index) {

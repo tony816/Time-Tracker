@@ -38,6 +38,10 @@ const applyPlanSegmentTitleTextEdit = buildMethod(
     'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
 );
+const resolvePlannedSlotContext = buildMethod(
+    'resolvePlannedSlotContext(index)',
+    '(index)'
+);
 const attachPlanSegmentSelectionListeners = buildMethod(
     'attachPlanSegmentSelectionListeners(entryDiv, index)',
     '(entryDiv, index)'
@@ -619,6 +623,27 @@ test('child segment title edit preserves title band state while clearing stale i
     });
     assert.equal(ctx.timeSlots[0].planTitle, 'Exercise');
     assert.equal(ctx.timeSlots[0].planTitleBandOn, true);
+});
+
+test('merged planned segment title edit from secondary row stores on base slot', () => {
+    const ctx = createTitleEditHarness().ctx;
+    ctx.timeSlots.push({
+        planned: '',
+        planTitle: '',
+        planTitleBandOn: false,
+        planActivities: [],
+    });
+    ctx.mergedFields = new Map([['planned-0-1', 'Focus']]);
+    ctx.findMergeKey = (type, index) => (type === 'planned' && index >= 0 && index <= 1 ? 'planned-0-1' : null);
+    ctx.resolvePlannedSlotContext = function(index) {
+        return resolvePlannedSlotContext.call(this, index);
+    };
+
+    applyPlanSegmentTitleEdit.call(ctx, 1, 0, 'Merged Focus');
+
+    assert.equal(ctx.timeSlots[0].planActivities[0].label, 'Merged Focus');
+    assert.equal(ctx.timeSlots[0].planned, 'Merged Focus');
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
 });
 
 test('virtual rest gap markup has no title edit affordance', () => {

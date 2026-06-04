@@ -48,6 +48,43 @@ test('clearSelection clears planned state and tears down floating UI', () => {
     assert.ok(calls.some((entry) => Array.isArray(entry) && entry[0] === 'removeSelectionOverlay' && entry[1] === 'planned'));
 });
 
+test('showScheduleButtonForSelection remains disabled in plan-only mode', () => {
+    const originalDocument = global.document;
+    const calls = [];
+    global.document = {
+        createElement() {
+            throw new Error('schedule button should not be created');
+        },
+        querySelector() {
+            throw new Error('schedule modal anchor should not be queried');
+        },
+    };
+    const ctx = {
+        selectedPlannedFields: new Set([0, 1]),
+        scheduleButton: { parentNode: { removeChild() {} } },
+        hideScheduleButton() {
+            calls.push('hideScheduleButton');
+            this.scheduleButton = null;
+        },
+        openInlinePlanDropdown() {
+            calls.push('openInlinePlanDropdown');
+        },
+        openScheduleModal() {
+            calls.push('openScheduleModal');
+        },
+    };
+
+    try {
+        const result = controller.showScheduleButtonForSelection.call(ctx, 'planned');
+
+        assert.equal(result, false);
+        assert.deepEqual(calls, ['hideScheduleButton']);
+        assert.equal(ctx.scheduleButton, null);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
 test('repositionButtonsNextToSchedule aligns merge and undo buttons next to the active schedule anchor', () => {
     const ctx = {
         scheduleButton: {

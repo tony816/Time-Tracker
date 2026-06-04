@@ -24,6 +24,7 @@ const pauseSegmentTimerWrapper = buildMethod('pauseSegmentTimer(segmentRef, segm
 const resumeSegmentTimerWrapper = buildMethod('resumeSegmentTimer(segmentRef, segmentId = null)', '(segmentRef, segmentId = null)');
 const resolvePlanSegmentBaseIndexWrapper = buildMethod('resolvePlanSegmentBaseIndex(segmentRef)', '(segmentRef)');
 const getPlanSegmentIndexByIdWrapper = buildMethod('getPlanSegmentIndexById(segmentId)', '(segmentId)');
+const resolvePlannedSlotContextWrapper = buildMethod('resolvePlannedSlotContext(index)', '(index)');
 
 test('timer-controller exports and global attach are available', () => {
     assert.equal(typeof timerController.attachTimerListeners, 'function');
@@ -334,6 +335,48 @@ test('plan segment timers stay isolated within a merged slot', () => {
     assert.equal(timerController.startSegmentTimer.call(ctx, 'planned-0-0-seg0'), true);
     assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].running, true);
     assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].running, false);
+});
+
+test('plan segment timer from merged secondary row stores on base slot', () => {
+    const originalNow = Date.now;
+    Date.now = () => 300_000;
+    const ctx = {
+        timeSlots: [
+            {
+                planActivities: [{ label: 'A', seconds: 3600 }],
+                planSegmentTimers: {},
+                timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null },
+            },
+            {
+                planActivities: [],
+                planSegmentTimers: {},
+                timer: { status: 'idle', running: false, elapsed: 0, rawElapsed: 0, startTime: null },
+            },
+        ],
+        mergedFields: new Map([['planned-0-1', 'A']]),
+        findMergeKey(type, idx) {
+            return type === 'planned' && idx >= 0 && idx <= 1 ? 'planned-0-1' : null;
+        },
+        resolvePlannedSlotContext(index) {
+            return resolvePlannedSlotContextWrapper.call(this, index);
+        },
+        normalizeTimerStatus: timerController.normalizeTimerStatus,
+        normalizePlanActivitiesArray(value) {
+            return Array.isArray(value) ? value.map(item => ({ ...item })) : [];
+        },
+        startTimerInterval() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+
+    try {
+        assert.equal(timerController.handleSegmentTimerClick.call(ctx, 1), true);
+        assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1'].status, 'running');
+        assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-0-1'], undefined);
+    } finally {
+        Date.now = originalNow;
+    }
 });
 
 test('plan segment graphic clicks route to the inline plan dropdown anchor', () => {

@@ -404,6 +404,93 @@ test('merged planned click capture keeps logical range but opens against the cli
     ]);
 });
 
+test('merged planned secondary click delegates inline dropdown target to base range anchor', () => {
+    const originalDocument = globalThis.document;
+    const baseAnchor = createListenerNode();
+    baseAnchor.getBoundingClientRect = () => ({ width: 640 });
+    const secondaryField = createListenerNode();
+    secondaryField.dataset.index = '1';
+    secondaryField.getAttribute = (name) => name === 'data-merge-key' ? 'planned-0-1' : null;
+    secondaryField.closest = (selector) => {
+        if (selector === '.planned-input') return secondaryField;
+        if (selector === '.planned-input[data-merge-key]') return secondaryField;
+        if (selector === '.split-cell-wrapper.split-type-planned') return null;
+        return null;
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: null,
+        pendingMergedMouseSelection: null,
+        resolvePlannedSlotContext(index) {
+            assert.ok(index === 0 || index === 1);
+            return {
+                clickedIndex: index,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 1,
+                mergeKey: 'planned-0-1',
+                isMerged: true,
+                slotCount: 2,
+                blockMinutes: 120,
+            };
+        },
+        getPlannedRangeInfo() {
+            return {
+                startIndex: 0,
+                endIndex: 1,
+                baseIndex: 0,
+                rangeStart: 0,
+                rangeEnd: 1,
+                mergeKey: 'planned-0-1',
+                blockMinutes: 120,
+            };
+        },
+        activateMergedPlannedSelection(mergeKey, index) {
+            calls.push(['activate', mergeKey, index]);
+            return { start: 0, end: 1 };
+        },
+        preparePlannedSlotReplacementViewport(targetEl) {
+            calls.push(['prepare', targetEl]);
+            return false;
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            calls.push(['open', startIndex, anchor, endIndex, options]);
+        },
+    };
+
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="0"] .planned-merged-main-container') return baseAnchor;
+            return null;
+        },
+    };
+
+    try {
+        controller.handleMergedClickCapture.call(ctx, {
+            type: 'click',
+            target: secondaryField,
+            preventDefault() {
+                calls.push(['prevent']);
+            },
+            stopPropagation() {
+                calls.push(['stop']);
+            },
+        });
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const openCall = calls.find((call) => call[0] === 'open');
+    assert.ok(openCall);
+    assert.equal(openCall[1], 0);
+    assert.equal(openCall[2], baseAnchor);
+    assert.equal(openCall[3], 1);
+    assert.equal(openCall[4].sheetTargetEl, baseAnchor);
+    assert.equal(openCall[4].baseIndex, 0);
+    assert.equal(openCall[4].rangeStart, 0);
+    assert.equal(openCall[4].rangeEnd, 1);
+});
+
 test('attachCellClickListeners keeps desktop empty planned slot open immediate when no pre-scroll occurs', () => {
     const plannedField = createListenerNode();
     const wrapper = createListenerNode();

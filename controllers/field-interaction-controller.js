@@ -21,6 +21,36 @@
             : 0;
     }
 
+    function getPlannedContextForIndex(ctx, index) {
+        if (ctx && typeof ctx.resolvePlannedSlotContext === 'function') {
+            return ctx.resolvePlannedSlotContext(index);
+        }
+        const range = ctx && typeof ctx.getPlannedRangeInfo === 'function'
+            ? ctx.getPlannedRangeInfo(index)
+            : { startIndex: index, endIndex: index, mergeKey: null };
+        const start = Number.isInteger(range.startIndex) ? range.startIndex : index;
+        const end = Number.isInteger(range.endIndex) ? range.endIndex : start;
+        const slotCount = Math.max(1, end - start + 1);
+        return {
+            clickedIndex: index,
+            baseIndex: start,
+            rangeStart: start,
+            rangeEnd: end,
+            mergeKey: range.mergeKey || null,
+            isMerged: Boolean(range.mergeKey && slotCount > 1),
+            slotCount,
+            blockMinutes: slotCount * 60,
+        };
+    }
+
+    function getMergedPlannedBlockAnchor(ctx, context, fallbackEl) {
+        if (!context || !context.isMerged || typeof document === 'undefined') return fallbackEl;
+        return document.querySelector(`[data-index="${context.rangeStart}"] .planned-merged-main-container`)
+            || document.querySelector(`[data-index="${context.rangeStart}"] .split-cell-wrapper.split-type-planned`)
+            || document.querySelector(`[data-index="${context.rangeStart}"] .planned-input`)
+            || fallbackEl;
+    }
+
     function scheduleAfterAnimationFrame(callback) {
         const rootWindow = typeof window !== 'undefined' ? window : root;
         if (rootWindow && typeof rootWindow.requestAnimationFrame === 'function') {
@@ -56,21 +86,41 @@
 
     function openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex = null, options = {}) {
         if (!ctx || !plannedField || typeof ctx.openInlinePlanDropdown !== 'function') return;
+        const context = getPlannedContextForIndex(ctx, index);
         const range = typeof ctx.getPlannedRangeInfo === 'function'
-            ? ctx.getPlannedRangeInfo(index)
-            : { startIndex: index, endIndex: Number.isInteger(endIndex) ? endIndex : index };
+            ? ctx.getPlannedRangeInfo(context.baseIndex)
+            : { startIndex: context.rangeStart, endIndex: context.rangeEnd };
         if (Number.isInteger(endIndex)) {
             range.startIndex = Math.min(range.startIndex, endIndex);
             range.endIndex = Math.max(range.endIndex, endIndex);
         }
-        const anchor = plannedField.closest && plannedField.closest('.split-cell-wrapper.split-type-planned')
+        const effectiveRangeStart = Number.isInteger(range.startIndex) ? range.startIndex : context.rangeStart;
+        const effectiveRangeEnd = Number.isInteger(range.endIndex) ? range.endIndex : effectiveRangeStart;
+        const effectiveSlotCount = Math.max(1, effectiveRangeEnd - effectiveRangeStart + 1);
+        const effectiveContext = context.isMerged
+            ? context
+            : {
+                ...context,
+                baseIndex: effectiveRangeStart,
+                rangeStart: effectiveRangeStart,
+                rangeEnd: effectiveRangeEnd,
+                slotCount: effectiveSlotCount,
+                blockMinutes: effectiveSlotCount * 60,
+            };
+        const rawAnchor = plannedField.closest && plannedField.closest('.split-cell-wrapper.split-type-planned')
             ? plannedField.closest('.split-cell-wrapper.split-type-planned')
             : plannedField;
+        const anchor = getMergedPlannedBlockAnchor(ctx, effectiveContext, rawAnchor);
         const open = () => {
-            const sheetTargetEl = plannedField;
+            const sheetTargetEl = getMergedPlannedBlockAnchor(ctx, effectiveContext, plannedField);
             ctx.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                 anchorMinWidth: getAnchorMinWidthFromElement(anchor || plannedField),
                 sheetTargetEl,
+                baseIndex: effectiveContext.baseIndex,
+                rangeStart: effectiveContext.rangeStart,
+                rangeEnd: effectiveContext.rangeEnd,
+                mergeKey: effectiveContext.mergeKey,
+                blockMinutes: effectiveContext.blockMinutes,
                 ...options,
             });
             syncOpenInlinePlanSheetTarget(ctx, sheetTargetEl);

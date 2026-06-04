@@ -617,18 +617,15 @@ class TimeTracker {
                 const idx = parseInt(planned.dataset.index, 10);
                 if (!Number.isFinite(idx)) return;
 
-                let start = idx;
-                let end = idx;
-                const mk = this.findMergeKey('planned', idx);
-                if (mk) {
-                    const [, sStr, eStr] = mk.split('-');
-                    const sVal = parseInt(sStr, 10);
-                    const eVal = parseInt(eStr, 10);
-                    if (Number.isFinite(sVal)) start = sVal;
-                    if (Number.isFinite(eVal)) end = eVal;
-                }
+                const context = this.resolvePlannedSlotContext
+                    ? this.resolvePlannedSlotContext(idx)
+                    : { baseIndex: idx, rangeStart: idx, rangeEnd: idx, mergeKey: null, blockMinutes: 60 };
+                const start = context.rangeStart;
+                const end = context.rangeEnd;
 
-                const anchor = planned.closest('.split-cell-wrapper.split-type-planned') || planned;
+                const anchor = document.querySelector(`[data-index="${context.baseIndex}"] .planned-merged-main-container`)
+                    || planned.closest('.split-cell-wrapper.split-type-planned')
+                    || planned;
                 const anchorRect = anchor && typeof anchor.getBoundingClientRect === 'function'
                     ? anchor.getBoundingClientRect()
                     : null;
@@ -637,7 +634,12 @@ class TimeTracker {
                     : 0;
                 this.openInlinePlanDropdown(start, anchor, end, {
                     anchorMinWidth,
-                    sheetTargetEl: planned,
+                    sheetTargetEl: anchor,
+                    baseIndex: context.baseIndex,
+                    rangeStart: context.rangeStart,
+                    rangeEnd: context.rangeEnd,
+                    mergeKey: context.mergeKey,
+                    blockMinutes: context.blockMinutes,
                 });
             });
         }
@@ -1903,6 +1905,12 @@ class TimeTracker {
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
+                    this.timeSlots[i].planActivities = i === startIndex && Array.isArray(this.timeSlots[i].planActivities)
+                        ? this.timeSlots[i].planActivities
+                        : [];
+                    this.timeSlots[i].planSegmentTimers = i === startIndex && this.timeSlots[i].planSegmentTimers && typeof this.timeSlots[i].planSegmentTimers === 'object'
+                        ? this.timeSlots[i].planSegmentTimers
+                        : {};
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     this.timeSlots[i].activityLog.actualOverride = i === startIndex
                         ? Boolean(this.timeSlots[i].activityLog.actualOverride)
@@ -1980,6 +1988,35 @@ class TimeTracker {
             }
         }
         return null;
+    }
+
+    resolvePlannedSlotContext(index) {
+        const clickedIndex = Number.isInteger(index) ? index : parseInt(index, 10);
+        const safeClickedIndex = Number.isInteger(clickedIndex) ? clickedIndex : 0;
+        const mergeKey = this.findMergeKey ? this.findMergeKey('planned', safeClickedIndex) : null;
+        let rangeStart = safeClickedIndex;
+        let rangeEnd = safeClickedIndex;
+
+        if (mergeKey) {
+            const [, startStr, endStr] = String(mergeKey).split('-');
+            const parsedStart = parseInt(startStr, 10);
+            const parsedEnd = parseInt(endStr, 10);
+            if (Number.isInteger(parsedStart)) rangeStart = parsedStart;
+            if (Number.isInteger(parsedEnd)) rangeEnd = parsedEnd;
+            if (rangeEnd < rangeStart) rangeEnd = rangeStart;
+        }
+
+        const slotCount = Math.max(1, rangeEnd - rangeStart + 1);
+        return {
+            clickedIndex: safeClickedIndex,
+            baseIndex: rangeStart,
+            rangeStart,
+            rangeEnd,
+            mergeKey,
+            isMerged: Boolean(mergeKey && slotCount > 1),
+            slotCount,
+            blockMinutes: slotCount * 60,
+        };
     }
 
     getBlockLength(type, index) {
@@ -3187,13 +3224,20 @@ class TimeTracker {
 
     computeSplitSegments(type, index) {
         if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return null;
-        const baseIndex = this.getSplitBaseIndex(type, index);
+        const plannedContext = type === 'planned' && typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(index)
+            : null;
+        const baseIndex = plannedContext
+            ? plannedContext.baseIndex
+            : this.getSplitBaseIndex(type, index);
         if (!Number.isInteger(baseIndex) || baseIndex < 0 || baseIndex >= this.timeSlots.length) return null;
 
         const slot = this.timeSlots[baseIndex];
         if (!slot) return null;
 
-        const range = this.getSplitRange(type, index);
+        const range = plannedContext
+            ? { start: plannedContext.rangeStart, end: plannedContext.rangeEnd }
+            : this.getSplitRange(type, index);
         if (!range || index < range.start || index > range.end) return null;
 
         const isMergedRange = range
@@ -3412,7 +3456,9 @@ class TimeTracker {
                 return null;
             }
 
-            const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+            const blockMinutes = plannedContext
+                ? plannedContext.blockMinutes
+                : Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
             const range = { startMinute: 0, endMinute: blockMinutes };
             let cursor = 0;
             const realSegments = activities.map((item, segmentIndex) => {
@@ -3547,6 +3593,10 @@ class TimeTracker {
         return result;
     }
     getSplitRange(type, index) {
+        if (type === 'planned' && typeof this.resolvePlannedSlotContext === 'function') {
+            const context = this.resolvePlannedSlotContext(index);
+            return { start: context.rangeStart, end: context.rangeEnd };
+        }
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {
             const [, startStr, endStr] = mergeKey.split('-');
@@ -3560,6 +3610,9 @@ class TimeTracker {
     }
 
     getSplitBaseIndex(type, index) {
+        if (type === 'planned' && typeof this.resolvePlannedSlotContext === 'function') {
+            return this.resolvePlannedSlotContext(index).baseIndex;
+        }
         const mergeKey = this.findMergeKey(type, index);
         if (mergeKey) {
             const [, startStr] = mergeKey.split('-');
@@ -3581,7 +3634,12 @@ class TimeTracker {
 
             const planLabel = this.getPlannedLabelForIndex(baseIndex);
             if (planLabel) {
-                const blockSeconds = Math.max(3600, this.getBlockLength('planned', baseIndex) * 3600);
+                const plannedContext = typeof this.resolvePlannedSlotContext === 'function'
+                    ? this.resolvePlannedSlotContext(baseIndex)
+                    : null;
+                const blockSeconds = plannedContext
+                    ? plannedContext.blockMinutes * 60
+                    : Math.max(3600, this.getBlockLength('planned', baseIndex) * 3600);
                 return [{ label: planLabel, seconds: blockSeconds, source: 'plan-template' }];
             }
 
@@ -5512,7 +5570,22 @@ class TimeTracker {
         });
     }
     getPlannedRangeInfo(index) {
-        const info = { startIndex: index, endIndex: index, mergeKey: null };
+        if (typeof this.resolvePlannedSlotContext === 'function') {
+            const context = this.resolvePlannedSlotContext(index);
+            return {
+                startIndex: context.rangeStart,
+                endIndex: context.rangeEnd,
+                baseIndex: context.baseIndex,
+                rangeStart: context.rangeStart,
+                rangeEnd: context.rangeEnd,
+                mergeKey: context.mergeKey,
+                isMerged: context.isMerged,
+                slotCount: context.slotCount,
+                blockMinutes: context.blockMinutes,
+                clickedIndex: context.clickedIndex,
+            };
+        }
+        const info = { startIndex: index, endIndex: index, baseIndex: index, rangeStart: index, rangeEnd: index, mergeKey: null, isMerged: false, slotCount: 1, blockMinutes: 60, clickedIndex: index };
         if (!Number.isInteger(index)) return info;
         const mk = this.findMergeKey ? this.findMergeKey('planned', index) : null;
         if (!mk) return info;
@@ -5521,7 +5594,8 @@ class TimeTracker {
         const e = parseInt(eStr, 10);
         const startIndex = Number.isInteger(s) ? s : index;
         const endIndex = Number.isInteger(e) ? e : startIndex;
-        return { startIndex, endIndex, mergeKey: mk };
+        const slotCount = Math.max(1, endIndex - startIndex + 1);
+        return { startIndex, endIndex, baseIndex: startIndex, rangeStart: startIndex, rangeEnd: endIndex, mergeKey: mk, isMerged: slotCount > 1, slotCount, blockMinutes: slotCount * 60, clickedIndex: index };
     }
     getPlannedValueForIndex(index) {
         if (!Number.isInteger(index) || index < 0 || index >= this.timeSlots.length) return '';
@@ -5780,9 +5854,15 @@ class TimeTracker {
                 const open = () => {
                     this.openInlinePlanDropdown(range.startIndex, anchor, range.endIndex, {
                         mode: 'virtual-rest-gap',
+                        baseIndex: range.baseIndex,
+                        rangeStart: range.rangeStart,
+                        rangeEnd: range.rangeEnd,
+                        mergeKey: range.mergeKey,
+                        blockMinutes: range.blockMinutes,
                         gapStartMinute,
                         gapDurationMinutes,
                         anchorMinWidth,
+                        sheetTargetEl: anchor,
                     });
                     if (this.inlinePlanDropdown && this.inlinePlanDropdown.classList && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')) {
                         this.addInlinePlanSheetTargetClasses(anchor, 'inline-plan-slot-context-target', 'inline-plan-gap-context-target');
@@ -5962,7 +6042,11 @@ class TimeTracker {
         return 'dropdown';
     }
     applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         if (!slot) return false;
         const nextTitle = this.normalizeActivityText
             ? this.normalizeActivityText(rawTitle || '')
@@ -6014,7 +6098,11 @@ class TimeTracker {
         return true;
     }
     applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle) {
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         if (!slot) return false;
         const nextTitle = this.normalizeActivityText
             ? this.normalizeActivityText(rawTitle || '')
@@ -6395,11 +6483,15 @@ class TimeTracker {
         return true;
     }
     setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
-        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return false;
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        if (!Number.isInteger(effectiveBaseIndex) || !Number.isInteger(segmentIndex)) return false;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
         if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
-        this.selectedPlanSegment = { baseIndex, segmentIndex };
+        this.selectedPlanSegment = { baseIndex: effectiveBaseIndex, segmentIndex };
         if (options.render !== false && typeof this.renderTimeEntries === 'function') {
             this.renderTimeEntries(true);
         }
@@ -6414,8 +6506,12 @@ class TimeTracker {
         return true;
     }
     openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
-        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !segmentEl) return false;
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        if (!Number.isInteger(effectiveBaseIndex) || !Number.isInteger(segmentIndex) || !segmentEl) return false;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
         if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
         const labelAnchor = segmentEl.querySelector
@@ -6435,7 +6531,7 @@ class TimeTracker {
         const anchorMinWidth = segmentRect && Number.isFinite(segmentRect.width)
             ? Math.floor(segmentRect.width)
             : 0;
-        this.openInlinePlanDropdown(baseIndex, anchor, baseIndex, {
+        this.openInlinePlanDropdown(effectiveBaseIndex, anchor, effectiveBaseIndex, {
             mode: 'plan-segment-replace',
             segmentIndex,
             segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId ?? '') : '',
@@ -6832,12 +6928,16 @@ class TimeTracker {
         });
     }
     replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null) {
-        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex) || !activityItem) return false;
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        if (!Number.isInteger(effectiveBaseIndex) || !Number.isInteger(segmentIndex) || !activityItem) return false;
         const activityText = this.normalizeActivityText
             ? this.normalizeActivityText(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '')
             : String(activityItem.activityText || activityItem.label || activityItem.name || activityItem.title || '').trim();
         if (!activityText) return false;
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         if (!slot || !Array.isArray(slot.planActivities)) return false;
         const current = slot.planActivities[segmentIndex];
         if (!current || current.kind === 'virtual-rest' || current.virtual === true) return false;
@@ -6879,9 +6979,15 @@ class TimeTracker {
         applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
         const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
         if (!planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return false;
-        const slot = this.timeSlots && this.timeSlots[baseIndex];
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
         if (!slot) return false;
-        const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+        const blockMinutes = context
+            ? context.blockMinutes
+            : Math.max(60, this.getBlockLength('planned', effectiveBaseIndex) * 60);
         const current = this.normalizePlanActivitiesPreservingSegments
             ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
             : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
@@ -7049,9 +7155,16 @@ class TimeTracker {
             let endMinute = Number(segmentEl && segmentEl.dataset ? segmentEl.dataset.segmentEndMinute : NaN);
             const grid = resizeSurfaceEl.closest && resizeSurfaceEl.closest('.split-grid');
             const gridRect = grid && typeof grid.getBoundingClientRect === 'function' ? grid.getBoundingClientRect() : null;
-            const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+            const plannedContext = typeof this.resolvePlannedSlotContext === 'function'
+                ? this.resolvePlannedSlotContext(index)
+                : null;
+            const baseIndex = plannedContext
+                ? plannedContext.baseIndex
+                : (this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index);
             const gridWidth = gridRect && Number.isFinite(gridRect.width) && gridRect.width > 0 ? gridRect.width : NaN;
-            const blockMinutes = Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
+            const blockMinutes = plannedContext
+                ? plannedContext.blockMinutes
+                : Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
             const slot = this.timeSlots && this.timeSlots[baseIndex];
             const originalPlanActivities = slot
                 ? (this.normalizePlanActivitiesPreservingSegments

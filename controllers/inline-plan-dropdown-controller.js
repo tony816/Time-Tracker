@@ -943,6 +943,9 @@ function getCatalogItemLabel(item) {
 
 function getInlinePlanSelectionSeconds() {
         const target = this.inlinePlanTarget || {};
+        if (Number.isFinite(target.blockMinutes) && target.blockMinutes > 0) {
+            return Math.max(1, Math.floor(target.blockMinutes)) * 60;
+        }
         const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
         const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
         return Math.max(1, Math.abs(endIndex - startIndex) + 1) * 3600;
@@ -1182,7 +1185,9 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         const keepOpenAfterSelection = shouldKeepInlinePlanOpenAfterSelection(this, options);
 
         if (this.inlinePlanTarget && this.inlinePlanTarget.mode === 'plan-segment-replace') {
-            const baseIndex = Number(this.inlinePlanTarget.startIndex);
+            const baseIndex = Number.isInteger(this.inlinePlanTarget.baseIndex)
+                ? this.inlinePlanTarget.baseIndex
+                : Number(this.inlinePlanTarget.startIndex);
             const segmentIndex = Number(this.inlinePlanTarget.segmentIndex);
             const replaced = Number.isInteger(baseIndex)
                 && Number.isInteger(segmentIndex)
@@ -1230,6 +1235,9 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
         const startIndex = Math.min(safeStart, safeEnd);
         const endIndex = Math.max(safeStart, safeEnd);
+        const baseIndex = Number.isInteger(this.inlinePlanTarget.baseIndex) ? this.inlinePlanTarget.baseIndex : startIndex;
+        const rangeStart = Number.isInteger(this.inlinePlanTarget.rangeStart) ? this.inlinePlanTarget.rangeStart : startIndex;
+        const rangeEnd = Number.isInteger(this.inlinePlanTarget.rangeEnd) ? this.inlinePlanTarget.rangeEnd : endIndex;
         const seconds = getInlinePlanSelectionSeconds.call(this);
         const planItem = {
             label: activityText,
@@ -1241,7 +1249,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         };
 
         if (isVirtualRestGapTarget(this.inlinePlanTarget)) {
-            const baseSlot = this.timeSlots[startIndex];
+            const baseSlot = this.timeSlots[baseIndex];
             if (!baseSlot) return;
             baseSlot.planActivities = buildPlanActivitiesWithVirtualGapFill(
                 this.normalizePlanActivitiesArray ? this.normalizePlanActivitiesArray(baseSlot.planActivities) : baseSlot.planActivities,
@@ -1252,7 +1260,8 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             baseSlot.planned = summary || activityText;
             baseSlot.planTitle = titleText || '';
             baseSlot.planTitleBandOn = Boolean(titleText);
-            for (let i = startIndex + 1; i <= endIndex; i++) {
+            for (let i = rangeStart; i <= rangeEnd; i++) {
+                if (i === baseIndex) continue;
                 if (!this.timeSlots[i]) continue;
                 this.timeSlots[i].planned = '';
                 this.timeSlots[i].planActivities = [];
@@ -1261,9 +1270,9 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             }
         } else if (this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, activityText);
-            for (let i = startIndex; i <= endIndex; i++) {
+            for (let i = rangeStart; i <= rangeEnd; i++) {
                 if (!this.timeSlots[i]) continue;
-                const isStart = i === startIndex;
+                const isStart = i === baseIndex;
                 this.timeSlots[i].planned = isStart ? activityText : '';
                 this.timeSlots[i].planActivities = isStart ? [{ ...planItem }] : [];
                 this.timeSlots[i].planTitle = isStart && titleText ? titleText : '';
@@ -1298,8 +1307,9 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         this.calculateTotals();
         this.autoSave();
         if (keepOpenAfterSelection && this.inlinePlanTarget) {
-            const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
-                || document.querySelector(`[data-index="${startIndex}"]`);
+            const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-merged-main-container`)
+                || document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
+                || document.querySelector(`[data-index="${baseIndex}"]`);
             if (anchor) {
                 setInlinePlanAnchorState.call(this, anchor);
                 this.positionInlinePlanDropdown(anchor);
@@ -2054,10 +2064,46 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
             return;
         }
-        const range = this.getPlannedRangeInfo(index);
-        if (Number.isInteger(endIndex)) {
+        const hasExplicitEndIndex = Number.isInteger(endIndex);
+        const plannedContext = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(index)
+            : null;
+        const range = this.getPlannedRangeInfo(plannedContext ? plannedContext.baseIndex : index);
+        if (hasExplicitEndIndex) {
             range.startIndex = Math.min(range.startIndex, endIndex);
             range.endIndex = Math.max(range.endIndex, endIndex);
+        }
+        if (plannedContext) {
+            const useContextRange = plannedContext.isMerged || !hasExplicitEndIndex;
+            const explicitStart = hasExplicitEndIndex ? Math.min(index, endIndex) : plannedContext.rangeStart;
+            const explicitEnd = hasExplicitEndIndex ? Math.max(index, endIndex) : plannedContext.rangeEnd;
+            range.startIndex = useContextRange ? plannedContext.rangeStart : explicitStart;
+            range.endIndex = useContextRange ? plannedContext.rangeEnd : explicitEnd;
+            range.baseIndex = plannedContext.baseIndex;
+            range.rangeStart = range.startIndex;
+            range.rangeEnd = range.endIndex;
+            range.mergeKey = plannedContext.mergeKey;
+            range.isMerged = plannedContext.isMerged;
+            range.slotCount = Math.max(1, range.endIndex - range.startIndex + 1);
+            range.blockMinutes = plannedContext.isMerged ? plannedContext.blockMinutes : range.slotCount * 60;
+            range.clickedIndex = plannedContext.clickedIndex;
+        } else {
+            const start = Number.isInteger(range.startIndex) ? range.startIndex : index;
+            const end = Number.isInteger(range.endIndex) ? range.endIndex : start;
+            const slotCount = Math.max(1, end - start + 1);
+            range.baseIndex = Number.isInteger(range.baseIndex) ? range.baseIndex : start;
+            range.rangeStart = Number.isInteger(range.rangeStart) ? range.rangeStart : start;
+            range.rangeEnd = Number.isInteger(range.rangeEnd) ? range.rangeEnd : end;
+            range.slotCount = Number.isInteger(range.slotCount) ? range.slotCount : slotCount;
+            range.blockMinutes = Number.isFinite(range.blockMinutes) ? range.blockMinutes : range.slotCount * 60;
+            range.clickedIndex = Number.isInteger(range.clickedIndex) ? range.clickedIndex : index;
+        }
+        if (options && Number.isInteger(options.baseIndex)) range.baseIndex = options.baseIndex;
+        if (options && Number.isInteger(options.rangeStart)) range.rangeStart = options.rangeStart;
+        if (options && Number.isInteger(options.rangeEnd)) range.rangeEnd = options.rangeEnd;
+        if (options && options.mergeKey != null) range.mergeKey = options.mergeKey;
+        if (options && Number.isFinite(options.blockMinutes) && options.blockMinutes > 0) {
+            range.blockMinutes = Math.floor(options.blockMinutes);
         }
         const gapStartMinute = Number(options && options.gapStartMinute);
         const gapDurationMinutes = Number(options && options.gapDurationMinutes);
@@ -2637,13 +2683,16 @@ function applyInlinePlanSelection(label, options = {}) {
         const safeEnd = Number.isInteger(this.inlinePlanTarget.endIndex) ? this.inlinePlanTarget.endIndex : safeStart;
         const startIndex = Math.min(safeStart, safeEnd);
         const endIndex = Math.max(safeStart, safeEnd);
+        const baseIndex = Number.isInteger(this.inlinePlanTarget.baseIndex) ? this.inlinePlanTarget.baseIndex : startIndex;
+        const rangeStart = Number.isInteger(this.inlinePlanTarget.rangeStart) ? this.inlinePlanTarget.rangeStart : startIndex;
+        const rangeEnd = Number.isInteger(this.inlinePlanTarget.rangeEnd) ? this.inlinePlanTarget.rangeEnd : endIndex;
 
         if (isVirtualRestGapTarget(this.inlinePlanTarget)) {
             const planItem = {
                 label: normalized,
                 seconds: this.inlinePlanTarget.gapDurationMinutes * 60,
             };
-            const baseSlot = this.timeSlots[startIndex];
+            const baseSlot = this.timeSlots[baseIndex];
             if (!baseSlot) return;
             baseSlot.planActivities = buildPlanActivitiesWithVirtualGapFill(
                 this.normalizePlanActivitiesArray ? this.normalizePlanActivitiesArray(baseSlot.planActivities) : baseSlot.planActivities,
@@ -2653,7 +2702,8 @@ function applyInlinePlanSelection(label, options = {}) {
             baseSlot.planned = this.formatActivitiesSummary ? this.formatActivitiesSummary(baseSlot.planActivities) : normalized;
             baseSlot.planTitle = '';
             baseSlot.planTitleBandOn = false;
-            for (let i = startIndex + 1; i <= endIndex; i++) {
+            for (let i = rangeStart; i <= rangeEnd; i++) {
+                if (i === baseIndex) continue;
                 if (!this.timeSlots[i]) continue;
                 this.timeSlots[i].planned = '';
                 this.timeSlots[i].planActivities = [];
@@ -2662,9 +2712,9 @@ function applyInlinePlanSelection(label, options = {}) {
             }
         } else if (this.inlinePlanTarget.mergeKey) {
             this.mergedFields.set(this.inlinePlanTarget.mergeKey, normalized);
-            for (let i = startIndex; i <= endIndex; i++) {
+            for (let i = rangeStart; i <= rangeEnd; i++) {
                 if (!this.timeSlots[i]) continue;
-                const isStart = i === startIndex;
+                const isStart = i === baseIndex;
                 this.timeSlots[i].planned = isStart ? normalized : '';
                 this.timeSlots[i].planActivities = [];
                 this.timeSlots[i].planTitle = isStart ? normalized : '';
@@ -2685,8 +2735,9 @@ function applyInlinePlanSelection(label, options = {}) {
         this.calculateTotals();
         this.autoSave();
         if (keepOpenAfterSelection && this.inlinePlanTarget) {
-            const anchor = document.querySelector(`[data-index="${startIndex}"] .planned-input`)
-                || document.querySelector(`[data-index="${startIndex}"]`);
+            const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-merged-main-container`)
+                || document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
+                || document.querySelector(`[data-index="${baseIndex}"]`);
             if (anchor) {
                 setInlinePlanAnchorState.call(this, anchor);
                 this.positionInlinePlanDropdown(anchor);
