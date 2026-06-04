@@ -1516,6 +1516,78 @@ test('merged plan segment resize preview uses the same six-unit row wrap as rend
     }
 });
 
+test('merged plan segment resize preview keeps string minute segments real instead of rest gaps', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: 'A', activityText: 'A', activityId: 'a', seconds: 60 * 60, startMinute: '0', durationMinutes: '60', endMinute: '60' },
+        { label: 'B', activityText: 'B', activityId: 'b', seconds: 80 * 60, startMinute: '60', durationMinutes: '80', endMinute: '140' },
+        { label: 'C', activityText: 'C', activityId: 'c', seconds: 40 * 60, startMinute: '140', durationMinutes: '40', endMinute: '180' },
+    ], {
+        overrides: {
+            timeSlots: [
+                {
+                    planned: 'A, B, C',
+                    planTitle: '',
+                    planTitleBandOn: false,
+                    planActivities: [
+                        { label: 'A', activityText: 'A', activityId: 'a', seconds: 60 * 60, startMinute: '0', durationMinutes: '60', endMinute: '60' },
+                        { label: 'B', activityText: 'B', activityId: 'b', seconds: 80 * 60, startMinute: '60', durationMinutes: '80', endMinute: '140' },
+                        { label: 'C', activityText: 'C', activityId: 'c', seconds: 40 * 60, startMinute: '140', durationMinutes: '40', endMinute: '180' },
+                    ],
+                },
+                { planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] },
+                { planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] },
+            ],
+            mergedFields: new Map([['planned-0-2', 'A, B, C']]),
+            findMergeKey(type, index) {
+                return type === 'planned' && index >= 0 && index <= 2 ? 'planned-0-2' : null;
+            },
+            resolvePlannedSlotContext(index) {
+                return resolvePlannedSlotContext.call(this, index);
+            },
+            getSplitBaseIndex(type, index) {
+                assert.equal(type, 'planned');
+                return this.resolvePlannedSlotContext(index).baseIndex;
+            },
+            getSplitRange(type, index) {
+                assert.equal(type, 'planned');
+                const context = this.resolvePlannedSlotContext(index);
+                return { start: context.rangeStart, end: context.rangeEnd };
+            },
+            getPlanSegmentBaseIndex(index) {
+                return this.resolvePlannedSlotContext(index).baseIndex;
+            },
+            getBlockLength(type, index) {
+                assert.equal(type, 'planned');
+                assert.equal(index, 0);
+                return 3;
+            },
+        },
+    });
+    ctx.applyPlanSegmentResize = function() {
+        return true;
+    };
+    ctx.renderTimeEntries = function(preserveInlineDropdown = false) {
+        return renderController.renderTimeEntries.call(this, preserveInlineDropdown);
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const handle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(handle);
+        startResizePreview(handle, 0);
+        moveResizePreview(document, 10);
+
+        const preview = getPreviewSegments(container);
+        assert.deepEqual(preview.map(segment => segment.label), ['A', 'A', 'B', 'B', 'C']);
+        assert.equal(preview.some(segment => segment.className.includes('plan-segment-resize-preview-rest')), false);
+        assert.equal(preview.some(segment => segment.label === '?댁떇' || segment.label === '휴식'), false);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('plan segment resize preview shows virtual rest gap and cancels without applying', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, document } = createRenderedResizeContext([

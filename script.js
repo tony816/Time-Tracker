@@ -3465,14 +3465,23 @@ class TimeTracker {
             const range = { startMinute: 0, endMinute: blockMinutes };
             let cursor = 0;
             const realSegments = activities.map((item, segmentIndex) => {
-                const durationMinutes = Number.isFinite(item.durationMinutes)
-                    ? Math.max(0, Math.floor(item.durationMinutes))
+                const rawDurationMinutes = this.toFinitePlanMinute
+                    ? this.toFinitePlanMinute(item.durationMinutes, null)
+                    : (Number.isFinite(Number(item.durationMinutes)) ? Number(item.durationMinutes) : null);
+                const durationMinutes = rawDurationMinutes != null
+                    ? Math.max(0, Math.floor(rawDurationMinutes))
                     : Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
-                const startMinute = Number.isFinite(item.startMinute)
-                    ? Math.max(0, Math.floor(item.startMinute))
+                const rawStartMinute = this.toFinitePlanMinute
+                    ? this.toFinitePlanMinute(item.startMinute, null)
+                    : (Number.isFinite(Number(item.startMinute)) ? Number(item.startMinute) : null);
+                const startMinute = rawStartMinute != null
+                    ? Math.max(0, Math.floor(rawStartMinute))
                     : cursor;
-                const endMinute = Number.isFinite(item.endMinute)
-                    ? Math.max(startMinute, Math.floor(item.endMinute))
+                const rawEndMinute = this.toFinitePlanMinute
+                    ? this.toFinitePlanMinute(item.endMinute, null)
+                    : (Number.isFinite(Number(item.endMinute)) ? Number(item.endMinute) : null);
+                const endMinute = rawEndMinute != null
+                    ? Math.max(startMinute, Math.floor(rawEndMinute))
                     : startMinute + durationMinutes;
                 cursor = Math.max(cursor, endMinute);
                 return {
@@ -4282,6 +4291,12 @@ class TimeTracker {
 
     normalizePlanActivitiesForSegmentResize(raw) {
         return this.normalizePlanActivitiesPreservingSegments(raw);
+    }
+
+    toFinitePlanMinute(value, fallback = null) {
+        if (value == null || value === '') return fallback;
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : fallback;
     }
 
     formatSecondsForInput(seconds) {
@@ -7174,6 +7189,12 @@ class TimeTracker {
                     ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
                     : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
                 : [];
+            const originalPreviewActivities = originalPlanActivities.map((item, itemIndex) => ({
+                ...item,
+                segmentIndex: item && item.segmentIndex != null && item.segmentIndex !== '' && Number.isInteger(Number(item.segmentIndex))
+                    ? Number(item.segmentIndex)
+                    : itemIndex,
+            }));
             if (typeof this.cleanupPlanSegmentResizeState === 'function') {
                 this.cleanupPlanSegmentResizeState(grid || entryDiv);
             }
@@ -7283,15 +7304,22 @@ class TimeTracker {
                     return normalizePreviewLabel(left) === normalizePreviewLabel(right);
                 };
 
+                const toPreviewMinute = (value, fallback = null) => {
+                    if (value == null || value === '') return fallback;
+                    const numeric = Number(value);
+                    return Number.isFinite(numeric) ? numeric : fallback;
+                };
+
                 const buildPreviewDisplaySegments = (segments) => {
                     const unitsPerRow = 6;
                     const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
                     const units = new Array(totalUnits).fill(null);
                     segments.forEach((segment) => {
                         if (!segment) return;
-                        const startMinuteForSegment = Number.isFinite(segment.startMinute) ? Math.max(0, Math.floor(segment.startMinute)) : 0;
-                        const durationMinutesForSegment = Number.isFinite(segment.durationMinutes)
-                            ? Math.max(0, Math.floor(segment.durationMinutes))
+                        const startMinuteForSegment = Math.max(0, Math.floor(toPreviewMinute(segment.startMinute, 0)));
+                        const rawDurationMinutesForSegment = toPreviewMinute(segment.durationMinutes, null);
+                        const durationMinutesForSegment = rawDurationMinutesForSegment != null
+                            ? Math.max(0, Math.floor(rawDurationMinutesForSegment))
                             : Math.max(0, Math.floor(((Number(segment.seconds) || 0) / 60)));
                         if (durationMinutesForSegment <= 0) return;
                         const startUnit = Math.max(0, Math.floor(startMinuteForSegment / 10));
@@ -7379,7 +7407,7 @@ class TimeTracker {
                     const deltaMinutes = deltaUnits * 10;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     const resized = planSegmentCore.resizePlanSegmentInList(
-                        originalPlanActivities.map(item => ({ ...item })),
+                        originalPreviewActivities.map(item => ({ ...item })),
                         segmentIndex,
                         effectiveEdge,
                         targetMinute,

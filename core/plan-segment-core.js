@@ -13,20 +13,26 @@
     const DEFAULT_DAY_START_MINUTE = 0;
     const DEFAULT_DAY_END_MINUTE = 24 * 60;
 
+    function toFiniteNumber(value, fallback = null) {
+        if (value == null || value === '') return fallback;
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : fallback;
+    }
+
     function snapToTenMinutes(value, options = {}) {
-        const min = Number.isFinite(options.min) ? Math.floor(options.min) : DEFAULT_DAY_START_MINUTE;
-        const max = Number.isFinite(options.max) ? Math.floor(options.max) : DEFAULT_DAY_END_MINUTE;
+        const min = Math.floor(toFiniteNumber(options.min, DEFAULT_DAY_START_MINUTE));
+        const max = Math.floor(toFiniteNumber(options.max, DEFAULT_DAY_END_MINUTE));
         const lower = Math.min(min, max);
         const upper = Math.max(min, max);
-        const numeric = Number(value);
+        const numeric = toFiniteNumber(value, lower);
         if (!Number.isFinite(numeric)) return lower;
         const snapped = Math.round(numeric / TEN_MINUTES) * TEN_MINUTES;
         return Math.max(lower, Math.min(upper, snapped));
     }
 
     function normalizePlanSegmentRange(range = {}) {
-        const rawStart = Number.isFinite(range.startMinute) ? range.startMinute : DEFAULT_DAY_START_MINUTE;
-        const rawEnd = Number.isFinite(range.endMinute) ? range.endMinute : DEFAULT_DAY_END_MINUTE;
+        const rawStart = toFiniteNumber(range.startMinute, DEFAULT_DAY_START_MINUTE);
+        const rawEnd = toFiniteNumber(range.endMinute, DEFAULT_DAY_END_MINUTE);
         const startMinute = snapToTenMinutes(Math.min(rawStart, rawEnd));
         const endMinute = snapToTenMinutes(Math.max(rawStart, rawEnd), { min: startMinute });
         return { startMinute, endMinute, durationMinutes: Math.max(0, endMinute - startMinute) };
@@ -34,8 +40,8 @@
 
     function createSegmentId(prefix, startMinute, durationMinutes) {
         const safePrefix = String(prefix || 'segment').trim() || 'segment';
-        const safeStart = Number.isFinite(startMinute) ? Math.floor(startMinute) : 0;
-        const safeDuration = Number.isFinite(durationMinutes) ? Math.floor(durationMinutes) : 0;
+        const safeStart = Math.floor(toFiniteNumber(startMinute, 0));
+        const safeDuration = Math.floor(toFiniteNumber(durationMinutes, 0));
         return `${safePrefix}-${safeStart}-${safeDuration}`;
     }
 
@@ -43,9 +49,9 @@
         if (!segment || typeof segment !== 'object' || segment.virtual || segment.kind === 'virtual-rest') {
             return null;
         }
-        const startSource = Number.isFinite(segment.startMinute) ? segment.startMinute : null;
-        const durationSource = Number.isFinite(segment.durationMinutes) ? segment.durationMinutes : null;
-        const endSource = Number.isFinite(segment.endMinute) ? segment.endMinute : null;
+        const startSource = toFiniteNumber(segment.startMinute, null);
+        const durationSource = toFiniteNumber(segment.durationMinutes, null);
+        const endSource = toFiniteNumber(segment.endMinute, null);
         if (startSource == null) return null;
 
         const startMinute = snapToTenMinutes(startSource, {
@@ -84,10 +90,10 @@
         if (!Array.isArray(gaps)) return [];
         const normalized = gaps
             .filter((gap) => gap && typeof gap === 'object')
-            .filter((gap) => Number.isFinite(gap.durationMinutes) && gap.durationMinutes >= TEN_MINUTES)
+            .filter((gap) => toFiniteNumber(gap.durationMinutes, 0) >= TEN_MINUTES)
             .map((gap) => {
                 const startMinute = snapToTenMinutes(gap.startMinute);
-                const rawDuration = Number.isFinite(gap.durationMinutes) ? gap.durationMinutes : 0;
+                const rawDuration = toFiniteNumber(gap.durationMinutes, 0);
                 const endMinute = snapToTenMinutes(startMinute + Math.max(0, rawDuration), { min: startMinute });
                 return { startMinute, durationMinutes: endMinute - startMinute };
             })
@@ -143,8 +149,8 @@
             .filter((segment) => segment && typeof segment === 'object' && !segment.virtual && segment.kind !== 'virtual-rest')
             .map((segment, index) => {
                 const startMinute = snapToTenMinutes(segment.startMinute);
-                const duration = Number.isFinite(segment.durationMinutes) ? Math.max(0, segment.durationMinutes) : 0;
-                const rawEnd = Number.isFinite(segment.endMinute) ? segment.endMinute : startMinute + duration;
+                const duration = Math.max(0, toFiniteNumber(segment.durationMinutes, 0));
+                const rawEnd = toFiniteNumber(segment.endMinute, startMinute + duration);
                 const endMinute = snapToTenMinutes(rawEnd, { min: startMinute });
                 return { index, segment, startMinute, endMinute };
             })
@@ -174,14 +180,17 @@
         return safeSegments
             .filter((segment) => segment && typeof segment === 'object' && !segment.virtual && segment.kind !== 'virtual-rest')
             .map((segment, index) => {
-                const durationMinutes = Number.isFinite(segment.durationMinutes)
-                    ? Math.max(0, Math.floor(segment.durationMinutes))
+                const rawDurationMinutes = toFiniteNumber(segment.durationMinutes, null);
+                const durationMinutes = rawDurationMinutes != null
+                    ? Math.max(0, Math.floor(rawDurationMinutes))
                     : Math.max(0, Math.floor((Number(segment.seconds) || 0) / 60));
-                const startMinute = Number.isFinite(segment.startMinute)
-                    ? Math.max(0, Math.floor(segment.startMinute))
+                const rawStartMinute = toFiniteNumber(segment.startMinute, null);
+                const startMinute = rawStartMinute != null
+                    ? Math.max(0, Math.floor(rawStartMinute))
                     : cursor;
-                const endMinute = Number.isFinite(segment.endMinute)
-                    ? Math.max(startMinute, Math.floor(segment.endMinute))
+                const rawEndMinute = toFiniteNumber(segment.endMinute, null);
+                const endMinute = rawEndMinute != null
+                    ? Math.max(startMinute, Math.floor(rawEndMinute))
                     : startMinute + durationMinutes;
                 cursor = Math.max(cursor, endMinute);
                 return {
@@ -202,8 +211,8 @@
         if (!target) return { allowed: false, startMinute: 0, endMinute: 0, durationMinutes: 0 };
 
         const range = normalizePlanSegmentRange({
-            startMinute: Number.isFinite(rangeInput.startMinute) ? rangeInput.startMinute : 0,
-            endMinute: Number.isFinite(rangeInput.endMinute) ? rangeInput.endMinute : Math.max(60, target.endMinute),
+            startMinute: toFiniteNumber(rangeInput.startMinute, 0),
+            endMinute: toFiniteNumber(rangeInput.endMinute, Math.max(60, target.endMinute)),
         });
         const position = normalized.indexOf(target);
         const previous = position > 0 ? normalized[position - 1] : null;
@@ -236,8 +245,8 @@
         const target = normalized.find((item) => item.index === segmentIndex);
         if (target) {
             const range = normalizePlanSegmentRange({
-                startMinute: Number.isFinite(rangeInput.startMinute) ? rangeInput.startMinute : 0,
-                endMinute: Number.isFinite(rangeInput.endMinute) ? rangeInput.endMinute : Math.max(60, target.endMinute),
+                startMinute: toFiniteNumber(rangeInput.startMinute, 0),
+                endMinute: toFiniteNumber(rangeInput.endMinute, Math.max(60, target.endMinute)),
             });
             const position = normalized.indexOf(target);
             const previous = position > 0 ? normalized[position - 1] : null;

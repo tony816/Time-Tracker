@@ -362,6 +362,39 @@ test('positionInlinePlanDropdown keeps non-segment dropdowns left aligned', () =
     }
 });
 
+test('positionInlinePlanDropdown uses merged overlay height when the merged container has no layout height', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    const overlay = createInlinePlanAnchor({ left: 120, top: 100, width: 680, height: 132 });
+    const anchor = {
+        isConnected: true,
+        getBoundingClientRect() {
+            return {
+                left: 120,
+                top: 100,
+                right: 800,
+                bottom: 100,
+                width: 680,
+                height: 0,
+            };
+        },
+        querySelector(selector) {
+            return selector === '.planned-merged-overlay' ? overlay : null;
+        },
+    };
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.left, '120px');
+        assert.equal(dropdown.style.top, '238px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
 test('positionInlinePlanDropdown expands a normal planned dropdown to the clicked slot width', () => {
     const restoreGlobals = installInlinePlanPositionGlobals();
     const { ctx, dropdown } = createInlinePlanPositionHarness({

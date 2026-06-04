@@ -451,6 +451,21 @@ function hasRecentInlinePlanInputIntent() {
         return Boolean(this.inlinePlanInputIntentUntil && Date.now() < this.inlinePlanInputIntentUntil);
     }
 
+function getInlinePlanAnchorRect(anchor) {
+        const rect = anchor && typeof anchor.getBoundingClientRect === 'function'
+            ? anchor.getBoundingClientRect()
+            : null;
+        const rectHeight = rect && Number.isFinite(rect.height) ? rect.height : 0;
+        if (rectHeight > 1 || !anchor || typeof anchor.querySelector !== 'function') return rect;
+        const overlay = anchor.querySelector('.planned-merged-overlay')
+            || anchor.querySelector('.merged-field');
+        const overlayRect = overlay && typeof overlay.getBoundingClientRect === 'function'
+            ? overlay.getBoundingClientRect()
+            : null;
+        const overlayHeight = overlayRect && Number.isFinite(overlayRect.height) ? overlayRect.height : 0;
+        return overlayHeight > rectHeight ? overlayRect : rect;
+    }
+
 function positionInlinePlanDropdown(anchorEl) {
         if (!this.inlinePlanDropdown) return;
         const dropdown = this.inlinePlanDropdown;
@@ -486,7 +501,7 @@ function positionInlinePlanDropdown(anchorEl) {
         if (getInlinePlanTargetState.call(this) && getInlinePlanAnchorState.call(this) !== anchor) {
             setInlinePlanAnchorState.call(this, anchor);
         }
-        const rect = anchor.getBoundingClientRect();
+        const rect = getInlinePlanAnchorRect(anchor);
         if (!rect || (!rect.width && !rect.height)) return;
         const docEl = document.documentElement;
         const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
@@ -2770,6 +2785,7 @@ function applyInlinePlanSelection(label, options = {}) {
         isInlinePlanInputFocused,
         markInlinePlanInputIntent,
         hasRecentInlinePlanInputIntent,
+        getInlinePlanAnchorRect,
         getOpenParentCaretAnchor,
         positionInlinePlanDropdown,
         positionInlinePlanChildPopover,

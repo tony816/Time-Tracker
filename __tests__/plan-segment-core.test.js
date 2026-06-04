@@ -428,6 +428,24 @@ test('resizePlanSegmentInList keeps non-adjacent resize behavior', () => {
     assert.equal(blocked[1].startMinute, 40);
 });
 
+test('resizePlanSegmentInList accepts string minute fields without creating false gaps', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'A', startMinute: '0', endMinute: '60', durationMinutes: '60', seconds: 3600 },
+        { label: 'B', startMinute: '60', endMinute: '120', durationMinutes: '60', seconds: 3600 },
+    ], 0, 'right', '70', { startMinute: '0', endMinute: '120' });
+
+    assert.deepEqual(result.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        { label: 'B', startMinute: 70, endMinute: 120, durationMinutes: 50 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result, { startMinute: '0', endMinute: '120' }), []);
+});
+
 test('resizePlanSegmentInList enforces minimum duration and strips virtual metadata', () => {
     const result = planSegmentCore.resizePlanSegmentInList([
         { label: 'A', startMinute: 0, durationMinutes: 30, seconds: 30 * 60 },
