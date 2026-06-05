@@ -263,10 +263,6 @@ h1 {
   overflow: hidden;
 }
 
-.plan-segment-graphic.is-plan-segment-continuation .plan-segment-graphic-main {
-  grid-template-rows: minmax(0, 1fr);
-}
-
 .plan-segment-graphic-main.has-segment-title {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }

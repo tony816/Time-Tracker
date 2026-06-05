@@ -53,7 +53,6 @@ test('split css files exist and keep section anchors', () => {
     assert.match(foundationSource, /\.plan-segment-graphic\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*height:\s*100%;[^}]*min-height:\s*38px;[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
     assert.match(foundationSource, /\.plan-segment-graphic\.is-plan-segment-continuation\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s);
     assert.match(foundationSource, /\.plan-segment-graphic-main\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;/s);
-    assert.match(foundationSource, /\.plan-segment-graphic\.is-plan-segment-continuation \.plan-segment-graphic-main\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);/s);
     assert.match(foundationSource, /\.plan-segment-timer-time\s*\{[^}]*display:\s*block;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s);
     assert.doesNotMatch(foundationSource, /\.split-grid-segment\.has-plan-segment-timer\s*\{[^}]*overflow:\s*hidden;/s);
     assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);
