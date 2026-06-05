@@ -39,6 +39,14 @@ const normalizePlanActivitiesForSegmentResize = buildMethod(
     'normalizePlanActivitiesForSegmentResize(raw)',
     '(raw)'
 );
+const normalizePlanActivitiesForBlockRelative = buildMethod(
+    'normalizePlanActivitiesForBlockRelative(raw, options = {})',
+    '(raw, options = {})'
+);
+const getPlannedBlockStartMinute = buildMethod(
+    'getPlannedBlockStartMinute(context = {}, fallbackIndex = 0)',
+    '(context = {}, fallbackIndex = 0)'
+);
 const applyPlanSegmentResize = buildMethod(
     'applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute)',
     '(baseIndex, segmentIndex, edge, targetMinute)'
@@ -238,6 +246,12 @@ function createPlannedRenderContext(planActivities, overrides = {}) {
         normalizePlanActivitiesForSegmentResize(raw) {
             return normalizePlanActivitiesForSegmentResize.call(this, raw);
         },
+        normalizePlanActivitiesForBlockRelative(raw, options = {}) {
+            return normalizePlanActivitiesForBlockRelative.call(this, raw, options);
+        },
+        getPlannedBlockStartMinute(context = {}, fallbackIndex = 0) {
+            return getPlannedBlockStartMinute.call(this, context, fallbackIndex);
+        },
         getSplitActivities(type, baseIndex) {
             return getSplitActivities.call(this, type, baseIndex);
         },
@@ -288,6 +302,74 @@ function summarizeGridSegments(context) {
         kind: segment.kind,
         virtual: segment.virtual,
     }));
+}
+
+function createMergedAbsoluteResizeContext(planActivities) {
+    const timeSlots = Array.from({ length: 17 }, (_, index) => ({
+        time: String(index),
+        planned: '',
+        planTitle: '',
+        planTitleBandOn: false,
+        planActivities: [],
+    }));
+    timeSlots[15] = {
+        time: '15',
+        planned: 'Exercise, Lunch, Read',
+        planTitle: '',
+        planTitleBandOn: false,
+        planActivities: planActivities.map(item => ({ ...item })),
+    };
+    timeSlots[16] = {
+        time: '16',
+        planned: '',
+        planTitle: '',
+        planTitleBandOn: false,
+        planActivities: [],
+    };
+
+    return {
+        timeSlots,
+        dayStartHour: 4,
+        mergedFields: new Map([['planned-15-16', 'Exercise, Lunch, Read']]),
+        findMergeKey(type, index) {
+            return type === 'planned' && index >= 15 && index <= 16 ? 'planned-15-16' : null;
+        },
+        resolvePlannedSlotContext(index) {
+            return resolvePlannedSlotContext.call(this, index);
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeDurationStep(seconds) {
+            return Math.max(0, Math.round(Number(seconds) || 0));
+        },
+        normalizePlanActivitiesPreservingSegments(raw) {
+            return normalizePlanActivitiesPreservingSegments.call(this, raw);
+        },
+        normalizePlanActivitiesForBlockRelative(raw, options = {}) {
+            return normalizePlanActivitiesForBlockRelative.call(this, raw, options);
+        },
+        toFinitePlanMinute(value, fallback = null) {
+            if (value == null || value === '') return fallback;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : fallback;
+        },
+        getPlannedBlockStartMinute(context = {}, fallbackIndex = 0) {
+            return getPlannedBlockStartMinute.call(this, context, fallbackIndex);
+        },
+        formatActivitiesSummary(items) {
+            return items.map(item => item.label).join(', ');
+        },
+        renderTimeEntries(force) {
+            this.lastRenderForce = force;
+        },
+        calculateTotals() {
+            this.calculated = true;
+        },
+        autoSave() {
+            this.saved = true;
+        },
+    };
 }
 
 test('resolvePlannedSlotContext maps merged planned secondary rows to the base range', () => {
@@ -411,6 +493,97 @@ test('merged planned segment resize uses merged blockMinutes and stores on base 
     assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 90);
     assert.deepEqual(ctx.timeSlots[1].planActivities, []);
     assert.equal(ctx.lastRenderContext.gridSegments.reduce((sum, segment) => sum + segment.span, 0), 12);
+});
+
+test('merged planned absolute segment coordinates normalize to block-relative minutes before resize', () => {
+    const absoluteSegments = [
+        { label: 'Exercise', seconds: 70 * 60, startMinute: 900, durationMinutes: 70, endMinute: 970 },
+        { label: 'Lunch', seconds: 10 * 60, startMinute: 970, durationMinutes: 10, endMinute: 980 },
+        { label: 'Read', seconds: 40 * 60, startMinute: 980, durationMinutes: 40, endMinute: 1020 },
+    ];
+    const ctx = createMergedAbsoluteResizeContext(absoluteSegments);
+
+    const relative = normalizePlanActivitiesForBlockRelative.call(ctx, absoluteSegments, {
+        context: ctx.resolvePlannedSlotContext(15),
+        baseIndex: 15,
+        blockMinutes: 120,
+    });
+
+    assert.deepEqual(relative.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Exercise', startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        { label: 'Lunch', startMinute: 70, endMinute: 80, durationMinutes: 10 },
+        { label: 'Read', startMinute: 80, endMinute: 120, durationMinutes: 40 },
+    ]);
+
+    const result = applyPlanSegmentResize.call(ctx, 15, 0, 'right', 60);
+
+    assert.equal(result, true);
+    assert.deepEqual(ctx.timeSlots[15].planActivities.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Exercise', startMinute: 0, endMinute: 60, durationMinutes: 60 },
+        { label: 'Lunch', startMinute: 60, endMinute: 80, durationMinutes: 20 },
+        { label: 'Read', startMinute: 80, endMinute: 120, durationMinutes: 40 },
+    ]);
+    assert.equal(ctx.timeSlots[15].planActivities.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[15].planActivities, { startMinute: 0, endMinute: 120 }), []);
+});
+
+test('mixed absolute and relative planned segments do not turn preview input into full rest', () => {
+    const mixedSegments = [
+        { label: 'Exercise', seconds: 60 * 60, startMinute: 900, durationMinutes: 60, endMinute: 960 },
+        { label: 'Read', seconds: 60 * 60, startMinute: 60, durationMinutes: 60, endMinute: 120 },
+    ];
+    const ctx = createMergedAbsoluteResizeContext(mixedSegments);
+    const relative = normalizePlanActivitiesForBlockRelative.call(ctx, mixedSegments, {
+        context: ctx.resolvePlannedSlotContext(15),
+        baseIndex: 15,
+        blockMinutes: 120,
+    });
+
+    assert.deepEqual(relative.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Exercise', startMinute: 0, endMinute: 60, durationMinutes: 60 },
+        { label: 'Read', startMinute: 60, endMinute: 120, durationMinutes: 60 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(relative, { startMinute: 0, endMinute: 120 }), []);
+});
+
+test('plan replacement keeps segment index stable before resizing absolute-backed merged segments', () => {
+    const ctx = createMergedAbsoluteResizeContext([
+        { label: 'Exercise', seconds: 70 * 60, startMinute: 900, durationMinutes: 70, endMinute: 970 },
+        { label: 'Lunch', seconds: 10 * 60, startMinute: 970, durationMinutes: 10, endMinute: 980 },
+        { label: 'Read', seconds: 40 * 60, startMinute: 980, durationMinutes: 40, endMinute: 1020 },
+    ]);
+
+    const replaced = replacePlanSegmentActivity.call(ctx, 15, 1, { id: 'review', label: 'Review' });
+    const resized = applyPlanSegmentResize.call(ctx, 15, 1, 'right', 90);
+
+    assert.equal(replaced, true);
+    assert.equal(resized, true);
+    assert.deepEqual(ctx.timeSlots[15].planActivities.map(item => ({
+        label: item.label,
+        activityId: item.activityId || null,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Exercise', activityId: null, startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        { label: 'Review', activityId: 'review', startMinute: 70, endMinute: 90, durationMinutes: 20 },
+        { label: 'Read', activityId: null, startMinute: 90, endMinute: 120, durationMinutes: 30 },
+    ]);
 });
 
 test('merged planned segment replacement from secondary row stores on base slot', () => {
@@ -1511,6 +1684,59 @@ test('merged plan segment resize preview uses the same six-unit row wrap as rend
         finishResizePreview(document, 10);
         assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 70 }]);
         assert.equal(container.querySelector('.plan-segment-resize-preview-layer'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('plan segment resize preview converts merged absolute minutes before rendering rest gaps', () => {
+    const originalDocument = globalThis.document;
+    const absoluteSegments = [
+        { label: 'Exercise', activityText: 'Exercise', activityId: 'exercise', seconds: 70 * 60, startMinute: 900, durationMinutes: 70, endMinute: 970 },
+        { label: 'Lunch', activityText: 'Lunch', activityId: 'lunch', seconds: 10 * 60, startMinute: 970, durationMinutes: 10, endMinute: 980 },
+        { label: 'Read', activityText: 'Read', activityId: 'read', seconds: 40 * 60, startMinute: 980, durationMinutes: 40, endMinute: 1020 },
+    ];
+    const { ctx, container, document } = createRenderedResizeContext(absoluteSegments, {
+        gridWidth: 60,
+        overrides: {
+            timeSlots: [
+                {
+                    time: '15',
+                    planned: 'Exercise, Lunch, Read',
+                    planTitle: '',
+                    planTitleBandOn: false,
+                    planActivities: absoluteSegments.map(item => ({ ...item })),
+                },
+                { time: '16', planned: '', planTitle: '', planTitleBandOn: false, planActivities: [] },
+            ],
+            mergedFields: new Map([['planned-0-1', 'Exercise, Lunch, Read']]),
+            findMergeKey(type, index) {
+                return type === 'planned' && index >= 0 && index <= 1 ? 'planned-0-1' : null;
+            },
+            resolvePlannedSlotContext(index) {
+                return resolvePlannedSlotContext.call(this, index);
+            },
+            getPlanSegmentBaseIndex(index) {
+                return this.resolvePlannedSlotContext(index).baseIndex;
+            },
+        },
+    });
+    ctx.applyPlanSegmentResize = function() {
+        return true;
+    };
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+        const handle = container.querySelector('.plan-segment-resize-handle-right');
+        assert.ok(handle);
+        startResizePreview(handle, 0);
+        moveResizePreview(document, -10);
+
+        const preview = getPreviewSegments(container);
+        assert.deepEqual(preview.map(segment => segment.label), ['Exercise', 'Lunch', 'Read']);
+        assert.deepEqual(preview.map(segment => segment.duration), ['60m', '20m', '40m']);
+        assert.equal(preview.some(segment => segment.className.includes('plan-segment-resize-preview-rest')), false);
     } finally {
         globalThis.document = originalDocument;
     }

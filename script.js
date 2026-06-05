@@ -3463,8 +3463,15 @@ class TimeTracker {
                 ? plannedContext.blockMinutes
                 : Math.max(60, this.getBlockLength('planned', baseIndex) * 60);
             const range = { startMinute: 0, endMinute: blockMinutes };
+            const blockRelativeActivities = this.normalizePlanActivitiesForBlockRelative
+                ? this.normalizePlanActivitiesForBlockRelative(activities, {
+                    context: plannedContext,
+                    baseIndex,
+                    blockMinutes,
+                })
+                : activities;
             let cursor = 0;
-            const realSegments = activities.map((item, segmentIndex) => {
+            const realSegments = blockRelativeActivities.map((item, segmentIndex) => {
                 const rawDurationMinutes = this.toFinitePlanMinute
                     ? this.toFinitePlanMinute(item.durationMinutes, null)
                     : (Number.isFinite(Number(item.durationMinutes)) ? Number(item.durationMinutes) : null);
@@ -4291,6 +4298,118 @@ class TimeTracker {
 
     normalizePlanActivitiesForSegmentResize(raw) {
         return this.normalizePlanActivitiesPreservingSegments(raw);
+    }
+
+    getPlannedBlockStartMinute(context = {}, fallbackIndex = 0) {
+        const rangeStart = Number.isInteger(Number(context && context.rangeStart))
+            ? Number(context.rangeStart)
+            : (Number.isInteger(Number(context && context.baseIndex)) ? Number(context.baseIndex) : fallbackIndex);
+        const slot = this.timeSlots && this.timeSlots[rangeStart];
+        const rawTime = slot && slot.time != null ? String(slot.time).trim() : '';
+        const dayStartHour = this.dayStartHour === 0 ? 0 : 4;
+        const parseTimeMinute = (value) => {
+            const text = String(value || '').trim();
+            if (!text) return null;
+            const match = /^(\d{1,2})(?::(\d{1,2}))?$/.exec(text);
+            if (!match) return null;
+            const hour = parseInt(match[1], 10);
+            const minute = match[2] == null ? 0 : parseInt(match[2], 10);
+            if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return null;
+            }
+            let total = hour * 60 + minute;
+            if (rangeStart > 0 && hour < dayStartHour) {
+                total += 24 * 60;
+            }
+            return total;
+        };
+        const parsed = parseTimeMinute(rawTime);
+        if (parsed != null) return parsed;
+        return Math.max(0, dayStartHour * 60 + Math.max(0, rangeStart) * 60);
+    }
+
+    normalizePlanActivitiesForBlockRelative(raw, options = {}) {
+        const normalizePlanActivities = this.normalizePlanActivitiesPreservingSegments
+            || this.normalizePlanActivitiesArray;
+        const source = normalizePlanActivities
+            ? normalizePlanActivities.call(this, raw)
+            : (Array.isArray(raw) ? raw.map(item => ({ ...item })) : []);
+        const blockMinutes = Math.max(0, Math.floor(this.toFinitePlanMinute
+            ? this.toFinitePlanMinute(options.blockMinutes, 60)
+            : (Number.isFinite(Number(options.blockMinutes)) ? Number(options.blockMinutes) : 60)));
+        const context = options.context || options || {};
+        const blockStartMinute = this.toFinitePlanMinute
+            ? this.toFinitePlanMinute(options.blockStartMinute, null)
+            : (Number.isFinite(Number(options.blockStartMinute)) ? Number(options.blockStartMinute) : null);
+        const resolvedBlockStartMinute = blockStartMinute != null
+            ? blockStartMinute
+            : (this.getPlannedBlockStartMinute
+                ? this.getPlannedBlockStartMinute(context, Number.isInteger(Number(options.baseIndex)) ? Number(options.baseIndex) : 0)
+                : 0);
+        const snapMinute = (value, snapOptions = {}) => {
+            const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
+            if (planSegmentCore && typeof planSegmentCore.snapToTenMinutes === 'function') {
+                return planSegmentCore.snapToTenMinutes(value, snapOptions);
+            }
+            const min = Number.isFinite(Number(snapOptions.min)) ? Number(snapOptions.min) : 0;
+            const max = Number.isFinite(Number(snapOptions.max)) ? Number(snapOptions.max) : Number.POSITIVE_INFINITY;
+            const snapped = Math.round((Number(value) || 0) / 10) * 10;
+            return Math.max(min, Math.min(max, snapped));
+        };
+        const toMinute = (value, fallback = null) => {
+            if (this.toFinitePlanMinute) return this.toFinitePlanMinute(value, fallback);
+            if (value == null || value === '') return fallback;
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : fallback;
+        };
+        let cursor = 0;
+        return source
+            .filter(item => item && typeof item === 'object' && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item) => {
+                const rawDurationMinutes = toMinute(item.durationMinutes, null);
+                const durationFromSeconds = Math.max(0, Math.floor((Number(item.seconds) || 0) / 60));
+                const fallbackDuration = rawDurationMinutes != null
+                    ? Math.max(0, Math.floor(rawDurationMinutes))
+                    : durationFromSeconds;
+                const rawStartMinute = toMinute(item.startMinute, null);
+                const rawEndMinute = toMinute(item.endMinute, null);
+                let startMinute = rawStartMinute != null
+                    ? Math.floor(rawStartMinute)
+                    : (rawEndMinute != null ? Math.floor(rawEndMinute) - fallbackDuration : cursor);
+                let endMinute = rawEndMinute != null
+                    ? Math.floor(rawEndMinute)
+                    : startMinute + fallbackDuration;
+                const hasExplicitRange = rawStartMinute != null && rawEndMinute != null;
+                const alreadyRelative = hasExplicitRange
+                    && startMinute >= 0
+                    && endMinute <= blockMinutes;
+                const appearsAbsolute = hasExplicitRange
+                    && !alreadyRelative
+                    && Number.isFinite(resolvedBlockStartMinute)
+                    && resolvedBlockStartMinute > 0
+                    && startMinute >= resolvedBlockStartMinute
+                    && endMinute > resolvedBlockStartMinute;
+
+                if (appearsAbsolute) {
+                    startMinute -= resolvedBlockStartMinute;
+                    endMinute -= resolvedBlockStartMinute;
+                }
+
+                const lower = 0;
+                const upper = Math.max(lower, blockMinutes || endMinute);
+                startMinute = snapMinute(startMinute, { min: lower, max: upper });
+                endMinute = snapMinute(Math.max(startMinute, endMinute), { min: startMinute, max: upper });
+                const durationMinutes = Math.max(0, endMinute - startMinute);
+                cursor = Math.max(cursor, endMinute);
+                return {
+                    ...item,
+                    startMinute,
+                    durationMinutes,
+                    endMinute,
+                    seconds: durationMinutes * 60,
+                };
+            })
+            .filter(item => item.durationMinutes > 0 || item.label || item.seconds > 0);
     }
 
     toFinitePlanMinute(value, fallback = null) {
@@ -7009,8 +7128,15 @@ class TimeTracker {
         const current = this.normalizePlanActivitiesPreservingSegments
             ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
             : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []);
+        const currentRelative = this.normalizePlanActivitiesForBlockRelative
+            ? this.normalizePlanActivitiesForBlockRelative(current, {
+                context,
+                baseIndex: effectiveBaseIndex,
+                blockMinutes,
+            })
+            : current;
         // resizePlanSegmentInList relies on existing start/end/duration fields to preserve gaps.
-        const next = planSegmentCore.resizePlanSegmentInList(current, segmentIndex, edge, targetMinute, {
+        const next = planSegmentCore.resizePlanSegmentInList(currentRelative, segmentIndex, edge, targetMinute, {
             startMinute: 0,
             endMinute: blockMinutes,
         });
@@ -7189,7 +7315,14 @@ class TimeTracker {
                     ? this.normalizePlanActivitiesPreservingSegments(slot.planActivities)
                     : (Array.isArray(slot.planActivities) ? slot.planActivities.map(item => ({ ...item })) : []))
                 : [];
-            const originalPreviewActivities = originalPlanActivities.map((item, itemIndex) => ({
+            const originalRelativeActivities = this.normalizePlanActivitiesForBlockRelative
+                ? this.normalizePlanActivitiesForBlockRelative(originalPlanActivities, {
+                    context: plannedContext,
+                    baseIndex,
+                    blockMinutes,
+                })
+                : originalPlanActivities;
+            const originalPreviewActivities = originalRelativeActivities.map((item, itemIndex) => ({
                 ...item,
                 segmentIndex: item && item.segmentIndex != null && item.segmentIndex !== '' && Number.isInteger(Number(item.segmentIndex))
                     ? Number(item.segmentIndex)
@@ -7209,7 +7342,7 @@ class TimeTracker {
                 const gapStartMinute = Number(virtualRestEl.dataset.gapStartMinute);
                 const gapDurationMinutes = Number(virtualRestEl.dataset.gapDurationMinutes);
                 const gapEndMinute = gapStartMinute + gapDurationMinutes;
-                const indexedSegments = originalPlanActivities
+                const indexedSegments = originalRelativeActivities
                     .map((item, itemIndex) => ({ item, itemIndex }))
                     .filter(({ item }) => item && item.kind !== 'virtual-rest' && item.virtual !== true);
                 const previous = indexedSegments.find(({ item }) => Number(item.endMinute) === gapStartMinute);
@@ -7220,7 +7353,7 @@ class TimeTracker {
                 if (!target) return false;
                 segmentIndex = target.segmentIndex;
                 effectiveEdge = target.edge;
-                const targetSegment = originalPlanActivities[segmentIndex];
+                const targetSegment = originalRelativeActivities[segmentIndex];
                 startMinute = Number(targetSegment && targetSegment.startMinute);
                 endMinute = Number(targetSegment && targetSegment.endMinute);
             }
