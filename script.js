@@ -6704,9 +6704,26 @@ class TimeTracker {
             : 0;
         const visibleTop = viewportTop + 16;
         const sheetTop = Number(sheetRect.top);
+        const sheetBottom = Number(sheetRect.bottom);
         const targetTop = Number(targetRect.top);
         const targetBottom = Number(targetRect.bottom);
         if (![sheetTop, targetTop, targetBottom].every(Number.isFinite)) return false;
+        if (typeof document !== 'undefined' && document.body && typeof document.createElement === 'function') {
+            let spacer = document.getElementById ? document.getElementById('inline-plan-sheet-scroll-spacer') : null;
+            if (!spacer) {
+                spacer = document.createElement('div');
+                spacer.id = 'inline-plan-sheet-scroll-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                spacer.style.pointerEvents = 'none';
+                spacer.style.flex = '0 0 auto';
+                document.body.appendChild(spacer);
+            }
+            const actualSheetHeight = Number.isFinite(sheetBottom) && Number.isFinite(sheetTop)
+                ? Math.max(0, sheetBottom - sheetTop)
+                : Math.max(0, Number(this.inlinePlanDropdown.offsetHeight) || 0);
+            spacer.style.display = 'block';
+            spacer.style.height = `${Math.ceil(actualSheetHeight + 24)}px`;
+        }
         const visibleBottom = Math.max(visibleTop, sheetTop - 20);
         let delta = 0;
         if (targetBottom > visibleBottom) {
@@ -6720,6 +6737,7 @@ class TimeTracker {
     }
     scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
         if (!targetEl) return false;
+        this.inlinePlanSheetTargetEl = targetEl;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         const schedule = root && typeof root.requestAnimationFrame === 'function'
             ? root.requestAnimationFrame.bind(root)
@@ -6872,8 +6890,15 @@ class TimeTracker {
             const target = event.target;
             if (target && target.closest && (
                 target.closest('.split-grid-segment[data-segment-kind="real-plan"]')
+                || target.closest('.inline-plan-dropdown')
                 || target.closest('.activity-chip-board')
                 || target.closest('.inline-plan-subsection')
+                || target.closest('.inline-plan-child-popover-layer')
+                || target.closest('.routine-menu')
+                || target.closest('.inline-priority-menu')
+                || target.closest('.plan-activity-menu')
+                || target.closest('.plan-title-menu')
+                || target.closest('.plan-segment-title-edit-input')
             )) {
                 return;
             }

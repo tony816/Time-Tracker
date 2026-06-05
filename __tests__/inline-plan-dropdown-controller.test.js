@@ -71,6 +71,12 @@ function createInlinePlanPositionHarness({ viewport, sheet = false, querySelecto
         getInlinePlanViewportMetrics() {
             return metrics;
         },
+        measureInlinePlanPanel(panel, fallbackWidth) {
+            return controller.measureInlinePlanPanel.call(this, panel, fallbackWidth);
+        },
+        layoutInlinePlanAnchoredPanel(panel, anchorRect, options) {
+            return controller.layoutInlinePlanAnchoredPanel.call(this, panel, anchorRect, options);
+        },
         getInlinePlanMinimumInteractiveHeight(dropdownEl) {
             return controller.getInlinePlanMinimumInteractiveHeight.call(this, dropdownEl);
         },
@@ -127,6 +133,7 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
         assert.equal(typeof controller.renderInlinePlanDropdownOptions, 'function');
         assert.equal(typeof controller.positionInlinePlanDropdown, 'function');
         assert.equal(typeof controller.positionInlinePlanChildPopover, 'function');
+        assert.equal(typeof controller.layoutInlinePlanAnchoredPanel, 'function');
         assert.equal(typeof controller.openInlinePlanDropdown, 'function');
         assert.equal(typeof controller.closeInlinePlanDropdown, 'function');
         assert.equal(typeof controller.closePlanActivityChildMenu, 'function');
@@ -135,6 +142,73 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
             globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown,
             controller.openInlinePlanDropdown
         );
+});
+
+test('layoutInlinePlanAnchoredPanel flips above and clamps horizontally', () => {
+    const restore = installInlinePlanPositionGlobals();
+    const panel = {
+        style: {},
+        scrollHeight: 260,
+        offsetHeight: 260,
+        scrollWidth: 420,
+        offsetWidth: 420,
+        getBoundingClientRect() {
+            return { width: 420, height: 260 };
+        },
+    };
+    const ctx = {
+        getInlinePlanViewportMetrics() {
+            return { left: 0, top: 0, right: 390, bottom: 420, width: 390, height: 420 };
+        },
+    };
+    try {
+        const layout = controller.layoutInlinePlanAnchoredPanel.call(ctx, panel, {
+            left: 330,
+            top: 380,
+            right: 370,
+            bottom: 410,
+            width: 40,
+            height: 30,
+        }, {
+            preferredWidth: 420,
+            minWidth: 240,
+            minHeight: 160,
+            margin: 12,
+            gap: 6,
+        });
+
+        assert.equal(layout.placement, 'above');
+        assert.equal(panel.style.left, '12px');
+        assert.ok(Number.parseInt(panel.style.top, 10) < 380);
+        assert.ok(Number.parseInt(panel.style.maxHeight, 10) <= 362);
+    } finally {
+        restore();
+    }
+});
+
+test('positionInlinePlanDropdown applies anchored collision layout to segment replacement', () => {
+    const restore = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 360, bottom: 300, width: 360, height: 300 },
+    });
+    const anchor = createInlinePlanAnchor({ left: 320, top: 250, width: 32, height: 28 });
+    ctx.inlinePlanTarget = {
+        startIndex: 0,
+        endIndex: 0,
+        mode: 'plan-segment-replace',
+        anchorAlign: 'center',
+        anchorMinWidth: 500,
+    };
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.visibility, 'visible');
+        assert.equal(dropdown.style.left, '12px');
+        assert.ok(Number.parseInt(dropdown.style.top, 10) < 250);
+        assert.equal(dropdown.style.width, '336px');
+    } finally {
+        restore();
+    }
 });
 
 test('sheet touch dismiss does not arm from chip board interactions', () => {
@@ -2583,18 +2657,18 @@ test('positionInlinePlanChildPopover anchors the child board under the caret', (
     controller.positionInlinePlanChildPopover.call(ctx, anchor);
 
     assert.equal(section.style.position, 'fixed');
-    assert.equal(section.style.left, '160px');
+    assert.equal(section.style.left, '240px');
     assert.equal(section.style.top, '136px');
     assert.equal(section.style.width, '360px');
     assert.equal(section.style.maxWidth, '360px');
     assert.equal(section.style.visibility, 'visible');
     assert.equal(section.style.zIndex, '80');
-    assert.equal(section.style.maxHeight, '280px');
+    assert.equal(section.style.maxHeight, '420px');
     assert.equal(section.style.overflow, 'hidden');
     assert.equal(section.classList.contains('inline-plan-subsection-anchored'), true);
     assert.equal(section.classList.contains('inline-plan-subsection-flow'), false);
     assert.equal(board.style.overflow, 'auto');
-    assert.equal(board.style.maxHeight, '212px');
+    assert.equal(board.style.maxHeight, '352px');
 });
 
 test('positionInlinePlanChildPopover caps tall child board height', () => {
