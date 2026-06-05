@@ -15,8 +15,8 @@ const startPlanSegmentInlineTextEdit = buildMethod(
     '(labelEl, index, event, options = {})'
 );
 const startPlanSegmentActivityEdit = buildMethod(
-    'startPlanSegmentActivityEdit(labelEl, index, event)',
-    '(labelEl, index, event)'
+    'startPlanSegmentActivityEdit(labelEl, index, event, options = {})',
+    '(labelEl, index, event, options = {})'
 );
 const startPlanSegmentParentTitleEdit = buildMethod(
     'startPlanSegmentParentTitleEdit(titleEl, index, event)',
@@ -39,8 +39,8 @@ const attachPlanSegmentSelectionListeners = buildMethod(
     '(entryDiv, index)'
 );
 const openPlanSegmentReplacementDropdown = buildMethod(
-    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
-    '(baseIndex, segmentIndex, segmentEl)'
+    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {})',
+    '(baseIndex, segmentIndex, segmentEl, options = {})'
 );
 const addInlinePlanSheetTargetClasses = buildMethod(
     'addInlinePlanSheetTargetClasses(targetEl, specificClass = \'\')',
@@ -274,11 +274,14 @@ function createTitleEditHarness(options = {}) {
         startPlanSegmentInlineTextEdit(labelEl, rowIndex, event, options = {}) {
             return startPlanSegmentInlineTextEdit.call(this, labelEl, rowIndex, event, options);
         },
-        startPlanSegmentActivityEdit(labelEl, rowIndex, event) {
-            return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event);
+        startPlanSegmentActivityEdit(labelEl, rowIndex, event, options = {}) {
+            return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event, options);
         },
         startPlanSegmentParentTitleEdit(titleEl, rowIndex, event) {
             return startPlanSegmentParentTitleEdit.call(this, titleEl, rowIndex, event);
+        },
+        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {}) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, options);
         },
         ...options.ctx,
     };
@@ -326,7 +329,7 @@ test('clicking plan segment title text opens inline editing UI', () => {
         assert.equal(harness.label.textContent, '');
         assert.equal(hasNodeClass(harness.label, 'is-editing'), true);
         assert.equal(hasNodeClass(harness.outerLabel, 'is-editing'), false);
-        assert.equal(input.style.width, '52px');
+        assert.equal(input.style.width, '40px');
         assert.equal(input.style.minWidth, '6ch');
     });
 });
@@ -361,12 +364,23 @@ function withMobileEditorDocument(run) {
     }
 }
 
-test('mobile segment title tap opens in-segment editor without a sheet', () => {
+test('mobile segment title tap opens in-segment editor and replacement dropdown without a sheet', () => {
     withMobileEditorDocument((body) => {
+        const dropdownCalls = [];
         const harness = createTitleEditHarness({
             ctx: {
                 isInlinePlanMobileInputContext() {
                     return true;
+                },
+                openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+                    dropdownCalls.push({ startIndex, anchor, endIndex, options });
+                    const dropdown = createElementNode('div');
+                    dropdown.className = options.forceAnchored
+                        ? 'inline-plan-dropdown'
+                        : 'inline-plan-dropdown inline-plan-dropdown-sheet';
+                    this.inlinePlanDropdown = dropdown;
+                    body.appendChild(dropdown);
+                    return dropdown;
                 },
                 scheduleInlinePlanInputVisibilitySync(inputEl) {
                     harness.calls.push(['visibility', inputEl]);
@@ -380,6 +394,9 @@ test('mobile segment title tap opens in-segment editor without a sheet', () => {
             target: harness.label,
             preventDefault() {},
             stopPropagation() {},
+        }, {
+            openDropdown: true,
+            dropdownAnchor: harness.label,
         });
 
         assert.equal(opened, true);
@@ -389,13 +406,16 @@ test('mobile segment title tap opens in-segment editor without a sheet', () => {
         assert.equal(input.value, 'Focus');
         assert.equal(input.focused, true);
         assert.equal(input.selected, true);
-        assert.equal(harness.ctx.mobilePlanSegmentEditor, undefined);
-        assert.equal(body.children.length, 0);
+        assert.equal(dropdownCalls.length, 1);
+        assert.equal(dropdownCalls[0].options.forceAnchored, true);
+        assert.equal(dropdownCalls[0].options.keepInlineEditor, true);
+        assert.equal(body.querySelector('.inline-plan-dropdown-sheet'), null);
+        assert.equal(body.querySelector('.inline-plan-dropdown') != null, true);
         assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), false);
     });
 });
 
-test('mobile segment inline editor closes an existing inline plan dropdown before editing', () => {
+test('mobile segment inline editor does not close the dropdown at entry before opening replacement dropdown', () => {
     withMobileEditorDocument((body) => {
         const calls = [];
         const harness = createTitleEditHarness({
@@ -407,6 +427,16 @@ test('mobile segment inline editor closes an existing inline plan dropdown befor
                 closeInlinePlanDropdown() {
                     calls.push('close-inline-dropdown');
                     this.inlinePlanDropdown = null;
+                },
+                openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+                    calls.push(['open-inline-dropdown', startIndex, anchor, endIndex, options]);
+                    const dropdown = createElementNode('div');
+                    dropdown.className = options.forceAnchored
+                        ? 'inline-plan-dropdown'
+                        : 'inline-plan-dropdown inline-plan-dropdown-sheet';
+                    this.inlinePlanDropdown = dropdown;
+                    body.appendChild(dropdown);
+                    return dropdown;
                 },
                 scheduleInlinePlanInputVisibilitySync(inputEl) {
                     calls.push(['visibility', inputEl]);
@@ -420,15 +450,20 @@ test('mobile segment inline editor closes an existing inline plan dropdown befor
             target: harness.label,
             preventDefault() {},
             stopPropagation() {},
+        }, {
+            openDropdown: true,
+            dropdownAnchor: harness.label,
         });
 
         assert.equal(opened, true);
-        assert.deepEqual(calls[0], 'close-inline-dropdown');
+        assert.notEqual(calls[0], 'close-inline-dropdown');
+        assert.equal(calls.some(call => call === 'close-inline-dropdown'), false);
         const input = harness.label.querySelector('.plan-segment-title-edit-input');
         assert.ok(input);
         assert.equal(input.parentNode, harness.label);
-        assert.equal(body.children.length, 0);
         assert.equal(body.querySelector('.inline-plan-dropdown-sheet'), null);
+        assert.equal(body.querySelector('.inline-plan-dropdown') != null, true);
+        assert.equal(calls[0][0], 'open-inline-dropdown');
     });
 });
 
@@ -861,8 +896,8 @@ test('clicking label container space opens segment dropdown instead of title edi
                 ],
             },
         ];
-        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl) {
-            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl, options = {}) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, options);
         };
         ctx.addInlinePlanSheetTargetClasses = addInlinePlanSheetTargetClasses;
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
@@ -1010,8 +1045,8 @@ test('clicking parent title band opens parent title inline editing UI', () => {
                 ],
             },
         ];
-        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl) {
-            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl, options = {}) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, options);
         };
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
             dropdownCalls.push({ startIndex, anchor, endIndex, options });

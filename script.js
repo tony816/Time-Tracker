@@ -6306,10 +6306,13 @@ class TimeTracker {
         const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
         const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
         const previousTitle = String(labelEl.textContent || '').trim();
+        const shouldOpenDropdown = Boolean(options.openDropdown);
+        const dropdownAnchor = options.dropdownAnchor || labelEl || segmentEl;
+        const dropdownMode = options.dropdownMode || 'plan-segment-replace';
         if (this.mobilePlanSegmentEditor && typeof this.closePlanSegmentMobileTextEditor === 'function') {
             this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
         }
-        if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+        if (!shouldOpenDropdown && this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
             this.closeInlinePlanDropdown();
         }
         const input = document.createElement('input');
@@ -6321,7 +6324,7 @@ class TimeTracker {
         const fallbackCh = Math.max(3, Math.min(previousTitle.length + 1, 18));
         input.style.minWidth = `${fallbackCh}ch`;
         if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
-            input.style.width = `${Math.ceil(measuredWidth + 12)}px`;
+            input.style.width = `${Math.ceil(measuredWidth)}px`;
         }
         const setLabelEditing = (editing) => {
             const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
@@ -6350,16 +6353,39 @@ class TimeTracker {
         if (typeof input.select === 'function') input.select();
 
         let finished = false;
+        const titleEditSessionToken = shouldOpenDropdown
+            ? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+            : null;
+        if (shouldOpenDropdown) {
+            this.inlinePlanSegmentTitleEditSession = {
+                token: titleEditSessionToken,
+                labelEl,
+                segmentEl,
+                inputEl: input,
+            };
+        }
+        let blurRetryTimer = null;
         const cleanup = () => {
+            if (blurRetryTimer) {
+                clearTimeout(blurRetryTimer);
+                blurRetryTimer = null;
+            }
             if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
                 input.parentNode.removeChild(input);
             }
             setLabelEditing(false);
             labelEl.textContent = previousTitle;
         };
+        const clearActiveSession = () => {
+            if (!shouldOpenDropdown) return;
+            if (this.inlinePlanSegmentTitleEditSession && this.inlinePlanSegmentTitleEditSession.token === titleEditSessionToken) {
+                this.inlinePlanSegmentTitleEditSession = null;
+            }
+        };
         const finish = (save) => {
             if (finished) return;
             finished = true;
+            clearActiveSession();
             const rawValue = input.value;
             cleanup();
             if (!save) return;
@@ -6371,6 +6397,25 @@ class TimeTracker {
             if (typeof this[applyMethod] === 'function') {
                 this[applyMethod](baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, normalized);
             }
+        };
+        const scheduleBlurFinish = () => {
+            if (!shouldOpenDropdown || finished) return;
+            if (blurRetryTimer) clearTimeout(blurRetryTimer);
+            blurRetryTimer = setTimeout(() => {
+                blurRetryTimer = null;
+                if (finished) return;
+                if (!this.inlinePlanSegmentTitleEditSession || this.inlinePlanSegmentTitleEditSession.token !== titleEditSessionToken) {
+                    return;
+                }
+                const doc = typeof document !== 'undefined' ? document : null;
+                const activeEl = doc && doc.activeElement ? doc.activeElement : null;
+                const dropdown = this.inlinePlanDropdown;
+                if (dropdown && activeEl && dropdown.contains && dropdown.contains(activeEl)) {
+                    scheduleBlurFinish();
+                    return;
+                }
+                finish(true);
+            }, 16);
         };
 
         input.addEventListener('keydown', (keyEvent) => {
@@ -6384,10 +6429,24 @@ class TimeTracker {
                 finish(false);
             }
         });
-        input.addEventListener('blur', () => finish(true));
+        input.addEventListener('blur', () => {
+            if (shouldOpenDropdown) {
+                scheduleBlurFinish();
+                return;
+            }
+            finish(true);
+        });
         input.addEventListener('click', (clickEvent) => {
             clickEvent.stopPropagation();
         });
+        if (shouldOpenDropdown && typeof this.openPlanSegmentReplacementDropdown === 'function') {
+            this.openPlanSegmentReplacementDropdown(baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, segmentEl, {
+                forceAnchored: true,
+                keepInlineEditor: true,
+                anchorEl: dropdownAnchor,
+                dropdownMode,
+            });
+        }
         return true;
     }
     closePlanSegmentMobileTextEditor(options = {}) {
@@ -6413,20 +6472,24 @@ class TimeTracker {
         }
         return true;
     }
-    startPlanSegmentActivityEdit(labelEl, index, event) {
+    startPlanSegmentActivityEdit(labelEl, index, event, options = {}) {
         return this.startPlanSegmentInlineTextEdit(labelEl, index, event, {
             ariaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
             mobileAriaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
             applyMethod: 'applyPlanSegmentTitleEdit',
+            ...options,
         });
     }
-    startPlanSegmentInlineActivityEdit(segmentEl, index, event) {
+    startPlanSegmentInlineActivityEdit(segmentEl, index, event, options = {}) {
         if (!segmentEl) return false;
         const activityEl = this.getPlanSegmentActivityEditElement
             ? this.getPlanSegmentActivityEditElement(segmentEl)
             : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
         if (!activityEl || typeof this.startPlanSegmentActivityEdit !== 'function') return false;
-        return this.startPlanSegmentActivityEdit(activityEl, index, event);
+        return this.startPlanSegmentActivityEdit(activityEl, index, event, {
+            dropdownAnchor: segmentEl,
+            ...options,
+        });
     }
     startPlanSegmentParentTitleEdit(titleEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
@@ -6494,7 +6557,7 @@ class TimeTracker {
         }
         return true;
     }
-    openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
+    openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {}) {
         const context = typeof this.resolvePlannedSlotContext === 'function'
             ? this.resolvePlannedSlotContext(baseIndex)
             : null;
@@ -6510,6 +6573,8 @@ class TimeTracker {
             )
             : null;
         const anchor = labelAnchor
+            || options.anchorEl
+            || options.dropdownAnchor
             || segmentEl
             || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
             || (segmentEl.closest && segmentEl.closest('.planned-input'));
@@ -6521,16 +6586,23 @@ class TimeTracker {
             ? Math.floor(segmentRect.width)
             : 0;
         this.openInlinePlanDropdown(effectiveBaseIndex, anchor, effectiveBaseIndex, {
-            mode: 'plan-segment-replace',
+            mode: options.dropdownMode || 'plan-segment-replace',
             segmentIndex,
             segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId ?? '') : '',
             anchorAlign: 'center',
             anchorMinWidth,
+            forceAnchored: Boolean(options.forceAnchored),
+            keepInlineEditor: Boolean(options.keepInlineEditor),
         });
         if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
             this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
         }
-        if (typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
+        if (
+            this.inlinePlanDropdown
+            && this.inlinePlanDropdown.classList
+            && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
+            && typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function'
+        ) {
             this.scheduleInlinePlanSheetTargetViewportCorrection(segmentEl);
         }
         return true;
@@ -6854,12 +6926,18 @@ class TimeTracker {
                             ? this.getPlanSegmentActivityEditElement(segmentEl)
                             : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
                         if (activityEl && typeof this.startPlanSegmentActivityEdit === 'function') {
-                            this.startPlanSegmentActivityEdit(activityEl, index, event);
+                            this.startPlanSegmentActivityEdit(activityEl, index, event, {
+                                openDropdown: true,
+                                dropdownAnchor: activityEl,
+                            });
                         }
                         return;
                     }
                     if (typeof this.startPlanSegmentInlineActivityEdit === 'function') {
-                        this.startPlanSegmentInlineActivityEdit(segmentEl, index, event);
+                        this.startPlanSegmentInlineActivityEdit(segmentEl, index, event, {
+                            openDropdown: true,
+                            dropdownAnchor: segmentEl,
+                        });
                     }
                     return;
                 }
@@ -6885,7 +6963,10 @@ class TimeTracker {
                     event.preventDefault();
                     event.stopPropagation();
                     if (typeof this.startPlanSegmentActivityEdit === 'function') {
-                        this.startPlanSegmentActivityEdit(activityTarget, index, event);
+                        this.startPlanSegmentActivityEdit(activityTarget, index, event, {
+                            openDropdown: true,
+                            dropdownAnchor: activityTarget,
+                        });
                     }
                     return;
                 }

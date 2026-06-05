@@ -756,7 +756,6 @@ textarea:focus-visible,
     }
 
     .inline-plan-input,
-    .plan-segment-title-edit-input,
     .activity-child-composer-input,
     .sub-activity-row input,
     .sub-activity-row select,
@@ -765,6 +764,10 @@ textarea:focus-visible,
     .timer-result-input,
     .input-field {
         font-size: 16px;
+    }
+
+    .plan-segment-title-edit-input {
+        font-size: inherit;
     }
 
     .activity-child-composer-input,

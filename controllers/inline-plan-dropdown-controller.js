@@ -591,8 +591,9 @@ function positionInlinePlanDropdown(anchorEl) {
         const fallbackHeight = Math.max(1, Math.floor(viewport.height - (margin * 2)));
         const rawSpaceBelow = Math.max(0, Math.floor(viewport.bottom - anchorBottom - gap - margin));
         const rawSpaceAbove = Math.max(0, Math.floor(anchorTop - viewport.top - gap - margin));
+        const isMobileInputContext = this.isInlinePlanMobileInputContext();
 
-        const forceBelow = this.isInlinePlanMobileInputContext();
+        const forceBelow = isMobileInputContext;
 
         let placeAbove = false;
         if (!forceBelow) {
@@ -1250,6 +1251,9 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
         if (!activityItem) return;
         const keepOpenAfterSelection = shouldKeepInlinePlanOpenAfterSelection(this, options);
+        if (this.inlinePlanSegmentTitleEditSession) {
+            this.inlinePlanSegmentTitleEditSession = null;
+        }
 
         if (this.inlinePlanTarget && this.inlinePlanTarget.mode === 'plan-segment-replace') {
             const baseIndex = Number.isInteger(this.inlinePlanTarget.baseIndex)
@@ -2225,7 +2229,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.preserveInlinePlanSheetScrollSpacer = false;
         this.currentPlanSource = this.getActivePlanSource();
 
-        const isMobileInputContext = this.isInlinePlanMobileInputContext();
+        const isMobileInputContext = options.forceAnchored ? false : this.isInlinePlanMobileInputContext();
         this.inlinePlanTarget = virtualGapTarget
             ? {
                 ...range,
@@ -2242,8 +2246,9 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                     segmentIndex: range.segmentIndex,
                     segmentId: range.segmentId,
                     anchorAlign: range.anchorAlign,
+                    keepInlineEditor: Boolean(options.keepInlineEditor),
                 }
-            : { ...range, anchor };
+            : { ...range, anchor, keepInlineEditor: Boolean(options.keepInlineEditor) };
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
             : null;

@@ -100,21 +100,25 @@
 }
 
 .plan-segment-title-edit-input {
+  display: inline-block;
   width: auto;
   max-width: 100%;
   min-width: 3ch;
-  height: 20px;
   box-sizing: border-box;
+  height: auto;
+  margin: 0;
+  padding: 0;
   border: 1px solid #2563eb;
   border-radius: 4px;
-  padding: 0 4px;
-  background: #ffffff;
+  background: transparent;
   color: #111827;
   font: inherit;
-  font-weight: 600;
-  line-height: 18px;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
   text-align: center;
   outline: none;
+  vertical-align: bottom;
 }
 
 .plan-segment-graphic-label[hidden],

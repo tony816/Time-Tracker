@@ -68,8 +68,8 @@ const setSelectedPlanSegment = buildMethod(
     '(baseIndex, segmentIndex, options = {})'
 );
 const openPlanSegmentReplacementDropdown = buildMethod(
-    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)',
-    '(baseIndex, segmentIndex, segmentEl)'
+    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {})',
+    '(baseIndex, segmentIndex, segmentEl, options = {})'
 );
 const replacePlanSegmentActivity = buildMethod(
     'replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem, parentItem = null)',
@@ -1261,8 +1261,8 @@ test('clicking real planned segment background opens segment-scoped inline dropd
         { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
         { label: 'B', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
     ], { overrides: {
-        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
-            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl);
+        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {}) {
+            return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, options);
         },
         openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
             dropdownCalls.push({ startIndex, anchor, endIndex, options });

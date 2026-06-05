@@ -28,8 +28,8 @@ const getPlanSegmentTapTextRect = buildMethod(
     '(textEl)'
 );
 const startPlanSegmentInlineActivityEdit = buildMethod(
-    'startPlanSegmentInlineActivityEdit(segmentEl, index, event)',
-    '(segmentEl, index, event)'
+    'startPlanSegmentInlineActivityEdit(segmentEl, index, event, options = {})',
+    '(segmentEl, index, event, options = {})'
 );
 const expandRectWithinBounds = buildMethod(
     'expandRectWithinBounds(rect, bounds, padding = {})',
@@ -281,13 +281,21 @@ function createHarness(options = {}) {
             calls.push(['title-edit', el, index, event.defaultPrevented, event.propagationStopped]);
             return true;
         },
-        startPlanSegmentActivityEdit(el, index, event) {
-            calls.push(['activity-edit', el, index, event.defaultPrevented, event.propagationStopped]);
+        startPlanSegmentActivityEdit(el, index, event, options = {}) {
+            calls.push(['activity-edit', el, index, event.defaultPrevented, event.propagationStopped, options]);
+            if (options.openDropdown && typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                this.openPlanSegmentReplacementDropdown(
+                    index,
+                    Number.parseInt(segment.dataset.segmentIndex || '0', 10),
+                    segment,
+                    options
+                );
+            }
             return true;
         },
         startPlanSegmentInlineActivityEdit,
-        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
-            calls.push(['dropdown', baseIndex, segmentIndex, segmentEl]);
+        openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {}) {
+            calls.push(['dropdown', baseIndex, segmentIndex, segmentEl, options]);
             return true;
         },
         setSelectedPlanSegment(baseIndex, segmentIndex) {
@@ -380,7 +388,14 @@ test('mobile activity hit area tap starts activity inline edit without opening r
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['activity-edit', harness.label, 0, true, true],
+        ['activity-edit', harness.label, 0, true, true, {
+            openDropdown: true,
+            dropdownAnchor: harness.label,
+        }],
+        ['dropdown', 0, 0, harness.segment, {
+            openDropdown: true,
+            dropdownAnchor: harness.label,
+        }],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
@@ -400,7 +415,14 @@ test('mobile segment background tap outside text hit areas starts activity inlin
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['activity-edit', harness.label, 0, true, true],
+        ['activity-edit', harness.label, 0, true, true, {
+            openDropdown: true,
+            dropdownAnchor: harness.segment,
+        }],
+        ['dropdown', 0, 0, harness.segment, {
+            openDropdown: true,
+            dropdownAnchor: harness.segment,
+        }],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
@@ -457,7 +479,14 @@ test('mobile segment background tap starts activity inline edit without pre-scro
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(rafCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true],
+            ['activity-edit', harness.label, 0, true, true, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
+            ['dropdown', 0, 0, harness.segment, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
         ]);
         assert.equal(event.defaultPrevented, true);
         assert.equal(event.propagationStopped, true);
@@ -484,7 +513,14 @@ test('mobile segment background tap skips minimal pre-scroll when segment is sli
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(rafCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true],
+            ['activity-edit', harness.label, 0, true, true, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
+            ['dropdown', 0, 0, harness.segment, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
         ]);
     });
 });
@@ -504,7 +540,14 @@ test('mobile segment background tap starts activity inline edit when segment is 
 
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true],
+            ['activity-edit', harness.label, 0, true, true, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
+            ['dropdown', 0, 0, harness.segment, {
+                openDropdown: true,
+                dropdownAnchor: harness.segment,
+            }],
         ]);
     });
 });
@@ -729,7 +772,14 @@ test('desktop activity label click starts activity edit without opening replacem
     labelHarness.segment.dispatchEvent(event);
 
     assert.deepEqual(labelHarness.calls, [
-        ['activity-edit', labelHarness.label, 0, true, true],
+        ['activity-edit', labelHarness.label, 0, true, true, {
+            openDropdown: true,
+            dropdownAnchor: labelHarness.label,
+        }],
+        ['dropdown', 0, 0, labelHarness.segment, {
+            openDropdown: true,
+            dropdownAnchor: labelHarness.label,
+        }],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
@@ -750,7 +800,7 @@ test('desktop segment background click still opens replacement dropdown', () => 
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(backgroundHarness.calls, [
-        ['dropdown', 0, 0, backgroundHarness.segment],
+        ['dropdown', 0, 0, backgroundHarness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
