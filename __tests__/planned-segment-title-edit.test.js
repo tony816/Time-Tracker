@@ -14,14 +14,6 @@ const startPlanSegmentInlineTextEdit = buildMethod(
     'startPlanSegmentInlineTextEdit(labelEl, index, event, options = {})',
     '(labelEl, index, event, options = {})'
 );
-const openPlanSegmentMobileTextEditor = buildMethod(
-    'openPlanSegmentMobileTextEditor(labelEl, index, event, options = {})',
-    '(labelEl, index, event, options = {})'
-);
-const closePlanSegmentMobileTextEditor = buildMethod(
-    'closePlanSegmentMobileTextEditor(options = {})',
-    '(options = {})'
-);
 const startPlanSegmentActivityEdit = buildMethod(
     'startPlanSegmentActivityEdit(labelEl, index, event)',
     '(labelEl, index, event)'
@@ -282,12 +274,6 @@ function createTitleEditHarness(options = {}) {
         startPlanSegmentInlineTextEdit(labelEl, rowIndex, event, options = {}) {
             return startPlanSegmentInlineTextEdit.call(this, labelEl, rowIndex, event, options);
         },
-        openPlanSegmentMobileTextEditor(labelEl, rowIndex, event, options = {}) {
-            return openPlanSegmentMobileTextEditor.call(this, labelEl, rowIndex, event, options);
-        },
-        closePlanSegmentMobileTextEditor(options = {}) {
-            return closePlanSegmentMobileTextEditor.call(this, options);
-        },
         startPlanSegmentActivityEdit(labelEl, rowIndex, event) {
             return startPlanSegmentActivityEdit.call(this, labelEl, rowIndex, event);
         },
@@ -406,6 +392,43 @@ test('mobile segment title tap opens in-segment editor without a sheet', () => {
         assert.equal(harness.ctx.mobilePlanSegmentEditor, undefined);
         assert.equal(body.children.length, 0);
         assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), false);
+    });
+});
+
+test('mobile segment inline editor closes an existing inline plan dropdown before editing', () => {
+    withMobileEditorDocument((body) => {
+        const calls = [];
+        const harness = createTitleEditHarness({
+            ctx: {
+                isInlinePlanMobileInputContext() {
+                    return true;
+                },
+                inlinePlanDropdown: { id: 'dropdown' },
+                closeInlinePlanDropdown() {
+                    calls.push('close-inline-dropdown');
+                    this.inlinePlanDropdown = null;
+                },
+                scheduleInlinePlanInputVisibilitySync(inputEl) {
+                    calls.push(['visibility', inputEl]);
+                },
+            },
+        });
+
+        const opened = startPlanSegmentActivityEdit.call(harness.ctx, harness.label, 0, {
+            type: 'click',
+            button: 0,
+            target: harness.label,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(opened, true);
+        assert.deepEqual(calls[0], 'close-inline-dropdown');
+        const input = harness.label.querySelector('.plan-segment-title-edit-input');
+        assert.ok(input);
+        assert.equal(input.parentNode, harness.label);
+        assert.equal(body.children.length, 0);
+        assert.equal(body.querySelector('.inline-plan-dropdown-sheet'), null);
     });
 });
 

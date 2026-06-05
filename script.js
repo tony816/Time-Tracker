@@ -6309,6 +6309,9 @@ class TimeTracker {
         if (this.mobilePlanSegmentEditor && typeof this.closePlanSegmentMobileTextEditor === 'function') {
             this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
         }
+        if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+            this.closeInlinePlanDropdown();
+        }
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'plan-segment-title-edit-input';
@@ -6385,158 +6388,6 @@ class TimeTracker {
         input.addEventListener('click', (clickEvent) => {
             clickEvent.stopPropagation();
         });
-        return true;
-    }
-    openPlanSegmentMobileTextEditor(labelEl, index, event, options = {}) {
-        if (!labelEl || typeof document === 'undefined') return false;
-        const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
-        if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return false;
-        const baseIndex = Number.isInteger(options.baseIndex)
-            ? options.baseIndex
-            : (this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index);
-        const parsedSegmentIndex = Number.isInteger(options.segmentIndex)
-            ? options.segmentIndex
-            : parseInt(segmentEl.dataset.segmentIndex || '', 10);
-        const segmentIndex = Number.isInteger(parsedSegmentIndex) ? parsedSegmentIndex : null;
-        const previousTitle = String(
-            options.previousTitle != null
-                ? options.previousTitle
-                : (labelEl.textContent || '')
-        ).trim();
-        const applyMethod = options.applyMethod || 'applyPlanSegmentTitleEdit';
-
-        if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
-            this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
-        }
-        if (this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
-            this.closeInlinePlanDropdown();
-        }
-
-        const backdrop = document.createElement('div');
-        backdrop.className = 'inline-plan-backdrop plan-segment-mobile-editor-backdrop';
-        const sheet = document.createElement('div');
-        sheet.className = 'plan-segment-mobile-editor inline-plan-dropdown inline-plan-dropdown-sheet';
-        sheet.setAttribute('role', 'dialog');
-        sheet.setAttribute('aria-modal', 'true');
-        const dialogLabel = options.mobileAriaLabel || options.ariaLabel || '\uD65C\uB3D9\uBA85 \uC218\uC815';
-        sheet.setAttribute('aria-label', dialogLabel);
-
-        const header = document.createElement('div');
-        header.className = 'plan-segment-mobile-editor-header';
-        const title = document.createElement('div');
-        title.className = 'plan-segment-mobile-editor-title';
-        title.textContent = dialogLabel;
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'plan-segment-mobile-editor-close';
-        closeBtn.setAttribute('aria-label', '\uB2EB\uAE30');
-        closeBtn.textContent = '\u00D7';
-        header.appendChild(title);
-        header.appendChild(closeBtn);
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'plan-segment-mobile-editor-input';
-        input.value = previousTitle;
-        input.setAttribute('aria-label', dialogLabel);
-
-        const actions = document.createElement('div');
-        actions.className = 'plan-segment-mobile-editor-actions';
-        const cancelBtn = document.createElement('button');
-        cancelBtn.type = 'button';
-        cancelBtn.className = 'plan-segment-mobile-editor-cancel';
-        cancelBtn.textContent = '\uCDE8\uC18C';
-        const saveBtn = document.createElement('button');
-        saveBtn.type = 'button';
-        saveBtn.className = 'plan-segment-mobile-editor-save';
-        saveBtn.textContent = '\uC800\uC7A5';
-        actions.appendChild(cancelBtn);
-        actions.appendChild(saveBtn);
-
-        sheet.appendChild(header);
-        sheet.appendChild(input);
-        sheet.appendChild(actions);
-
-        const closeEditor = (save) => {
-            const rawValue = input.value;
-            if (typeof this.closePlanSegmentMobileTextEditor === 'function') {
-                this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
-            }
-            if (!save) return;
-            const normalized = this.normalizeActivityText
-                ? this.normalizeActivityText(rawValue || '')
-                : String(rawValue || '').trim();
-            if (!normalized) return;
-            if (typeof this[applyMethod] === 'function') {
-                this[applyMethod](baseIndex, segmentIndex, normalized);
-            }
-        };
-
-        sheet.addEventListener('click', (sheetEvent) => {
-            sheetEvent.stopPropagation();
-        });
-        backdrop.addEventListener('click', () => closeEditor(false));
-        closeBtn.addEventListener('click', (clickEvent) => {
-            clickEvent.preventDefault();
-            clickEvent.stopPropagation();
-            closeEditor(false);
-        });
-        cancelBtn.addEventListener('click', (clickEvent) => {
-            clickEvent.preventDefault();
-            clickEvent.stopPropagation();
-            closeEditor(false);
-        });
-        saveBtn.addEventListener('click', (clickEvent) => {
-            clickEvent.preventDefault();
-            clickEvent.stopPropagation();
-            closeEditor(true);
-        });
-        input.addEventListener('keydown', (keyEvent) => {
-            if (keyEvent.key === 'Enter' && !keyEvent.isComposing) {
-                keyEvent.preventDefault();
-                keyEvent.stopPropagation();
-                closeEditor(true);
-            } else if (keyEvent.key === 'Escape') {
-                keyEvent.preventDefault();
-                keyEvent.stopPropagation();
-                closeEditor(false);
-            }
-        });
-        sheet.addEventListener('keydown', (keyEvent) => {
-            if (keyEvent.key === 'Escape') {
-                keyEvent.preventDefault();
-                keyEvent.stopPropagation();
-                closeEditor(false);
-                return;
-            }
-            if (keyEvent.key !== 'Tab') return;
-            const focusable = Array.from(sheet.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
-                .filter((el) => !(el.disabled || (el.getAttribute && el.getAttribute('aria-hidden') === 'true')));
-            if (focusable.length === 0) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            const active = document.activeElement;
-            if (keyEvent.shiftKey && active === first) {
-                keyEvent.preventDefault();
-                last.focus();
-            } else if (!keyEvent.shiftKey && active === last) {
-                keyEvent.preventDefault();
-                first.focus();
-            }
-        });
-
-        document.body.appendChild(backdrop);
-        document.body.appendChild(sheet);
-        document.body.classList.add('inline-plan-sheet-open');
-        this.mobilePlanSegmentEditor = { root: sheet, backdrop, input, labelEl };
-
-        if (typeof input.focus === 'function') {
-            input.focus();
-            if (typeof input.select === 'function') input.select();
-        }
-        if (typeof this.scheduleInlinePlanInputVisibilitySync === 'function') {
-            this.scheduleInlinePlanInputVisibilitySync(input);
-        }
         return true;
     }
     closePlanSegmentMobileTextEditor(options = {}) {

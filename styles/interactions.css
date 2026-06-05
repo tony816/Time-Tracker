@@ -83,15 +83,15 @@
 
 .plan-segment-label-text,
 .plan-segment-title-text {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
   cursor: text;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .plan-segment-label-text.is-editing,
@@ -1297,65 +1297,6 @@ button.activity-chip,
 
 .inline-plan-child-actions .activity-child-composer-cancel {
   display: none;
-}
-
-.plan-segment-mobile-editor {
-  gap: 12px;
-}
-
-.plan-segment-mobile-editor-header,
-.plan-segment-mobile-editor-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.plan-segment-mobile-editor-title {
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.plan-segment-mobile-editor-close,
-.plan-segment-mobile-editor-cancel,
-.plan-segment-mobile-editor-save {
-  min-height: 36px;
-  border-radius: 8px;
-  border: 1px solid #d5dee8;
-  background: #fff;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.plan-segment-mobile-editor-close {
-  width: 36px;
-  padding: 0;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.plan-segment-mobile-editor-input {
-  width: 100%;
-  min-height: 42px;
-  box-sizing: border-box;
-  border: 1px solid #9ac5ef;
-  border-radius: 10px;
-  padding: 0 12px;
-  background: #fff;
-  color: #111827;
-  font-size: 16px;
-  line-height: 1.4;
-  outline: none;
-}
-
-.plan-segment-mobile-editor-save {
-  color: #fff;
-  border-color: #2563eb;
-  background: #2563eb;
 }
 
 .inline-plan-sub-board .activity-chip-row + .activity-chip-board-title,
