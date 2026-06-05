@@ -268,7 +268,9 @@ function buildSplitVisualization(type, index) {
                     const icon = model.display.icon;
                     const timerText = this.escapeHtml(model.display.timeText);
                     const tone = model.display.tone;
-                    const buttonHtml = `<button type="button"
+                    const buttonHtml = segment.connectTop
+                        ? '<span class="plan-segment-timer-spacer" aria-hidden="true"></span>'
+                        : `<button type="button"
                                    class="plan-segment-timer-button"
                                    data-index="${baseIndex}"
                                    data-segment-id="${escapedSegmentId}"
@@ -279,10 +281,10 @@ function buildSplitVisualization(type, index) {
                     labelHtml = `<div class="plan-segment-graphic"
                                       data-index="${baseIndex}"
                                       data-segment-id="${escapedSegmentId}">
+                                    ${buttonHtml}
                                     <div class="${graphicMainClass}">
                                         ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}" data-segment-title-edit-trigger="true">${safeTitleLabel}</span>` : ''}
                                         <span class="plan-segment-graphic-label" title="${safeLabel}">
-                                            ${buttonHtml}
                                             <span class="plan-segment-label-text" role="button" tabindex="0" data-title-edit-trigger="true" data-activity-edit-trigger="true">${safeLabel}</span>
                                         </span>
                                         <span class="plan-segment-timer-time tone-${tone}"

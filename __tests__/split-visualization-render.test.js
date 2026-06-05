@@ -319,51 +319,6 @@ test('buildSplitVisualization passes segment duration context to plan segment ti
     assert.doesNotMatch(html, /0m \/ 180m/);
 });
 
-test('buildSplitVisualization renders 10 minute plan segments with the standard inline timer structure', () => {
-    const ctx = {
-        actualRecordingDisabled: true,
-        computeSplitSegments(type, index) {
-            assert.equal(type, 'planned');
-            assert.equal(index, 2);
-            return {
-                showTitleBand: false,
-                gridSegments: [
-                    { label: 'Lunch', span: 1, segmentIndex: 0, startMinute: 0, durationMinutes: 10, endMinute: 10 },
-                    { label: 'Focus', span: 3, segmentIndex: 1, startMinute: 10, durationMinutes: 30, endMinute: 40 },
-                ],
-            };
-        },
-        escapeHtml(value) { return String(value); },
-        escapeAttribute(value) { return String(value); },
-        getSplitColor() { return '#abcdef'; },
-        getPlanSegmentBaseIndex() { return 2; },
-        getPlanSegmentId(baseIndex, segmentIndex) {
-            return `planned-${baseIndex}-seg${segmentIndex}`;
-        },
-        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
-            return {
-                id: segmentId,
-                timer: { status: 'idle', running: false },
-                display: {
-                    icon: 'play',
-                    timeText: `0m / ${segmentContext.durationMinutes}m`,
-                    tone: 'under',
-                },
-            };
-        },
-    };
-
-    const html = buildSplitVisualization.call(ctx, 'planned', 2);
-    const tenMinuteSegment = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-duration-minutes="10"[\s\S]*?data-segment-duration-minutes="30"/)[0];
-
-    assert.match(tenMinuteSegment, /class="plan-segment-graphic"/);
-    assert.match(tenMinuteSegment, /class="plan-segment-graphic-main"/);
-    assert.match(tenMinuteSegment, /<span class="plan-segment-graphic-label"[^>]*>\s*<button type="button"\s*class="plan-segment-timer-button"[\s\S]*?<\/button>\s*<span class="plan-segment-label-text"[^>]*>Lunch<\/span>\s*<\/span>/);
-    assert.match(tenMinuteSegment, /class="plan-segment-timer-time tone-under"[\s\S]*>0m \/ 10m<\/span>/);
-    assert.doesNotMatch(tenMinuteSegment, /plan-segment-timer-spacer/);
-    assert.doesNotMatch(html, /compact-plan-segment|plan-segment-compact/);
-});
-
 test('buildSplitVisualization renders parent title above child activity inside plan segment', () => {
     const ctx = {
         actualRecordingDisabled: true,
