@@ -268,8 +268,9 @@ function buildSplitVisualization(type, index) {
                     const icon = model.display.icon;
                     const timerText = this.escapeHtml(model.display.timeText);
                     const tone = model.display.tone;
-                    const buttonHtml = segment.connectTop
-                        ? '<span class="plan-segment-timer-spacer" aria-hidden="true"></span>'
+                    const isContinuationSegment = Boolean(segment.connectTop);
+                    const buttonHtml = isContinuationSegment
+                        ? ''
                         : `<button type="button"
                                    class="plan-segment-timer-button"
                                    data-index="${baseIndex}"
@@ -278,7 +279,15 @@ function buildSplitVisualization(type, index) {
                     const graphicMainClass = safeTitleLabel
                         ? 'plan-segment-graphic-main has-segment-title'
                         : 'plan-segment-graphic-main';
-                    labelHtml = `<div class="plan-segment-graphic"
+                    const graphicClass = isContinuationSegment
+                        ? 'plan-segment-graphic is-plan-segment-continuation'
+                        : 'plan-segment-graphic';
+                    const timerTimeHtml = isContinuationSegment
+                        ? ''
+                        : `<span class="plan-segment-timer-time tone-${tone}"
+                                  data-index="${baseIndex}"
+                                  data-segment-id="${escapedSegmentId}">${timerText}</span>`;
+                    labelHtml = `<div class="${graphicClass}"
                                       data-index="${baseIndex}"
                                       data-segment-id="${escapedSegmentId}">
                                     ${buttonHtml}
@@ -287,9 +296,7 @@ function buildSplitVisualization(type, index) {
                                         <span class="plan-segment-graphic-label" title="${safeLabel}">
                                             <span class="plan-segment-label-text" role="button" tabindex="0" data-title-edit-trigger="true" data-activity-edit-trigger="true">${safeLabel}</span>
                                         </span>
-                                        <span class="plan-segment-timer-time tone-${tone}"
-                                              data-index="${baseIndex}"
-                                              data-segment-id="${escapedSegmentId}">${timerText}</span>
+                                        ${timerTimeHtml}
                                     </div>
                                 </div>`;
                 }

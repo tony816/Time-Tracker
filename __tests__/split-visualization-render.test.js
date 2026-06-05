@@ -274,6 +274,97 @@ test('buildSplitVisualization keeps long planned labels and timer text inside se
     assert.doesNotMatch(segments[1], /split-grid-segment-virtual-rest/);
 });
 
+test('buildSplitVisualization omits the timer area on connected continuation plan segments', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 15);
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: 'Shower',
+                        span: 6,
+                        segmentIndex: 0,
+                        startMinute: 900,
+                        durationMinutes: 130,
+                        endMinute: 1030,
+                        connectTop: false,
+                        connectBottom: true,
+                    },
+                    {
+                        label: 'Shower',
+                        span: 6,
+                        segmentIndex: 0,
+                        startMinute: 900,
+                        durationMinutes: 130,
+                        endMinute: 1030,
+                        connectTop: true,
+                        connectBottom: true,
+                    },
+                    {
+                        label: 'Shower',
+                        span: 1,
+                        segmentIndex: 0,
+                        startMinute: 900,
+                        durationMinutes: 130,
+                        endMinute: 1030,
+                        connectTop: true,
+                        connectBottom: false,
+                    },
+                ],
+            };
+        },
+        escapeHtml(value) {
+            return String(value);
+        },
+        escapeAttribute(value) {
+            return String(value);
+        },
+        getSplitColor() {
+            return '#abcdef';
+        },
+        getPlanSegmentBaseIndex() {
+            return 15;
+        },
+        getPlanSegmentId(baseIndex, segmentIndex) {
+            return `planned-${baseIndex}-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: {
+                    icon: 'play',
+                    timeText: `0m / ${segmentContext.durationMinutes}m`,
+                    tone: 'under',
+                },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 15);
+    const segments = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-kind="real-plan"[\s\S]*?<\/div>/g) || [];
+
+    assert.equal(segments.length, 3);
+    assert.match(segments[0], /connect-bottom/);
+    assert.match(segments[0], /class="plan-segment-timer-button"/);
+    assert.match(segments[0], /class="plan-segment-timer-time tone-under"/);
+    assert.match(segments[0], /0m \/ 130m/);
+
+    [segments[1], segments[2]].forEach((segmentHtml) => {
+        assert.match(segmentHtml, /connect-top/);
+        assert.match(segmentHtml, /class="plan-segment-graphic is-plan-segment-continuation"/);
+        assert.match(segmentHtml, /class="plan-segment-graphic-label"[^>]*>[\s\S]*plan-segment-label-text[^>]*>Shower<\/span>/);
+        assert.match(segmentHtml, /plan-segment-resize-handle-right/);
+        assert.doesNotMatch(segmentHtml, /plan-segment-timer-button/);
+        assert.doesNotMatch(segmentHtml, /plan-segment-timer-spacer/);
+        assert.doesNotMatch(segmentHtml, /plan-segment-timer-time/);
+        assert.doesNotMatch(segmentHtml, /0m \/ 130m/);
+    });
+});
+
 test('buildSplitVisualization passes segment duration context to plan segment timers', () => {
     const seen = [];
     const ctx = {
