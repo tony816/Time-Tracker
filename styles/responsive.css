@@ -825,6 +825,6 @@ textarea:focus-visible,
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        width: 16px;
+        width: 24px;
     }
 }

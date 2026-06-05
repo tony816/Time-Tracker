@@ -2330,7 +2330,7 @@ button.activity-chip,
   position: absolute;
   top: 50%;
   width: 30px;
-  height: min(58px, calc(100% - 8px));
+  height: min(64px, calc(100% - 4px));
   z-index: 12;
   cursor: ew-resize;
   opacity: 1;
@@ -2340,6 +2340,8 @@ button.activity-chip,
   transform: translateY(-50%);
   --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
   --plan-segment-handle-mixed-color: var(--plan-segment-handle-color);
+  --plan-segment-handle-stroke: #111827;
+  --plan-segment-handle-shell: #fffef8;
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
@@ -2368,21 +2370,15 @@ button.activity-chip,
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 16px;
+  width: 24px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: var(--plan-segment-handle-color, rgba(44, 62, 80, 0.3));
-  background:
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.94),
-      color-mix(in srgb, var(--plan-segment-handle-mixed-color) 44%, white 56%)
-    );
-  border: 2px solid rgba(15, 23, 42, 0.95);
+  background: var(--plan-segment-handle-shell);
+  border: 2px solid var(--plan-segment-handle-stroke);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.82),
-    0 2px 4px rgba(15, 23, 42, 0.16),
-    inset 0 1px 1px rgba(255, 255, 255, 0.82);
+    0 1px 2px rgba(15, 23, 42, 0.22),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.72);
 }
 
 .plan-segment-boundary-resize-handle-line {
@@ -2392,17 +2388,17 @@ button.activity-chip,
 .plan-segment-boundary-resize-handle-line::after {
   content: '';
   position: absolute;
-  top: 6px;
-  bottom: 6px;
+  top: 7px;
+  bottom: 7px;
   left: 50%;
-  width: 4px;
+  width: 8px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.78);
-  border: 1px solid rgba(15, 23, 42, 0.92);
+  background: var(--plan-segment-handle-color);
+  border: 2px solid var(--plan-segment-handle-stroke);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.42),
-    inset 0 1px 1px rgba(255, 255, 255, 0.24);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .plan-segment-boundary-resize-handle::after {
@@ -2415,17 +2411,11 @@ button.activity-chip,
 .plan-segment-resize-handle:focus-visible::after,
 .split-grid-segment.is-resizing-plan-segment .plan-segment-boundary-resize-handle-line,
 .split-grid-segment.is-resizing-plan-segment .plan-segment-resize-handle::after {
-  background: var(--plan-segment-handle-color, rgba(30, 64, 175, 0.58));
-  background:
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.96),
-      color-mix(in srgb, var(--plan-segment-handle-mixed-color) 58%, white 42%)
-    );
-  border-color: #0f172a;
+  background: #ffffff;
+  border-color: var(--plan-segment-handle-stroke);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.82),
-    0 3px 8px rgba(15, 23, 42, 0.26),
+    0 3px 8px rgba(15, 23, 42, 0.3),
     inset 0 1px 1px rgba(255, 255, 255, 0.74);
 }
 
