@@ -358,10 +358,13 @@ test('buildSplitVisualization omits timer controls but keeps timer text on conne
         assert.match(segmentHtml, /class="plan-segment-graphic-label"[^>]*>[\s\S]*plan-segment-label-text[^>]*>Shower<\/span>/);
         assert.match(segmentHtml, /class="plan-segment-timer-row"[\s\S]*class="plan-segment-timer-time tone-under"/);
         assert.match(segmentHtml, /0m \/ 130m/);
-        assert.match(segmentHtml, /plan-segment-resize-handle-right/);
         assert.doesNotMatch(segmentHtml, /plan-segment-timer-button/);
         assert.doesNotMatch(segmentHtml, /plan-segment-timer-spacer/);
     });
+    assert.doesNotMatch(segments[0], /plan-segment-resize-handle-right/);
+    assert.doesNotMatch(segments[1], /plan-segment-resize-handle-right/);
+    assert.match(segments[2], /plan-segment-resize-handle-right/);
+    assert.equal((html.match(/plan-segment-resize-handle-right/g) || []).length, 1);
 });
 
 test('buildSplitVisualization passes segment duration context to plan segment timers', () => {
@@ -573,6 +576,46 @@ test('buildSplitVisualization renders one persistent shared handle at adjacent b
     assert.doesNotMatch(secondSegment, /has-shared-plan-boundary-handle/);
     assert.doesNotMatch(secondSegment, /data-resize-edge="left"/);
     assert.equal((html.match(/plan-segment-boundary-resize-handle-shared/g) || []).length, 1);
+});
+
+test('buildSplitVisualization layers earlier adjacent handles above resized right neighbors', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    { label: 'A', span: 2, segmentIndex: 0, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+                    { label: 'B', span: 2, segmentIndex: 1, startMinute: 20, durationMinutes: 20, endMinute: 40 },
+                    { label: 'C', span: 2, segmentIndex: 2, startMinute: 40, durationMinutes: 20, endMinute: 60 },
+                ],
+            };
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        buildPlanSegmentViewModel(baseIndex, segmentId) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: { icon: 'play', timeText: '0m', tone: 'under' },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 0);
+    const segments = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-kind="real-plan"[\s\S]*?<\/div>/g) || [];
+    const layers = segments.map((segmentHtml) => {
+        const match = segmentHtml.match(/--split-segment-layer:\s*(\d+);/);
+        return match ? Number(match[1]) : null;
+    });
+
+    assert.deepEqual(layers, [5, 4, 3]);
+    assert.match(segments[0], /plan-segment-boundary-resize-handle-shared/);
+    assert.match(segments[1], /plan-segment-boundary-resize-handle-shared/);
+    assert.ok(layers[0] > layers[1]);
+    assert.ok(layers[1] > layers[2]);
 });
 
 test('buildSplitVisualization renders one boundary handle between leading rest and a real segment', () => {

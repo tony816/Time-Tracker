@@ -2181,7 +2181,7 @@ button.activity-chip,
 .split-visualization .split-title-segment,
 .split-visualization .split-grid-segment {
   position: relative;
-  z-index: 2;
+  z-index: var(--split-segment-layer, 2);
   /* 덮개(::before)보다 위에 표시해 막대가 가려지지 않도록 */
 }
 
@@ -2241,7 +2241,7 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment.has-shared-plan-boundary-handle {
-  z-index: 13;
+  z-index: var(--split-segment-layer, 13);
 }
 
 .split-grid.is-previewing-plan-resize > .split-grid-segment[data-segment-kind="real-plan"] {
@@ -2348,7 +2348,7 @@ button.activity-chip,
 }
 
 .plan-segment-resize-handle-right {
-  right: 2px;
+  right: -15px;
 }
 
 .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
@@ -2370,7 +2370,7 @@ button.activity-chip,
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 24px;
+  width: 12px;
   transform: translateX(-50%);
   border-radius: 999px;
   background: var(--plan-segment-handle-shell);
@@ -2388,10 +2388,10 @@ button.activity-chip,
 .plan-segment-boundary-resize-handle-line::after {
   content: '';
   position: absolute;
-  top: 7px;
-  bottom: 7px;
+  top: 5px;
+  bottom: 5px;
   left: 50%;
-  width: 8px;
+  width: 3px;
   transform: translateX(-50%);
   border-radius: 999px;
   background: var(--plan-segment-handle-color);

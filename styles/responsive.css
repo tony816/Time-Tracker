@@ -816,7 +816,7 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle-right {
-        right: -5px;
+        right: -20px;
     }
 
     .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
@@ -825,6 +825,6 @@ textarea:focus-visible,
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        width: 24px;
+        width: 12px;
     }
 }
