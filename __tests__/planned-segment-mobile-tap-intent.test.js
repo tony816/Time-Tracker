@@ -374,7 +374,7 @@ test('mobile title hit area tap starts title inline edit without opening replace
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile activity hit area tap starts activity inline edit without opening replacement dropdown', () => {
+test('mobile activity hit area tap starts activity inline edit and opens replacement dropdown', () => {
     const prepareCalls = [];
     const harness = createHarness({
         preparePlanSegmentReplacementViewport(segmentEl) {
@@ -401,7 +401,7 @@ test('mobile activity hit area tap starts activity inline edit without opening r
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile segment background tap outside text hit areas starts activity inline edit without opening replacement dropdown', () => {
+test('mobile segment background tap outside text hit areas starts activity inline edit and opens replacement dropdown', () => {
     const prepareCalls = [];
     const harness = createHarness({
         preparePlanSegmentReplacementViewport(segmentEl) {
@@ -765,7 +765,7 @@ test('desktop title click starts parent title edit without opening replacement d
     assert.equal(event.propagationStopped, true);
 });
 
-test('desktop activity label click starts activity edit without opening replacement dropdown', () => {
+test('desktop activity label click starts activity edit and opens replacement dropdown', () => {
     const labelHarness = createHarness({ coarse: false });
     const event = createClickEvent(labelHarness.label, 118, 42);
 
@@ -785,7 +785,7 @@ test('desktop activity label click starts activity edit without opening replacem
     assert.equal(event.propagationStopped, true);
 });
 
-test('desktop segment background click still opens replacement dropdown', () => {
+test('desktop segment background click starts activity inline edit and opens replacement dropdown', () => {
     const prepareCalls = [];
     const backgroundHarness = createHarness({
         coarse: false,
@@ -800,7 +800,14 @@ test('desktop segment background click still opens replacement dropdown', () => 
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(backgroundHarness.calls, [
-        ['dropdown', 0, 0, backgroundHarness.segment, {}],
+        ['activity-edit', backgroundHarness.label, 0, true, true, {
+            openDropdown: true,
+            dropdownAnchor: backgroundHarness.segment,
+        }],
+        ['dropdown', 0, 0, backgroundHarness.segment, {
+            openDropdown: true,
+            dropdownAnchor: backgroundHarness.segment,
+        }],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);

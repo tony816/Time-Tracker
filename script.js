@@ -6572,9 +6572,9 @@ class TimeTracker {
                 || segmentEl.querySelector('.plan-segment-graphic-label')
             )
             : null;
-        const anchor = labelAnchor
-            || options.anchorEl
+        const anchor = options.anchorEl
             || options.dropdownAnchor
+            || labelAnchor
             || segmentEl
             || (segmentEl.closest && segmentEl.closest('.split-cell-wrapper.split-type-planned'))
             || (segmentEl.closest && segmentEl.closest('.planned-input'));
@@ -6970,10 +6970,26 @@ class TimeTracker {
                     }
                     return;
                 }
+                const activityLabelContainer = target && target.closest
+                    ? target.closest('.plan-segment-graphic-label')
+                    : null;
+                if (activityLabelContainer) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                        this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                    } else {
+                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+                    }
+                    return;
+                }
                 event.preventDefault();
                 event.stopPropagation();
-                if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
-                    this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                if (typeof this.startPlanSegmentInlineActivityEdit === 'function') {
+                    this.startPlanSegmentInlineActivityEdit(segmentEl, index, event, {
+                        openDropdown: true,
+                        dropdownAnchor: segmentEl,
+                    });
                 } else {
                     this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
                 }

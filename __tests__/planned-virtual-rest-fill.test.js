@@ -1256,11 +1256,24 @@ test('rendered DOM drag moves adjacent planned segment boundary without opening 
 
 test('clicking real planned segment background opens segment-scoped inline dropdown', () => {
     const originalDocument = globalThis.document;
+    const originalDateNow = Date.now;
+    const activityEditCalls = [];
     const dropdownCalls = [];
     const { ctx, container, document } = createRenderedResizeContext([
         { label: 'A', seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
         { label: 'B', seconds: 30 * 60, startMinute: 30, durationMinutes: 30, endMinute: 60 },
     ], { overrides: {
+        startPlanSegmentInlineActivityEdit(segmentEl, index, event, options = {}) {
+            activityEditCalls.push({ segmentEl, index, options });
+            const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+            const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+            this.openPlanSegmentReplacementDropdown(baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, segmentEl, {
+                ...options,
+                forceAnchored: true,
+                keepInlineEditor: true,
+            });
+            return true;
+        },
         openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {}) {
             return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, options);
         },
@@ -1287,6 +1300,7 @@ test('clicking real planned segment background opens segment-scoped inline dropd
         assert.equal(ctx.selectedPlanSegment, undefined);
         assert.equal(dropdownCalls.length, 0);
 
+        Date.now = () => originalDateNow() + 1000;
         firstSegment.dispatchEvent({
             type: 'click',
             button: 0,
@@ -1295,6 +1309,7 @@ test('clicking real planned segment background opens segment-scoped inline dropd
             stopPropagation() {},
         });
 
+        assert.equal(activityEditCalls.length, 1);
         assert.equal(dropdownCalls.length, 1);
         assert.equal(dropdownCalls[0].startIndex, 0);
         assert.equal(dropdownCalls[0].endIndex, 0);
@@ -1305,6 +1320,7 @@ test('clicking real planned segment background opens segment-scoped inline dropd
         assert.equal(ctx.selectedPlanSegment, undefined);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
     } finally {
+        Date.now = originalDateNow;
         globalThis.document = originalDocument;
     }
 });

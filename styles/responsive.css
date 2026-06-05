@@ -816,18 +816,15 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle-right {
+        right: 3px;
+    }
+
+    .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
         right: -20px;
     }
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        width: 5px;
-        background: rgba(30, 64, 175, 0.74);
-    }
-
-    .plan-segment-resize-handle-right .plan-segment-boundary-resize-handle-line,
-    .plan-segment-resize-handle-right::after {
-        right: 17px;
-        left: auto;
+        width: 18px;
     }
 }
