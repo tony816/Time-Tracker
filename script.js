@@ -8694,6 +8694,60 @@ class TimeTracker {
     attachActivityModalEventListeners() {
         return false;
     }
+
+    createMergedField(mergeKey, type, index, value) {
+        const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
+        if (!safeMergeKey) {
+            if (type === 'actual') {
+                return '';
+            }
+            return `<input type="text" class="input-field ${type}-input"
+                           data-index="${index}"
+                           data-type="${type}"
+                           value="${this.escapeAttribute(value || '')}"
+                           placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">`;
+        }
+
+        const [, startStr, endStr] = safeMergeKey.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        const safeMergeValue = this.escapeAttribute(this.mergedFields.get(safeMergeKey) || '');
+
+        if (type === 'actual') {
+            return '';
+        }
+
+        if (index === start) {
+            return `<div class="planned-merged-main-container"
+                           data-merge-key="${safeMergeKey}"
+                           data-merge-start="${start}"
+                           data-merge-end="${end}">
+                        <div class="planned-merged-overlay">
+                            <input type="text" class="input-field ${type}-input merged-field merged-main"
+                                   data-index="${index}"
+                                   data-type="${type}"
+                                   data-merge-key="${safeMergeKey}"
+                                   data-merge-start="${start}"
+                                   data-merge-end="${end}"
+                                   value="${safeMergeValue}"
+                                   placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\ubcd1\ud569\ub41c \uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">
+                        </div>
+                    </div>`;
+        }
+
+        const isLast = index === end;
+        return `<input type="text" class="input-field ${type}-input merged-secondary planned-merged-secondary ${isLast ? 'merged-planned-last' : ''}"
+                       data-index="${index}"
+                       data-type="${type}"
+                       data-merge-key="${safeMergeKey}"
+                       data-merge-start="${start}"
+                       data-merge-end="${end}"
+                       value="${safeMergeValue}"
+                       readonly
+                       tabindex="-1"
+                       style="cursor: pointer;"
+                       placeholder="">`;
+    }
 }
 
 window.TimeTracker = TimeTracker;

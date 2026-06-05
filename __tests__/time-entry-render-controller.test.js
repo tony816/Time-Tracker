@@ -8,6 +8,10 @@ const buildTimeEntryRowModelWrapper = buildMethod(
     'buildTimeEntryRowModel(slot, index)',
     '(slot, index)'
 );
+const createMergedFieldWrapper = buildMethod(
+    'createMergedField(mergeKey, type, index, value)',
+    '(mergeKey, type, index, value)'
+);
 const renderTimeEntriesWrapper = buildMethod(
     'renderTimeEntries(preserveInlineDropdown = false)',
     '(preserveInlineDropdown = false)'
@@ -73,4 +77,22 @@ test('script time-entry render wrapper methods delegate to controller helpers', 
         ['wrap', ctx, 'planned', 0, '<div />'],
         ['split', ctx, 'actual', 3],
     ]);
+});
+
+test('createMergedField renders readable Korean placeholder text for merged planned slots', () => {
+    const ctx = {
+        mergedFields: new Map([['planned-2-4', '계획 내용']]),
+        normalizeMergeKey(mergeKey) {
+            return mergeKey;
+        },
+        escapeAttribute(value) {
+            return String(value).replace(/"/g, '&quot;');
+        },
+    };
+
+    const markup = createMergedFieldWrapper.call(ctx, 'planned-2-4', 'planned', 2, '');
+
+    assert.match(markup, /계획을 입력하려면 클릭 또는 Enter/);
+    assert.match(markup, /병합된 계획 활동 입력/);
+    assert.match(markup, /클릭해서 계획 선택\/입력/);
 });
