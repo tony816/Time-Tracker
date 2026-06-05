@@ -67,7 +67,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /body\.inline-plan-sheet-open #timeEntries\.inline-plan-context-active \.time-entry\.inline-plan-context-keep-clear\s*\{[^}]*pointer-events:\s*none;/s);
     assert.match(interactionsSource, /body\.inline-plan-sheet-open \.inline-plan-sheet-context-target\s*\{[^}]*z-index:\s*60;[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /body\.inline-plan-sheet-open \.split-cell-wrapper\.split-type-planned\.inline-plan-sheet-context-target \.planned-input\s*\{[^}]*pointer-events:\s*auto;/s);
-    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-input,[\s\S]*?\.plan-segment-mobile-editor-input,[\s\S]*?font-size:\s*16px;/s);
+    assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-input,[\s\S]*?\.plan-segment-title-edit-input,[\s\S]*?font-size:\s*16px;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-resize-handle\s*\{[^}]*width:\s*40px;[^}]*touch-action:\s*none;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-resize-handle-right\s*\{[^}]*right:\s*-20px;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*--plan-segment-mobile-edge-zone:\s*36px;/s);

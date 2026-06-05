@@ -19,10 +19,6 @@ const cleanupPlanSegmentResizeState = buildMethod(
     'cleanupPlanSegmentResizeState(rootOrGrid)',
     '(rootOrGrid)'
 );
-const openPlanSegmentMobileTextEditor = buildMethod(
-    'openPlanSegmentMobileTextEditor(labelEl, index, event, options = {})',
-    '(labelEl, index, event, options = {})'
-);
 const closePlanSegmentMobileTextEditor = buildMethod(
     'closePlanSegmentMobileTextEditor(options = {})',
     '(options = {})'
@@ -850,77 +846,5 @@ test('edge-zone resize remains interactive after renderTimeEntries replaces segm
         assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
         assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
         assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
-    });
-});
-
-test('mobile segment text editor uses Korean labels and traps focus', () => {
-    withDocument(({ body }) => {
-        const segment = createNode('div', 'split-grid-segment', {
-            segmentKind: 'real-plan',
-            segmentIndex: '0',
-        });
-        const label = createNode('span', 'plan-segment-label-text');
-        label.textContent = 'Focus';
-        segment.appendChild(label);
-        const calls = [];
-        const ctx = {
-            mobilePlanSegmentEditor: null,
-            inlinePlanDropdown: null,
-            normalizeActivityText(value) { return String(value || '').trim(); },
-            getPlanSegmentBaseIndex(index) { return index; },
-            applyPlanSegmentTitleEdit(baseIndex, segmentIndex, value) {
-                calls.push(['save', baseIndex, segmentIndex, value]);
-            },
-            closePlanSegmentMobileTextEditor,
-        };
-
-        assert.equal(openPlanSegmentMobileTextEditor.call(ctx, label, 0, null, {
-            baseIndex: 0,
-            segmentIndex: 0,
-            mobileAriaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
-        }), true);
-
-        const editor = ctx.mobilePlanSegmentEditor;
-        const root = editor.root;
-        const closeBtn = root.querySelector('.plan-segment-mobile-editor-close');
-        const input = root.querySelector('.plan-segment-mobile-editor-input');
-        const cancelBtn = root.querySelector('.plan-segment-mobile-editor-cancel');
-        const saveBtn = root.querySelector('.plan-segment-mobile-editor-save');
-
-        assert.equal(root.ariaLabel, '활동명 수정');
-        assert.equal(root.querySelector('.plan-segment-mobile-editor-title').textContent, '활동명 수정');
-        assert.equal(closeBtn.ariaLabel, '닫기');
-        assert.equal(cancelBtn.textContent, '취소');
-        assert.equal(saveBtn.textContent, '저장');
-        assert.equal(global.document.activeElement, input);
-
-        global.document.activeElement = saveBtn;
-        root.dispatchEvent({
-            type: 'keydown',
-            key: 'Tab',
-            preventDefault() { this.prevented = true; },
-            stopPropagation() {},
-        });
-        assert.equal(global.document.activeElement, closeBtn);
-
-        global.document.activeElement = closeBtn;
-        root.dispatchEvent({
-            type: 'keydown',
-            key: 'Tab',
-            shiftKey: true,
-            preventDefault() { this.prevented = true; },
-            stopPropagation() {},
-        });
-        assert.equal(global.document.activeElement, saveBtn);
-
-        root.dispatchEvent({
-            type: 'keydown',
-            key: 'Escape',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-        assert.equal(ctx.mobilePlanSegmentEditor, null);
-        assert.equal(body.children.includes(root), false);
-        assert.equal(hasClass(body, 'inline-plan-sheet-open'), false);
     });
 });
