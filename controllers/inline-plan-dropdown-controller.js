@@ -431,11 +431,22 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         if ((!viewport || !Number(viewport.width) || !Number(viewport.height)) && options.fallbackViewport) {
             viewport = options.fallbackViewport;
         }
+        const positionMode = options.positionMode === 'fixed' ? 'fixed' : 'absolute';
         const margin = Number.isFinite(options.margin) ? options.margin : 12;
         const gap = Number.isFinite(options.gap) ? options.gap : 6;
         const minHeight = Math.max(1, Number(options.minHeight) || 1);
         const preferredWidth = Number.isFinite(options.preferredWidth) ? options.preferredWidth : 420;
-        const maxAllowedWidth = Math.max(1, viewport.width - (margin * 2));
+        const layoutViewport = positionMode === 'fixed'
+            ? {
+                left: 0,
+                top: 0,
+                width: viewport.width,
+                height: viewport.height,
+                right: viewport.width,
+                bottom: viewport.height,
+            }
+            : viewport;
+        const maxAllowedWidth = Math.max(1, layoutViewport.width - (margin * 2));
         const width = Math.max(
             1,
             Math.min(
@@ -456,13 +467,13 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         const docEl = typeof document !== 'undefined' && document.documentElement ? document.documentElement : {};
         const layoutScrollX = (root && Number(root.scrollX)) || Number(docEl.scrollLeft) || 0;
         const layoutScrollY = (root && Number(root.scrollY)) || Number(docEl.scrollTop) || 0;
-        const anchorLeft = layoutScrollX + rectLeft;
-        const anchorTop = layoutScrollY + rectTop;
-        const anchorBottom = layoutScrollY + rectBottom;
+        const anchorLeft = positionMode === 'fixed' ? rectLeft : layoutScrollX + rectLeft;
+        const anchorTop = positionMode === 'fixed' ? rectTop : layoutScrollY + rectTop;
+        const anchorBottom = positionMode === 'fixed' ? rectBottom : layoutScrollY + rectBottom;
         let left = options.align === 'center'
             ? anchorLeft + (anchorWidth / 2) - (width / 2)
             : anchorLeft;
-        left = Math.max(viewport.left + margin, Math.min(left, viewport.right - width - margin));
+        left = Math.max(layoutViewport.left + margin, Math.min(left, layoutViewport.right - width - margin));
 
         panel.style.width = `${Math.round(width)}px`;
         panel.style.minWidth = `${Math.round(width)}px`;
@@ -473,8 +484,8 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
 
         const measured = measureInlinePlanPanel(panel, width);
         const naturalHeight = Math.max(1, measured.height || Number(options.fallbackHeight) || minHeight);
-        const spaceBelow = Math.max(0, Math.floor(viewport.bottom - anchorBottom - gap - margin));
-        const spaceAbove = Math.max(0, Math.floor(anchorTop - viewport.top - gap - margin));
+        const spaceBelow = Math.max(0, Math.floor(layoutViewport.bottom - anchorBottom - gap - margin));
+        const spaceAbove = Math.max(0, Math.floor(anchorTop - layoutViewport.top - gap - margin));
         const requiredHeight = Math.min(naturalHeight, minHeight);
         const preferAbove = options.prefer === 'above';
         const forceBelow = options.forceBelow === true;
@@ -488,7 +499,7 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         }
         let available = placeAbove ? spaceAbove : spaceBelow;
         if (available < 1) {
-            available = Math.max(1, viewport.height - (margin * 2));
+            available = Math.max(1, layoutViewport.height - (margin * 2));
         }
         if (Number.isFinite(options.maxHeight) && options.maxHeight > 0) {
             available = Math.min(available, options.maxHeight);
@@ -496,7 +507,7 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         const maxHeight = Math.max(1, Math.floor(available));
         const height = Math.min(naturalHeight, maxHeight);
         let top = placeAbove ? anchorTop - height - gap : anchorBottom + gap;
-        top = Math.max(viewport.top + margin, Math.min(top, viewport.bottom - height - margin));
+        top = Math.max(layoutViewport.top + margin, Math.min(top, layoutViewport.bottom - height - margin));
 
         panel.style.left = `${Math.round(left)}px`;
         panel.style.top = `${Math.round(top)}px`;
@@ -666,6 +677,7 @@ function positionInlinePlanDropdown(anchorEl) {
         layoutAnchoredPanel.call(this, dropdown, rect, {
             margin,
             gap,
+            positionMode: 'absolute',
             preferredWidth: expandedWidth,
             minWidth: Math.min(240, expandedWidth),
             minHeight: this.getInlinePlanMinimumInteractiveHeight(dropdown),
@@ -836,6 +848,7 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const layout = layoutAnchoredPanel.call(this, section, anchorRect, {
             margin,
             gap,
+            positionMode: 'fixed',
             preferredWidth: maxWidth,
             minWidth,
             minHeight: minPopoverHeight,

@@ -83,7 +83,7 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
-        /function layoutInlinePlanAnchoredPanel\(panel, anchorRect, options = \{\}\) \{[\s\S]*?const layoutScrollY = \(root && Number\(root\.scrollY\)\) \|\| Number\(docEl\.scrollTop\) \|\| 0;[\s\S]*?const anchorTop = layoutScrollY \+ rectTop;[\s\S]*?const anchorBottom = layoutScrollY \+ rectBottom;/
+        /function layoutInlinePlanAnchoredPanel\(panel, anchorRect, options = \{\}\) \{[\s\S]*?const positionMode = options\.positionMode === 'fixed' \? 'fixed' : 'absolute';[\s\S]*?const layoutScrollY = \(root && Number\(root\.scrollY\)\) \|\| Number\(docEl\.scrollTop\) \|\| 0;[\s\S]*?const anchorTop = positionMode === 'fixed' \? rectTop : layoutScrollY \+ rectTop;[\s\S]*?const anchorBottom = positionMode === 'fixed' \? rectBottom : layoutScrollY \+ rectBottom;/
     );
     assert.doesNotMatch(
         controllerSource,
@@ -91,15 +91,23 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
+        /positionInlinePlanChildPopover\(anchorEl = null\) \{[\s\S]*?positionMode: 'fixed'/
+    );
+    assert.match(
+        controllerSource,
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?positionMode: 'absolute'/
+    );
+    assert.match(
+        controllerSource,
         /minHeight: this\.getInlinePlanMinimumInteractiveHeight\(dropdown\),/
     );
     assert.match(
         controllerSource,
-        /const spaceBelow = Math\.max\(0, Math\.floor\(viewport\.bottom - anchorBottom - gap - margin\)\);/
+        /const spaceBelow = Math\.max\(0, Math\.floor\(layoutViewport\.bottom - anchorBottom - gap - margin\)\);/
     );
     assert.match(
         controllerSource,
-        /spaceBelow < requiredHeight[\s\S]*?spaceAbove > spaceBelow/
+        /const spaceAbove = Math\.max\(0, Math\.floor\(anchorTop - layoutViewport\.top - gap - margin\)\);[\s\S]*?spaceBelow < requiredHeight[\s\S]*?spaceAbove > spaceBelow/
     );
     assert.match(
         controllerSource,
