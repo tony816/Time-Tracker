@@ -349,15 +349,14 @@ test('buildSplitVisualization omits timer controls but keeps timer text on conne
 
     assert.equal(segments.length, 3);
     assert.match(segments[0], /connect-bottom/);
-    assert.match(segments[0], /class="plan-segment-timer-button"/);
-    assert.match(segments[0], /class="plan-segment-timer-time tone-under"/);
+    assert.match(segments[0], /class="plan-segment-timer-row"[\s\S]*class="plan-segment-timer-button"[\s\S]*class="plan-segment-timer-time tone-under"/);
     assert.match(segments[0], /0m \/ 130m/);
 
     [segments[1], segments[2]].forEach((segmentHtml) => {
         assert.match(segmentHtml, /connect-top/);
         assert.match(segmentHtml, /class="plan-segment-graphic is-plan-segment-continuation"/);
         assert.match(segmentHtml, /class="plan-segment-graphic-label"[^>]*>[\s\S]*plan-segment-label-text[^>]*>Shower<\/span>/);
-        assert.match(segmentHtml, /class="plan-segment-timer-time tone-under"/);
+        assert.match(segmentHtml, /class="plan-segment-timer-row"[\s\S]*class="plan-segment-timer-time tone-under"/);
         assert.match(segmentHtml, /0m \/ 130m/);
         assert.match(segmentHtml, /plan-segment-resize-handle-right/);
         assert.doesNotMatch(segmentHtml, /plan-segment-timer-button/);

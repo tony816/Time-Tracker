@@ -375,7 +375,7 @@ function withMobileEditorDocument(run) {
     }
 }
 
-test('mobile segment title tap opens sheet editor instead of inline cell input', () => {
+test('mobile segment title tap opens in-segment editor without a sheet', () => {
     withMobileEditorDocument((body) => {
         const harness = createTitleEditHarness({
             ctx: {
@@ -397,20 +397,19 @@ test('mobile segment title tap opens sheet editor instead of inline cell input',
         });
 
         assert.equal(opened, true);
-        assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
-        assert.ok(harness.ctx.mobilePlanSegmentEditor);
-        assert.equal(body.children.length, 2);
-        const editor = harness.ctx.mobilePlanSegmentEditor.root;
-        const input = editor.querySelector('.plan-segment-mobile-editor-input');
+        const input = harness.label.querySelector('.plan-segment-title-edit-input');
         assert.ok(input);
+        assert.equal(input.parentNode, harness.label);
         assert.equal(input.value, 'Focus');
         assert.equal(input.focused, true);
         assert.equal(input.selected, true);
-        assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), true);
+        assert.equal(harness.ctx.mobilePlanSegmentEditor, undefined);
+        assert.equal(body.children.length, 0);
+        assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), false);
     });
 });
 
-test('mobile segment sheet editor saves and cancels without cell input', () => {
+test('mobile segment inline editor saves and cancels without a sheet', () => {
     withMobileEditorDocument(() => {
         const saveHarness = createTitleEditHarness({
             ctx: {
@@ -426,7 +425,9 @@ test('mobile segment sheet editor saves and cancels without cell input', () => {
             preventDefault() {},
             stopPropagation() {},
         });
-        const saveInput = saveHarness.ctx.mobilePlanSegmentEditor.root.querySelector('.plan-segment-mobile-editor-input');
+        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, undefined);
+        const saveInput = saveHarness.label.querySelector('.plan-segment-title-edit-input');
+        assert.ok(saveInput);
         saveInput.value = 'Deep Work';
         saveInput.dispatchEvent({
             type: 'keydown',
@@ -437,7 +438,7 @@ test('mobile segment sheet editor saves and cancels without cell input', () => {
 
         assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].label, 'Deep Work');
         assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].activityText, 'Deep Work');
-        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, null);
+        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, undefined);
 
         const cancelHarness = createTitleEditHarness({
             ctx: {
@@ -453,7 +454,9 @@ test('mobile segment sheet editor saves and cancels without cell input', () => {
             preventDefault() {},
             stopPropagation() {},
         });
-        const cancelInput = cancelHarness.ctx.mobilePlanSegmentEditor.root.querySelector('.plan-segment-mobile-editor-input');
+        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, undefined);
+        const cancelInput = cancelHarness.label.querySelector('.plan-segment-title-edit-input');
+        assert.ok(cancelInput);
         cancelInput.value = 'Canceled';
         cancelInput.dispatchEvent({
             type: 'keydown',
@@ -463,7 +466,7 @@ test('mobile segment sheet editor saves and cancels without cell input', () => {
         });
 
         assert.equal(cancelHarness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
-        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, null);
+        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, undefined);
     });
 });
 

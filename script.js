@@ -6306,15 +6306,8 @@ class TimeTracker {
         const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
         const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
         const previousTitle = String(labelEl.textContent || '').trim();
-        const isMobileInputContext = typeof this.isInlinePlanMobileInputContext === 'function'
-            && this.isInlinePlanMobileInputContext();
-        if (isMobileInputContext && typeof this.openPlanSegmentMobileTextEditor === 'function') {
-            return this.openPlanSegmentMobileTextEditor(labelEl, index, event, {
-                ...options,
-                baseIndex,
-                segmentIndex,
-                previousTitle,
-            });
+        if (this.mobilePlanSegmentEditor && typeof this.closePlanSegmentMobileTextEditor === 'function') {
+            this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
         }
         const input = document.createElement('input');
         input.type = 'text';

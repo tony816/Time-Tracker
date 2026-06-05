@@ -51,8 +51,11 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*overflow:\s*visible;[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.has-shared-plan-boundary-handle\s*\{[^}]*z-index:\s*13;/s);
     assert.match(foundationSource, /\.plan-segment-graphic\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*height:\s*100%;[^}]*min-height:\s*38px;[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
-    assert.match(foundationSource, /\.plan-segment-graphic\.is-plan-segment-continuation\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s);
+    assert.doesNotMatch(foundationSource, /\.plan-segment-graphic\s*\{[^}]*grid-template-columns:\s*34px\s+minmax\(0,\s*1fr\);/s);
     assert.match(foundationSource, /\.plan-segment-graphic-main\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;/s);
+    assert.match(foundationSource, /\.plan-segment-timer-row\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*gap:\s*4px;[^}]*overflow:\s*hidden;/s);
+    assert.match(foundationSource, /\.plan-segment-timer-button\s*\{[^}]*flex:\s*0 0 auto;[^}]*width:\s*22px;[^}]*min-width:\s*22px;[^}]*height:\s*22px;[^}]*border-radius:\s*7px;/s);
+    assert.doesNotMatch(foundationSource, /\.plan-segment-timer-spacer/);
     assert.match(foundationSource, /\.plan-segment-timer-time\s*\{[^}]*display:\s*block;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s);
     assert.doesNotMatch(foundationSource, /\.split-grid-segment\.has-plan-segment-timer\s*\{[^}]*overflow:\s*hidden;/s);
     assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);

@@ -282,13 +282,15 @@ function buildSplitVisualization(type, index) {
                     const graphicClass = isContinuationSegment
                         ? 'plan-segment-graphic is-plan-segment-continuation'
                         : 'plan-segment-graphic';
-                    const timerTimeHtml = `<span class="plan-segment-timer-time tone-${tone}"
-                                               data-index="${baseIndex}"
-                                               data-segment-id="${escapedSegmentId}">${timerText}</span>`;
+                    const timerTimeHtml = `<span class="plan-segment-timer-row">
+                                               ${buttonHtml}
+                                               <span class="plan-segment-timer-time tone-${tone}"
+                                                     data-index="${baseIndex}"
+                                                     data-segment-id="${escapedSegmentId}">${timerText}</span>
+                                           </span>`;
                     labelHtml = `<div class="${graphicClass}"
                                       data-index="${baseIndex}"
                                       data-segment-id="${escapedSegmentId}">
-                                    ${buttonHtml}
                                     <div class="${graphicMainClass}">
                                         ${safeTitleLabel ? `<span class="plan-segment-graphic-title" title="${safeTitleLabel}" data-segment-title-edit-trigger="true">${safeTitleLabel}</span>` : ''}
                                         <span class="plan-segment-graphic-label" title="${safeLabel}">
