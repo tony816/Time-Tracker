@@ -27,6 +27,10 @@ const getPlanSegmentTapTextRect = buildMethod(
     'getPlanSegmentTapTextRect(textEl)',
     '(textEl)'
 );
+const startPlanSegmentInlineActivityEdit = buildMethod(
+    'startPlanSegmentInlineActivityEdit(segmentEl, index, event)',
+    '(segmentEl, index, event)'
+);
 const expandRectWithinBounds = buildMethod(
     'expandRectWithinBounds(rect, bounds, padding = {})',
     '(rect, bounds, padding = {})'
@@ -281,6 +285,7 @@ function createHarness(options = {}) {
             calls.push(['activity-edit', el, index, event.defaultPrevented, event.propagationStopped]);
             return true;
         },
+        startPlanSegmentInlineActivityEdit,
         openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl) {
             calls.push(['dropdown', baseIndex, segmentIndex, segmentEl]);
             return true;
@@ -381,14 +386,21 @@ test('mobile activity hit area tap starts activity inline edit without opening r
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile segment background tap outside text hit areas opens replacement dropdown', () => {
-    const harness = createHarness();
+test('mobile segment background tap outside text hit areas starts activity inline edit without opening replacement dropdown', () => {
+    const prepareCalls = [];
+    const harness = createHarness({
+        preparePlanSegmentReplacementViewport(segmentEl) {
+            prepareCalls.push(segmentEl);
+            return true;
+        },
+    });
     const event = createClickEvent(harness.segment, 260, 78);
 
     harness.segment.dispatchEvent(event);
 
+    assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['dropdown', 0, 0, harness.segment],
+        ['activity-edit', harness.label, 0, true, true],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
@@ -418,9 +430,10 @@ test('mobile segment click after resize rerender is suppressed from controller s
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile segment background tap pre-scrolls before opening replacement sheet when segment would be covered', () => {
+test('mobile segment background tap starts activity inline edit without pre-scroll when segment would be covered', () => {
     const scrollCalls = [];
     const rafCalls = [];
+    const prepareCalls = [];
     withMockWindow({
         scrollBy(options) {
             scrollCalls.push(options);
@@ -429,31 +442,29 @@ test('mobile segment background tap pre-scrolls before opening replacement sheet
             rafCalls.push(callback);
         },
     }, () => {
-        const harness = createHarness();
+        const harness = createHarness({
+            preparePlanSegmentReplacementViewport(segmentEl) {
+                prepareCalls.push(segmentEl);
+                return true;
+            },
+        });
         harness.segment.getBoundingClientRect = () => rect(0, 500, 300, 590);
         const event = createClickEvent(harness.segment, 260, 560);
 
         harness.segment.dispatchEvent(event);
 
-        assert.equal(scrollCalls.length, 1);
-        assert.equal(scrollCalls[0].behavior, 'auto');
-        assert.equal(scrollCalls[0].top, 382);
-        assert.deepEqual(harness.calls, []);
-        assert.equal(rafCalls.length, 1);
-
-        rafCalls[0]();
-        assert.equal(rafCalls.length, 2);
-        rafCalls[1]();
-
+        assert.deepEqual(prepareCalls, []);
+        assert.deepEqual(scrollCalls, []);
+        assert.deepEqual(rafCalls, []);
         assert.deepEqual(harness.calls, [
-            ['dropdown', 0, 0, harness.segment],
+            ['activity-edit', harness.label, 0, true, true],
         ]);
         assert.equal(event.defaultPrevented, true);
         assert.equal(event.propagationStopped, true);
     });
 });
 
-test('mobile segment background tap uses minimal pre-scroll when segment is slightly covered', () => {
+test('mobile segment background tap skips minimal pre-scroll when segment is slightly covered', () => {
     const scrollCalls = [];
     const rafCalls = [];
     withMockWindow({
@@ -470,17 +481,15 @@ test('mobile segment background tap uses minimal pre-scroll when segment is slig
 
         harness.segment.dispatchEvent(event);
 
-        assert.equal(scrollCalls.length, 1);
-        assert.equal(scrollCalls[0].top, 12);
-        assert.equal(scrollCalls[0].behavior, 'auto');
-        assert.deepEqual(harness.calls, []);
-        assert.equal(rafCalls.length, 1);
-        rafCalls[0]();
-        assert.equal(rafCalls.length, 2);
+        assert.deepEqual(scrollCalls, []);
+        assert.deepEqual(rafCalls, []);
+        assert.deepEqual(harness.calls, [
+            ['activity-edit', harness.label, 0, true, true],
+        ]);
     });
 });
 
-test('mobile segment background tap opens replacement sheet without pre-scroll when segment is already safe', () => {
+test('mobile segment background tap starts activity inline edit when segment is already safe', () => {
     const scrollCalls = [];
     withMockWindow({
         scrollBy(options) {
@@ -495,7 +504,7 @@ test('mobile segment background tap opens replacement sheet without pre-scroll w
 
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(harness.calls, [
-            ['dropdown', 0, 0, harness.segment],
+            ['activity-edit', harness.label, 0, true, true],
         ]);
     });
 });

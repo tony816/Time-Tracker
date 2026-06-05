@@ -6576,6 +6576,14 @@ class TimeTracker {
             applyMethod: 'applyPlanSegmentTitleEdit',
         });
     }
+    startPlanSegmentInlineActivityEdit(segmentEl, index, event) {
+        if (!segmentEl) return false;
+        const activityEl = this.getPlanSegmentActivityEditElement
+            ? this.getPlanSegmentActivityEditElement(segmentEl)
+            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
+        if (!activityEl || typeof this.startPlanSegmentActivityEdit !== 'function') return false;
+        return this.startPlanSegmentActivityEdit(activityEl, index, event);
+    }
     startPlanSegmentParentTitleEdit(titleEl, index, event) {
         return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
             ariaLabel: '\uC81C\uBAA9 \uC218\uC815',
@@ -7006,25 +7014,8 @@ class TimeTracker {
                         }
                         return;
                     }
-                    if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
-                        const delayed = this.preparePlanSegmentReplacementViewport
-                            ? this.preparePlanSegmentReplacementViewport(segmentEl)
-                            : false;
-                        if (delayed) {
-                            const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
-                            const schedule = root && typeof root.requestAnimationFrame === 'function'
-                                ? root.requestAnimationFrame.bind(root)
-                                : (callback) => callback();
-                            schedule(() => {
-                                schedule(() => {
-                                    this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
-                                });
-                            });
-                            return;
-                        }
-                        this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
-                    } else {
-                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
+                    if (typeof this.startPlanSegmentInlineActivityEdit === 'function') {
+                        this.startPlanSegmentInlineActivityEdit(segmentEl, index, event);
                     }
                     return;
                 }
