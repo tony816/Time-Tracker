@@ -9,8 +9,8 @@ function extractMethodSource(signature) {
     const escapedSignature = signature.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const declPattern = new RegExp(`(^|\\n)\\s*${escapedSignature}\\s*\\{`, 'gm');
     const matches = Array.from(source.matchAll(declPattern));
-    assert.ok(matches.length > 0, `method signature not found: ${signature}`);
-    const match = matches[matches.length - 1];
+    assert.equal(matches.length, 1, `expected exactly one method signature for ${signature}, found ${matches.length}`);
+    const match = matches[0];
 
     const start = match.index + match[0].lastIndexOf(signature);
     const openBrace = source.indexOf('{', start + signature.length);

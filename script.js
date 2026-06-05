@@ -4680,7 +4680,7 @@ class TimeTracker {
         return globalThis.TimerController.getTimerStartBlockReason.call(this, index);
     }
 
-    createMergedField(mergeKey, type, index, value) {
+    createMergedFieldLegacy(mergeKey, type, index, value) {
         const safeMergeKey = this.normalizeMergeKey(mergeKey, type);
         if (!safeMergeKey) {
             if (type === 'actual') {
@@ -8705,7 +8705,7 @@ class TimeTracker {
                            data-index="${index}"
                            data-type="${type}"
                            value="${this.escapeAttribute(value || '')}"
-                           placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">`;
+                           placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         }
 
         const [, startStr, endStr] = safeMergeKey.split('-');
@@ -8729,8 +8729,8 @@ class TimeTracker {
                                    data-merge-key="${safeMergeKey}"
                                    data-merge-start="${start}"
                                    data-merge-end="${end}"
-                                   value="${safeMergeValue}"
-                                   placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\ubcd1\ud569\ub41c \uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">
+                               value="${safeMergeValue}"
+                               placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
                         </div>
                     </div>`;
         }

@@ -203,6 +203,77 @@ test('buildSplitVisualization renders plan-only timer controls inside planned gr
     assert.match(html, /0m \/ 60m/);
 });
 
+test('buildSplitVisualization keeps long planned labels and timer text inside segment content for merged slots 16~18', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 16);
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: '점심 준비와 회의 정리용 아주 긴 계획 라벨',
+                        span: 3,
+                        segmentIndex: 0,
+                        startMinute: 960,
+                        durationMinutes: 30,
+                        endMinute: 990,
+                    },
+                    {
+                        label: '오후 작업 전환용 더 긴 계획 라벨',
+                        span: 3,
+                        segmentIndex: 1,
+                        startMinute: 990,
+                        durationMinutes: 30,
+                        endMinute: 1020,
+                    },
+                ],
+            };
+        },
+        escapeHtml(value) {
+            return String(value);
+        },
+        escapeAttribute(value) {
+            return String(value);
+        },
+        getSplitColor() {
+            return '#abcdef';
+        },
+        getPlanSegmentBaseIndex() {
+            return 16;
+        },
+        getPlanSegmentId(baseIndex, segmentIndex) {
+            return `planned-${baseIndex}-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: {
+                    icon: 'play',
+                    timeText: `0m / ${segmentContext.durationMinutes}m / 아주 긴 타이머 텍스트`,
+                    tone: 'under',
+                },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 16);
+    const segments = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-kind="real-plan"[\s\S]*?<\/div>/g) || [];
+
+    assert.equal(segments.length, 2);
+    segments.forEach((segmentHtml) => {
+        assert.match(segmentHtml, /plan-segment-resize-handle-right/);
+        assert.match(segmentHtml, /class="plan-segment-graphic"/);
+        assert.match(segmentHtml, /class="plan-segment-graphic-main/);
+        assert.match(segmentHtml, /class="plan-segment-graphic-label"/);
+        assert.match(segmentHtml, /class="plan-segment-timer-time/);
+    });
+    assert.match(segments[1], /plan-segment-timer-time[^>]*>0m \/ 30m \/ 아주 긴 타이머 텍스트/);
+    assert.doesNotMatch(segments[1], /split-grid-segment-virtual-rest/);
+});
+
 test('buildSplitVisualization passes segment duration context to plan segment timers', () => {
     const seen = [];
     const ctx = {

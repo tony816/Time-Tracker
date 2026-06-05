@@ -88,7 +88,10 @@
   justify-content: center;
   max-width: 100%;
   min-width: 0;
+  overflow: hidden;
   cursor: text;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plan-segment-label-text.is-editing,

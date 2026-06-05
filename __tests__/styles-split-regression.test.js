@@ -50,7 +50,11 @@ test('split css files exist and keep section anchors', () => {
     assert.doesNotMatch(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.is-selected-plan-segment\s*\{[^}]*outline:\s*2px solid rgba\(37,\s*99,\s*235,\s*0\.42\);/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*overflow:\s*visible;[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /\.split-visualization-planned \.split-grid-segment\.has-shared-plan-boundary-handle\s*\{[^}]*z-index:\s*13;/s);
-    assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;/s);
+    assert.match(foundationSource, /\.plan-segment-graphic\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*height:\s*100%;[^}]*min-height:\s*38px;[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s);
+    assert.match(foundationSource, /\.plan-segment-graphic-main\s*\{[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;/s);
+    assert.match(foundationSource, /\.plan-segment-timer-time\s*\{[^}]*display:\s*block;[^}]*min-width:\s*0;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s);
+    assert.doesNotMatch(foundationSource, /\.split-grid-segment\.has-plan-segment-timer\s*\{[^}]*overflow:\s*hidden;/s);
+    assert.match(interactionsSource, /\.plan-segment-label-text,\s*\.plan-segment-title-text\s*\{[^}]*display:\s*inline-flex;[^}]*max-width:\s*100%;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;/s);
     assert.match(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*3ch;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-graphic-label\.is-editing\s*\{[^}]*width:\s*100%;/s);
     assert.doesNotMatch(interactionsSource, /\.plan-segment-title-edit-input\s*\{[^}]*\n\s{2}width:\s*100%;/s);
