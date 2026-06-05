@@ -456,7 +456,7 @@ function getInlinePlanAnchorRect(anchor) {
             ? anchor.getBoundingClientRect()
             : null;
         const rectHeight = rect && Number.isFinite(rect.height) ? rect.height : 0;
-        if (rectHeight > 1 || !anchor || typeof anchor.querySelector !== 'function') return rect;
+        if (!anchor || typeof anchor.querySelector !== 'function') return rect;
         const overlay = anchor.querySelector('.planned-merged-overlay')
             || anchor.querySelector('.merged-field');
         const overlayRect = overlay && typeof overlay.getBoundingClientRect === 'function'
@@ -464,6 +464,58 @@ function getInlinePlanAnchorRect(anchor) {
             : null;
         const overlayHeight = overlayRect && Number.isFinite(overlayRect.height) ? overlayRect.height : 0;
         return overlayHeight > rectHeight ? overlayRect : rect;
+    }
+
+function getInlinePlanRangeAnchorRect(anchor, target = null) {
+        const baseRect = getInlinePlanAnchorRect(anchor);
+        const resolvedTarget = target || getInlinePlanTargetState.call(this);
+        const rangeStart = Number.isInteger(resolvedTarget && resolvedTarget.rangeStart)
+            ? resolvedTarget.rangeStart
+            : Number.isInteger(resolvedTarget && resolvedTarget.startIndex)
+                ? resolvedTarget.startIndex
+                : null;
+        const rangeEnd = Number.isInteger(resolvedTarget && resolvedTarget.rangeEnd)
+            ? resolvedTarget.rangeEnd
+            : Number.isInteger(resolvedTarget && resolvedTarget.endIndex)
+                ? resolvedTarget.endIndex
+                : rangeStart;
+        const mergeKey = resolvedTarget && resolvedTarget.mergeKey;
+        const isMergedRange = Boolean(mergeKey && Number.isInteger(rangeStart) && Number.isInteger(rangeEnd));
+        if (!isMergedRange || typeof document === 'undefined' || typeof document.querySelector !== 'function') {
+            return baseRect;
+        }
+
+        const start = Math.min(rangeStart, rangeEnd);
+        const end = Math.max(rangeStart, rangeEnd);
+        let rangeTop = null;
+        let rangeBottom = null;
+        for (let i = start; i <= end; i += 1) {
+            const row = document.querySelector(`.time-entry[data-index="${i}"]`);
+            if (!row || typeof row.getBoundingClientRect !== 'function') continue;
+            const rowRect = row.getBoundingClientRect();
+            if (!rowRect) continue;
+            if (Number.isFinite(rowRect.top)) {
+                rangeTop = rangeTop === null ? rowRect.top : Math.min(rangeTop, rowRect.top);
+            }
+            if (Number.isFinite(rowRect.bottom)) {
+                rangeBottom = rangeBottom === null ? rowRect.bottom : Math.max(rangeBottom, rowRect.bottom);
+            }
+        }
+
+        if (rangeTop === null || rangeBottom === null) {
+            return baseRect;
+        }
+
+        const mergedRangeRect = {
+            left: baseRect && Number.isFinite(baseRect.left) ? baseRect.left : 0,
+            top: rangeTop,
+            width: baseRect && Number.isFinite(baseRect.width) ? baseRect.width : 0,
+            height: Math.max(0, rangeBottom - rangeTop),
+            right: baseRect && Number.isFinite(baseRect.right) ? baseRect.right : 0,
+            bottom: rangeBottom,
+        };
+        mergedRangeRect.right = mergedRangeRect.left + mergedRangeRect.width;
+        return mergedRangeRect;
     }
 
 function positionInlinePlanDropdown(anchorEl) {
@@ -498,10 +550,11 @@ function positionInlinePlanDropdown(anchorEl) {
         const dropdownWidth = Math.min(expandedWidth, maxWidth);
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
-        if (getInlinePlanTargetState.call(this) && getInlinePlanAnchorState.call(this) !== anchor) {
+        const target = getInlinePlanTargetState.call(this);
+        if (target && getInlinePlanAnchorState.call(this) !== anchor) {
             setInlinePlanAnchorState.call(this, anchor);
         }
-        const rect = getInlinePlanAnchorRect(anchor);
+        const rect = getInlinePlanRangeAnchorRect.call(this, anchor, target);
         if (!rect || (!rect.width && !rect.height)) return;
         const docEl = document.documentElement;
         const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
@@ -512,7 +565,6 @@ function positionInlinePlanDropdown(anchorEl) {
         dropdown.style.minWidth = `${dropdownWidth}px`;
         dropdown.style.width = `${dropdownWidth}px`;
 
-        const target = getInlinePlanTargetState.call(this);
         const alignToCenter = target?.mode === 'plan-segment-replace'
             && target?.anchorAlign === 'center';
         let left = alignToCenter
@@ -2786,6 +2838,7 @@ function applyInlinePlanSelection(label, options = {}) {
         markInlinePlanInputIntent,
         hasRecentInlinePlanInputIntent,
         getInlinePlanAnchorRect,
+        getInlinePlanRangeAnchorRect,
         getOpenParentCaretAnchor,
         positionInlinePlanDropdown,
         positionInlinePlanChildPopover,

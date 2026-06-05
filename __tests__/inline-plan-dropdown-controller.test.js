@@ -46,7 +46,7 @@ const touchPlannedActivityUsageWrapper = buildMethod(
     '(activityItem, parentItem = null)'
 );
 
-function createInlinePlanPositionHarness({ viewport, sheet = false } = {}) {
+function createInlinePlanPositionHarness({ viewport, sheet = false, querySelector = null } = {}) {
     const dropdownClasses = new Set(['inline-plan-dropdown']);
     if (sheet) dropdownClasses.add('inline-plan-dropdown-sheet');
     const dropdown = {
@@ -98,13 +98,16 @@ function createInlinePlanAnchor({ left = 100, top = 100, width = 80, height = 30
     };
 }
 
-function installInlinePlanPositionGlobals() {
+function installInlinePlanPositionGlobals({ querySelector = null } = {}) {
     const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;
     globalThis.document = {
         documentElement: {
             scrollLeft: 0,
             scrollTop: 0,
+        },
+        querySelector(selector) {
+            return typeof querySelector === 'function' ? querySelector(selector) : null;
         },
     };
     globalThis.window = {
@@ -362,7 +365,7 @@ test('positionInlinePlanDropdown keeps non-segment dropdowns left aligned', () =
     }
 });
 
-test('positionInlinePlanDropdown uses merged overlay height when the merged container has no layout height', () => {
+test('positionInlinePlanDropdown uses merged overlay height when the overlay is taller than the anchor', () => {
     const restoreGlobals = installInlinePlanPositionGlobals();
     const { ctx, dropdown } = createInlinePlanPositionHarness({
         viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
@@ -375,9 +378,9 @@ test('positionInlinePlanDropdown uses merged overlay height when the merged cont
                 left: 120,
                 top: 100,
                 right: 800,
-                bottom: 100,
+                bottom: 144,
                 width: 680,
-                height: 0,
+                height: 44,
             };
         },
         querySelector(selector) {
@@ -390,6 +393,59 @@ test('positionInlinePlanDropdown uses merged overlay height when the merged cont
 
         assert.equal(dropdown.style.left, '120px');
         assert.equal(dropdown.style.top, '238px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown uses the full merged planned range bottom for merged slots', () => {
+    const rows = new Map([
+        [16, createInlinePlanAnchor({ left: 120, top: 100, width: 680, height: 44 })],
+        [17, createInlinePlanAnchor({ left: 120, top: 144, width: 680, height: 44 })],
+        [18, createInlinePlanAnchor({ left: 120, top: 188, width: 680, height: 44 })],
+    ]);
+    const restoreGlobals = installInlinePlanPositionGlobals({
+        querySelector(selector) {
+            const match = selector && selector.match(/^\.time-entry\[data-index="(\d+)"\]$/);
+            if (!match) return null;
+            return rows.get(Number.parseInt(match[1], 10)) || null;
+        },
+    });
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = {
+        startIndex: 16,
+        endIndex: 18,
+        rangeStart: 16,
+        rangeEnd: 18,
+        mergeKey: 'planned-16-18',
+    };
+    const anchor = rows.get(16);
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.top, '238px');
+        assert.equal(dropdown.style.left, '120px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown keeps a non-merged single slot anchored to the clicked row', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    ctx.inlinePlanTarget = { startIndex: 10, endIndex: 10 };
+    const anchor = createInlinePlanAnchor({ left: 200, top: 100, width: 120, height: 44 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.top, '150px');
+        assert.equal(dropdown.style.left, '200px');
     } finally {
         restoreGlobals();
     }
@@ -519,6 +575,7 @@ test('positionInlinePlanDropdown keeps mobile sheet sizing unchanged', () => {
     assert.equal(dropdown.style.maxWidth, '100vw');
     assert.equal(dropdown.style.left, '0px');
     assert.equal(dropdown.style.bottom, '0px');
+    assert.equal(dropdown.style.top, 'auto');
 });
 
 test('isSameInlinePlanTarget can read the current range through shared controller state access', () => {
