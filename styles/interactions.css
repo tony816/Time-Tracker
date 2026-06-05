@@ -88,7 +88,7 @@
   min-width: 0;
   overflow: hidden;
   cursor: text;
-  text-align: left;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;

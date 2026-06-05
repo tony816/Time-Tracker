@@ -268,7 +268,7 @@ h1 {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  text-align: left;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 6px;
