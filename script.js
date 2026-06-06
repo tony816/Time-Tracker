@@ -1876,13 +1876,61 @@ class TimeTracker {
             const firstField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const mergedValue = firstField ? firstField.value : '';
 
-            overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
-
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
-            this.mergedFields.set(mergeKey, mergedValue);
 
             // 좌측 계획 ?�이 병합????모든 ?�을 ?�기??병합
             if (type === 'planned') {
+                const clonePlain = (value, fallback) => {
+                    if (value == null) return fallback;
+                    try {
+                        return JSON.parse(JSON.stringify(value));
+                    } catch (_) {
+                        return Array.isArray(value)
+                            ? value.map((item) => ({ ...(item || {}) }))
+                            : { ...(value || {}) };
+                    }
+                };
+                const mergeSnapshot = {
+                    version: 1,
+                    mergeKey,
+                    startIndex,
+                    endIndex,
+                    slots: this.timeSlots.slice(startIndex, endIndex + 1).map((slot) => clonePlain(slot, {})),
+                    mergedFields: overlappingEntries.map((entry) => ({
+                        key: entry.key,
+                        value: clonePlain(this.mergedFields.get(entry.key), ''),
+                    })),
+                };
+                const planSegmentCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentCore)
+                    ? globalThis.TimeTrackerPlanSegmentCore
+                    : null;
+                const mergedPlanPayload = planSegmentCore && typeof planSegmentCore.buildMergedPlanSegmentPayload === 'function'
+                    ? planSegmentCore.buildMergedPlanSegmentPayload(this.timeSlots, {
+                        rangeStart: startIndex,
+                        rangeEnd: endIndex,
+                        findMergeKey: (index) => this.findMergeKey('planned', index),
+                        normalizePlanActivities: (items) => this.normalizePlanActivitiesPreservingSegments
+                            ? this.normalizePlanActivitiesPreservingSegments(items)
+                            : this.normalizePlanActivitiesArray(items),
+                    })
+                    : { blocked: false, activities: [], timers: {}, summary: '' };
+                if (mergedPlanPayload.blocked) {
+                    if (typeof console !== 'undefined' && console.warn) {
+                        console.warn('Blocked planned merge to preserve active plan segment timer', mergedPlanPayload);
+                    }
+                    return;
+                }
+                overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
+                const mergedPlanActivities = Array.isArray(mergedPlanPayload.activities)
+                    ? mergedPlanPayload.activities.map((item) => ({ ...item }))
+                    : [];
+                const mergedPlanTimers = mergedPlanPayload.timers && typeof mergedPlanPayload.timers === 'object'
+                    ? clonePlain(mergedPlanPayload.timers, {})
+                    : {};
+                const mergedPlanValue = mergedPlanActivities.length > 0
+                    ? (this.formatActivitiesSummary ? this.formatActivitiesSummary(mergedPlanActivities) : (mergedPlanPayload.summary || mergedValue))
+                    : mergedValue;
+                this.mergedFields.set(mergeKey, mergedPlanValue);
                 // 중앙 ?�간 ??병합 (?�간 범위 ?�시)
                 const timeRangeKey = `time-${startIndex}-${endIndex}`;
                 const startTime = this.timeSlots[startIndex].time;
@@ -1901,19 +1949,24 @@ class TimeTracker {
                     ? this.timeSlots[startIndex].planTitle
                     : '';
                 for (let i = startIndex; i <= endIndex; i++) {
-                    this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
+                    this.timeSlots[i].planned = i === startIndex ? mergedPlanValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
                         this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
-                    this.timeSlots[i].planActivities = i === startIndex && Array.isArray(this.timeSlots[i].planActivities)
-                        ? this.timeSlots[i].planActivities
+                    this.timeSlots[i].planActivities = i === startIndex
+                        ? mergedPlanActivities.map((item) => ({ ...item }))
                         : [];
-                    this.timeSlots[i].planSegmentTimers = i === startIndex && this.timeSlots[i].planSegmentTimers && typeof this.timeSlots[i].planSegmentTimers === 'object'
-                        ? this.timeSlots[i].planSegmentTimers
+                    this.timeSlots[i].planSegmentTimers = i === startIndex
+                        ? clonePlain(mergedPlanTimers, {})
                         : {};
+                    if (i === startIndex) {
+                        this.timeSlots[i].planMergeSnapshot = clonePlain(mergeSnapshot, null);
+                    } else {
+                        delete this.timeSlots[i].planMergeSnapshot;
+                    }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     this.timeSlots[i].activityLog.actualOverride = i === startIndex
                         ? Boolean(this.timeSlots[i].activityLog.actualOverride)
@@ -1939,6 +1992,8 @@ class TimeTracker {
                 }
             } else {
                 // ?�측 ?�만 병합?�는 경우
+                overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
+                this.mergedFields.set(mergeKey, mergedValue);
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {

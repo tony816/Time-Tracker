@@ -284,6 +284,47 @@
         const actualMergeKey = `actual-${start}-${end}`;
         const baseSlot = this.timeSlots[start] || {};
 
+        const snapshot = baseSlot.planMergeSnapshot && typeof baseSlot.planMergeSnapshot === 'object'
+            ? baseSlot.planMergeSnapshot
+            : null;
+        if (snapshot
+            && snapshot.mergeKey === mergeKey
+            && Number(snapshot.startIndex) === start
+            && Number(snapshot.endIndex) === end
+            && Array.isArray(snapshot.slots)
+            && snapshot.slots.length === slotCount) {
+            const clonePlain = (value, fallback) => {
+                if (value == null) return fallback;
+                try {
+                    return JSON.parse(JSON.stringify(value));
+                } catch (_) {
+                    return Array.isArray(value)
+                        ? value.map((item) => ({ ...(item || {}) }))
+                        : { ...(value || {}) };
+                }
+            };
+
+            this.mergedFields.delete(mergeKey);
+            this.mergedFields.delete(timeRangeKey);
+            this.mergedFields.delete(actualMergeKey);
+            for (let i = start; i <= end; i += 1) {
+                const restored = clonePlain(snapshot.slots[i - start], {});
+                this.timeSlots[i] = restored;
+            }
+            if (Array.isArray(snapshot.mergedFields)) {
+                snapshot.mergedFields.forEach((entry) => {
+                    if (!entry || typeof entry.key !== 'string') return;
+                    this.mergedFields.set(entry.key, clonePlain(entry.value, ''));
+                });
+            }
+
+            this.renderTimeEntries();
+            this.clearAllSelections();
+            this.calculateTotals();
+            this.autoSave();
+            return;
+        }
+
         const mergedPlannedText = String(this.mergedFields.get(mergeKey) ?? baseSlot.planned ?? '').trim();
         const mergedActualText = String(this.mergedFields.get(actualMergeKey) ?? baseSlot.actual ?? '').trim();
         const mergedPlanTitle = String(baseSlot.planTitle || '').trim();

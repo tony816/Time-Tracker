@@ -309,6 +309,186 @@
             });
     }
 
+    function clonePlainObject(value, fallback) {
+        if (!value || typeof value !== 'object') return fallback;
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            return { ...value };
+        }
+    }
+
+    function parsePlannedSegmentId(segmentId) {
+        const match = String(segmentId || '').trim().match(/^planned-(\d+)-(\d+)(?:-seg(\d+))?$/);
+        if (!match) return null;
+        const start = parseInt(match[1], 10);
+        const end = parseInt(match[2], 10);
+        const segmentIndex = match[3] == null ? null : parseInt(match[3], 10);
+        if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+        return { start, end, segmentIndex };
+    }
+
+    function isActiveSegmentTimer(timer) {
+        if (!timer || typeof timer !== 'object') return false;
+        const status = String(timer.status || '').trim();
+        return Boolean(timer.running)
+            || status === 'running'
+            || status === 'paused';
+    }
+
+    function getSegmentDurationMinutes(segment) {
+        const startMinute = toFiniteNumber(segment.startMinute, null);
+        const endMinute = toFiniteNumber(segment.endMinute, null);
+        if (startMinute != null && endMinute != null && endMinute > startMinute) {
+            return Math.max(0, Math.floor(endMinute - startMinute));
+        }
+        const durationMinutes = toFiniteNumber(segment.durationMinutes, null);
+        if (durationMinutes != null && durationMinutes > 0) {
+            return Math.max(0, Math.floor(durationMinutes));
+        }
+        const seconds = toFiniteNumber(segment.seconds, 0);
+        return Math.max(0, Math.floor(seconds / 60));
+    }
+
+    function summarizeSegments(segments = []) {
+        const labels = (Array.isArray(segments) ? segments : [])
+            .map((segment) => String(segment && segment.label ? segment.label : '').trim())
+            .filter(Boolean);
+        if (labels.length <= 0) return '';
+        if (labels.length === 1) return labels[0];
+        return `${labels[0]} +${labels.length - 1}`;
+    }
+
+    function buildMergedPlanSegmentPayload(slots = [], options = {}) {
+        const rangeStart = parseInt(options.rangeStart, 10);
+        const rangeEnd = parseInt(options.rangeEnd, 10);
+        if (!Number.isInteger(rangeStart) || !Number.isInteger(rangeEnd) || rangeEnd < rangeStart) {
+            return { blocked: true, reason: 'invalid-range', activities: [], timers: {} };
+        }
+
+        const normalizePlanActivities = typeof options.normalizePlanActivities === 'function'
+            ? options.normalizePlanActivities
+            : (items) => Array.isArray(items)
+                ? items.filter((item) => item && typeof item === 'object').map((item) => ({ ...item }))
+                : [];
+        const findMergeKey = typeof options.findMergeKey === 'function' ? options.findMergeKey : null;
+        const blockMinutes = Math.max(1, rangeEnd - rangeStart + 1) * 60;
+        const sourceBlocks = [];
+        const seenBlocks = new Set();
+
+        for (let index = rangeStart; index <= rangeEnd; index += 1) {
+            let blockStart = index;
+            let blockEnd = index;
+            const mergeKey = findMergeKey ? findMergeKey(index) : null;
+            const parsed = parsePlannedSegmentId(mergeKey);
+            if (parsed && parsed.start <= index && index <= parsed.end) {
+                blockStart = parsed.start;
+                blockEnd = parsed.end;
+            }
+            if (blockEnd < rangeStart || blockStart > rangeEnd) continue;
+            const blockKey = `${blockStart}-${blockEnd}`;
+            if (seenBlocks.has(blockKey)) continue;
+            seenBlocks.add(blockKey);
+            sourceBlocks.push({ blockStart, blockEnd, baseIndex: blockStart });
+        }
+
+        const collected = [];
+        sourceBlocks.forEach((block) => {
+            const slot = slots[block.baseIndex] || {};
+            const sourceActivities = normalizePlanActivities(slot.planActivities);
+            let cursor = 0;
+            sourceActivities.forEach((segment, segmentIndex) => {
+                if (!segment || typeof segment !== 'object' || segment.virtual || segment.kind === 'virtual-rest') return;
+                const rawStart = toFiniteNumber(segment.startMinute, null);
+                const startMinute = rawStart != null ? Math.max(0, Math.floor(rawStart)) : cursor;
+                const durationMinutes = getSegmentDurationMinutes({ ...segment, startMinute });
+                if (durationMinutes <= 0) return;
+                const endMinute = toFiniteNumber(segment.endMinute, null) != null
+                    ? Math.max(startMinute, Math.floor(toFiniteNumber(segment.endMinute)))
+                    : startMinute + durationMinutes;
+                cursor = Math.max(cursor, endMinute);
+                const absoluteStart = ((block.blockStart - rangeStart) * 60) + startMinute;
+                const absoluteEnd = ((block.blockStart - rangeStart) * 60) + endMinute;
+                if (absoluteEnd <= 0 || absoluteStart >= blockMinutes) return;
+                collected.push({
+                    sourceBaseIndex: block.baseIndex,
+                    sourceRangeStart: block.blockStart,
+                    sourceRangeEnd: block.blockEnd,
+                    sourceSegmentIndex: segmentIndex,
+                    sourceSegment: segment,
+                    sourceStartMinute: startMinute,
+                    sourceEndMinute: endMinute,
+                    startMinute: Math.max(0, absoluteStart),
+                    endMinute: Math.min(blockMinutes, absoluteEnd),
+                    order: collected.length,
+                });
+            });
+        });
+
+        collected.sort((a, b) => (a.startMinute - b.startMinute) || (a.order - b.order));
+
+        const consumedTimerKeys = new Set();
+        const timers = {};
+        const activities = collected
+            .filter((entry) => entry.endMinute > entry.startMinute)
+            .map((entry, nextSegmentIndex) => {
+                const next = { ...entry.sourceSegment };
+                delete next.kind;
+                delete next.virtual;
+                next.startMinute = entry.startMinute;
+                next.endMinute = entry.endMinute;
+                next.durationMinutes = entry.endMinute - entry.startMinute;
+                next.seconds = next.durationMinutes * 60;
+
+                const sourceSlot = slots[entry.sourceBaseIndex] || {};
+                const sourceTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
+                    ? sourceSlot.planSegmentTimers
+                    : {};
+                const candidates = [
+                    `planned-${entry.sourceRangeStart}-${entry.sourceRangeEnd}-seg${entry.sourceSegmentIndex}`,
+                    `planned-${entry.sourceBaseIndex}-${entry.sourceBaseIndex}-seg${entry.sourceSegmentIndex}`,
+                ];
+                if (collected.length === 1 || entry.sourceSegmentIndex === 0) {
+                    candidates.push(`planned-${entry.sourceRangeStart}-${entry.sourceRangeEnd}`);
+                    candidates.push(`planned-${entry.sourceBaseIndex}-${entry.sourceBaseIndex}`);
+                }
+                const matchedKey = candidates.find((key) => sourceTimers[key]);
+                if (matchedKey) {
+                    const nextId = `planned-${rangeStart}-${rangeEnd}-seg${nextSegmentIndex}`;
+                    timers[nextId] = clonePlainObject(sourceTimers[matchedKey], {});
+                    consumedTimerKeys.add(`${entry.sourceBaseIndex}:${matchedKey}`);
+                }
+                return next;
+            });
+
+        for (const block of sourceBlocks) {
+            const sourceSlot = slots[block.baseIndex] || {};
+            const sourceTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
+                ? sourceSlot.planSegmentTimers
+                : {};
+            for (const [timerKey, timer] of Object.entries(sourceTimers)) {
+                if (consumedTimerKeys.has(`${block.baseIndex}:${timerKey}`)) continue;
+                if (isActiveSegmentTimer(timer)) {
+                    return {
+                        blocked: true,
+                        reason: 'unmatched-active-segment-timer',
+                        timerKey,
+                        sourceBaseIndex: block.baseIndex,
+                        activities: [],
+                        timers: {},
+                    };
+                }
+            }
+        }
+
+        return {
+            blocked: false,
+            activities,
+            timers,
+            summary: summarizeSegments(activities),
+        };
+    }
+
     return Object.freeze({
         snapToTenMinutes,
         normalizePlanSegmentRange,
@@ -319,5 +499,6 @@
         normalizePlanSegmentListForResize,
         canResizePlanSegment,
         resizePlanSegmentInList,
+        buildMergedPlanSegmentPayload,
     });
 });

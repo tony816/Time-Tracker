@@ -11,6 +11,7 @@ test('plan-segment-core exports pure helpers', () => {
     assert.equal(typeof planSegmentCore.findOverlaps, 'function');
     assert.equal(typeof planSegmentCore.createSegmentId, 'function');
     assert.equal(typeof planSegmentCore.resizePlanSegmentInList, 'function');
+    assert.equal(typeof planSegmentCore.buildMergedPlanSegmentPayload, 'function');
     assert.equal(globalThis.TimeTrackerPlanSegmentCore, planSegmentCore);
 });
 
@@ -118,6 +119,168 @@ test('mergeAdjacentGaps merges adjacent gaps and keeps non-adjacent gaps separat
             virtual: true,
         },
     ]);
+});
+
+test('buildMergedPlanSegmentPayload rebases multi-segment slot plus empty slot and leaves rest virtual', () => {
+    const slots = [
+        {
+            planActivities: [
+                { label: 'Deep Work', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                { label: 'Review', seconds: 1200, startMinute: 40, endMinute: 60, durationMinutes: 20 },
+            ],
+            planSegmentTimers: {},
+        },
+        { planActivities: [], planSegmentTimers: {} },
+    ];
+
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload(slots, {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.deepEqual(payload.activities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Deep Work', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: 'Review', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(payload.activities, {
+        startMinute: 0,
+        endMinute: 120,
+    }).map((gap) => ({ startMinute: gap.startMinute, durationMinutes: gap.durationMinutes })), [
+        { startMinute: 20, durationMinutes: 20 },
+        { startMinute: 60, durationMinutes: 60 },
+    ]);
+});
+
+test('buildMergedPlanSegmentPayload concatenates segmented slots by chronological order and preserves metadata', () => {
+    const slots = [
+        {
+            planActivities: [
+                {
+                    label: 'Plan',
+                    activityId: 'plan-a',
+                    activityText: 'Plan',
+                    titleActivityId: 'title-a',
+                    titleText: 'Morning',
+                    seconds: 1800,
+                    startMinute: 30,
+                    endMinute: 60,
+                    durationMinutes: 30,
+                },
+            ],
+            planSegmentTimers: {},
+        },
+        {
+            planActivities: [
+                {
+                    label: 'Plan',
+                    activityId: 'plan-b',
+                    activityText: 'Plan B',
+                    titleActivityId: 'title-b',
+                    titleText: 'Next',
+                    seconds: 1200,
+                    startMinute: 0,
+                    endMinute: 20,
+                    durationMinutes: 20,
+                },
+            ],
+            planSegmentTimers: {},
+        },
+    ];
+
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload(slots, {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.deepEqual(payload.activities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        activityText: item.activityText,
+        titleActivityId: item.titleActivityId,
+        titleText: item.titleText,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        {
+            label: 'Plan',
+            activityId: 'plan-a',
+            activityText: 'Plan',
+            titleActivityId: 'title-a',
+            titleText: 'Morning',
+            startMinute: 30,
+            endMinute: 60,
+        },
+        {
+            label: 'Plan',
+            activityId: 'plan-b',
+            activityText: 'Plan B',
+            titleActivityId: 'title-b',
+            titleText: 'Next',
+            startMinute: 60,
+            endMinute: 80,
+        },
+    ]);
+});
+
+test('buildMergedPlanSegmentPayload remaps paused and running plan segment timers', () => {
+    const slots = [
+        {
+            planActivities: [
+                { label: 'A', seconds: 1800, startMinute: 0, endMinute: 30, durationMinutes: 30 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'paused', running: false, elapsedSeconds: 300, method: 'plan-segment' },
+            },
+        },
+        {
+            planActivities: [
+                { label: 'B', seconds: 1800, startMinute: 0, endMinute: 30, durationMinutes: 30 },
+            ],
+            planSegmentTimers: {
+                'planned-1-1-seg0': { status: 'running', running: true, startedAt: 123, method: 'plan-segment' },
+            },
+        },
+    ];
+
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload(slots, {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.equal(payload.timers['planned-0-1-seg0'].status, 'paused');
+    assert.equal(payload.timers['planned-0-1-seg0'].elapsedSeconds, 300);
+    assert.equal(payload.timers['planned-0-1-seg1'].status, 'running');
+    assert.equal(payload.timers['planned-0-1-seg1'].running, true);
+    assert.equal(payload.timers['planned-0-1-seg1'].startedAt, 123);
+});
+
+test('buildMergedPlanSegmentPayload blocks when an active segment timer cannot be matched', () => {
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload([
+        {
+            planActivities: [
+                { label: 'A', seconds: 1800, startMinute: 0, endMinute: 30, durationMinutes: 30 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg99': { status: 'running', running: true, method: 'plan-segment' },
+            },
+        },
+        { planActivities: [], planSegmentTimers: {} },
+    ], {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, true);
+    assert.equal(payload.reason, 'unmatched-active-segment-timer');
 });
 
 test('mergeAdjacentGaps does not emit gaps shorter than 10 minutes', () => {
