@@ -2308,6 +2308,27 @@ button.activity-chip,
   font-weight: 700;
 }
 
+.plan-segment-resize-preview-guide {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: 66px;
+  height: 14px;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.1s ease;
+}
+
+.plan-segment-resize-preview-guide path {
+  fill: none;
+  stroke: rgba(37, 99, 235, 0.72);
+  stroke-width: 2.7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .plan-segment-resize-handle {
   position: absolute;
   top: 50%;

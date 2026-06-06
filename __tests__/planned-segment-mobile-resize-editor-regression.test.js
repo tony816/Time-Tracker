@@ -326,11 +326,16 @@ test('plan segment resize cleans preview state and lets a newly rendered handle 
         const first = createResizeFixture();
         attachPlanSegmentResizeListeners.call(ctx, first.entry, 0);
         first.handle.dispatchEvent(createPointerEvent('pointerdown', first.handle, 0));
+        const activeGuide = first.grid.querySelector('.plan-segment-resize-preview-guide');
+        assert.ok(activeGuide);
+        assert.equal(activeGuide.style.pointerEvents, 'none');
         listeners.pointermove(createPointerEvent('pointermove', first.handle, 100));
         assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+        assert.ok(first.grid.querySelector('.plan-segment-resize-preview-guide'));
         listeners.pointerup(createPointerEvent('pointerup', first.handle, 100));
 
         assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
         assert.equal(hasClass(first.grid, 'is-previewing-plan-resize'), false);
         assert.equal(hasClass(first.segment, 'is-resizing-plan-segment'), false);
 
@@ -398,6 +403,7 @@ test('plan segment resize remains interactive after renderTimeEntries replaces h
         assert.equal(listenerCounts.pointermove, 1);
         assert.equal(listenerCounts.pointerup, 1);
         assert.equal(listenerCounts.pointercancel, 1);
+        assert.equal(listenerCounts.keydown, 1);
         listeners.pointermove(createPointerEvent('pointermove', firstHandle, 100));
         assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
         listeners.pointerup(createPointerEvent('pointerup', firstHandle, 100));
@@ -406,8 +412,10 @@ test('plan segment resize remains interactive after renderTimeEntries replaces h
         assert.equal(listenerCounts.pointermove, 0);
         assert.equal(listenerCounts.pointerup, 0);
         assert.equal(listenerCounts.pointercancel, 0);
+        assert.equal(listenerCounts.keydown, 0);
         assert.deepEqual(captureCalls.slice(0, 2), [['set', 7], ['release', 7]]);
         assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(current.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
         assert.equal(container.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
         assert.equal(container.querySelectorAll('.split-grid.is-previewing-plan-resize').length, 0);
         assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
@@ -523,7 +531,49 @@ test('mobile segment edge zone starts resize without targeting the handle', () =
 
         assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
         assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
         assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
+test('plan segment resize preview guide is removed on escape cancel', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 1);
+        assert.equal(listenerCounts.keydown, 1);
+
+        listeners.keydown({ type: 'keydown', key: 'Escape' });
+
+        assert.deepEqual(resizeCalls, []);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
+        assert.equal(hasClass(fixture.grid, 'is-previewing-plan-resize'), false);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
+        assert.equal(listenerCounts.keydown, 0);
     });
 });
 
@@ -661,12 +711,14 @@ test('mobile left edge-zone on an adjacent segment uses the previous segment rig
         assert.equal(pointerStart.propagationStopped, true);
         assert.equal(hasClass(firstSegment, 'is-resizing-plan-segment'), true);
         assert.equal(hasClass(secondSegment, 'is-resizing-plan-segment'), false);
+        assert.equal(grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 1);
 
         listeners.pointermove(createPointerEvent('pointermove', secondSegment, 120));
         listeners.pointerup(createPointerEvent('pointerup', secondSegment, 120));
 
         assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
         assert.equal(hasClass(firstSegment, 'is-resizing-plan-segment'), false);
+        assert.equal(grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
     });
 });
 

@@ -7426,6 +7426,47 @@ class TimeTracker {
                     return previewLayer;
                 };
 
+                const appendResizePreviewGuide = (layer, boundaryMinute) => {
+                    if (!layer || typeof document === 'undefined' || !document.createElement) return;
+                    const createSvgElement = (tagName) => (
+                        typeof document.createElementNS === 'function'
+                            ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
+                            : document.createElement(tagName)
+                    );
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
+                    if (!Number.isFinite(clampedMinute)) return;
+                    let boundaryUnit = Math.round(clampedMinute / 10);
+                    boundaryUnit = Math.max(0, Math.min(totalUnits, boundaryUnit));
+                    let rowIndex = Math.floor(boundaryUnit / unitsPerRow);
+                    let columnUnit = boundaryUnit % unitsPerRow;
+                    if (boundaryUnit > 0 && columnUnit === 0) {
+                        rowIndex -= 1;
+                        columnUnit = unitsPerRow;
+                    }
+                    rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
+
+                    const guide = createSvgElement('svg');
+                    guide.className = 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow';
+                    guide.setAttribute('viewBox', '0 0 66 14');
+                    guide.setAttribute('width', '66');
+                    guide.setAttribute('height', '14');
+                    guide.setAttribute('aria-hidden', 'true');
+                    guide.setAttribute('focusable', 'false');
+                    if (guide.style) {
+                        guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
+                        guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
+                        guide.style.pointerEvents = 'none';
+                    }
+                    const path = createSvgElement('path');
+                    path.setAttribute('d', 'M28 7H0 M0 7L7 2 M0 7L7 12 M38 7H66 M66 7L59 2 M66 7L59 12');
+                    path.setAttribute('vector-effect', 'non-scaling-stroke');
+                    guide.appendChild(path);
+                    layer.appendChild(guide);
+                };
+
                 const normalizePreviewLabel = (segment) => {
                     const value = segment ? (segment.activityText || segment.label || '') : '';
                     return this.normalizeActivityText ? this.normalizeActivityText(value) : String(value || '').trim();
@@ -7564,6 +7605,7 @@ class TimeTracker {
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
                     layer.innerHTML = '';
                     previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
+                    appendResizePreviewGuide(layer, targetMinute);
                 };
 
                 const cleanup = () => {
@@ -7579,6 +7621,7 @@ class TimeTracker {
                     document.removeEventListener(moveType, update, documentListenerOptions);
                     document.removeEventListener(upType, finish, documentListenerOptions);
                     if (cancelType) document.removeEventListener(cancelType, cancel, documentListenerOptions);
+                    document.removeEventListener('keydown', keyCancel, true);
                     if (isPointerEvent && pointerId != null && captureEl && captureEl.releasePointerCapture) {
                         try {
                             captureEl.releasePointerCapture(pointerId);
@@ -7615,10 +7658,15 @@ class TimeTracker {
                 const cancel = () => {
                     cleanup();
                 };
+                const keyCancel = (keyEvent) => {
+                    if (keyEvent && keyEvent.key !== 'Escape') return;
+                    cleanup();
+                };
                 updatePreview(originX);
                 document.addEventListener(moveType, update, documentListenerOptions);
                 document.addEventListener(upType, finish, documentListenerOptions);
                 if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);
+                document.addEventListener('keydown', keyCancel, true);
                 return true;
             };
         const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
