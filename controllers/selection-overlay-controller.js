@@ -74,6 +74,40 @@
         return this.scheduleButton || this.scheduleHoverButton || null;
     }
 
+    function getPlanSegmentCore() {
+        return (root && root.TimeTrackerPlanSegmentCore && typeof root.TimeTrackerPlanSegmentCore === 'object')
+            ? root.TimeTrackerPlanSegmentCore
+            : ((typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentCore)
+                ? globalThis.TimeTrackerPlanSegmentCore
+                : null);
+    }
+
+    function resolvePlanMergeSnapshotState(mergeKey, start, end) {
+        const baseSlot = this.timeSlots && this.timeSlots[start] ? this.timeSlots[start] : {};
+        const snapshot = baseSlot.planMergeSnapshot && typeof baseSlot.planMergeSnapshot === 'object'
+            ? baseSlot.planMergeSnapshot
+            : null;
+        if (!snapshot) return { state: 'none', snapshot: null, baseSlot };
+
+        const core = getPlanSegmentCore();
+        const valid = core && typeof core.isPlanMergeSnapshotRestorable === 'function'
+            ? core.isPlanMergeSnapshotRestorable(snapshot, { mergeKey, startIndex: start, endIndex: end, baseSlot })
+            : (snapshot.mergeKey === mergeKey
+                && Number(snapshot.startIndex) === start
+                && Number(snapshot.endIndex) === end
+                && Array.isArray(snapshot.slots)
+                && snapshot.slots.length === Math.max(1, end - start + 1));
+        if (!valid) {
+            delete baseSlot.planMergeSnapshot;
+            return { state: 'invalid', snapshot: null, baseSlot };
+        }
+
+        const sanitized = core && typeof core.sanitizePlanMergeSnapshot === 'function'
+            ? core.sanitizePlanMergeSnapshot(snapshot)
+            : snapshot;
+        return { state: 'valid', snapshot: sanitized, baseSlot };
+    }
+
     function selectFieldRange(type, startIndex, endIndex) {
         if (type !== 'planned') return; // 우측 열 멀티 선택 금지
         this.clearSelection(type);
@@ -220,6 +254,11 @@
         const [, startStr, endStr] = mergeKey.split('-');
         const start = parseInt(startStr);
         const end = parseInt(endStr);
+        const snapshotState = resolvePlanMergeSnapshotState.call(this, mergeKey, start, end);
+        if (snapshotState.state === 'invalid') {
+            this.hideUndoButton();
+            return;
+        }
 
         const startField = document.querySelector(`[data-index="${start}"] .${type}-input`);
         const endField = document.querySelector(`[data-index="${end}"] .${type}-input`);
@@ -284,15 +323,15 @@
         const actualMergeKey = `actual-${start}-${end}`;
         const baseSlot = this.timeSlots[start] || {};
 
-        const snapshot = baseSlot.planMergeSnapshot && typeof baseSlot.planMergeSnapshot === 'object'
-            ? baseSlot.planMergeSnapshot
-            : null;
-        if (snapshot
-            && snapshot.mergeKey === mergeKey
-            && Number(snapshot.startIndex) === start
-            && Number(snapshot.endIndex) === end
-            && Array.isArray(snapshot.slots)
-            && snapshot.slots.length === slotCount) {
+        const snapshotState = resolvePlanMergeSnapshotState.call(this, mergeKey, start, end);
+        const snapshot = snapshotState.snapshot;
+        if (snapshotState.state === 'invalid') {
+            this.hideUndoButton();
+            if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
+            if (typeof this.autoSave === 'function') this.autoSave();
+            return;
+        }
+        if (snapshot) {
             const clonePlain = (value, fallback) => {
                 if (value == null) return fallback;
                 try {

@@ -1890,20 +1890,31 @@ class TimeTracker {
                             : { ...(value || {}) };
                     }
                 };
-                const mergeSnapshot = {
-                    version: 1,
-                    mergeKey,
-                    startIndex,
-                    endIndex,
-                    slots: this.timeSlots.slice(startIndex, endIndex + 1).map((slot) => clonePlain(slot, {})),
-                    mergedFields: overlappingEntries.map((entry) => ({
-                        key: entry.key,
-                        value: clonePlain(this.mergedFields.get(entry.key), ''),
-                    })),
-                };
                 const planSegmentCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentCore)
                     ? globalThis.TimeTrackerPlanSegmentCore
                     : null;
+                const mergeSnapshot = planSegmentCore && typeof planSegmentCore.createPlanMergeSnapshot === 'function'
+                    ? planSegmentCore.createPlanMergeSnapshot({
+                        mergeKey,
+                        startIndex,
+                        endIndex,
+                        slots: this.timeSlots.slice(startIndex, endIndex + 1),
+                        mergedFields: overlappingEntries.map((entry) => ({
+                            key: entry.key,
+                            value: this.mergedFields.get(entry.key),
+                        })),
+                    })
+                    : {
+                        version: 1,
+                        mergeKey,
+                        startIndex,
+                        endIndex,
+                        slots: this.timeSlots.slice(startIndex, endIndex + 1).map((slot) => clonePlain(slot, {})),
+                        mergedFields: overlappingEntries.map((entry) => ({
+                            key: entry.key,
+                            value: clonePlain(this.mergedFields.get(entry.key), ''),
+                        })),
+                    };
                 const mergedPlanPayload = planSegmentCore && typeof planSegmentCore.buildMergedPlanSegmentPayload === 'function'
                     ? planSegmentCore.buildMergedPlanSegmentPayload(this.timeSlots, {
                         rangeStart: startIndex,
@@ -1915,6 +1926,9 @@ class TimeTracker {
                     })
                     : { blocked: false, activities: [], timers: {}, summary: '' };
                 if (mergedPlanPayload.blocked) {
+                    if (typeof this.showNotification === 'function') {
+                        this.showNotification('계획 병합을 진행할 수 없습니다. 실행 중이거나 일시정지된 계획 세그먼트 타이머를 안전하게 연결할 수 없습니다.', 'error');
+                    }
                     if (typeof console !== 'undefined' && console.warn) {
                         console.warn('Blocked planned merge to preserve active plan segment timer', mergedPlanPayload);
                     }
@@ -1962,9 +1976,7 @@ class TimeTracker {
                     this.timeSlots[i].planSegmentTimers = i === startIndex
                         ? clonePlain(mergedPlanTimers, {})
                         : {};
-                    if (i === startIndex) {
-                        this.timeSlots[i].planMergeSnapshot = clonePlain(mergeSnapshot, null);
-                    } else {
+                    if (i !== startIndex) {
                         delete this.timeSlots[i].planMergeSnapshot;
                     }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
@@ -1989,6 +2001,11 @@ class TimeTracker {
                     } else if (i !== startIndex) {
                         this.timeSlots[i].activityLog.actualFailedGridUnits = [];
                     }
+                }
+                if (this.timeSlots[startIndex]) {
+                    this.timeSlots[startIndex].planMergeSnapshot = planSegmentCore && typeof planSegmentCore.attachPlanMergePostState === 'function'
+                        ? planSegmentCore.attachPlanMergePostState(mergeSnapshot, this.timeSlots[startIndex])
+                        : clonePlain(mergeSnapshot, null);
                 }
             } else {
                 // ?�측 ?�만 병합?�는 경우

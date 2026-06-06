@@ -310,7 +310,8 @@
     }
 
     function clonePlainObject(value, fallback) {
-        if (!value || typeof value !== 'object') return fallback;
+        if (value == null) return fallback;
+        if (typeof value !== 'object') return value;
         try {
             return JSON.parse(JSON.stringify(value));
         } catch (_) {
@@ -357,6 +358,122 @@
         if (labels.length <= 0) return '';
         if (labels.length === 1) return labels[0];
         return `${labels[0]} +${labels.length - 1}`;
+    }
+
+    function stableJson(value) {
+        if (value == null || typeof value !== 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) {
+            return `[${value.map((item) => stableJson(item)).join(',')}]`;
+        }
+        const keys = Object.keys(value).sort();
+        return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    }
+
+    function sanitizeSnapshotSlot(slot = {}) {
+        const source = slot && typeof slot === 'object' ? slot : {};
+        const sanitized = {};
+        [
+            'time',
+            'planned',
+            'actual',
+            'planActivities',
+            'planTitle',
+            'planTitleBandOn',
+            'timer',
+            'planSegmentTimers',
+            'activityLog',
+        ].forEach((key) => {
+            if (!(key in source)) return;
+            sanitized[key] = clonePlainObject(source[key], Array.isArray(source[key]) ? [] : {});
+        });
+        return sanitized;
+    }
+
+    function buildPlanMergeBaseSignature(slot = {}) {
+        const source = slot && typeof slot === 'object' ? slot : {};
+        return stableJson({
+            planned: source.planned || '',
+            planActivities: Array.isArray(source.planActivities) ? source.planActivities : [],
+            planTitle: source.planTitle || '',
+            planTitleBandOn: Boolean(source.planTitleBandOn),
+            planSegmentTimers: source.planSegmentTimers && typeof source.planSegmentTimers === 'object'
+                ? source.planSegmentTimers
+                : {},
+        });
+    }
+
+    function sanitizePlanMergeSnapshot(snapshot = {}) {
+        if (!snapshot || typeof snapshot !== 'object') return null;
+        const startIndex = parseInt(snapshot.startIndex, 10);
+        const endIndex = parseInt(snapshot.endIndex, 10);
+        const mergeKey = String(snapshot.mergeKey || '').trim();
+        if (!mergeKey || !Number.isInteger(startIndex) || !Number.isInteger(endIndex) || endIndex < startIndex) {
+            return null;
+        }
+        const slots = Array.isArray(snapshot.slots)
+            ? snapshot.slots.map((slot) => sanitizeSnapshotSlot(slot))
+            : [];
+        if (slots.length !== (endIndex - startIndex + 1)) return null;
+        const mergedFields = Array.isArray(snapshot.mergedFields)
+            ? snapshot.mergedFields
+                .filter((entry) => entry && typeof entry.key === 'string')
+                .map((entry) => ({
+                    key: String(entry.key),
+                    value: entry.value == null ? '' : String(entry.value),
+                }))
+            : [];
+        const sanitized = {
+            version: 2,
+            mergeKey,
+            startIndex,
+            endIndex,
+            slots,
+            mergedFields,
+        };
+        if (typeof snapshot.postMergeSignature === 'string' && snapshot.postMergeSignature) {
+            sanitized.postMergeSignature = snapshot.postMergeSignature;
+        }
+        return sanitized;
+    }
+
+    function createPlanMergeSnapshot(options = {}) {
+        const startIndex = parseInt(options.startIndex, 10);
+        const endIndex = parseInt(options.endIndex, 10);
+        const mergeKey = String(options.mergeKey || '').trim();
+        const slots = Array.isArray(options.slots) ? options.slots : [];
+        const mergedFields = Array.isArray(options.mergedFields) ? options.mergedFields : [];
+        return sanitizePlanMergeSnapshot({
+            version: 2,
+            mergeKey,
+            startIndex,
+            endIndex,
+            slots: slots.slice(0, Math.max(0, endIndex - startIndex + 1)),
+            mergedFields,
+        });
+    }
+
+    function attachPlanMergePostState(snapshot, baseSlot = {}) {
+        const sanitized = sanitizePlanMergeSnapshot(snapshot);
+        if (!sanitized) return null;
+        sanitized.postMergeSignature = buildPlanMergeBaseSignature(baseSlot);
+        return sanitized;
+    }
+
+    function isPlanMergeSnapshotRestorable(snapshot = {}, options = {}) {
+        const sanitized = sanitizePlanMergeSnapshot(snapshot);
+        if (!sanitized) return false;
+        const start = parseInt(options.startIndex, 10);
+        const end = parseInt(options.endIndex, 10);
+        const mergeKey = String(options.mergeKey || '').trim();
+        if (mergeKey && sanitized.mergeKey !== mergeKey) return false;
+        if (Number.isInteger(start) && sanitized.startIndex !== start) return false;
+        if (Number.isInteger(end) && sanitized.endIndex !== end) return false;
+        const expectedSlotCount = Math.max(1, sanitized.endIndex - sanitized.startIndex + 1);
+        if (sanitized.slots.length !== expectedSlotCount) return false;
+        if (options.baseSlot && sanitized.postMergeSignature) {
+            return sanitized.postMergeSignature === buildPlanMergeBaseSignature(options.baseSlot);
+        }
+        return true;
     }
 
     function buildMergedPlanSegmentPayload(slots = [], options = {}) {
@@ -500,5 +617,10 @@
         canResizePlanSegment,
         resizePlanSegmentInList,
         buildMergedPlanSegmentPayload,
+        sanitizePlanMergeSnapshot,
+        createPlanMergeSnapshot,
+        attachPlanMergePostState,
+        buildPlanMergeBaseSignature,
+        isPlanMergeSnapshotRestorable,
     });
 });

@@ -12,6 +12,9 @@ test('plan-segment-core exports pure helpers', () => {
     assert.equal(typeof planSegmentCore.createSegmentId, 'function');
     assert.equal(typeof planSegmentCore.resizePlanSegmentInList, 'function');
     assert.equal(typeof planSegmentCore.buildMergedPlanSegmentPayload, 'function');
+    assert.equal(typeof planSegmentCore.createPlanMergeSnapshot, 'function');
+    assert.equal(typeof planSegmentCore.attachPlanMergePostState, 'function');
+    assert.equal(typeof planSegmentCore.isPlanMergeSnapshotRestorable, 'function');
     assert.equal(globalThis.TimeTrackerPlanSegmentCore, planSegmentCore);
 });
 
@@ -281,6 +284,225 @@ test('buildMergedPlanSegmentPayload blocks when an active segment timer cannot b
 
     assert.equal(payload.blocked, true);
     assert.equal(payload.reason, 'unmatched-active-segment-timer');
+});
+
+test('buildMergedPlanSegmentPayload remaps timer from existing merged block plus standalone slot', () => {
+    const slots = [
+        {
+            planActivities: [
+                { label: 'A', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                { label: 'B', seconds: 1200, startMinute: 20, endMinute: 40, durationMinutes: 20 },
+            ],
+            planSegmentTimers: {
+                'planned-0-1-seg1': { status: 'paused', elapsedSeconds: 200 },
+            },
+        },
+        { planActivities: [], planSegmentTimers: {} },
+        {
+            planActivities: [
+                { label: 'C', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-2-2-seg0': { status: 'running', running: true, startedAt: 777 },
+            },
+        },
+    ];
+
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload(slots, {
+        rangeStart: 0,
+        rangeEnd: 2,
+        findMergeKey(index) {
+            return index === 0 || index === 1 ? 'planned-0-1' : null;
+        },
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.equal(payload.timers['planned-0-2-seg1'].status, 'paused');
+    assert.equal(payload.timers['planned-0-2-seg2'].status, 'running');
+    assert.equal(payload.activities[2].startMinute, 120);
+});
+
+test('buildMergedPlanSegmentPayload remaps timer from standalone slot plus existing merged block', () => {
+    const slots = [
+        {
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'running', running: true, startedAt: 111 },
+            },
+        },
+        {
+            planActivities: [
+                { label: 'B', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                { label: 'C', seconds: 1200, startMinute: 20, endMinute: 40, durationMinutes: 20 },
+            ],
+            planSegmentTimers: {
+                'planned-1-2-seg1': { status: 'paused', elapsedSeconds: 400 },
+            },
+        },
+        { planActivities: [], planSegmentTimers: {} },
+    ];
+
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload(slots, {
+        rangeStart: 0,
+        rangeEnd: 2,
+        findMergeKey(index) {
+            return index === 1 || index === 2 ? 'planned-1-2' : null;
+        },
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.equal(payload.timers['planned-0-2-seg0'].status, 'running');
+    assert.equal(payload.timers['planned-0-2-seg2'].status, 'paused');
+    assert.equal(payload.activities[1].startMinute, 60);
+});
+
+test('buildMergedPlanSegmentPayload remaps active timer when only segment 1 has a timer', () => {
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload([
+        {
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+                { label: 'B', seconds: 600, startMinute: 10, endMinute: 20, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg1': { status: 'paused', elapsedSeconds: 99 },
+            },
+        },
+        { planActivities: [], planSegmentTimers: {} },
+    ], {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.equal(payload.timers['planned-0-1-seg1'].status, 'paused');
+    assert.equal(payload.timers['planned-0-1-seg1'].elapsedSeconds, 99);
+});
+
+test('buildMergedPlanSegmentPayload ignores unmatched stale non-active timer', () => {
+    const payload = planSegmentCore.buildMergedPlanSegmentPayload([
+        {
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg99': { status: 'idle', running: false, elapsedSeconds: 0 },
+            },
+        },
+        { planActivities: [], planSegmentTimers: {} },
+    ], {
+        rangeStart: 0,
+        rangeEnd: 1,
+    });
+
+    assert.equal(payload.blocked, false);
+    assert.deepEqual(payload.timers, {});
+});
+
+test('plan merge snapshots are sanitized and do not nest indefinitely', () => {
+    const nested = {
+        version: 2,
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        slots: [],
+        mergedFields: [],
+    };
+    const snapshot = planSegmentCore.createPlanMergeSnapshot({
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        slots: [
+            {
+                time: '4',
+                planned: 'A',
+                planActivities: [{ label: 'A', seconds: 600 }],
+                planSegmentTimers: {},
+                activityLog: { subActivities: [] },
+                planMergeSnapshot: nested,
+            },
+            {
+                time: '5',
+                planned: 'B',
+                planActivities: [{ label: 'B', seconds: 600 }],
+                planSegmentTimers: {},
+                activityLog: { subActivities: [] },
+                planMergeSnapshot: nested,
+            },
+        ],
+        mergedFields: [{ key: 'planned-0-1', value: 'A' }],
+    });
+
+    assert.equal(snapshot.slots[0].planMergeSnapshot, undefined);
+    assert.equal(snapshot.slots[1].planMergeSnapshot, undefined);
+    const withPostState = planSegmentCore.attachPlanMergePostState(snapshot, {
+        planned: 'A + B',
+        planActivities: [{ label: 'A', seconds: 600 }],
+        planSegmentTimers: {},
+        planTitle: '',
+        planTitleBandOn: false,
+    });
+    const repeated = planSegmentCore.createPlanMergeSnapshot({
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        slots: [
+            { ...snapshot.slots[0], planMergeSnapshot: withPostState },
+            { ...snapshot.slots[1], planMergeSnapshot: withPostState },
+        ],
+        mergedFields: snapshot.mergedFields,
+    });
+
+    assert.equal(repeated.slots[0].planMergeSnapshot, undefined);
+    assert.equal(JSON.stringify(repeated).length < JSON.stringify(withPostState).length * 2, true);
+});
+
+test('plan merge snapshot restore validity detects post-merge base edits', () => {
+    const baseSlot = {
+        planned: 'A',
+        planActivities: [{ label: 'A', seconds: 600 }],
+        planTitle: '',
+        planTitleBandOn: false,
+        planSegmentTimers: {},
+    };
+    const snapshot = planSegmentCore.attachPlanMergePostState(
+        planSegmentCore.createPlanMergeSnapshot({
+            mergeKey: 'planned-0-1',
+            startIndex: 0,
+            endIndex: 1,
+            slots: [
+                { time: '4', planned: 'A', planActivities: [], planSegmentTimers: {}, activityLog: {} },
+                { time: '5', planned: 'B', planActivities: [], planSegmentTimers: {}, activityLog: {} },
+            ],
+            mergedFields: [],
+        }),
+        baseSlot
+    );
+
+    assert.equal(planSegmentCore.isPlanMergeSnapshotRestorable(snapshot, {
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        baseSlot,
+    }), true);
+    assert.equal(planSegmentCore.isPlanMergeSnapshotRestorable(snapshot, {
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        baseSlot: { ...baseSlot, planned: 'Edited' },
+    }), false);
+    assert.equal(planSegmentCore.isPlanMergeSnapshotRestorable(snapshot, {
+        mergeKey: 'planned-0-1',
+        startIndex: 0,
+        endIndex: 1,
+        baseSlot: {
+            ...baseSlot,
+            planSegmentTimers: {
+                'planned-0-1-seg0': { status: 'paused', elapsedSeconds: 30 },
+            },
+        },
+    }), false);
 });
 
 test('mergeAdjacentGaps does not emit gaps shorter than 10 minutes', () => {

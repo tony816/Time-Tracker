@@ -85,6 +85,16 @@
         }
     }
 
+    function sanitizePlanMergeSnapshot(snapshot) {
+        const core = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentCore)
+            ? globalThis.TimeTrackerPlanSegmentCore
+            : null;
+        if (core && typeof core.sanitizePlanMergeSnapshot === 'function') {
+            return core.sanitizePlanMergeSnapshot(snapshot);
+        }
+        return null;
+    }
+
     function createStateSnapshot(timeSlots, mergedFields) {
         return {
             timeSlots: cloneTimeSlots(timeSlots),
@@ -177,6 +187,12 @@
                 targetSlot.planSegmentTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
                     ? JSON.parse(JSON.stringify(sourceSlot.planSegmentTimers))
                     : {};
+                const planMergeSnapshot = sanitizePlanMergeSnapshot(sourceSlot.planMergeSnapshot);
+                if (planMergeSnapshot) {
+                    targetSlot.planMergeSnapshot = planMergeSnapshot;
+                } else {
+                    delete targetSlot.planMergeSnapshot;
+                }
                 targetSlot.activityLog = normalizeActivityLog(sourceSlot.activityLog, {
                     normalizeActivitiesArray,
                 });
