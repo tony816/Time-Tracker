@@ -7382,6 +7382,7 @@ class TimeTracker {
             const cancelType = isPointerEvent ? 'pointercancel' : (isTouchEvent ? 'touchcancel' : null);
             const documentListenerOptions = isTouchEvent ? { capture: true, passive: false } : true;
             const captureEl = (handle && handle.setPointerCapture) ? handle : (event.target && event.target.setPointerCapture ? event.target : resizeSurfaceEl);
+            const resizeController = this;
             if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) {
                 resizeSurfaceEl.classList.add('is-resizing-plan-segment', `plan-segment-resize-edge-${effectiveEdge}`);
             }
@@ -7427,44 +7428,46 @@ class TimeTracker {
                 };
 
                 const appendResizePreviewGuide = (layer, boundaryMinute) => {
-                    if (!layer || typeof document === 'undefined' || !document.createElement) return;
-                    const createSvgElement = (tagName) => (
-                        typeof document.createElementNS === 'function'
-                            ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
-                            : document.createElement(tagName)
-                    );
-                    const unitsPerRow = 6;
-                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
-                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
-                    const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
-                    if (!Number.isFinite(clampedMinute)) return;
-                    let boundaryUnit = Math.round(clampedMinute / 10);
-                    boundaryUnit = Math.max(0, Math.min(totalUnits, boundaryUnit));
-                    let rowIndex = Math.floor(boundaryUnit / unitsPerRow);
-                    let columnUnit = boundaryUnit % unitsPerRow;
-                    if (boundaryUnit > 0 && columnUnit === 0) {
-                        rowIndex -= 1;
-                        columnUnit = unitsPerRow;
-                    }
-                    rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
+                    try {
+                        if (!layer || typeof document === 'undefined' || !document.createElement) return;
+                        const createSvgElement = (tagName) => (
+                            typeof document.createElementNS === 'function'
+                                ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
+                                : document.createElement(tagName)
+                        );
+                        const unitsPerRow = 6;
+                        const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                        const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                        const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
+                        if (!Number.isFinite(clampedMinute)) return;
+                        let boundaryUnit = Math.round(clampedMinute / 10);
+                        boundaryUnit = Math.max(0, Math.min(totalUnits, boundaryUnit));
+                        let rowIndex = Math.floor(boundaryUnit / unitsPerRow);
+                        let columnUnit = boundaryUnit % unitsPerRow;
+                        if (boundaryUnit > 0 && columnUnit === 0) {
+                            rowIndex -= 1;
+                            columnUnit = unitsPerRow;
+                        }
+                        rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
 
-                    const guide = createSvgElement('svg');
-                    guide.className = 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow';
-                    guide.setAttribute('viewBox', '0 0 66 14');
-                    guide.setAttribute('width', '66');
-                    guide.setAttribute('height', '14');
-                    guide.setAttribute('aria-hidden', 'true');
-                    guide.setAttribute('focusable', 'false');
-                    if (guide.style) {
-                        guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
-                        guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
-                        guide.style.pointerEvents = 'none';
-                    }
-                    const path = createSvgElement('path');
-                    path.setAttribute('d', 'M28 7H0 M0 7L7 2 M0 7L7 12 M38 7H66 M66 7L59 2 M66 7L59 12');
-                    path.setAttribute('vector-effect', 'non-scaling-stroke');
-                    guide.appendChild(path);
-                    layer.appendChild(guide);
+                        const guide = createSvgElement('svg');
+                        guide.setAttribute('class', 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
+                        guide.setAttribute('viewBox', '0 0 66 14');
+                        guide.setAttribute('width', '66');
+                        guide.setAttribute('height', '14');
+                        guide.setAttribute('aria-hidden', 'true');
+                        guide.setAttribute('focusable', 'false');
+                        if (guide.style) {
+                            guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
+                            guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
+                            guide.style.pointerEvents = 'none';
+                        }
+                        const path = createSvgElement('path');
+                        path.setAttribute('d', 'M28 7H0 M0 7L7 2 M0 7L7 12 M38 7H66 M66 7L59 2 M66 7L59 12');
+                        path.setAttribute('vector-effect', 'non-scaling-stroke');
+                        guide.appendChild(path);
+                        layer.appendChild(guide);
+                    } catch (_) {}
                 };
 
                 const normalizePreviewLabel = (segment) => {
@@ -7608,15 +7611,15 @@ class TimeTracker {
                     appendResizePreviewGuide(layer, targetMinute);
                 };
 
-                const cleanup = () => {
+                function cleanup() {
                     if (cleanedUp) return;
                     cleanedUp = true;
                     removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
                         resizeSurfaceEl.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
                     }
-                    if (typeof this.clearActivePlanSegmentResizeClasses === 'function') {
-                        this.clearActivePlanSegmentResizeClasses(grid || entryDiv);
+                    if (typeof resizeController.clearActivePlanSegmentResizeClasses === 'function') {
+                        resizeController.clearActivePlanSegmentResizeClasses(grid || entryDiv);
                     }
                     document.removeEventListener(moveType, update, documentListenerOptions);
                     document.removeEventListener(upType, finish, documentListenerOptions);
@@ -7627,9 +7630,9 @@ class TimeTracker {
                             captureEl.releasePointerCapture(pointerId);
                         } catch (_) {}
                     }
-                };
+                }
 
-                const update = (moveEvent) => {
+                function update(moveEvent) {
                     const point = getPointFromEvent(moveEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -7637,9 +7640,9 @@ class TimeTracker {
                     updatePreview(lastClientX);
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
-                };
+                }
 
-                const finish = (upEvent) => {
+                function finish(upEvent) {
                     const point = getPointFromEvent(upEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -7652,17 +7655,22 @@ class TimeTracker {
                     const deltaMinutes = deltaUnits * 10;
                     if (deltaMinutes === 0) return;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    this.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
-                };
+                    resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
+                }
 
-                const cancel = () => {
+                function cancel() {
                     cleanup();
-                };
-                const keyCancel = (keyEvent) => {
+                }
+                function keyCancel(keyEvent) {
                     if (keyEvent && keyEvent.key !== 'Escape') return;
                     cleanup();
-                };
-                updatePreview(originX);
+                }
+                try {
+                    updatePreview(originX);
+                } catch (_) {
+                    cleanup();
+                    return false;
+                }
                 document.addEventListener(moveType, update, documentListenerOptions);
                 document.addEventListener(upType, finish, documentListenerOptions);
                 if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);
