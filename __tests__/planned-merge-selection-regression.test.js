@@ -4,9 +4,110 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const controller = require('../controllers/selection-overlay-controller');
+const planSegmentCore = require('../core/plan-segment-core');
+const stateCore = require('../core/timesheet-state-core');
+const { buildMethod } = require('./helpers/script-method-builder');
 
-const { selectFieldRange } = controller;
+const { selectFieldRange, undoMerge } = controller;
+const mergeSelectedFields = buildMethod('mergeSelectedFields(type)', '(type)');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
+
+function createSlot(overrides = {}) {
+    return {
+        time: '',
+        planned: '',
+        actual: '',
+        planActivities: [],
+        planTitle: '',
+        planTitleBandOn: false,
+        planSegmentTimers: {},
+        activityLog: {
+            title: '',
+            details: '',
+            subActivities: [],
+            titleBandOn: false,
+            actualGridUnits: [],
+            actualExtraGridUnits: [],
+            actualFailedGridUnits: [],
+            actualOverride: false,
+        },
+        ...overrides,
+    };
+}
+
+function createMergeContext(slots) {
+    return {
+        timeSlots: slots,
+        mergedFields: new Map(),
+        selectedPlannedFields: new Set(),
+        selectedActualFields: new Set(),
+        normalizePlanActivitiesArray(items) {
+            return Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+        },
+        normalizePlanActivitiesPreservingSegments(items) {
+            return Array.isArray(items)
+                ? items
+                    .filter((item) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+                    .map((item) => ({ ...item }))
+                : [];
+        },
+        normalizeActivitiesArray(items) {
+            return Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+        },
+        formatActivitiesSummary(items) {
+            return items.map((item) => item.label).join(' + ');
+        },
+        findMergeKey(type, index) {
+            for (const key of this.mergedFields.keys()) {
+                const [keyType, startStr, endStr] = key.split('-');
+                const start = parseInt(startStr, 10);
+                const end = parseInt(endStr, 10);
+                if (keyType === type && index >= start && index <= end) return key;
+            }
+            return null;
+        },
+        renderTimeEntriesCalls: 0,
+        renderTimeEntries() {
+            this.renderTimeEntriesCalls += 1;
+        },
+        clearAllSelectionsCalls: 0,
+        clearAllSelections() {
+            this.clearAllSelectionsCalls += 1;
+        },
+        calculateTotalsCalls: 0,
+        calculateTotals() {
+            this.calculateTotalsCalls += 1;
+        },
+        autoSaveCalls: 0,
+        autoSave() {
+            this.autoSaveCalls += 1;
+        },
+        showUndoButtonCalls: [],
+        showUndoButton(type, mergeKey) {
+            this.showUndoButtonCalls.push({ type, mergeKey });
+        },
+        notifications: [],
+        showNotification(message, type, options) {
+            this.notifications.push({ message, type, options });
+        },
+        hideUndoButton() {},
+        clearSelection() {},
+    };
+}
+
+function withDocumentQuery(value, fn) {
+    const originalDocument = global.document;
+    global.document = {
+        querySelector() {
+            return { value };
+        },
+    };
+    try {
+        return fn();
+    } finally {
+        global.document = originalDocument;
+    }
+}
 
 test('selectFieldRange expands to merged planned slot boundaries', () => {
     const ctx = {
@@ -52,4 +153,301 @@ test('merged planned drag start no longer depends on hold delay', () => {
 
     assert.match(anchor, /if \(movedPx >= 4\)/);
     assert.doesNotMatch(anchor, /elapsedMs\s*>=\s*220/);
+});
+
+test('mergeSelectedFields preserves segmented plan data, metadata, timers, and empty virtual-rest space', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'Morning',
+            planTitle: 'Title Band',
+            planTitleBandOn: true,
+            planActivities: [
+                {
+                    label: 'Focus',
+                    activityId: 'focus-id',
+                    activityText: 'Focus',
+                    titleActivityId: 'title-id',
+                    titleText: 'Title Band',
+                    seconds: 1200,
+                    startMinute: 0,
+                    endMinute: 20,
+                    durationMinutes: 20,
+                },
+                {
+                    label: 'Review',
+                    activityId: 'review-id',
+                    activityText: 'Review',
+                    seconds: 1200,
+                    startMinute: 40,
+                    endMinute: 60,
+                    durationMinutes: 20,
+                },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'paused', running: false, elapsedSeconds: 90, method: 'plan-segment' },
+                'planned-0-0-seg1': { status: 'running', running: true, startedAt: 555, method: 'plan-segment' },
+            },
+        }),
+        createSlot({ time: '5' }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+
+    withDocumentQuery('Morning', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(ctx.mergedFields.get('planned-0-1'), 'Focus + Review');
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        titleActivityId: item.titleActivityId,
+        titleText: item.titleText,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        {
+            label: 'Focus',
+            activityId: 'focus-id',
+            titleActivityId: 'title-id',
+            titleText: 'Title Band',
+            startMinute: 0,
+            endMinute: 20,
+            durationMinutes: 20,
+            seconds: 1200,
+        },
+        {
+            label: 'Review',
+            activityId: 'review-id',
+            titleActivityId: undefined,
+            titleText: undefined,
+            startMinute: 40,
+            endMinute: 60,
+            durationMinutes: 20,
+            seconds: 1200,
+        },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, {
+        startMinute: 0,
+        endMinute: 120,
+    }).map((gap) => ({ startMinute: gap.startMinute, durationMinutes: gap.durationMinutes })), [
+        { startMinute: 20, durationMinutes: 20 },
+        { startMinute: 60, durationMinutes: 60 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planTitle, 'Title Band');
+    assert.equal(ctx.timeSlots[0].planTitleBandOn, true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1-seg0'].status, 'paused');
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1-seg1'].status, 'running');
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
+    assert.deepEqual(ctx.timeSlots[1].planSegmentTimers, {});
+});
+
+test('mergeSelectedFields concatenates existing segmented merge boundaries in chronological order', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'A',
+            planActivities: [
+                { label: 'A1', seconds: 1800, startMinute: 0, endMinute: 30, durationMinutes: 30 },
+                { label: 'A2', seconds: 1200, startMinute: 40, endMinute: 60, durationMinutes: 20 },
+            ],
+        }),
+        createSlot({ time: '5' }),
+        createSlot({
+            time: '6',
+            planned: 'B',
+            planActivities: [
+                { label: 'B1', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+        }),
+    ]);
+    ctx.mergedFields.set('planned-0-1', 'A');
+    ctx.mergedFields.set('time-0-1', '4-5');
+    ctx.mergedFields.set('actual-0-1', '');
+    ctx.selectedPlannedFields = new Set([1, 2]);
+
+    withDocumentQuery('A', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(ctx.mergedFields.has('planned-0-1'), false);
+    assert.equal(ctx.mergedFields.has('planned-0-2'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A1', startMinute: 0, endMinute: 30 },
+        { label: 'A2', startMinute: 40, endMinute: 60 },
+        { label: 'B1', startMinute: 120, endMinute: 130 },
+    ]);
+});
+
+test('undoMerge restores original segmented slots and plan segment timers from merge metadata', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'A',
+            planActivities: [
+                { label: 'A', seconds: 1800, startMinute: 0, endMinute: 30, durationMinutes: 30 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 45, method: 'plan-segment' },
+            },
+        }),
+        createSlot({
+            time: '5',
+            planned: 'B',
+            planActivities: [
+                { label: 'B', seconds: 1200, startMinute: 10, endMinute: 30, durationMinutes: 20 },
+            ],
+            planSegmentTimers: {
+                'planned-1-1-seg0': { status: 'running', running: true, startedAt: 999, method: 'plan-segment' },
+            },
+        }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+    withDocumentQuery('A', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    undoMerge.call(ctx, 'planned', 'planned-0-1');
+
+    assert.equal(ctx.mergedFields.has('planned-0-1'), false);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['A']);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['B']);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].status, 'paused');
+    assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].status, 'running');
+    assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].startedAt, 999);
+});
+
+test('blocked segmented merge shows user notice and preserves state and selection', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'A',
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg99': { status: 'running', running: true, startedAt: 123 },
+            },
+        }),
+        createSlot({ time: '5', planned: '' }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+    const beforeSlots = JSON.stringify(ctx.timeSlots);
+    const beforeMerged = JSON.stringify([...ctx.mergedFields.entries()]);
+
+    withDocumentQuery('A', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(JSON.stringify(ctx.timeSlots), beforeSlots);
+    assert.equal(JSON.stringify([...ctx.mergedFields.entries()]), beforeMerged);
+    assert.deepEqual([...ctx.selectedPlannedFields], [0, 1]);
+    assert.equal(ctx.notifications.length, 1);
+    assert.equal(ctx.notifications[0].type, 'error');
+    assert.match(ctx.notifications[0].message, /계획 병합을 진행할 수 없습니다/);
+    assert.equal(ctx.renderTimeEntriesCalls, 0);
+    assert.equal(ctx.autoSaveCalls, 0);
+});
+
+test('undoMerge invalidates stale snapshot after merged base plan edit instead of restoring old data', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'A',
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {},
+        }),
+        createSlot({
+            time: '5',
+            planned: 'B',
+            planActivities: [
+                { label: 'B', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {},
+        }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+    withDocumentQuery('A', () => mergeSelectedFields.call(ctx, 'planned'));
+    assert.equal(Boolean(ctx.timeSlots[0].planMergeSnapshot), true);
+
+    ctx.timeSlots[0].planned = 'Edited after merge';
+    ctx.timeSlots[0].planActivities = [
+        { label: 'Edited', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+    ];
+
+    undoMerge.call(ctx, 'planned', 'planned-0-1');
+
+    assert.equal(ctx.timeSlots[0].planned, 'Edited after merge');
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Edited']);
+    assert.equal(ctx.timeSlots[1].planned, '');
+    assert.equal(ctx.timeSlots[0].planMergeSnapshot, undefined);
+});
+
+test('planMergeSnapshot survives state snapshot restore enough for undoMerge to restore segments and timers', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'A',
+            planActivities: [
+                { label: 'A', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 12 },
+            },
+        }),
+        createSlot({
+            time: '5',
+            planned: 'B',
+            planActivities: [
+                { label: 'B', seconds: 600, startMinute: 0, endMinute: 10, durationMinutes: 10 },
+            ],
+            planSegmentTimers: {
+                'planned-1-1-seg0': { status: 'running', running: true, startedAt: 345 },
+            },
+        }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+    withDocumentQuery('A', () => mergeSelectedFields.call(ctx, 'planned'));
+    assert.equal(Boolean(ctx.timeSlots[0].planMergeSnapshot), true);
+
+    const snapshot = stateCore.createStateSnapshot(ctx.timeSlots, ctx.mergedFields);
+    const restored = stateCore.restoreStateSnapshot(snapshot, {
+        templateSlots: [createSlot({ time: '4' }), createSlot({ time: '5' })],
+        normalizePlanActivitiesArray(items) {
+            return Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+        },
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        normalizeTimerStatus(status) {
+            const normalized = String(status || '').trim();
+            return normalized === 'running' || normalized === 'paused' || normalized === 'completed' || normalized === 'idle'
+                ? normalized
+                : 'idle';
+        },
+        normalizeActivitiesArray(items) {
+            return Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+        },
+        normalizeMergeKey(value) {
+            const text = String(value || '').trim();
+            return /^(planned|actual|time)-\d+-\d+$/.test(text) ? text : null;
+        },
+    });
+    const restoredCtx = createMergeContext(restored.timeSlots);
+    restoredCtx.mergedFields = restored.mergedFields;
+
+    undoMerge.call(restoredCtx, 'planned', 'planned-0-1');
+
+    assert.deepEqual(restoredCtx.timeSlots[0].planActivities.map((item) => item.label), ['A']);
+    assert.deepEqual(restoredCtx.timeSlots[1].planActivities.map((item) => item.label), ['B']);
+    assert.equal(restoredCtx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].status, 'paused');
+    assert.equal(restoredCtx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].status, 'running');
+    assert.equal(restoredCtx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].startedAt, 345);
+    assert.equal(restoredCtx.timeSlots[0].planMergeSnapshot, undefined);
 });

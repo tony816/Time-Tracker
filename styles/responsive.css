@@ -360,7 +360,6 @@
 
     body.inline-plan-sheet-open .inline-plan-sheet-context-target {
         position: relative;
-        z-index: 2;
         box-shadow:
             0 0 0 2px rgba(52, 152, 219, 0.42),
             0 8px 18px rgba(52, 152, 219, 0.12);
@@ -682,7 +681,6 @@ textarea:focus-visible,
 
     body.inline-plan-sheet-open .inline-plan-sheet-context-target {
         position: relative;
-        z-index: 2;
         box-shadow:
             0 0 0 2px rgba(52, 152, 219, 0.42),
             0 8px 18px rgba(52, 152, 219, 0.12);
@@ -779,8 +777,7 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle {
-        --plan-segment-handle-hitbox-width: 40px;
-        --plan-segment-handle-right-offset: -7px;
+        width: 40px;
         opacity: 1;
         touch-action: none;
     }
@@ -817,10 +814,14 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle-right {
-        right: var(--plan-segment-handle-right-offset);
+        right: -10px;
     }
 
     .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
-        right: var(--plan-segment-handle-right-offset);
+        right: -10px;
     }
-}
+
+    .plan-segment-boundary-resize-handle-line,
+    .plan-segment-resize-handle::after {
+        width: 12px;
+    }

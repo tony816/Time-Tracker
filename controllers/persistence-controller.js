@@ -26,6 +26,16 @@
         return null;
     }
 
+    function sanitizePlanMergeSnapshot(snapshot) {
+        const core = (root && root.TimeTrackerPlanSegmentCore && typeof root.TimeTrackerPlanSegmentCore === 'object')
+            ? root.TimeTrackerPlanSegmentCore
+            : null;
+        if (core && typeof core.sanitizePlanMergeSnapshot === 'function') {
+            return core.sanitizePlanMergeSnapshot(snapshot);
+        }
+        return null;
+    }
+
     function serializeSnapshotFallback() {
         let mergedFieldsObject = {};
         if (this.mergedFields instanceof Map) {
@@ -178,6 +188,12 @@
                             targetSlot.planSegmentTimers = (sourceSlot.planSegmentTimers && typeof sourceSlot.planSegmentTimers === 'object')
                                 ? JSON.parse(JSON.stringify(sourceSlot.planSegmentTimers))
                                 : {};
+                            const planMergeSnapshot = sanitizePlanMergeSnapshot(sourceSlot.planMergeSnapshot);
+                            if (planMergeSnapshot) {
+                                targetSlot.planMergeSnapshot = planMergeSnapshot;
+                            } else {
+                                delete targetSlot.planMergeSnapshot;
+                            }
                             targetSlot.activityLog = {
                                 title: String(sourceSlot.activityLog && sourceSlot.activityLog.title || ''),
                                 details: String(sourceSlot.activityLog && sourceSlot.activityLog.details || ''),

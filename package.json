@@ -11,6 +11,7 @@
     "test": "node --test __tests__/*.test.js",
     "test:plan-only": "node --test __tests__/plan-only-actual-removal.test.js",
     "test:actual-lock": "npm run test:plan-only",
+    "test:harness": "node scripts/validate-agent-harness.mjs && node --test __tests__/agent-harness-docs.test.js",
     "check:env": "node -e \"const fs=require('fs'); if(!fs.existsSync('.env')){console.error('Missing .env. Copy from .env.example'); process.exit(1)} console.log('.env present')\""
   },
   "dependencies": {

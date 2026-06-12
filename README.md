@@ -7,10 +7,11 @@ Static SPA for day planning, actual activity tracking, timer logging, local pers
 For new contributors or AI agents:
 
 1. `README.md`
-2. `docs/product-identity.md`
-3. `docs/ai-handoff-map.md`
-4. `docs/actual-lock-guardrails.md` only for actual-grid, locking, assigned-duration, locked rows, failed clicks, or extra allocation
-5. `docs/docs-index.md` for prompt docs or historical refactor notes
+2. `docs/agent-harness.md` for the work loop, surface routing, test mapping, and UI smoke rules
+3. `docs/product-identity.md` for product direction or UX decisions
+4. `docs/ai-handoff-map.md` for architecture context
+5. `docs/actual-lock-guardrails.md` only for actual-grid, locking, assigned-duration, locked rows, failed clicks, or extra allocation
+6. `docs/docs-index.md` when document selection is unclear
 
 ## Product Identity
 
@@ -40,7 +41,7 @@ The order matters because modules attach globals consumed by `script.js`.
 ## Risk Surfaces
 
 - Actual-grid locking, assigned-duration edits, locked rows, failed clicks, and extra allocation are one feature surface.
-- Planned selection, merge, inline dropdown, schedule hover button, and undo overlay are tightly coupled.
+- Planned selection, merge, inline dropdown, mobile bottom sheet, mobile segment resize, schedule hover button, and undo overlay are tightly coupled.
 - Persistence/sync spans in-memory state, local snapshot shape, and optional Supabase day sync.
 - Timer behavior spans eligibility, current-slot selection, actual input writes, and rendered controls.
 
@@ -52,16 +53,22 @@ python -m http.server 8000
 npm start
 npm run test:plan-only
 npm run test:actual-lock
+npm run test:harness
 npm test
 ```
 
 ## Validation Rules
 
 - UI-impacting changes require browser validation with Playwright or equivalent unless explicitly skipped.
+- Agent-harness changes require `npm run test:harness` before `npm test`.
 - For actual-grid locking/locked rows/assigned-duration/failed clicks/extra allocation:
   - read `docs/actual-lock-guardrails.md`
   - run `npm run test:actual-lock` before `npm test`
   - run the documented browser smoke checks
+- For planned selection/dropdown/mobile bottom sheet/mobile segment resize:
+  - read `docs/agent-harness.md`
+  - run the mapped targeted tests before `npm test`
+  - run desktop and mobile browser smoke if UI behavior can change
 
 ## Persistence / Sync
 
@@ -81,6 +88,8 @@ Optional Supabase table: `timesheet_days`.
 
 ## Documentation Map
 
+- `docs/agent-harness.md`: Codex work loop, surface routing, test mapping, mobile planned segment risk, browser smoke rules
+- `docs/harness-quality-score.md`: Codex-readability scorecard and missing harness inventory
 - `docs/product-identity.md`: product identity and anti-shallow checklist
 - `docs/ai-handoff-map.md`: current architecture, read paths, test mapping
 - `docs/actual-lock-guardrails.md`: actual-grid checklist

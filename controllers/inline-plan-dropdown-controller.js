@@ -360,6 +360,15 @@ function scheduleInlinePlanViewportSync() {
             } else if (currentAnchor) {
                 this.positionInlinePlanDropdown(currentAnchor);
             }
+            if (
+                this.inlinePlanDropdown
+                && this.inlinePlanDropdown.classList
+                && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
+                && this.inlinePlanSheetTargetEl
+                && typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function'
+            ) {
+                this.scheduleInlinePlanSheetTargetViewportCorrection(this.inlinePlanSheetTargetEl);
+            }
             if (priorityAnchor) this.positionInlinePriorityMenu(priorityAnchor);
         };
 
@@ -379,14 +388,16 @@ function scheduleInlinePlanViewportSync() {
     }
 
 function getInlinePlanViewportMetrics() {
-        const docEl = document.documentElement;
-        const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
-        const layoutScrollY = window.scrollY || docEl.scrollTop || 0;
-        const vv = (typeof window !== 'undefined' && window.visualViewport) ? window.visualViewport : null;
+        const root = typeof window !== 'undefined' ? window : globalThis;
+        const doc = typeof document !== 'undefined' ? document : { documentElement: {} };
+        const docEl = doc.documentElement || {};
+        const layoutScrollX = Number(root && root.scrollX) || Number(docEl.scrollLeft) || 0;
+        const layoutScrollY = Number(root && root.scrollY) || Number(docEl.scrollTop) || 0;
+        const vv = (root && root.visualViewport) ? root.visualViewport : null;
         const viewportLeft = vv ? (layoutScrollX + vv.offsetLeft) : layoutScrollX;
         const viewportTop = vv ? (layoutScrollY + vv.offsetTop) : layoutScrollY;
-        const viewportWidth = vv ? vv.width : (docEl.clientWidth || window.innerWidth || 0);
-        const viewportHeight = vv ? vv.height : (docEl.clientHeight || window.innerHeight || 0);
+        const viewportWidth = vv ? vv.width : (Number(docEl.clientWidth) || Number(root && root.innerWidth) || 0);
+        const viewportHeight = vv ? vv.height : (Number(docEl.clientHeight) || Number(root && root.innerHeight) || 0);
 
         return {
             left: viewportLeft,
@@ -396,6 +407,113 @@ function getInlinePlanViewportMetrics() {
             right: viewportLeft + viewportWidth,
             bottom: viewportTop + viewportHeight,
         };
+    }
+
+function measureInlinePlanPanel(panel, fallbackWidth = 0) {
+        if (!panel) return { width: fallbackWidth, height: 0 };
+        const rect = typeof panel.getBoundingClientRect === 'function'
+            ? panel.getBoundingClientRect()
+            : null;
+        const width = Number.isFinite(rect && rect.width) && rect.width > 0
+            ? Number(rect.width)
+            : Math.max(Number(panel.offsetWidth) || 0, Number(panel.scrollWidth) || 0, Number(fallbackWidth) || 0);
+        const height = Number.isFinite(rect && rect.height) && rect.height > 0
+            ? Number(rect.height)
+            : Math.max(Number(panel.offsetHeight) || 0, Number(panel.scrollHeight) || 0);
+        return { width, height };
+    }
+
+function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
+        if (!panel || !anchorRect) return null;
+        let viewport = this.getInlinePlanViewportMetrics
+            ? this.getInlinePlanViewportMetrics()
+            : getInlinePlanViewportMetrics.call(this);
+        if ((!viewport || !Number(viewport.width) || !Number(viewport.height)) && options.fallbackViewport) {
+            viewport = options.fallbackViewport;
+        }
+        const positionMode = options.positionMode === 'fixed' ? 'fixed' : 'absolute';
+        const margin = Number.isFinite(options.margin) ? options.margin : 12;
+        const gap = Number.isFinite(options.gap) ? options.gap : 6;
+        const minHeight = Math.max(1, Number(options.minHeight) || 1);
+        const preferredWidth = Number.isFinite(options.preferredWidth) ? options.preferredWidth : 420;
+        const layoutViewport = positionMode === 'fixed'
+            ? {
+                left: 0,
+                top: 0,
+                width: viewport.width,
+                height: viewport.height,
+                right: viewport.width,
+                bottom: viewport.height,
+            }
+            : viewport;
+        const maxAllowedWidth = Math.max(1, layoutViewport.width - (margin * 2));
+        const width = Math.max(
+            1,
+            Math.min(
+                maxAllowedWidth,
+                Math.max(Number(options.minWidth) || 1, preferredWidth)
+            )
+        );
+        const rectLeft = Number.isFinite(anchorRect.left) ? Number(anchorRect.left) : 0;
+        const rectTop = Number.isFinite(anchorRect.top) ? Number(anchorRect.top) : 0;
+        const rectRight = Number.isFinite(anchorRect.right)
+            ? Number(anchorRect.right)
+            : rectLeft + (Number(anchorRect.width) || 0);
+        const rectBottom = Number.isFinite(anchorRect.bottom)
+            ? Number(anchorRect.bottom)
+            : rectTop + (Number(anchorRect.height) || 0);
+        const anchorWidth = Math.max(0, rectRight - rectLeft);
+        const root = typeof window !== 'undefined' ? window : globalThis;
+        const docEl = typeof document !== 'undefined' && document.documentElement ? document.documentElement : {};
+        const layoutScrollX = (root && Number(root.scrollX)) || Number(docEl.scrollLeft) || 0;
+        const layoutScrollY = (root && Number(root.scrollY)) || Number(docEl.scrollTop) || 0;
+        const anchorLeft = positionMode === 'fixed' ? rectLeft : layoutScrollX + rectLeft;
+        const anchorTop = positionMode === 'fixed' ? rectTop : layoutScrollY + rectTop;
+        const anchorBottom = positionMode === 'fixed' ? rectBottom : layoutScrollY + rectBottom;
+        let left = options.align === 'center'
+            ? anchorLeft + (anchorWidth / 2) - (width / 2)
+            : anchorLeft;
+        left = Math.max(layoutViewport.left + margin, Math.min(left, layoutViewport.right - width - margin));
+
+        panel.style.width = `${Math.round(width)}px`;
+        panel.style.minWidth = `${Math.round(width)}px`;
+        panel.style.maxHeight = '';
+        panel.style.visibility = 'hidden';
+        panel.style.left = '0px';
+        panel.style.top = '0px';
+
+        const measured = measureInlinePlanPanel(panel, width);
+        const naturalHeight = Math.max(1, measured.height || Number(options.fallbackHeight) || minHeight);
+        const spaceBelow = Math.max(0, Math.floor(layoutViewport.bottom - anchorBottom - gap - margin));
+        const spaceAbove = Math.max(0, Math.floor(anchorTop - layoutViewport.top - gap - margin));
+        const requiredHeight = Math.min(naturalHeight, minHeight);
+        const preferAbove = options.prefer === 'above';
+        const forceBelow = options.forceBelow === true;
+        let placeAbove = false;
+        if (!forceBelow) {
+            if (preferAbove && spaceAbove >= requiredHeight) {
+                placeAbove = true;
+            } else if (spaceBelow < requiredHeight && spaceAbove > spaceBelow) {
+                placeAbove = true;
+            }
+        }
+        let available = placeAbove ? spaceAbove : spaceBelow;
+        if (available < 1) {
+            available = Math.max(1, layoutViewport.height - (margin * 2));
+        }
+        if (Number.isFinite(options.maxHeight) && options.maxHeight > 0) {
+            available = Math.min(available, options.maxHeight);
+        }
+        const maxHeight = Math.max(1, Math.floor(available));
+        const height = Math.min(naturalHeight, maxHeight);
+        let top = placeAbove ? anchorTop - height - gap : anchorBottom + gap;
+        top = Math.max(layoutViewport.top + margin, Math.min(top, layoutViewport.bottom - height - margin));
+
+        panel.style.left = `${Math.round(left)}px`;
+        panel.style.top = `${Math.round(top)}px`;
+        panel.style.maxHeight = `${Math.round(maxHeight)}px`;
+        panel.style.visibility = 'visible';
+        return { left, top, width, maxHeight, placement: placeAbove ? 'above' : 'below' };
     }
 
 function getInlinePlanMinimumInteractiveHeight(dropdown = this.inlinePlanDropdown) {
@@ -537,7 +655,6 @@ function positionInlinePlanDropdown(anchorEl) {
             }
             return;
         }
-        const viewport = this.getInlinePlanViewportMetrics();
         const margin = 12;
         const gap = 6;
         const preferredWidth = 420;
@@ -546,8 +663,6 @@ function positionInlinePlanDropdown(anchorEl) {
         const expandedWidth = Number.isFinite(requestedMinWidth) && requestedMinWidth > preferredWidth
             ? requestedMinWidth
             : preferredWidth;
-        const maxWidth = Math.max(240, viewport.width - (margin * 2));
-        const dropdownWidth = Math.min(expandedWidth, maxWidth);
         const anchor = this.resolveInlinePlanAnchor(anchorEl);
         if (!anchor) return;
         const target = getInlinePlanTargetState.call(this);
@@ -556,79 +671,18 @@ function positionInlinePlanDropdown(anchorEl) {
         }
         const rect = getInlinePlanRangeAnchorRect.call(this, anchor, target);
         if (!rect || (!rect.width && !rect.height)) return;
-        const docEl = document.documentElement;
-        const layoutScrollX = window.scrollX || docEl.scrollLeft || 0;
-        const layoutScrollY = window.scrollY || docEl.scrollTop || 0;
-        const anchorLeft = layoutScrollX + rect.left;
-        const anchorTop = layoutScrollY + rect.top;
-        const anchorBottom = layoutScrollY + rect.bottom;
-        dropdown.style.minWidth = `${dropdownWidth}px`;
-        dropdown.style.width = `${dropdownWidth}px`;
-
         const alignToCenter = target?.mode === 'plan-segment-replace'
             && target?.anchorAlign === 'center';
-        let left = alignToCenter
-            ? anchorLeft + (rect.width / 2) - (dropdownWidth / 2)
-            : anchorLeft;
-        const maxLeft = viewport.right - dropdownWidth - margin;
-        if (left > maxLeft) {
-            left = Math.max(viewport.left + margin, maxLeft);
-        }
-        if (left < viewport.left + margin) {
-            left = viewport.left + margin;
-        }
-
-        dropdown.style.visibility = 'hidden';
-        dropdown.style.left = '0px';
-        dropdown.style.top = '0px';
-        dropdown.style.maxHeight = '';
-
-        const naturalHeight = Math.max(
-            Number(dropdown.scrollHeight) || 0,
-            Number(dropdown.offsetHeight) || 0
-        );
-        const minimumInteractiveHeight = this.getInlinePlanMinimumInteractiveHeight(dropdown);
-        const fallbackHeight = Math.max(1, Math.floor(viewport.height - (margin * 2)));
-        const rawSpaceBelow = Math.max(0, Math.floor(viewport.bottom - anchorBottom - gap - margin));
-        const rawSpaceAbove = Math.max(0, Math.floor(anchorTop - viewport.top - gap - margin));
-        const isMobileInputContext = this.isInlinePlanMobileInputContext();
-
-        const forceBelow = isMobileInputContext;
-
-        let placeAbove = false;
-        if (!forceBelow) {
-            if (rawSpaceBelow <= 0 && rawSpaceAbove > 0) {
-                placeAbove = true;
-            } else if (
-                rawSpaceBelow < minimumInteractiveHeight
-                && rawSpaceAbove > rawSpaceBelow
-                && rawSpaceAbove >= Math.min(minimumInteractiveHeight, naturalHeight || minimumInteractiveHeight)
-            ) {
-                placeAbove = true;
-            }
-        }
-
-        let available = placeAbove ? rawSpaceAbove : rawSpaceBelow;
-        if (available <= 0) {
-            available = forceBelow ? 1 : fallbackHeight;
-        }
-
-        const maxHeight = Math.max(1, available > 0 ? Math.floor(available) : fallbackHeight);
-        dropdown.style.maxHeight = `${maxHeight}px`;
-
-        const estimatedHeight = Math.min(maxHeight, naturalHeight || maxHeight);
-        let top = placeAbove
-            ? (anchorTop - estimatedHeight - gap)
-            : (anchorBottom + gap);
-
-        if (placeAbove) {
-            const minTop = viewport.top + margin;
-            if (top < minTop) top = minTop;
-        }
-
-        dropdown.style.left = `${Math.round(left)}px`;
-        dropdown.style.top = `${Math.round(top)}px`;
-        dropdown.style.visibility = 'visible';
+        const layoutAnchoredPanel = this.layoutInlinePlanAnchoredPanel || layoutInlinePlanAnchoredPanel;
+        layoutAnchoredPanel.call(this, dropdown, rect, {
+            margin,
+            gap,
+            positionMode: 'absolute',
+            preferredWidth: expandedWidth,
+            minWidth: Math.min(240, expandedWidth),
+            minHeight: this.getInlinePlanMinimumInteractiveHeight(dropdown),
+            align: alignToCenter ? 'center' : 'left',
+        });
         if (this.positionInlinePlanChildPopover) {
             this.positionInlinePlanChildPopover(this.inlinePlanChildPopoverAnchorEl || anchorEl || null);
         }
@@ -729,10 +783,7 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const anchorRect = resolvedAnchor.getBoundingClientRect();
         if (!dropdownRect || !anchorRect) return;
 
-        const dropdownWidth = Number.isFinite(dropdownRect.width) ? dropdownRect.width : 0;
         const anchorLeft = Number.isFinite(anchorRect.left) ? anchorRect.left : 0;
-        const anchorTop = Number.isFinite(anchorRect.top) ? anchorRect.top : 0;
-        const anchorBottom = Number.isFinite(anchorRect.bottom) ? anchorRect.bottom : (anchorTop + (Number.isFinite(anchorRect.height) ? anchorRect.height : 0));
 
         const useFlowLayout = Boolean(
             this.isInlinePlanMobileInputContext && this.isInlinePlanMobileInputContext()
@@ -779,62 +830,44 @@ function positionInlinePlanChildPopover(anchorEl = null) {
         const minWidth = 300;
         const maxWidth = 360;
         const minPopoverHeight = 280;
-        const preferredPopoverHeight = 360;
         const maxPopoverHeight = 420;
-        const width = Math.max(minWidth, Math.min(maxWidth, Math.floor(dropdownWidth - (margin * 2)) || maxWidth));
-        let left = Math.round(anchorLeft);
-        const viewportWidth = (typeof window !== 'undefined' && Number.isFinite(window.innerWidth))
-            ? window.innerWidth
-            : ((Number.isFinite(dropdownRect.right) ? dropdownRect.right : dropdownWidth) + margin);
-        if (left + width > viewportWidth - margin) {
-            left = Math.max(margin, Math.round(viewportWidth - width - margin));
-        }
-        left = Math.max(margin, left);
-
-        const viewportHeight = (typeof window !== 'undefined' && Number.isFinite(window.innerHeight))
-            ? window.innerHeight
-            : ((Number.isFinite(dropdownRect.bottom) ? dropdownRect.bottom : 0) + 600);
-        const topBelow = Math.round(anchorBottom + gap);
-        const availableBelow = Math.max(0, Math.floor(viewportHeight - anchorBottom - margin));
-        const naturalHeight = Math.max(Number(section.scrollHeight) || 0, Number(section.offsetHeight) || 0);
-        const popoverHeight = Math.min(
-            maxPopoverHeight,
-            Math.max(minPopoverHeight, naturalHeight || preferredPopoverHeight)
-        );
-        const boundedHeight = Math.max(80, Math.min(popoverHeight, availableBelow || popoverHeight));
-        const top = Math.max(margin, topBelow);
-
-        const anchorCenter = anchorLeft + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
-        const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
-        const placeSectionBelowAnchor = () => {
-            if (!resolvedAnchor || typeof resolvedAnchor.getBoundingClientRect !== 'function') return false;
-
-            const nextAnchorRect = resolvedAnchor.getBoundingClientRect();
-            if (!nextAnchorRect) return false;
-
-            const nextAnchorTop = Number.isFinite(nextAnchorRect.top) ? nextAnchorRect.top : 0;
-            const nextAnchorBottom = Number.isFinite(nextAnchorRect.bottom)
-                ? nextAnchorRect.bottom
-                : nextAnchorTop + (Number.isFinite(nextAnchorRect.height) ? nextAnchorRect.height : 0);
-            const nextTopBelow = Math.round(nextAnchorBottom + gap);
-            const nextTop = Math.max(margin, nextTopBelow);
-            section.style.top = `${nextTop}px`;
-
-            return true;
-        };
-
+        const root = typeof window !== 'undefined' ? window : globalThis;
+        const fallbackViewportWidth = Number(root && root.innerWidth)
+            || (Number.isFinite(dropdownRect.right) ? dropdownRect.right + margin : 0)
+            || 800;
+        const fallbackViewportHeight = Number(root && root.innerHeight)
+            || (Number.isFinite(dropdownRect.bottom) ? dropdownRect.bottom + 600 : 0)
+            || 600;
         section.style.position = 'fixed';
-        section.style.top = `${top}px`;
-        section.style.left = `${left}px`;
-        section.style.width = `${width}px`;
-        section.style.maxWidth = `${width}px`;
-        section.style.maxHeight = `${boundedHeight}px`;
         section.style.marginTop = '0';
         section.style.right = 'auto';
         section.style.bottom = 'auto';
         section.style.overflow = 'hidden';
-        section.style.visibility = 'visible';
         section.style.zIndex = '80';
+        const layoutAnchoredPanel = this.layoutInlinePlanAnchoredPanel || layoutInlinePlanAnchoredPanel;
+        const layout = layoutAnchoredPanel.call(this, section, anchorRect, {
+            margin,
+            gap,
+            positionMode: 'fixed',
+            preferredWidth: maxWidth,
+            minWidth,
+            minHeight: minPopoverHeight,
+            maxHeight: maxPopoverHeight,
+            align: 'left',
+            fallbackViewport: {
+                left: 0,
+                top: 0,
+                right: fallbackViewportWidth,
+                bottom: fallbackViewportHeight,
+                width: fallbackViewportWidth,
+                height: fallbackViewportHeight,
+            },
+        });
+        const width = layout && Number.isFinite(layout.width) ? layout.width : maxWidth;
+        const left = layout && Number.isFinite(layout.left) ? layout.left : anchorLeft;
+        section.style.maxWidth = `${Math.round(width)}px`;
+        const anchorCenter = anchorLeft + Math.max(0, Math.floor((Number.isFinite(anchorRect.width) ? anchorRect.width : 0) / 2));
+        const notchLeft = Math.max(16, Math.min(width - 16, anchorCenter - left));
         section.style.setProperty('--inline-plan-subsection-notch-left', `${Math.round(notchLeft)}px`);
         const anchoredBoard = queryInlinePlanChildPopoverPart(section, this.inlinePlanDropdown, '.inline-plan-sub-board');
         const header = queryInlinePlanChildPopoverPart(section, this.inlinePlanDropdown, '.inline-plan-subsection-head');
@@ -847,17 +880,10 @@ function positionInlinePlanChildPopover(anchorEl = null) {
                 ? Math.ceil(actions.getBoundingClientRect().height || 0)
                 : 0;
             const verticalPadding = 24;
+            const boundedHeight = layout && Number.isFinite(layout.maxHeight) ? layout.maxHeight : minPopoverHeight;
             const boardMaxHeight = Math.max(72, boundedHeight - headerHeight - actionsHeight - verticalPadding - gap);
             anchoredBoard.style.maxHeight = `${boardMaxHeight}px`;
             anchoredBoard.style.overflow = 'auto';
-        }
-        if (!this.inlinePlanChildPopoverAutoScrolling) {
-            this.inlinePlanChildPopoverAutoScrolling = true;
-            try {
-                placeSectionBelowAnchor();
-            } finally {
-                this.inlinePlanChildPopoverAutoScrolling = false;
-            }
         }
         this.inlinePlanChildPopoverAnchorEl = resolvedAnchor;
     }
@@ -2204,6 +2230,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         const sheetTargetEl = options && options.sheetTargetEl && typeof options.sheetTargetEl.getBoundingClientRect === 'function'
             ? options.sheetTargetEl
             : anchor;
+        this.inlinePlanSheetTargetEl = sheetTargetEl;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
             if (
                 this.inlinePlanDropdown.classList
@@ -2249,6 +2276,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                     keepInlineEditor: Boolean(options.keepInlineEditor),
                 }
             : { ...range, anchor, keepInlineEditor: Boolean(options.keepInlineEditor) };
+        this.inlinePlanSheetTargetEl = sheetTargetEl;
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
             : null;
@@ -2291,7 +2319,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
 
         const input = dropdown.querySelector('.inline-plan-input');
         const addBtn = dropdown.querySelector('.inline-plan-add-btn');
-        const clearBtn = dropdown.querySelector('.inline-plan-sync-btn');
         const closeBtn = dropdown.querySelector('.inline-plan-close-btn');
         this.inlinePlanInputFocusHandler = null;
         const runInlineNotionSync = async () => {
@@ -2336,74 +2363,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 this.applyInlinePlanSelection(val, applyOptions);
             }
         };
-        const clearHandler = () => {
-            const target = this.inlinePlanTarget;
-            if (!target) return;
-            const startIndex = Number.isInteger(target.startIndex) ? target.startIndex : 0;
-            const endIndex = Number.isInteger(target.endIndex) ? target.endIndex : startIndex;
-            const baseIndex = Math.min(startIndex, endIndex);
-
-            const previousLabel = this.getPlannedValueForIndex(baseIndex);
-            const routine = previousLabel ? this.findRoutineForLabelAtIndex(previousLabel, baseIndex) : null;
-
-            if (routine && this.ensureRoutinesAvailableOrNotify()) {
-                const routineChanged = this.passRoutineForDate(routine.id, this.currentDate);
-                if (routineChanged) {
-                    this.scheduleSupabaseRoutineSave();
-                }
-                this.clearRoutineRangeForDate(routine, this.currentDate);
-            } else {
-                if (target.mergeKey && this.mergedFields && this.mergedFields.has(target.mergeKey)) {
-                    this.mergedFields.delete(target.mergeKey);
-                }
-                for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
-                    if (!this.timeSlots[i]) continue;
-                    this.timeSlots[i].planned = '';
-                    this.timeSlots[i].planActivities = [];
-                    this.timeSlots[i].planTitle = '';
-                    this.timeSlots[i].planTitleBandOn = false;
-                }
-            }
-            for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
-                if (!this.timeSlots[i]) continue;
-                if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
-                    this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
-                }
-                this.timeSlots[i].activityLog.subActivities = [];
-                this.timeSlots[i].activityLog.actualGridUnits = [];
-                this.timeSlots[i].activityLog.actualExtraGridUnits = [];
-                this.timeSlots[i].activityLog.actualFailedGridUnits = [];
-                this.timeSlots[i].activityLog.actualOverride = false;
-            }
-            this.modalPlanActivities = [];
-            this.modalPlanActiveRow = -1;
-            this.modalPlanTitle = '';
-            this.modalPlanTitleBandOn = false;
-            if (this.inlinePlanContext && this.inlinePlanContext.titleInput) {
-                this.inlinePlanContext.titleInput.value = '';
-            }
-            if (this.inlinePlanContext && this.inlinePlanContext.titleToggle) {
-                this.inlinePlanContext.titleToggle.checked = false;
-            }
-            if (this.inlinePlanContext && this.inlinePlanContext.titleField) {
-                this.inlinePlanContext.titleField.hidden = true;
-            }
-            this.renderPlanActivitiesList();
-            this.renderTimeEntries(true);
-            this.calculateTotals();
-            this.autoSave();
-            this.renderInlinePlanDropdownOptions();
-
-            if (getInlinePlanTargetState.call(this)) {
-                const anchor = document.querySelector(`[data-index="${baseIndex}"] .planned-input`)
-                    || document.querySelector(`[data-index="${baseIndex}"]`);
-                if (anchor) {
-                    setInlinePlanAnchorState.call(this, anchor);
-                    this.positionInlinePlanDropdown(anchor);
-                }
-            }
-        };
-
         if (input) {
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.isComposing) {
@@ -2428,11 +2387,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         }
         if (addBtn) {
             addBtn.addEventListener('click', addHandler);
-        }
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                clearHandler();
-            });
         }
         if (closeBtn) {
             closeBtn.addEventListener('click', (event) => {
@@ -2734,6 +2688,7 @@ function closeInlinePlanDropdown() {
         this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePlanChildPopoverAnchorSectionKey = null;
         this.inlinePlanChildPopoverAnchorInstanceKey = null;
+        this.inlinePlanSheetTargetEl = null;
         this.inlinePlanContext = null;
         this.inlinePlanInputIntentUntil = 0;
     }
@@ -2835,6 +2790,8 @@ function applyInlinePlanSelection(label, options = {}) {
         scheduleInlinePlanInputVisibilitySync,
         scheduleInlinePlanViewportSync,
         getInlinePlanViewportMetrics,
+        measureInlinePlanPanel,
+        layoutInlinePlanAnchoredPanel,
         getInlinePlanMinimumInteractiveHeight,
         getInlinePlanDropdownScrollContainer,
         scrollChildPopoverIntoDropdownView,

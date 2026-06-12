@@ -83,7 +83,7 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
-        /const layoutScrollY = window\.scrollY \|\| docEl\.scrollTop \|\| 0;[\s\S]*?const anchorTop = layoutScrollY \+ rect\.top;[\s\S]*?const anchorBottom = layoutScrollY \+ rect\.bottom;/
+        /function layoutInlinePlanAnchoredPanel\(panel, anchorRect, options = \{\}\) \{[\s\S]*?const positionMode = options\.positionMode === 'fixed' \? 'fixed' : 'absolute';[\s\S]*?const layoutScrollY = \(root && Number\(root\.scrollY\)\) \|\| Number\(docEl\.scrollTop\) \|\| 0;[\s\S]*?const anchorTop = positionMode === 'fixed' \? rectTop : layoutScrollY \+ rectTop;[\s\S]*?const anchorBottom = positionMode === 'fixed' \? rectBottom : layoutScrollY \+ rectBottom;/
     );
     assert.doesNotMatch(
         controllerSource,
@@ -91,19 +91,27 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
-        /const minimumInteractiveHeight = this\.getInlinePlanMinimumInteractiveHeight\(dropdown\);/
+        /positionInlinePlanChildPopover\(anchorEl = null\) \{[\s\S]*?positionMode: 'fixed'/
     );
     assert.match(
         controllerSource,
-        /const rawSpaceBelow = Math\.max\(0, Math\.floor\(viewport\.bottom - anchorBottom - gap - margin\)\);/
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?positionMode: 'absolute'/
     );
     assert.match(
         controllerSource,
-        /rawSpaceBelow < minimumInteractiveHeight[\s\S]*?rawSpaceAbove > rawSpaceBelow/
+        /minHeight: this\.getInlinePlanMinimumInteractiveHeight\(dropdown\),/
     );
     assert.match(
         controllerSource,
-        /const maxHeight = Math\.max\(1, available > 0 \? Math\.floor\(available\) : fallbackHeight\);/
+        /const spaceBelow = Math\.max\(0, Math\.floor\(layoutViewport\.bottom - anchorBottom - gap - margin\)\);/
+    );
+    assert.match(
+        controllerSource,
+        /const spaceAbove = Math\.max\(0, Math\.floor\(anchorTop - layoutViewport\.top - gap - margin\)\);[\s\S]*?spaceBelow < requiredHeight[\s\S]*?spaceAbove > spaceBelow/
+    );
+    assert.match(
+        controllerSource,
+        /const maxHeight = Math\.max\(1, Math\.floor\(available\)\);/
     );
     assert.doesNotMatch(
         controllerSource,
