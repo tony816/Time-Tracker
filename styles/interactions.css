@@ -2362,11 +2362,8 @@ button.activity-chip,
   box-sizing: border-box;
   --plan-segment-handle-hitbox-width: 30px;
   --plan-segment-handle-visual-width: 8px;
-  --plan-segment-handle-inner-width: 4px;
-  --plan-segment-handle-inner-y-inset: 3px;
   --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
   --plan-segment-handle-stroke: rgba(17, 24, 39, 0.94);
-  --plan-segment-handle-shell: rgba(255, 255, 255, 0.94);
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
@@ -2389,30 +2386,19 @@ button.activity-chip,
   right: 3px;
   width: var(--plan-segment-handle-visual-width);
   border-radius: 999px;
-  background: var(--plan-segment-handle-shell);
+  background: color-mix(in srgb, var(--plan-segment-handle-color) 34%, #ffffff 66%);
   border: 1px solid var(--plan-segment-handle-stroke);
   box-sizing: border-box;
   pointer-events: none;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.18),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
 }
 
 .plan-segment-boundary-resize-handle-line {
-  display: grid;
-  place-items: center;
+  display: block;
 }
 
 .plan-segment-boundary-resize-handle-line::after {
-  content: '';
-  position: static;
-  width: var(--plan-segment-handle-inner-width);
-  height: calc(100% - (var(--plan-segment-handle-inner-y-inset) * 2));
-  border-radius: 999px;
-  background: var(--plan-segment-handle-color);
-  border: 1px solid var(--plan-segment-handle-stroke);
-  box-sizing: border-box;
-  pointer-events: none;
+  content: none;
 }
 
 .plan-segment-boundary-resize-handle::after {
@@ -2425,11 +2411,9 @@ button.activity-chip,
 .plan-segment-resize-handle:focus-visible::after,
 .split-grid-segment.is-resizing-plan-segment .plan-segment-boundary-resize-handle-line,
 .split-grid-segment.is-resizing-plan-segment .plan-segment-resize-handle::after {
-  background: #ffffff;
+  background: color-mix(in srgb, var(--plan-segment-handle-color) 42%, #ffffff 58%);
   border-color: var(--plan-segment-handle-stroke);
-  box-shadow:
-    0 2px 5px rgba(15, 23, 42, 0.25),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.86);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.24);
 }
 
 .split-grid-segment.is-resizing-plan-segment {
