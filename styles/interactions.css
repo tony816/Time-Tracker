@@ -822,8 +822,7 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   outline: none;
 }
 
-.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn,
-.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
+.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-add-btn {
   grid-row: 1;
   width: 30px;
   height: 30px;
@@ -842,13 +841,7 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   margin-left: 2px;
 }
 
-.inline-plan-input-row.inline-plan-input-row-mobile-close .inline-plan-sync-btn {
-  grid-column: 4;
-  margin-left: 2px;
-}
-
-.inline-plan-add-btn,
-.inline-plan-sync-btn {
+.inline-plan-add-btn {
   padding: 8px 10px;
   border: 1px solid #dcdfe3;
   border-radius: 8px;
@@ -872,19 +865,8 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   border-color: #3498db;
 }
 
-.inline-plan-sync-btn {
-  background: #e74c3c;
-  color: white;
-  border-color: #e74c3c;
-}
-
 .inline-plan-add-btn:hover {
   background: #2980b9;
-}
-
-.inline-plan-sync-btn:hover {
-  background: #c0392b;
-  border-color: #c0392b;
 }
 
 .inline-plan-options {
@@ -2326,11 +2308,32 @@ button.activity-chip,
   font-weight: 700;
 }
 
+.plan-segment-resize-preview-guide {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: 66px;
+  height: 14px;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.1s ease;
+}
+
+.plan-segment-resize-preview-guide path {
+  fill: none;
+  stroke: rgba(37, 99, 235, 0.72);
+  stroke-width: 2.7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .plan-segment-resize-handle {
   position: absolute;
   top: 50%;
   width: 30px;
-  height: min(50px, calc(100% - 10px));
+  height: min(64px, calc(100% - 4px));
   z-index: 12;
   cursor: ew-resize;
   opacity: 1;
@@ -2348,11 +2351,11 @@ button.activity-chip,
 }
 
 .plan-segment-resize-handle-right {
-  right: -5px;
+  right: -15px;
 }
 
 .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
-  right: -5px;
+  right: -15px;
 }
 
 .plan-segment-boundary-resize-handle-shared {

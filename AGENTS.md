@@ -29,12 +29,19 @@
 - PRs: summary/rationale, validation steps, screenshots/GIFs for UI changes, data compatibility notes for storage/schema changes.
 - Keep patches small and focused.
 
+## Agent Harness
+
+- Use `docs/agent-harness.md` for the Codex work loop, read path/test path table, mobile planned segment risk surface, and UI smoke rules.
+- Use `docs/harness-quality-score.md` when improving the repo-local harness or judging missing docs/tests/smoke coverage.
+- Harness changes must run `npm run test:harness` before `npm test`.
+- Planned selection, merge, inline dropdown, mobile bottom sheet, and mobile segment resize are one coupled surface; use the mapped targeted tests in `docs/agent-harness.md`.
+
 ## Actual Lock Guardrail
 
 When a task touches actual-grid locking, locked rows, assigned-duration changes, or extra-slot allocation, treat them as one feature surface.
 
 - Before editing, list affected surfaces in the refined prompt.
-- Use [docs/actual-lock-guardrails.md](/C:/Time-Tracker/docs/actual-lock-guardrails.md).
+- Use `docs/actual-lock-guardrails.md`.
 - Run `npm run test:actual-lock` before `npm test`.
 - If UI behavior can change, run the documented browser smoke check unless explicitly skipped.
 - Verify row generation, effective lock mask, grid graphics, click blocking, and extra allocation together.
@@ -43,6 +50,8 @@ When a task touches actual-grid locking, locked rows, assigned-duration changes,
 
 - Do not preload every Markdown file in `docs/` for routine tasks.
 - Use `docs/docs-index.md` only when document selection is needed, then open the smallest relevant source document.
+- Read `docs/agent-harness.md` when choosing work loop, risk surface, tests, or smoke checks.
+- Read `docs/harness-quality-score.md` only for harness quality or missing coverage decisions.
 - Read `docs/ai-handoff-map.md` only for architecture context.
 - Read `docs/product-identity.md` only for product direction, UX, or feature decisions.
 - Read `docs/actual-lock-guardrails.md` only for actual-grid locking, locked rows, assigned-duration, or extra allocation.

@@ -43,6 +43,8 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /\.plan-segment-resize-preview-layer\s*\{[^}]*position:\s*absolute;[^}]*grid-template-columns:\s*repeat\(6,\s*1fr\);[^}]*pointer-events:\s*none;[^}]*overflow:\s*hidden;/s);
     assert.match(interactionsSource, /\.plan-segment-resize-preview-segment\s*\{[^}]*align-self:\s*stretch;[^}]*height:\s*100%;[^}]*max-height:\s*100%;[^}]*border-bottom:\s*3px solid #fff;[^}]*background:\s*var\(--split-segment-color,\s*rgba\(223,\s*228,\s*234,\s*0\.5\)\);/s);
     assert.match(interactionsSource, /\.plan-segment-resize-preview-segment\.plan-segment-resize-preview-rest\s*\{[^}]*align-self:\s*start;[^}]*height:\s*calc\(100% - 3px\);[^}]*max-height:\s*calc\(100% - 3px\);/s);
+    assert.match(interactionsSource, /\.plan-segment-resize-preview-guide\s*\{[^}]*position:\s*absolute;[^}]*width:\s*66px;[^}]*height:\s*14px;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 0\.1s ease;/s);
+    assert.match(interactionsSource, /\.plan-segment-resize-preview-guide path\s*\{[^}]*fill:\s*none;[^}]*stroke:\s*rgba\(37,\s*99,\s*235,\s*0\.72\);[^}]*stroke-width:\s*2\.7px;[^}]*stroke-linecap:\s*round;[^}]*stroke-linejoin:\s*round;/s);
     assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment\[data-segment-kind="real-plan"\]\s*\{[^}]*opacity:\s*0;/s);
     assert.match(interactionsSource, /\.split-grid\.is-previewing-plan-resize > \.split-grid-segment-virtual-rest\s*\{[^}]*opacity:\s*0;/s);
     assert.match(interactionsSource, /\.plan-segment-resize-handle\s*\{[^}]*top:\s*50%;[^}]*width:\s*30px;[^}]*height:\s*min\(64px,\s*calc\(100% - 4px\)\);[^}]*opacity:\s*1;[^}]*--plan-segment-handle-color:\s*var\(--split-segment-color,\s*rgba\(223,\s*228,\s*234,\s*0\.85\)\);/s);
@@ -75,6 +77,7 @@ test('split css files exist and keep section anchors', () => {
     assert.match(interactionsSource, /body\.inline-plan-sheet-open #timeEntries\.inline-plan-context-active \.time-entry\.inline-plan-context-keep-clear\s*\{[^}]*pointer-events:\s*none;/s);
     assert.match(interactionsSource, /body\.inline-plan-sheet-open \.inline-plan-sheet-context-target\s*\{[^}]*z-index:\s*60;[^}]*pointer-events:\s*auto;/s);
     assert.match(interactionsSource, /body\.inline-plan-sheet-open \.split-cell-wrapper\.split-type-planned\.inline-plan-sheet-context-target \.planned-input\s*\{[^}]*pointer-events:\s*auto;/s);
+    assert.doesNotMatch(responsiveSource, /body\.inline-plan-sheet-open \.inline-plan-sheet-context-target\s*\{[^}]*z-index:\s*2;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.inline-plan-input,[\s\S]*?\.activity-child-composer-input,[\s\S]*?font-size:\s*16px;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-title-edit-input\s*\{[^}]*font-size:\s*inherit;/s);
     assert.match(responsiveSource, /@media \(max-width:\s*768px\), \(hover:\s*none\), \(pointer:\s*coarse\)\s*\{[\s\S]*?\.plan-segment-resize-handle\s*\{[^}]*width:\s*40px;[^}]*touch-action:\s*none;/s);

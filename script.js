@@ -1876,13 +1876,75 @@ class TimeTracker {
             const firstField = document.querySelector(`[data-index="${startIndex}"] .${type}-input`);
             const mergedValue = firstField ? firstField.value : '';
 
-            overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
-
             const mergeKey = `${type}-${startIndex}-${endIndex}`;
-            this.mergedFields.set(mergeKey, mergedValue);
 
             // 좌측 계획 ?�이 병합????모든 ?�을 ?�기??병합
             if (type === 'planned') {
+                const clonePlain = (value, fallback) => {
+                    if (value == null) return fallback;
+                    try {
+                        return JSON.parse(JSON.stringify(value));
+                    } catch (_) {
+                        return Array.isArray(value)
+                            ? value.map((item) => ({ ...(item || {}) }))
+                            : { ...(value || {}) };
+                    }
+                };
+                const planSegmentCore = (typeof globalThis !== 'undefined' && globalThis.TimeTrackerPlanSegmentCore)
+                    ? globalThis.TimeTrackerPlanSegmentCore
+                    : null;
+                const mergeSnapshot = planSegmentCore && typeof planSegmentCore.createPlanMergeSnapshot === 'function'
+                    ? planSegmentCore.createPlanMergeSnapshot({
+                        mergeKey,
+                        startIndex,
+                        endIndex,
+                        slots: this.timeSlots.slice(startIndex, endIndex + 1),
+                        mergedFields: overlappingEntries.map((entry) => ({
+                            key: entry.key,
+                            value: this.mergedFields.get(entry.key),
+                        })),
+                    })
+                    : {
+                        version: 1,
+                        mergeKey,
+                        startIndex,
+                        endIndex,
+                        slots: this.timeSlots.slice(startIndex, endIndex + 1).map((slot) => clonePlain(slot, {})),
+                        mergedFields: overlappingEntries.map((entry) => ({
+                            key: entry.key,
+                            value: clonePlain(this.mergedFields.get(entry.key), ''),
+                        })),
+                    };
+                const mergedPlanPayload = planSegmentCore && typeof planSegmentCore.buildMergedPlanSegmentPayload === 'function'
+                    ? planSegmentCore.buildMergedPlanSegmentPayload(this.timeSlots, {
+                        rangeStart: startIndex,
+                        rangeEnd: endIndex,
+                        findMergeKey: (index) => this.findMergeKey('planned', index),
+                        normalizePlanActivities: (items) => this.normalizePlanActivitiesPreservingSegments
+                            ? this.normalizePlanActivitiesPreservingSegments(items)
+                            : this.normalizePlanActivitiesArray(items),
+                    })
+                    : { blocked: false, activities: [], timers: {}, summary: '' };
+                if (mergedPlanPayload.blocked) {
+                    if (typeof this.showNotification === 'function') {
+                        this.showNotification('계획 병합을 진행할 수 없습니다. 실행 중이거나 일시정지된 계획 세그먼트 타이머를 안전하게 연결할 수 없습니다.', 'error');
+                    }
+                    if (typeof console !== 'undefined' && console.warn) {
+                        console.warn('Blocked planned merge to preserve active plan segment timer', mergedPlanPayload);
+                    }
+                    return;
+                }
+                overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
+                const mergedPlanActivities = Array.isArray(mergedPlanPayload.activities)
+                    ? mergedPlanPayload.activities.map((item) => ({ ...item }))
+                    : [];
+                const mergedPlanTimers = mergedPlanPayload.timers && typeof mergedPlanPayload.timers === 'object'
+                    ? clonePlain(mergedPlanPayload.timers, {})
+                    : {};
+                const mergedPlanValue = mergedPlanActivities.length > 0
+                    ? (this.formatActivitiesSummary ? this.formatActivitiesSummary(mergedPlanActivities) : (mergedPlanPayload.summary || mergedValue))
+                    : mergedValue;
+                this.mergedFields.set(mergeKey, mergedPlanValue);
                 // 중앙 ?�간 ??병합 (?�간 범위 ?�시)
                 const timeRangeKey = `time-${startIndex}-${endIndex}`;
                 const startTime = this.timeSlots[startIndex].time;
@@ -1901,19 +1963,22 @@ class TimeTracker {
                     ? this.timeSlots[startIndex].planTitle
                     : '';
                 for (let i = startIndex; i <= endIndex; i++) {
-                    this.timeSlots[i].planned = i === startIndex ? mergedValue : '';
+                    this.timeSlots[i].planned = i === startIndex ? mergedPlanValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
                         this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
                     this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
-                    this.timeSlots[i].planActivities = i === startIndex && Array.isArray(this.timeSlots[i].planActivities)
-                        ? this.timeSlots[i].planActivities
+                    this.timeSlots[i].planActivities = i === startIndex
+                        ? mergedPlanActivities.map((item) => ({ ...item }))
                         : [];
-                    this.timeSlots[i].planSegmentTimers = i === startIndex && this.timeSlots[i].planSegmentTimers && typeof this.timeSlots[i].planSegmentTimers === 'object'
-                        ? this.timeSlots[i].planSegmentTimers
+                    this.timeSlots[i].planSegmentTimers = i === startIndex
+                        ? clonePlain(mergedPlanTimers, {})
                         : {};
+                    if (i !== startIndex) {
+                        delete this.timeSlots[i].planMergeSnapshot;
+                    }
                     this.timeSlots[i].activityLog.titleBandOn = i === startIndex ? Boolean(this.timeSlots[i].activityLog.titleBandOn) : false;
                     this.timeSlots[i].activityLog.actualOverride = i === startIndex
                         ? Boolean(this.timeSlots[i].activityLog.actualOverride)
@@ -1937,8 +2002,15 @@ class TimeTracker {
                         this.timeSlots[i].activityLog.actualFailedGridUnits = [];
                     }
                 }
+                if (this.timeSlots[startIndex]) {
+                    this.timeSlots[startIndex].planMergeSnapshot = planSegmentCore && typeof planSegmentCore.attachPlanMergePostState === 'function'
+                        ? planSegmentCore.attachPlanMergePostState(mergeSnapshot, this.timeSlots[startIndex])
+                        : clonePlain(mergeSnapshot, null);
+                }
             } else {
                 // ?�측 ?�만 병합?�는 경우
+                overlappingEntries.forEach((entry) => this.mergedFields.delete(entry.key));
+                this.mergedFields.set(mergeKey, mergedValue);
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].actual = i === startIndex ? mergedValue : '';
                     if (!this.timeSlots[i].activityLog || typeof this.timeSlots[i].activityLog !== 'object') {
@@ -6704,9 +6776,26 @@ class TimeTracker {
             : 0;
         const visibleTop = viewportTop + 16;
         const sheetTop = Number(sheetRect.top);
+        const sheetBottom = Number(sheetRect.bottom);
         const targetTop = Number(targetRect.top);
         const targetBottom = Number(targetRect.bottom);
         if (![sheetTop, targetTop, targetBottom].every(Number.isFinite)) return false;
+        if (typeof document !== 'undefined' && document.body && typeof document.createElement === 'function') {
+            let spacer = document.getElementById ? document.getElementById('inline-plan-sheet-scroll-spacer') : null;
+            if (!spacer) {
+                spacer = document.createElement('div');
+                spacer.id = 'inline-plan-sheet-scroll-spacer';
+                spacer.setAttribute('aria-hidden', 'true');
+                spacer.style.pointerEvents = 'none';
+                spacer.style.flex = '0 0 auto';
+                document.body.appendChild(spacer);
+            }
+            const actualSheetHeight = Number.isFinite(sheetBottom) && Number.isFinite(sheetTop)
+                ? Math.max(0, sheetBottom - sheetTop)
+                : Math.max(0, Number(this.inlinePlanDropdown.offsetHeight) || 0);
+            spacer.style.display = 'block';
+            spacer.style.height = `${Math.ceil(actualSheetHeight + 24)}px`;
+        }
         const visibleBottom = Math.max(visibleTop, sheetTop - 20);
         let delta = 0;
         if (targetBottom > visibleBottom) {
@@ -6720,6 +6809,7 @@ class TimeTracker {
     }
     scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
         if (!targetEl) return false;
+        this.inlinePlanSheetTargetEl = targetEl;
         const root = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
         const schedule = root && typeof root.requestAnimationFrame === 'function'
             ? root.requestAnimationFrame.bind(root)
@@ -6872,8 +6962,15 @@ class TimeTracker {
             const target = event.target;
             if (target && target.closest && (
                 target.closest('.split-grid-segment[data-segment-kind="real-plan"]')
+                || target.closest('.inline-plan-dropdown')
                 || target.closest('.activity-chip-board')
                 || target.closest('.inline-plan-subsection')
+                || target.closest('.inline-plan-child-popover-layer')
+                || target.closest('.routine-menu')
+                || target.closest('.inline-priority-menu')
+                || target.closest('.plan-activity-menu')
+                || target.closest('.plan-title-menu')
+                || target.closest('.plan-segment-title-edit-input')
             )) {
                 return;
             }
@@ -7302,6 +7399,7 @@ class TimeTracker {
             const cancelType = isPointerEvent ? 'pointercancel' : (isTouchEvent ? 'touchcancel' : null);
             const documentListenerOptions = isTouchEvent ? { capture: true, passive: false } : true;
             const captureEl = (handle && handle.setPointerCapture) ? handle : (event.target && event.target.setPointerCapture ? event.target : resizeSurfaceEl);
+            const resizeController = this;
             if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.add) {
                 resizeSurfaceEl.classList.add('is-resizing-plan-segment', `plan-segment-resize-edge-${effectiveEdge}`);
             }
@@ -7344,6 +7442,49 @@ class TimeTracker {
                         grid.classList.add('is-previewing-plan-resize');
                     }
                     return previewLayer;
+                };
+
+                const appendResizePreviewGuide = (layer, boundaryMinute) => {
+                    try {
+                        if (!layer || typeof document === 'undefined' || !document.createElement) return;
+                        const createSvgElement = (tagName) => (
+                            typeof document.createElementNS === 'function'
+                                ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
+                                : document.createElement(tagName)
+                        );
+                        const unitsPerRow = 6;
+                        const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                        const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                        const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
+                        if (!Number.isFinite(clampedMinute)) return;
+                        let boundaryUnit = Math.round(clampedMinute / 10);
+                        boundaryUnit = Math.max(0, Math.min(totalUnits, boundaryUnit));
+                        let rowIndex = Math.floor(boundaryUnit / unitsPerRow);
+                        let columnUnit = boundaryUnit % unitsPerRow;
+                        if (boundaryUnit > 0 && columnUnit === 0) {
+                            rowIndex -= 1;
+                            columnUnit = unitsPerRow;
+                        }
+                        rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
+
+                        const guide = createSvgElement('svg');
+                        guide.setAttribute('class', 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
+                        guide.setAttribute('viewBox', '0 0 66 14');
+                        guide.setAttribute('width', '66');
+                        guide.setAttribute('height', '14');
+                        guide.setAttribute('aria-hidden', 'true');
+                        guide.setAttribute('focusable', 'false');
+                        if (guide.style) {
+                            guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
+                            guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
+                            guide.style.pointerEvents = 'none';
+                        }
+                        const path = createSvgElement('path');
+                        path.setAttribute('d', 'M28 7H0 M0 7L7 2 M0 7L7 12 M38 7H66 M66 7L59 2 M66 7L59 12');
+                        path.setAttribute('vector-effect', 'non-scaling-stroke');
+                        guide.appendChild(path);
+                        layer.appendChild(guide);
+                    } catch (_) {}
                 };
 
                 const normalizePreviewLabel = (segment) => {
@@ -7484,29 +7625,31 @@ class TimeTracker {
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
                     layer.innerHTML = '';
                     previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
+                    appendResizePreviewGuide(layer, targetMinute);
                 };
 
-                const cleanup = () => {
+                function cleanup() {
                     if (cleanedUp) return;
                     cleanedUp = true;
                     removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
                         resizeSurfaceEl.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
                     }
-                    if (typeof this.clearActivePlanSegmentResizeClasses === 'function') {
-                        this.clearActivePlanSegmentResizeClasses(grid || entryDiv);
+                    if (typeof resizeController.clearActivePlanSegmentResizeClasses === 'function') {
+                        resizeController.clearActivePlanSegmentResizeClasses(grid || entryDiv);
                     }
                     document.removeEventListener(moveType, update, documentListenerOptions);
                     document.removeEventListener(upType, finish, documentListenerOptions);
                     if (cancelType) document.removeEventListener(cancelType, cancel, documentListenerOptions);
+                    document.removeEventListener('keydown', keyCancel, true);
                     if (isPointerEvent && pointerId != null && captureEl && captureEl.releasePointerCapture) {
                         try {
                             captureEl.releasePointerCapture(pointerId);
                         } catch (_) {}
                     }
-                };
+                }
 
-                const update = (moveEvent) => {
+                function update(moveEvent) {
                     const point = getPointFromEvent(moveEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -7514,9 +7657,9 @@ class TimeTracker {
                     updatePreview(lastClientX);
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
-                };
+                }
 
-                const finish = (upEvent) => {
+                function finish(upEvent) {
                     const point = getPointFromEvent(upEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -7529,16 +7672,26 @@ class TimeTracker {
                     const deltaMinutes = deltaUnits * 10;
                     if (deltaMinutes === 0) return;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    this.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
-                };
+                    resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
+                }
 
-                const cancel = () => {
+                function cancel() {
                     cleanup();
-                };
-                updatePreview(originX);
+                }
+                function keyCancel(keyEvent) {
+                    if (keyEvent && keyEvent.key !== 'Escape') return;
+                    cleanup();
+                }
+                try {
+                    updatePreview(originX);
+                } catch (_) {
+                    cleanup();
+                    return false;
+                }
                 document.addEventListener(moveType, update, documentListenerOptions);
                 document.addEventListener(upType, finish, documentListenerOptions);
                 if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);
+                document.addEventListener('keydown', keyCancel, true);
                 return true;
             };
         const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');
