@@ -2407,9 +2407,10 @@ button.activity-chip,
   position: absolute;
   top: var(--plan-segment-handle-inner-y-inset);
   bottom: var(--plan-segment-handle-inner-y-inset);
-  left: 50%;
+  left: 0;
+  right: 0;
   width: var(--plan-segment-handle-inner-width);
-  transform: translateX(-50%);
+  margin-inline: auto;
   border-radius: 999px;
   background: var(--plan-segment-handle-color);
   box-sizing: border-box;
