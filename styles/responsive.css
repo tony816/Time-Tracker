@@ -440,7 +440,8 @@
         justify-content: flex-start;
     }
 
-    .inline-plan-add-btn {
+    .inline-plan-add-btn,
+    .inline-plan-sync-btn {
         width: 100%;
     }
 
@@ -824,4 +825,3 @@ textarea:focus-visible,
     .plan-segment-resize-handle::after {
         width: 12px;
     }
-}
