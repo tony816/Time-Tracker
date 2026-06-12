@@ -2330,9 +2330,9 @@ button.activity-chip,
   position: absolute;
   z-index: 4;
   display: block;
-  width: min(96px, 26%);
-  min-width: 64px;
-  height: 28px;
+  width: min(86.4px, 23.4%);
+  min-width: 57.6px;
+  height: 25.2px;
   overflow: visible;
   pointer-events: none;
   opacity: 1;
