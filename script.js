@@ -7478,9 +7478,9 @@ class TimeTracker {
 
                         const guide = createSvgElement('svg');
                         guide.setAttribute('class', 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
-                        guide.setAttribute('viewBox', '0 0 66 14');
-                        guide.setAttribute('width', '66');
-                        guide.setAttribute('height', '14');
+                        guide.setAttribute('viewBox', '0 0 124 36');
+                        guide.setAttribute('width', '124');
+                        guide.setAttribute('height', '36');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
                         if (guide.style) {
@@ -7488,10 +7488,98 @@ class TimeTracker {
                             guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
                             guide.style.pointerEvents = 'none';
                         }
-                        const path = createSvgElement('path');
-                        path.setAttribute('d', 'M28 7H0 M0 7L7 2 M0 7L7 12 M38 7H66 M66 7L59 2 M66 7L59 12');
-                        path.setAttribute('vector-effect', 'non-scaling-stroke');
-                        guide.appendChild(path);
+                        const idSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+                        const gradientId = `plan-resize-arrow-fill-${idSuffix}`;
+                        const glowId = `plan-resize-arrow-glow-${idSuffix}`;
+                        const setAttributes = (node, attributes) => {
+                            Object.entries(attributes).forEach(([name, value]) => {
+                                node.setAttribute(name, value);
+                            });
+                            return node;
+                        };
+                        const defs = createSvgElement('defs');
+                        const gradient = setAttributes(createSvgElement('linearGradient'), {
+                            id: gradientId,
+                            x1: '8',
+                            y1: '18',
+                            x2: '116',
+                            y2: '18',
+                            gradientUnits: 'userSpaceOnUse',
+                        });
+                        [
+                            ['0%', '#BEB7DF'],
+                            ['18%', '#DCFBFE'],
+                            ['48%', '#FFFFFF'],
+                            ['82%', '#DCFBFE'],
+                            ['100%', '#BEB7DF'],
+                        ].forEach(([offset, color]) => {
+                            gradient.appendChild(setAttributes(createSvgElement('stop'), { offset, 'stop-color': color }));
+                        });
+                        const glow = setAttributes(createSvgElement('filter'), {
+                            id: glowId,
+                            x: '-30%',
+                            y: '-70%',
+                            width: '160%',
+                            height: '240%',
+                        });
+                        glow.appendChild(setAttributes(createSvgElement('feGaussianBlur'), {
+                            in: 'SourceGraphic',
+                            stdDeviation: '3.8',
+                            result: 'blur',
+                        }));
+                        glow.appendChild(setAttributes(createSvgElement('feColorMatrix'), {
+                            in: 'blur',
+                            type: 'matrix',
+                            values: '0.72 0 0 0 0.74 0 0.98 0 0 1 0 0 1 0 1 0 0 0 0.76 0',
+                            result: 'aura',
+                        }));
+                        const merge = createSvgElement('feMerge');
+                        merge.appendChild(setAttributes(createSvgElement('feMergeNode'), { in: 'aura' }));
+                        merge.appendChild(setAttributes(createSvgElement('feMergeNode'), { in: 'SourceGraphic' }));
+                        glow.appendChild(merge);
+                        defs.appendChild(gradient);
+                        defs.appendChild(glow);
+                        guide.appendChild(defs);
+
+                        const leftArrow = setAttributes(createSvgElement('path'), {
+                            class: 'plan-segment-resize-preview-arrow-shape',
+                            d: 'M56 6H28C26 6 24.4 4.4 24.4 2.4C24.4 0.8 22.5 0 21.3 1L2.8 15.5C1.4 16.6 1.4 18.7 2.8 19.8L21.3 34.3C22.5 35.3 24.4 34.5 24.4 32.9C24.4 30.9 26 29.3 28 29.3H56C59.4 29.3 62.2 26.5 62.2 23.1V12.2C62.2 8.8 59.4 6 56 6Z',
+                            fill: `url(#${gradientId})`,
+                            filter: `url(#${glowId})`,
+                        });
+                        const rightArrow = setAttributes(createSvgElement('path'), {
+                            class: 'plan-segment-resize-preview-arrow-shape',
+                            d: 'M68 6H96C98 6 99.6 4.4 99.6 2.4C99.6 0.8 101.5 0 102.7 1L121.2 15.5C122.6 16.6 122.6 18.7 121.2 19.8L102.7 34.3C101.5 35.3 99.6 34.5 99.6 32.9C99.6 30.9 98 29.3 96 29.3H68C64.6 29.3 61.8 26.5 61.8 23.1V12.2C61.8 8.8 64.6 6 68 6Z',
+                            fill: `url(#${gradientId})`,
+                            filter: `url(#${glowId})`,
+                        });
+                        guide.appendChild(leftArrow);
+                        guide.appendChild(rightArrow);
+
+                        [
+                            'M22 17.8C31.7 14 41.8 12.5 57 13.4',
+                            'M18 21.8C30.4 25.3 43.5 26.4 58.5 23.6',
+                            'M102 17.8C92.3 14 82.2 12.5 67 13.4',
+                            'M106 21.8C93.6 25.3 80.5 26.4 65.5 23.6',
+                        ].forEach((d) => {
+                            guide.appendChild(setAttributes(createSvgElement('path'), {
+                                class: 'plan-segment-resize-preview-arrow-sheen',
+                                d,
+                            }));
+                        });
+                        [
+                            ['19', '25.6', '1.1'],
+                            ['42', '10.8', '0.8'],
+                            ['82', '10.8', '0.8'],
+                            ['105', '25.6', '1.1'],
+                        ].forEach(([cx, cy, r]) => {
+                            guide.appendChild(setAttributes(createSvgElement('circle'), {
+                                class: 'plan-segment-resize-preview-arrow-spark',
+                                cx,
+                                cy,
+                                r,
+                            }));
+                        });
                         layer.appendChild(guide);
                     } catch (_) {}
                 };
