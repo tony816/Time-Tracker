@@ -528,14 +528,14 @@ test('ten minute plan segment right-shrink preview clamps guide to current bound
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('right-only preview guide anchors outside while bidirectional guide remains centered', () => {
+test('right-only preview guide anchors inside the 10m segment while bidirectional guide remains centered', () => {
     const defaultGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\s*\{[^}]*\}/);
     assert.ok(defaultGuideRule);
     assert.match(defaultGuideRule[0], /transform:\s*translate\(-50%,\s*-50%\);/);
 
     const rightOnlyGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\.plan-segment-resize-preview-arrow-right-only\s*\{[^}]*\}/);
     assert.ok(rightOnlyGuideRule);
-    assert.match(rightOnlyGuideRule[0], /transform:\s*translate\(3px,\s*-50%\);/);
+    assert.match(rightOnlyGuideRule[0], /transform:\s*translate\(calc\(-100%\s*-\s*3px\),\s*-50%\);/);
 
     withDocument(({ listeners }) => {
         const shrinkCalls = [];

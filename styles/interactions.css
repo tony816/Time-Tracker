@@ -2345,7 +2345,7 @@ button.activity-chip,
 }
 
 .plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-right-only {
-  transform: translate(3px, -50%);
+  transform: translate(calc(-100% - 3px), -50%);
 }
 
 .plan-segment-resize-preview-arrow-shape {
