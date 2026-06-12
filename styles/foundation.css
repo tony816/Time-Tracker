@@ -316,6 +316,8 @@ h1 {
 }
 
 .plan-segment-timer-row {
+  --plan-segment-timer-button-width: 17px;
+  --plan-segment-timer-gap: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,6 +328,10 @@ h1 {
   overflow: hidden;
   padding: 0 8px 4px;
   white-space: nowrap;
+}
+
+.plan-segment-timer-row:has(.plan-segment-timer-button) {
+  transform: translateX(calc((var(--plan-segment-timer-button-width) + var(--plan-segment-timer-gap)) / -2));
 }
 
 .plan-segment-timer-time {
