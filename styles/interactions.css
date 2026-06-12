@@ -2330,23 +2330,23 @@ button.activity-chip,
   position: absolute;
   z-index: 4;
   display: block;
-  width: min(124px, 34%);
-  min-width: 82px;
-  height: 36px;
+  width: min(96px, 26%);
+  min-width: 64px;
+  height: 28px;
   overflow: visible;
   pointer-events: none;
   opacity: 1;
   transform: translate(-50%, -50%);
   transition: opacity 0.1s ease;
   filter:
-    drop-shadow(0 0 6px rgba(220, 251, 254, 0.95))
-    drop-shadow(0 0 14px rgba(190, 183, 223, 0.72))
-    drop-shadow(0 0 22px rgba(220, 251, 254, 0.48));
+    drop-shadow(0 0 5px rgba(220, 251, 254, 0.95))
+    drop-shadow(0 0 11px rgba(190, 183, 223, 0.72))
+    drop-shadow(0 0 17px rgba(220, 251, 254, 0.48));
 }
 
 .plan-segment-resize-preview-arrow-shape {
   stroke: rgba(255, 255, 255, 0.96);
-  stroke-width: 1.25px;
+  stroke-width: 1px;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.94;
@@ -2355,18 +2355,18 @@ button.activity-chip,
 .plan-segment-resize-preview-arrow-sheen {
   fill: none;
   stroke: rgba(255, 255, 255, 0.86);
-  stroke-width: 1.15px;
+  stroke-width: 0.9px;
   stroke-linecap: round;
   opacity: 0.74;
-  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95));
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
 }
 
 .plan-segment-resize-preview-arrow-spark {
   fill: #fff;
   opacity: 0.92;
   filter:
-    drop-shadow(0 0 2px rgba(255, 255, 255, 1))
-    drop-shadow(0 0 6px rgba(220, 251, 254, 0.92));
+    drop-shadow(0 0 1.5px rgba(255, 255, 255, 1))
+    drop-shadow(0 0 5px rgba(220, 251, 254, 0.92));
 }
 
 .plan-segment-resize-handle {

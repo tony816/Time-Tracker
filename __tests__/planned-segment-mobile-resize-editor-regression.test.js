@@ -406,7 +406,7 @@ test('plan segment resize preview guide uses svg class attribute without classNa
             guide.getAttribute('class'),
             'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow'
         );
-        assert.equal(guide.getAttribute('viewBox'), '0 0 124 36');
+        assert.equal(guide.getAttribute('viewBox'), '0 0 96 28');
         assert.equal(guide.style.pointerEvents, 'none');
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));

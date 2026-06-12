@@ -7478,9 +7478,9 @@ class TimeTracker {
 
                         const guide = createSvgElement('svg');
                         guide.setAttribute('class', 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
-                        guide.setAttribute('viewBox', '0 0 124 36');
-                        guide.setAttribute('width', '124');
-                        guide.setAttribute('height', '36');
+                        guide.setAttribute('viewBox', '0 0 96 28');
+                        guide.setAttribute('width', '96');
+                        guide.setAttribute('height', '28');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
                         if (guide.style) {
@@ -7500,10 +7500,10 @@ class TimeTracker {
                         const defs = createSvgElement('defs');
                         const gradient = setAttributes(createSvgElement('linearGradient'), {
                             id: gradientId,
-                            x1: '8',
-                            y1: '18',
-                            x2: '116',
-                            y2: '18',
+                            x1: '3',
+                            y1: '14',
+                            x2: '93',
+                            y2: '14',
                             gradientUnits: 'userSpaceOnUse',
                         });
                         [
@@ -7543,13 +7543,13 @@ class TimeTracker {
 
                         const leftArrow = setAttributes(createSvgElement('path'), {
                             class: 'plan-segment-resize-preview-arrow-shape',
-                            d: 'M56 6H28C26 6 24.4 4.4 24.4 2.4C24.4 0.8 22.5 0 21.3 1L2.8 15.5C1.4 16.6 1.4 18.7 2.8 19.8L21.3 34.3C22.5 35.3 24.4 34.5 24.4 32.9C24.4 30.9 26 29.3 28 29.3H56C59.4 29.3 62.2 26.5 62.2 23.1V12.2C62.2 8.8 59.4 6 56 6Z',
+                            d: 'M39 5H22C20.4 5 19.1 3.7 19.1 2.1C19.1 0.8 17.6 0.2 16.6 1L3.1 12.3C1.9 13.3 1.9 15.1 3.1 16.1L16.6 27C17.6 27.8 19.1 27.2 19.1 25.9C19.1 24.3 20.4 23 22 23H39C41.8 23 44 20.8 44 18V10C44 7.2 41.8 5 39 5Z',
                             fill: `url(#${gradientId})`,
                             filter: `url(#${glowId})`,
                         });
                         const rightArrow = setAttributes(createSvgElement('path'), {
                             class: 'plan-segment-resize-preview-arrow-shape',
-                            d: 'M68 6H96C98 6 99.6 4.4 99.6 2.4C99.6 0.8 101.5 0 102.7 1L121.2 15.5C122.6 16.6 122.6 18.7 121.2 19.8L102.7 34.3C101.5 35.3 99.6 34.5 99.6 32.9C99.6 30.9 98 29.3 96 29.3H68C64.6 29.3 61.8 26.5 61.8 23.1V12.2C61.8 8.8 64.6 6 68 6Z',
+                            d: 'M57 5H74C75.6 5 76.9 3.7 76.9 2.1C76.9 0.8 78.4 0.2 79.4 1L92.9 12.3C94.1 13.3 94.1 15.1 92.9 16.1L79.4 27C78.4 27.8 76.9 27.2 76.9 25.9C76.9 24.3 75.6 23 74 23H57C54.2 23 52 20.8 52 18V10C52 7.2 54.2 5 57 5Z',
                             fill: `url(#${gradientId})`,
                             filter: `url(#${glowId})`,
                         });
@@ -7557,10 +7557,10 @@ class TimeTracker {
                         guide.appendChild(rightArrow);
 
                         [
-                            'M22 17.8C31.7 14 41.8 12.5 57 13.4',
-                            'M18 21.8C30.4 25.3 43.5 26.4 58.5 23.6',
-                            'M102 17.8C92.3 14 82.2 12.5 67 13.4',
-                            'M106 21.8C93.6 25.3 80.5 26.4 65.5 23.6',
+                            'M17 13.8C24.8 11 32.6 10 43 10.7',
+                            'M14 17.2C24 20 33.8 20.8 43.2 18.8',
+                            'M79 13.8C71.2 11 63.4 10 53 10.7',
+                            'M82 17.2C72 20 62.2 20.8 52.8 18.8',
                         ].forEach((d) => {
                             guide.appendChild(setAttributes(createSvgElement('path'), {
                                 class: 'plan-segment-resize-preview-arrow-sheen',
@@ -7568,10 +7568,10 @@ class TimeTracker {
                             }));
                         });
                         [
-                            ['19', '25.6', '1.1'],
-                            ['42', '10.8', '0.8'],
-                            ['82', '10.8', '0.8'],
-                            ['105', '25.6', '1.1'],
+                            ['16', '20.2', '0.85'],
+                            ['32', '8.6', '0.65'],
+                            ['64', '8.6', '0.65'],
+                            ['80', '20.2', '0.85'],
                         ].forEach(([cx, cy, r]) => {
                             guide.appendChild(setAttributes(createSvgElement('circle'), {
                                 class: 'plan-segment-resize-preview-arrow-spark',
