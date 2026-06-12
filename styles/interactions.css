@@ -2344,6 +2344,10 @@ button.activity-chip,
     drop-shadow(0 0 17px rgba(220, 251, 254, 0.48));
 }
 
+.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-right-only {
+  transform: translate(3px, -50%);
+}
+
 .plan-segment-resize-preview-arrow-shape {
   stroke: rgba(255, 255, 255, 0.96);
   stroke-width: 1px;

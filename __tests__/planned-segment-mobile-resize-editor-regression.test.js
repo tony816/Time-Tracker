@@ -1,8 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { buildMethod } = require('./helpers/script-method-builder');
 const realPlanSegmentCore = require('../core/plan-segment-core');
+const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
 const attachPlanSegmentResizeListeners = buildMethod(
     'attachPlanSegmentResizeListeners(entryDiv, index)',
@@ -522,6 +525,77 @@ test('ten minute plan segment right-shrink preview clamps guide to current bound
             durationMinutes: 10,
             endMinute: 10,
         }]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('right-only preview guide anchors outside while bidirectional guide remains centered', () => {
+    const defaultGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\s*\{[^}]*\}/);
+    assert.ok(defaultGuideRule);
+    assert.match(defaultGuideRule[0], /transform:\s*translate\(-50%,\s*-50%\);/);
+
+    const rightOnlyGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\.plan-segment-resize-preview-arrow-right-only\s*\{[^}]*\}/);
+    assert.ok(rightOnlyGuideRule);
+    assert.match(rightOnlyGuideRule[0], /transform:\s*translate\(3px,\s*-50%\);/);
+
+    withDocument(({ listeners }) => {
+        const shrinkCalls = [];
+        const shrinkCtx = createTenMinuteResizeContext(shrinkCalls);
+        const shrinkFixture = createResizeFixture({ endMinute: 10 });
+
+        attachPlanSegmentResizeListeners.call(shrinkCtx, shrinkFixture.entry, 0);
+        shrinkFixture.handle.dispatchEvent(createPointerEvent('pointerdown', shrinkFixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', shrinkFixture.handle, -100));
+
+        const rightOnlyGuide = latestGuide(shrinkFixture.grid);
+        assert.ok(rightOnlyGuide);
+        assert.equal(hasClass(rightOnlyGuide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(rightOnlyGuide.style.left, `${(1 / 6) * 100}%`);
+        assert.notEqual(rightOnlyGuide.style.left, '0%');
+        assert.equal(rightOnlyGuide.getAttribute('viewBox'), '56 0 40 28');
+        assert.equal(rightOnlyGuide.getAttribute('width'), '40');
+        assert.equal(rightOnlyGuide.style.width, '40px');
+        assert.equal(rightOnlyGuide.style.minWidth, '40px');
+        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 1);
+        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
+        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+
+        listeners.pointerup(createPointerEvent('pointerup', shrinkFixture.handle, -100));
+
+        const resizeCalls = [];
+        const bidirectionalCtx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const bidirectionalFixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(bidirectionalCtx, bidirectionalFixture.entry, 0);
+        bidirectionalFixture.handle.dispatchEvent(createPointerEvent('pointerdown', bidirectionalFixture.handle, 0));
+
+        const bidirectionalGuide = latestGuide(bidirectionalFixture.grid);
+        assert.ok(bidirectionalGuide);
+        assert.equal(hasClass(bidirectionalGuide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(
+            bidirectionalGuide.getAttribute('class'),
+            'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow'
+        );
+        assert.equal(bidirectionalGuide.getAttribute('viewBox'), '0 0 96 28');
+        assert.equal(bidirectionalGuide.getAttribute('width'), '96');
+        assert.equal(bidirectionalGuide.style.width || '', '');
+        assert.equal(bidirectionalGuide.style.minWidth || '', '');
+        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 2);
+        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 4);
+        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 4);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
