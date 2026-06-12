@@ -2351,23 +2351,8 @@ button.activity-chip,
   position: absolute;
   top: 50%;
   width: 30px;
-  height: min(50px, calc(100% - 10px));
+  height: min(46px, calc(100% - 12px));
   z-index: 12;
-  cursor: ew-resize;
-  opacity: 1;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-  transform: translateY(-50%);
-  --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
-  --plan-segment-handle-mixed-color: var(--plan-segment-handle-color);
-  --plan-segment-handle-stroke: #111827;
-  --plan-segment-handle-shell: #fffef8;
-  transition:
-    opacity 0.12s ease,
-    transform 0.12s ease;
-}
-z-index: 12;
   cursor: ew-resize;
   opacity: 1;
   pointer-events: auto;
@@ -2376,28 +2361,26 @@ z-index: 12;
   transform: translateY(-50%);
   box-sizing: border-box;
   --plan-segment-handle-hitbox-width: 30px;
-  --plan-segment-handle-visual-width: 22px;
-  --plan-segment-handle-max-height: 84px;
-  --plan-segment-handle-y-inset: 4px;
-  --plan-segment-handle-inner-width: 8px;
-  --plan-segment-handle-inner-y-inset: 9px;
-  --plan-segment-handle-right-offset: -2px;
+  --plan-segment-handle-visual-width: 8px;
+  --plan-segment-handle-inner-width: 2px;
+  --plan-segment-handle-inner-y-inset: 5px;
   --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
   --plan-segment-handle-mixed-color: var(--plan-segment-handle-color);
-  --plan-segment-handle-stroke: rgba(17, 24, 39, 0.9);
-  --plan-segment-handle-shell: #fffef8;
+  --plan-segment-handle-stroke: rgba(17, 24, 39, 0.94);
+  --plan-segment-handle-shell: rgba(255, 255, 255, 0.94);
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
 }
 
 .plan-segment-resize-handle-right {
-  right: -5px;
+  right: 0;
 }
 
 .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
-  right: -5px;
+  right: 0;
 }
+
 .plan-segment-boundary-resize-handle-shared {
   --plan-segment-handle-mixed-color: color-mix(
     in srgb,
@@ -2412,17 +2395,16 @@ z-index: 12;
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
+  right: 3px;
   width: var(--plan-segment-handle-visual-width);
-  transform: translateX(-50%);
   border-radius: 999px;
   background: var(--plan-segment-handle-shell);
-  border: 2px solid var(--plan-segment-handle-stroke);
+  border: 1px solid var(--plan-segment-handle-stroke);
   box-sizing: border-box;
   pointer-events: none;
   box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.76);
+    0 1px 2px rgba(15, 23, 42, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.78);
 }
 
 .plan-segment-boundary-resize-handle-line {
@@ -2442,7 +2424,7 @@ z-index: 12;
   box-sizing: border-box;
   pointer-events: none;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+    inset 0 0 0 1px rgba(17, 24, 39, 0.22);
 }
 
 .plan-segment-boundary-resize-handle::after {
@@ -2458,8 +2440,8 @@ z-index: 12;
   background: #ffffff;
   border-color: var(--plan-segment-handle-stroke);
   box-shadow:
-    0 2px 6px rgba(15, 23, 42, 0.28),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+    0 2px 5px rgba(15, 23, 42, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.86);
 }
 
 .split-grid-segment.is-resizing-plan-segment {

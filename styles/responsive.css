@@ -814,14 +814,14 @@ textarea:focus-visible,
     }
 
     .plan-segment-resize-handle-right {
-        right: -10px;
+        right: 0;
     }
 
     .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
-        right: -10px;
+        right: 0;
     }
 
     .plan-segment-boundary-resize-handle-line,
     .plan-segment-resize-handle::after {
-        width: 12px;
+        width: 8px;
     }
