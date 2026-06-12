@@ -2362,7 +2362,7 @@ button.activity-chip,
   box-sizing: border-box;
   --plan-segment-handle-hitbox-width: 30px;
   --plan-segment-handle-visual-width: 8px;
-  --plan-segment-handle-inner-width: 3px;
+  --plan-segment-handle-inner-width: 4px;
   --plan-segment-handle-inner-y-inset: 3px;
   --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
   --plan-segment-handle-stroke: rgba(17, 24, 39, 0.94);
@@ -2399,25 +2399,20 @@ button.activity-chip,
 }
 
 .plan-segment-boundary-resize-handle-line {
-  display: block;
+  display: grid;
+  place-items: center;
 }
 
 .plan-segment-boundary-resize-handle-line::after {
   content: '';
-  position: absolute;
-  top: var(--plan-segment-handle-inner-y-inset);
-  bottom: var(--plan-segment-handle-inner-y-inset);
-  left: 0;
-  right: 0;
+  position: static;
   width: var(--plan-segment-handle-inner-width);
-  margin-inline: auto;
+  height: calc(100% - (var(--plan-segment-handle-inner-y-inset) * 2));
   border-radius: 999px;
   background: var(--plan-segment-handle-color);
-  border: 0.5px solid var(--plan-segment-handle-stroke);
+  border: 1px solid var(--plan-segment-handle-stroke);
   box-sizing: border-box;
   pointer-events: none;
-  box-shadow:
-    inset 0 0 0 1px rgba(17, 24, 39, 0.22);
 }
 
 .plan-segment-boundary-resize-handle::after {
