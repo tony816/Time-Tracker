@@ -7453,9 +7453,10 @@ class TimeTracker {
                     return previewLayer;
                 };
 
-                const appendResizePreviewGuide = (layer, boundaryMinute) => {
+                const appendResizePreviewGuide = (layer, boundaryMinute, options = {}) => {
                     try {
                         if (!layer || typeof document === 'undefined' || !document.createElement) return;
+                        const hideLeftArrow = Boolean(options.hideLeftArrow);
                         const createSvgElement = (tagName) => (
                             typeof document.createElementNS === 'function'
                                 ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
@@ -7553,12 +7554,16 @@ class TimeTracker {
                             fill: `url(#${gradientId})`,
                             filter: `url(#${glowId})`,
                         });
-                        guide.appendChild(leftArrow);
+                        if (!hideLeftArrow) {
+                            guide.appendChild(leftArrow);
+                        }
                         guide.appendChild(rightArrow);
 
                         [
-                            'M17 13.8C24.8 11 31.1 10 38.3 10.7',
-                            'M14 16.6C24 18.8 32.2 19.4 38.5 17.7',
+                            ...(!hideLeftArrow ? [
+                                'M17 13.8C24.8 11 31.1 10 38.3 10.7',
+                                'M14 16.6C24 18.8 32.2 19.4 38.5 17.7',
+                            ] : []),
                             'M79 13.8C71.2 11 64.9 10 57.7 10.7',
                             'M82 16.6C72 18.8 63.8 19.4 57.5 17.7',
                         ].forEach((d) => {
@@ -7568,8 +7573,10 @@ class TimeTracker {
                             }));
                         });
                         [
-                            ['16', '20.2', '0.85'],
-                            ['32', '8.6', '0.65'],
+                            ...(!hideLeftArrow ? [
+                                ['16', '20.2', '0.85'],
+                                ['32', '8.6', '0.65'],
+                            ] : []),
                             ['64', '8.6', '0.65'],
                             ['80', '20.2', '0.85'],
                         ].forEach(([cx, cy, r]) => {
@@ -7722,7 +7729,9 @@ class TimeTracker {
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
                     layer.innerHTML = '';
                     previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
-                    appendResizePreviewGuide(layer, targetMinute);
+                    appendResizePreviewGuide(layer, targetMinute, {
+                        hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10,
+                    });
                 };
 
                 function cleanup() {

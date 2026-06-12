@@ -423,6 +423,35 @@ test('plan segment resize preview guide uses svg class attribute without classNa
     });
 });
 
+test('ten minute plan segment resize preview omits left arrow graphics', () => {
+    withDocument(() => {
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 10, durationMinutes: 10 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize() { return true; },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 10 });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+
+        const guide = fixture.grid.querySelector('.plan-segment-resize-preview-guide');
+        assert.ok(guide);
+        const arrowShapes = guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape');
+        assert.equal(arrowShapes.length, 1);
+        assert.match(arrowShapes[0].getAttribute('d'), /^M61\.7/);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+    });
+});
+
 test('plan segment resize still applies and cleans up when preview guide creation fails', () => {
     withDocument(({ listeners, listenerCounts }) => {
         const resizeCalls = [];
