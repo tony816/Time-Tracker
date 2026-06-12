@@ -571,7 +571,7 @@ test('buildSplitVisualization renders one persistent shared handle at adjacent b
     assert.match(firstSegment, /plan-segment-boundary-resize-handle-shared/);
     assert.match(firstSegment, /has-shared-plan-boundary-handle/);
     assert.match(firstSegment, /plan-segment-resize-handle-right/);
-    assert.match(firstSegment, /--plan-segment-handle-peer-color: #c8f0c0/);
+    assert.doesNotMatch(firstSegment, /--plan-segment-handle-peer-color/);
     assert.doesNotMatch(secondSegment, /plan-segment-resize-handle-left/);
     assert.doesNotMatch(secondSegment, /has-shared-plan-boundary-handle/);
     assert.doesNotMatch(secondSegment, /data-resize-edge="left"/);

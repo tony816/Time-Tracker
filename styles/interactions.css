@@ -2365,7 +2365,6 @@ button.activity-chip,
   --plan-segment-handle-inner-width: 2px;
   --plan-segment-handle-inner-y-inset: 5px;
   --plan-segment-handle-color: var(--split-segment-color, rgba(223, 228, 234, 0.85));
-  --plan-segment-handle-mixed-color: var(--plan-segment-handle-color);
   --plan-segment-handle-stroke: rgba(17, 24, 39, 0.94);
   --plan-segment-handle-shell: rgba(255, 255, 255, 0.94);
   transition:
@@ -2379,14 +2378,6 @@ button.activity-chip,
 
 .plan-segment-resize-handle-right.plan-segment-boundary-resize-handle-shared {
   right: 0;
-}
-
-.plan-segment-boundary-resize-handle-shared {
-  --plan-segment-handle-mixed-color: color-mix(
-    in srgb,
-    var(--plan-segment-handle-color) 50%,
-    var(--plan-segment-handle-peer-color, var(--plan-segment-handle-color))
-  );
 }
 
 .plan-segment-boundary-resize-handle-line,
@@ -2420,7 +2411,7 @@ button.activity-chip,
   width: var(--plan-segment-handle-inner-width);
   transform: translateX(-50%);
   border-radius: 999px;
-  background: var(--plan-segment-handle-mixed-color);
+  background: var(--plan-segment-handle-color);
   box-sizing: border-box;
   pointer-events: none;
   box-shadow:
