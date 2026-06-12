@@ -283,6 +283,105 @@ test('mergeSelectedFields concatenates existing segmented merge boundaries in ch
     ]);
 });
 
+test('mergeSelectedFields rebases empty slot plus segmented slot and preserves title metadata', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({ time: '4' }),
+        createSlot({
+            time: '5',
+            planned: 'Study',
+            planTitle: 'Study Block',
+            planTitleBandOn: true,
+            planActivities: [
+                {
+                    label: 'Read',
+                    activityId: 'read-id',
+                    activityText: 'Read',
+                    titleActivityId: 'study-title',
+                    titleText: 'Study Block',
+                    seconds: 1200,
+                    startMinute: 0,
+                    endMinute: 20,
+                    durationMinutes: 20,
+                },
+            ],
+            planSegmentTimers: {
+                'planned-1-1-seg0': { status: 'paused', running: false, elapsedSeconds: 120, method: 'plan-segment' },
+            },
+        }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+
+    withDocumentQuery('', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        activityText: item.activityText,
+        titleActivityId: item.titleActivityId,
+        titleText: item.titleText,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        {
+            label: 'Read',
+            activityId: 'read-id',
+            activityText: 'Read',
+            titleActivityId: 'study-title',
+            titleText: 'Study Block',
+            startMinute: 60,
+            endMinute: 80,
+            durationMinutes: 20,
+            seconds: 1200,
+        },
+    ]);
+    assert.equal(ctx.timeSlots[0].planTitle, 'Study Block');
+    assert.equal(ctx.timeSlots[0].planTitleBandOn, true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1-seg0'].elapsedSeconds, 120);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, {
+        startMinute: 0,
+        endMinute: 120,
+    }).map((gap) => ({ startMinute: gap.startMinute, durationMinutes: gap.durationMinutes })), [
+        { startMinute: 0, durationMinutes: 60 },
+        { startMinute: 80, durationMinutes: 40 },
+    ]);
+});
+
+test('mergeSelectedFields never persists virtual-rest activities into merged slots', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'Focus',
+            planActivities: [
+                { label: 'Focus', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+                { kind: 'virtual-rest', virtual: true, label: 'Rest', startMinute: 20, durationMinutes: 40 },
+            ],
+        }),
+        createSlot({ time: '5' }),
+    ]);
+    ctx.selectedPlannedFields = new Set([0, 1]);
+
+    withDocumentQuery('Focus', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(ctx.timeSlots[0].planActivities.some((item) => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'Focus', startMinute: 0, endMinute: 20 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, {
+        startMinute: 0,
+        endMinute: 120,
+    }).map((gap) => ({ startMinute: gap.startMinute, durationMinutes: gap.durationMinutes })), [
+        { startMinute: 20, durationMinutes: 100 },
+    ]);
+});
+
 test('undoMerge restores original segmented slots and plan segment timers from merge metadata', () => {
     global.TimeTrackerPlanSegmentCore = planSegmentCore;
     const ctx = createMergeContext([

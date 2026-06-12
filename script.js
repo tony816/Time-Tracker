@@ -1959,9 +1959,18 @@ class TimeTracker {
                 this.mergedFields.set(actualMergeKey, actualMergedValue);
 
                 // ?�이???�데?�트
-                const basePlanTitle = (this.timeSlots[startIndex] && typeof this.timeSlots[startIndex].planTitle === 'string')
-                    ? this.timeSlots[startIndex].planTitle
-                    : '';
+                let basePlanTitle = '';
+                let basePlanTitleBandOn = false;
+                for (let titleIndex = startIndex; titleIndex <= endIndex; titleIndex += 1) {
+                    const titleSlot = this.timeSlots[titleIndex] || {};
+                    const titleText = typeof titleSlot.planTitle === 'string'
+                        ? titleSlot.planTitle.trim()
+                        : '';
+                    if (!titleText) continue;
+                    basePlanTitle = titleSlot.planTitle;
+                    basePlanTitleBandOn = Boolean(titleSlot.planTitleBandOn);
+                    break;
+                }
                 for (let i = startIndex; i <= endIndex; i++) {
                     this.timeSlots[i].planned = i === startIndex ? mergedPlanValue : '';
                     this.timeSlots[i].actual = i === startIndex ? actualMergedValue : '';
@@ -1969,7 +1978,7 @@ class TimeTracker {
                         this.timeSlots[i].activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
                     }
                     this.timeSlots[i].planTitle = i === startIndex ? basePlanTitle : '';
-                    this.timeSlots[i].planTitleBandOn = i === startIndex ? Boolean(this.timeSlots[i].planTitleBandOn) : false;
+                    this.timeSlots[i].planTitleBandOn = i === startIndex ? basePlanTitleBandOn : false;
                     this.timeSlots[i].planActivities = i === startIndex
                         ? mergedPlanActivities.map((item) => ({ ...item }))
                         : [];

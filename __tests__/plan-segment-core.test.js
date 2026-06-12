@@ -797,6 +797,26 @@ test('resizePlanSegmentInList preserves adjacent boundary metadata', () => {
     });
 });
 
+test('resizePlanSegmentInList keeps adjacent different real segments separate after shared-boundary resize', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'Email', activityId: 'email-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ], 0, 'right', 40, { startMinute: 0, endMinute: 60 });
+
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 40, durationMinutes: 40, seconds: 2400 },
+        { label: 'Email', activityId: 'email-id', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+    ]);
+    assert.equal(result.length, 2);
+});
+
 test('resizePlanSegmentInList keeps non-adjacent resize behavior', () => {
     const segments = [
         { label: 'A', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
@@ -841,4 +861,28 @@ test('resizePlanSegmentInList enforces minimum duration and strips virtual metad
     assert.equal(result[0].durationMinutes, 10);
     assert.equal(result[0].seconds, 10 * 60);
     assert.equal(result.some((item) => item.kind === 'virtual-rest' || item.virtual), false);
+});
+
+test('resizePlanSegmentInList strips virtual-rest from resize apply output while leaving computed gaps', () => {
+    const result = planSegmentCore.resizePlanSegmentInList([
+        { label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { kind: 'virtual-rest', virtual: true, label: 'Rest', startMinute: 30, durationMinutes: 30 },
+    ], 0, 'right', 20, { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result.some((item) => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(result.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Focus', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result, { startMinute: 0, endMinute: 60 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 20, durationMinutes: 40 },
+    ]);
 });
