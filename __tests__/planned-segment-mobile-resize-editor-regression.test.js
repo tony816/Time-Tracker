@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { buildMethod } = require('./helpers/script-method-builder');
+const realPlanSegmentCore = require('../core/plan-segment-core');
 
 const attachPlanSegmentResizeListeners = buildMethod(
     'attachPlanSegmentResizeListeners(entryDiv, index)',
@@ -78,6 +79,19 @@ function createNode(tagName = 'div', className = '', dataset = {}) {
         textContent: '',
         value: '',
         disabled: false,
+        _innerHTML: '',
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        set innerHTML(value) {
+            this._innerHTML = String(value || '');
+            if (this._innerHTML === '') {
+                this.children.forEach((child) => {
+                    child.parentNode = null;
+                });
+                this.children = [];
+            }
+        },
         classList: {
             add(...classNames) {
                 const next = new Set(classesOf(node));
@@ -298,12 +312,15 @@ function withDocument(callback, options = {}) {
         },
     };
     global.TimeTrackerPlanSegmentCore = {
-        resizePlanSegmentInList(items, segmentIndex, edge, targetMinute) {
+        ...(options.planSegmentCore || {}),
+        resizePlanSegmentInList: (options.planSegmentCore && options.planSegmentCore.resizePlanSegmentInList)
+            || function resizePlanSegmentInList(items, segmentIndex, edge, targetMinute) {
             return items.map((item, index) => index === segmentIndex
                 ? { ...item, endMinute: edge === 'right' ? targetMinute : item.endMinute, durationMinutes: targetMinute }
                 : item);
         },
-        calculateVirtualRestGaps() {
+        calculateVirtualRestGaps: (options.planSegmentCore && options.planSegmentCore.calculateVirtualRestGaps)
+            || function calculateVirtualRestGaps() {
             return [];
         },
     };
@@ -423,33 +440,126 @@ test('plan segment resize preview guide uses svg class attribute without classNa
     });
 });
 
-test('ten minute plan segment resize preview omits left arrow graphics', () => {
-    withDocument(() => {
-        const ctx = {
-            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 10, durationMinutes: 10 }] }],
-            removePlanSegmentResizePreviewLayer,
-            clearActivePlanSegmentResizeClasses,
-            cleanupPlanSegmentResizeState,
-            getPlanSegmentBaseIndex(index) { return index; },
-            getBlockLength() { return 1; },
-            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
-            applyPlanSegmentResize() { return true; },
-            closePlanSegmentMobileTextEditor() { return false; },
-            closeInlinePlanDropdown() {},
-        };
+function latestGuide(grid) {
+    const guides = grid.querySelectorAll('.plan-segment-resize-preview-guide');
+    return guides[guides.length - 1] || null;
+}
+
+function latestPreviewDurations(grid) {
+    return grid.querySelectorAll('.plan-segment-resize-preview-duration')
+        .map(node => node.textContent);
+}
+
+function createTenMinuteResizeContext(applyCalls = []) {
+    return {
+        timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 10, durationMinutes: 10, seconds: 600 }] }],
+        removePlanSegmentResizePreviewLayer,
+        clearActivePlanSegmentResizeClasses,
+        cleanupPlanSegmentResizeState,
+        getPlanSegmentBaseIndex(index) { return index; },
+        getBlockLength() { return 1; },
+        normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+        applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+            const slot = this.timeSlots[baseIndex];
+            slot.planActivities = realPlanSegmentCore.resizePlanSegmentInList(
+                slot.planActivities,
+                segmentIndex,
+                edge,
+                targetMinute,
+                { startMinute: 0, endMinute: 60 }
+            );
+            applyCalls.push({
+                baseIndex,
+                segmentIndex,
+                edge,
+                targetMinute,
+                durationMinutes: slot.planActivities[0].durationMinutes,
+                endMinute: slot.planActivities[0].endMinute,
+            });
+            return true;
+        },
+        closePlanSegmentMobileTextEditor() { return false; },
+        closeInlinePlanDropdown() {},
+    };
+}
+
+test('ten minute plan segment right-shrink preview clamps guide to current boundary', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const ctx = createTenMinuteResizeContext(applyCalls);
         const fixture = createResizeFixture({ endMinute: 10 });
 
         attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
         fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -100));
 
-        const guide = fixture.grid.querySelector('.plan-segment-resize-preview-guide');
+        const guide = latestGuide(fixture.grid);
         assert.ok(guide);
+        assert.equal(guide.style.left, `${(1 / 6) * 100}%`);
+        assert.notEqual(guide.style.left, '0%');
+        assert.equal(guide.getAttribute('viewBox'), '56 0 40 28');
+        assert.equal(guide.getAttribute('width'), '40');
+        assert.equal(guide.style.width, '40px');
+        assert.equal(guide.style.minWidth, '40px');
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+
         const arrowShapes = guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape');
         assert.equal(arrowShapes.length, 1);
         assert.match(arrowShapes[0].getAttribute('d'), /^M61\.7/);
         assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
         assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
-    });
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -100));
+
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 10);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 10);
+        assert.deepEqual(applyCalls, [{
+            baseIndex: 0,
+            segmentIndex: 0,
+            edge: 'right',
+            targetMinute: 0,
+            durationMinutes: 10,
+            endMinute: 10,
+        }]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('ten minute plan segment right-expansion preview follows expanded boundary', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const ctx = createTenMinuteResizeContext(applyCalls);
+        const fixture = createResizeFixture({ endMinute: 10 });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+
+        const guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(guide.style.left, `${(2 / 6) * 100}%`);
+        assert.equal(guide.getAttribute('viewBox'), '56 0 40 28');
+        assert.equal(guide.getAttribute('width'), '40');
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['20m', '40m']);
+
+        const arrowShapes = guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape');
+        assert.equal(arrowShapes.length, 1);
+        assert.match(arrowShapes[0].getAttribute('d'), /^M61\.7/);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 20);
+        assert.deepEqual(applyCalls, [{
+            baseIndex: 0,
+            segmentIndex: 0,
+            edge: 'right',
+            targetMinute: 20,
+            durationMinutes: 20,
+            endMinute: 20,
+        }]);
+    }, { planSegmentCore: realPlanSegmentCore });
 });
 
 test('plan segment resize still applies and cleans up when preview guide creation fails', () => {

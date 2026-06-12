@@ -7478,9 +7478,9 @@ class TimeTracker {
                         rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
 
                         const guide = createSvgElement('svg');
-                        guide.setAttribute('class', 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
-                        guide.setAttribute('viewBox', '0 0 96 28');
-                        guide.setAttribute('width', '96');
+                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}`);
+                        guide.setAttribute('viewBox', hideLeftArrow ? '56 0 40 28' : '0 0 96 28');
+                        guide.setAttribute('width', hideLeftArrow ? '40' : '96');
                         guide.setAttribute('height', '28');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
@@ -7488,6 +7488,10 @@ class TimeTracker {
                             guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
                             guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
                             guide.style.pointerEvents = 'none';
+                            if (hideLeftArrow) {
+                                guide.style.width = '40px';
+                                guide.style.minWidth = '40px';
+                            }
                         }
                         const idSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
                         const gradientId = `plan-resize-arrow-fill-${idSuffix}`;
@@ -7729,7 +7733,21 @@ class TimeTracker {
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
                     layer.innerHTML = '';
                     previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
-                    appendResizePreviewGuide(layer, targetMinute, {
+                    const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
+                    let guideBoundaryMinute = originalBoundaryMinute;
+                    if (Array.isArray(resized)) {
+                        const hasMatchingSegmentIndex = resized.some(item => Number(item && item.segmentIndex) === segmentIndex);
+                        const resizedTarget = hasMatchingSegmentIndex
+                            ? resized.find(item => Number(item && item.segmentIndex) === segmentIndex)
+                            : resized[segmentIndex];
+                        const resizedBoundaryMinute = effectiveEdge === 'left'
+                            ? toPreviewMinute(resizedTarget && resizedTarget.startMinute, null)
+                            : toPreviewMinute(resizedTarget && resizedTarget.endMinute, null);
+                        if (Number.isFinite(resizedBoundaryMinute)) {
+                            guideBoundaryMinute = resizedBoundaryMinute;
+                        }
+                    }
+                    appendResizePreviewGuide(layer, guideBoundaryMinute, {
                         hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10,
                     });
                 };
