@@ -821,7 +821,6 @@ textarea:focus-visible,
         right: 0;
     }
 
-    .plan-segment-boundary-resize-handle-line,
-    .plan-segment-resize-handle::after {
+    .plan-segment-boundary-resize-handle-line {
         width: 8px;
     }

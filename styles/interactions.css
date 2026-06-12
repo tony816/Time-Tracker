@@ -2377,8 +2377,7 @@ button.activity-chip,
   right: 0;
 }
 
-.plan-segment-boundary-resize-handle-line,
-.plan-segment-resize-handle::after {
+.plan-segment-boundary-resize-handle-line {
   content: '';
   position: absolute;
   top: 0;
@@ -2397,20 +2396,14 @@ button.activity-chip,
   display: block;
 }
 
+.plan-segment-resize-handle::after,
 .plan-segment-boundary-resize-handle-line::after {
-  content: none;
-}
-
-.plan-segment-boundary-resize-handle::after {
   content: none;
 }
 
 .plan-segment-resize-handle:hover .plan-segment-boundary-resize-handle-line,
 .plan-segment-resize-handle:focus-visible .plan-segment-boundary-resize-handle-line,
-.plan-segment-resize-handle:hover::after,
-.plan-segment-resize-handle:focus-visible::after,
-.split-grid-segment.is-resizing-plan-segment .plan-segment-boundary-resize-handle-line,
-.split-grid-segment.is-resizing-plan-segment .plan-segment-resize-handle::after {
+.split-grid-segment.is-resizing-plan-segment .plan-segment-boundary-resize-handle-line {
   background: color-mix(in srgb, var(--plan-segment-handle-color) 42%, #ffffff 58%);
   border-color: var(--plan-segment-handle-stroke);
   box-shadow: 0 2px 5px rgba(15, 23, 42, 0.24);
