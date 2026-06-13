@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const controller = require('../controllers/selection-overlay-controller');
+const fieldInteractionController = require('../controllers/field-interaction-controller');
 const planSegmentCore = require('../core/plan-segment-core');
 const stateCore = require('../core/timesheet-state-core');
 const { buildMethod } = require('./helpers/script-method-builder');
@@ -32,6 +33,23 @@ function createSlot(overrides = {}) {
             actualOverride: false,
         },
         ...overrides,
+    };
+}
+
+function createListenerNode() {
+    const listeners = {};
+    return {
+        dataset: {},
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).forEach((handler) => handler(event));
+        },
+        closest() {
+            return null;
+        },
     };
 }
 
@@ -143,6 +161,121 @@ test('selectFieldRange expands to merged planned slot boundaries', () => {
     assert.deepEqual(ctx.updateSelectionOverlayCalls, ['planned']);
     assert.deepEqual(ctx.showMergeButtonCalls, ['planned']);
     assert.deepEqual(ctx.showScheduleButtonForSelectionCalls, ['planned']);
+});
+
+test('existing merged planned range selected from time slot shows undo instead of new merge', () => {
+    const ctx = {
+        timeSlots: new Array(6).fill({}),
+        selectedPlannedFields: new Set(),
+        selectedActualFields: new Set(),
+        getPlannedRangeInfo(index) {
+            if (index >= 1 && index <= 3) return { startIndex: 1, endIndex: 3, mergeKey: 'planned-1-3' };
+            return { startIndex: index, endIndex: index, mergeKey: null };
+        },
+        findMergeKey(type, index) {
+            return type === 'planned' && index >= 1 && index <= 3 ? 'planned-1-3' : null;
+        },
+        getMergeRangeBounds(mergeKey) {
+            assert.equal(mergeKey, 'planned-1-3');
+            return { start: 1, end: 3 };
+        },
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+            if (type === 'actual') this.selectedActualFields.clear();
+        },
+        updateSelectionOverlayCalls: [],
+        updateSelectionOverlay(type) {
+            this.updateSelectionOverlayCalls.push(type);
+        },
+        showMergeButtonCalls: [],
+        showMergeButton(type) {
+            this.showMergeButtonCalls.push(type);
+        },
+        showUndoButtonCalls: [],
+        showUndoButton(type, mergeKey) {
+            this.showUndoButtonCalls.push({ type, mergeKey });
+        },
+        showScheduleButtonForSelectionCalls: [],
+        showScheduleButtonForSelection(type) {
+            this.showScheduleButtonForSelectionCalls.push(type);
+        },
+    };
+
+    selectFieldRange.call(ctx, 'planned', 1, 3);
+
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), [1, 2, 3]);
+    assert.deepEqual(ctx.showMergeButtonCalls, []);
+    assert.deepEqual(ctx.showUndoButtonCalls, [{ type: 'planned', mergeKey: 'planned-1-3' }]);
+    assert.deepEqual(ctx.showScheduleButtonForSelectionCalls, ['planned']);
+});
+
+test('time-slot initiated selection can merge selected fields and preserve segmented planned data', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'Morning',
+            planActivities: [
+                { label: 'Focus', seconds: 1200, startMinute: 0, endMinute: 20, durationMinutes: 20 },
+            ],
+            planSegmentTimers: {
+                'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 30, method: 'plan-segment' },
+            },
+        }),
+        createSlot({
+            time: '5',
+            planned: 'Review',
+            planActivities: [
+                { label: 'Review', seconds: 900, startMinute: 10, endMinute: 25, durationMinutes: 15 },
+            ],
+        }),
+    ]);
+    Object.assign(ctx, {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index, mergeKey: null };
+        },
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+            if (type === 'actual') this.selectedActualFields.clear();
+        },
+        updateSelectionOverlay() {},
+        showMergeButton() {},
+        showScheduleButtonForSelection() {},
+        selectFieldRange,
+    });
+
+    fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 0);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    selectFieldRange.call(ctx, 'planned', 0, 1);
+    withDocumentQuery('Morning', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(ctx.mergedFields.get('planned-0-1'), 'Focus + Review');
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'Focus', startMinute: 0, endMinute: 20 },
+        { label: 'Review', startMinute: 70, endMinute: 85 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1-seg0'].status, 'paused');
 });
 
 test('merged planned drag start no longer depends on hold delay', () => {

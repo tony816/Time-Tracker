@@ -84,6 +84,14 @@
         }
     }
 
+    function resetPlannedSelectionDragState(ctx) {
+        if (!ctx) return;
+        ctx.isSelectingPlanned = false;
+        ctx.currentColumnType = null;
+        ctx.dragStartIndex = -1;
+        ctx.dragBaseEndIndex = -1;
+    }
+
     function openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex = null, options = {}) {
         if (!ctx || !plannedField || typeof ctx.openInlinePlanDropdown !== 'function') return;
         const context = getPlannedContextForIndex(ctx, index);
@@ -292,6 +300,23 @@
             ? entryDiv.querySelector('.time-slot-container')
             : null;
         if (!timeSlot) return;
+        const doc = (timeSlot.ownerDocument || (typeof document !== 'undefined' ? document : null));
+
+        const isNonMergeTimeSlotControl = (target) => {
+            if (!target || !target.closest) return false;
+            return [
+                '.timer-controls-container',
+                '.timer-btn',
+                '.time-slot-control',
+                '[data-time-slot-control]',
+                'button',
+                'input',
+                'select',
+                'textarea',
+                'a',
+                '[role="button"]',
+            ].some((selector) => Boolean(target.closest(selector)));
+        };
 
         const getRange = () => {
             const mergeKey = this.findMergeKey ? this.findMergeKey('planned', index) : null;
@@ -303,10 +328,7 @@
             return { start, end };
         };
         const beginTimeSlotMergeSelection = (event) => {
-            if (event && event.target && event.target.closest && (
-                event.target.closest('.timer-controls-container') ||
-                event.target.closest('.timer-btn')
-            )) {
+            if (event && isNonMergeTimeSlotControl(event.target)) {
                 return false;
             }
             const range = getRange();
@@ -321,10 +343,41 @@
             this.selectFieldRange('planned', range.start, range.end);
             return true;
         };
+        const updateTimeSlotMergeSelection = (event) => {
+            if (!this.isSelectingPlanned || this.currentColumnType !== 'planned') return;
+            const point = event && event.touches ? event.touches[0] : event;
+            if (!point) return;
+            const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
+            if (!Number.isInteger(hoverIndex)) return;
+            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
+            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
+                ? this.dragBaseEndIndex
+                : baseStart;
+            this.clearSelection('planned');
+            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
+        };
+        const handleDocumentMouseMove = (event) => {
+            if (typeof event.buttons === 'number' && event.buttons === 0) {
+                handleDocumentMouseUp();
+                return;
+            }
+            updateTimeSlotMergeSelection(event);
+        };
+        const handleDocumentMouseUp = () => {
+            resetPlannedSelectionDragState(this);
+            if (doc && typeof doc.removeEventListener === 'function') {
+                doc.removeEventListener('mousemove', handleDocumentMouseMove);
+                doc.removeEventListener('mouseup', handleDocumentMouseUp);
+            }
+        };
 
         timeSlot.addEventListener('mousedown', (e) => {
             if (e.button !== undefined && e.button !== 0) return;
             if (!beginTimeSlotMergeSelection(e)) return;
+            if (doc && typeof doc.addEventListener === 'function') {
+                doc.addEventListener('mousemove', handleDocumentMouseMove);
+                doc.addEventListener('mouseup', handleDocumentMouseUp);
+            }
             e.preventDefault();
             e.stopPropagation();
         });
@@ -340,10 +393,7 @@
 
         timeSlot.addEventListener('touchstart', (e) => {
             if (!e.touches || e.touches.length !== 1) return;
-            if (e.target && e.target.closest && (
-                e.target.closest('.timer-controls-container') ||
-                e.target.closest('.timer-btn')
-            )) {
+            if (isNonMergeTimeSlotControl(e.target)) {
                 return;
             }
             touchLongPressActive = false;
@@ -358,15 +408,7 @@
             const t = e.touches && e.touches[0];
             if (!t) return;
             e.preventDefault();
-            const hoverIndex = this.getIndexAtClientPosition('planned', t.clientX, t.clientY);
-            if (!Number.isInteger(hoverIndex)) return;
-            if (this.currentColumnType !== 'planned') return;
-            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
-            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
-                ? this.dragBaseEndIndex
-                : baseStart;
-            this.clearSelection('planned');
-            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
+            updateTimeSlotMergeSelection(e);
         }, { passive: false });
 
         timeSlot.addEventListener('touchend', (e) => {
@@ -374,10 +416,7 @@
             if (touchLongPressActive) {
                 e.preventDefault();
                 e.stopPropagation();
-                this.isSelectingPlanned = false;
-                this.currentColumnType = null;
-                this.dragStartIndex = -1;
-                this.dragBaseEndIndex = -1;
+                resetPlannedSelectionDragState(this);
             }
             touchLongPressActive = false;
         }, { passive: false });
@@ -385,10 +424,7 @@
         timeSlot.addEventListener('touchcancel', () => {
             clearTouchLongPress();
             touchLongPressActive = false;
-            this.isSelectingPlanned = false;
-            this.currentColumnType = null;
-            this.dragStartIndex = -1;
-            this.dragBaseEndIndex = -1;
+            resetPlannedSelectionDragState(this);
         }, { passive: true });
     }
 
@@ -437,6 +473,7 @@
 
     return {
         getAnchorMinWidthFromElement,
+        resetPlannedSelectionDragState,
         openPlannedFieldDropdownWithViewportPreparation,
         handleMergedClickCapture,
         attachPlannedFieldSelectionListeners,

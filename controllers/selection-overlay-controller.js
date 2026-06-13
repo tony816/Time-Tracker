@@ -149,6 +149,36 @@
 
         const plannedSelection = getSelectionSetForType.call(this, 'planned');
         if (plannedSelection.size > 1) {
+            const selectedIndices = Array.from(plannedSelection).sort((a, b) => a - b);
+            const selectedStart = selectedIndices[0];
+            const selectedEnd = selectedIndices[selectedIndices.length - 1];
+            const mergeKey = this.findMergeKey ? this.findMergeKey('planned', selectedStart) : null;
+            const bounds = mergeKey && this.getMergeRangeBounds
+                ? this.getMergeRangeBounds(mergeKey, selectedStart)
+                : null;
+            let mergeStart = bounds && Number.isInteger(bounds.start) ? bounds.start : selectedStart;
+            let mergeEnd = bounds && Number.isInteger(bounds.end) ? bounds.end : selectedEnd;
+            if (!bounds && mergeKey) {
+                const parts = String(mergeKey).split('-');
+                const parsedStart = parseInt(parts[1], 10);
+                const parsedEnd = parseInt(parts[2], 10);
+                if (Number.isInteger(parsedStart)) mergeStart = parsedStart;
+                if (Number.isInteger(parsedEnd)) mergeEnd = parsedEnd;
+            }
+            const exactExistingMerge = Boolean(
+                mergeKey
+                && mergeStart === selectedStart
+                && mergeEnd === selectedEnd
+                && selectedIndices.every((idx) => {
+                    const keyAtIndex = this.findMergeKey ? this.findMergeKey('planned', idx) : null;
+                    return keyAtIndex === mergeKey;
+                })
+            );
+            if (exactExistingMerge) {
+                this.showScheduleButtonForSelection(type);
+                this.showUndoButton('planned', mergeKey);
+                return;
+            }
             this.showMergeButton('planned');
         }
         this.showScheduleButtonForSelection(type);

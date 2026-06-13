@@ -37,6 +37,26 @@ function createListenerNode() {
     };
 }
 
+function createDocumentListenerHarness() {
+    const listeners = {};
+    return {
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            const handlers = listeners[event.type] || [];
+            handlers.slice().forEach((handler) => handler(event));
+        },
+        listenerCount(type) {
+            return (listeners[type] || []).length;
+        },
+    };
+}
+
 test('field-interaction-controller exports and global attach are available', () => {
     assert.ok(controller);
     assert.equal(typeof controller.handleMergedClickCapture, 'function');
@@ -762,6 +782,211 @@ test('time-slot merge entry does not intercept timer controls', () => {
     });
 
     assert.deepEqual(calls, []);
+});
+
+test('desktop time-slot drag selects multiple planned slots through document mousemove', () => {
+    const doc = createDocumentListenerHarness();
+    const timeSlot = createListenerNode();
+    timeSlot.ownerDocument = doc;
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        findMergeKey() {
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+        getIndexAtClientPosition(type, x, y) {
+            calls.push(['hit', type, x, y]);
+            return 5;
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    doc.dispatchEvent({ type: 'mousemove', buttons: 1, clientX: 10, clientY: 20 });
+
+    assert.equal(doc.listenerCount('mousemove'), 1);
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 2 && call[3] === 5));
+    assert.equal(ctx.currentColumnType, 'planned');
+    assert.equal(ctx.isSelectingPlanned, true);
+});
+
+test('desktop time-slot mouseup resets selection state and document listeners', () => {
+    const doc = createDocumentListenerHarness();
+    const timeSlot = createListenerNode();
+    timeSlot.ownerDocument = doc;
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        findMergeKey() {
+            return null;
+        },
+        closeInlinePlanDropdown() {},
+        clearSelection() {},
+        selectFieldRange() {},
+        getIndexAtClientPosition() {
+            return 4;
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+    doc.dispatchEvent({ type: 'mouseup' });
+
+    assert.equal(ctx.isSelectingPlanned, false);
+    assert.equal(ctx.currentColumnType, null);
+    assert.equal(ctx.dragStartIndex, -1);
+    assert.equal(ctx.dragBaseEndIndex, -1);
+    assert.equal(doc.listenerCount('mousemove'), 0);
+    assert.equal(doc.listenerCount('mouseup'), 0);
+});
+
+test('time-slot merge entry does not intercept generic time-slot controls', () => {
+    const control = {
+        closest(selector) {
+            return selector.includes('[data-time-slot-control]') ? control : null;
+        },
+    };
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        findMergeKey() {
+            calls.push(['find']);
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: control,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, []);
+});
+
+test('mobile time-slot long-press selection resets cleanly on touchend and touchcancel', () => {
+    const originalSetTimeout = global.setTimeout;
+    const originalClearTimeout = global.clearTimeout;
+    const timers = [];
+    global.setTimeout = (callback) => {
+        timers.push(callback);
+        return callback;
+    };
+    global.clearTimeout = () => {};
+    const timeSlot = createListenerNode();
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        findMergeKey() {
+            return null;
+        },
+        closeInlinePlanDropdown() {},
+        clearSelection() {},
+        selectFieldRange() {},
+        getIndexAtClientPosition() {
+            return 3;
+        },
+    };
+    const touchEvent = (type) => ({
+        type,
+        target: timeSlot,
+        touches: [{ clientX: 0, clientY: 0 }],
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    try {
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent(touchEvent('touchstart'));
+        timers.pop()();
+        assert.equal(ctx.isSelectingPlanned, true);
+        timeSlot.dispatchEvent(touchEvent('touchend'));
+        assert.equal(ctx.isSelectingPlanned, false);
+        assert.equal(ctx.currentColumnType, null);
+        assert.equal(ctx.dragStartIndex, -1);
+        assert.equal(ctx.dragBaseEndIndex, -1);
+
+        timeSlot.dispatchEvent(touchEvent('touchstart'));
+        timers.pop()();
+        assert.equal(ctx.isSelectingPlanned, true);
+        timeSlot.dispatchEvent(touchEvent('touchcancel'));
+        assert.equal(ctx.isSelectingPlanned, false);
+        assert.equal(ctx.currentColumnType, null);
+        assert.equal(ctx.dragStartIndex, -1);
+        assert.equal(ctx.dragBaseEndIndex, -1);
+    } finally {
+        global.setTimeout = originalSetTimeout;
+        global.clearTimeout = originalClearTimeout;
+    }
 });
 
 test('planned mouseup path no longer starts merge selection from planned slot UI', () => {
