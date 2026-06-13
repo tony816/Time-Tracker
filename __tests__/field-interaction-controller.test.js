@@ -9,6 +9,10 @@ const attachPlannedFieldSelectionListenersWrapper = buildMethod(
     'attachPlannedFieldSelectionListeners(entryDiv, index, plannedField)',
     '(entryDiv, index, plannedField)'
 );
+const attachTimeSlotMergeEntryListenersWrapper = buildMethod(
+    'attachTimeSlotMergeEntryListeners(entryDiv, index)',
+    '(entryDiv, index)'
+);
 const attachRowWideClickTargetsWrapper = buildMethod(
     'attachRowWideClickTargets(entryDiv, index)',
     '(entryDiv, index)'
@@ -37,6 +41,7 @@ test('field-interaction-controller exports and global attach are available', () 
     assert.ok(controller);
     assert.equal(typeof controller.handleMergedClickCapture, 'function');
     assert.equal(typeof controller.attachPlannedFieldSelectionListeners, 'function');
+    assert.equal(typeof controller.attachTimeSlotMergeEntryListeners, 'function');
     assert.equal(typeof controller.attachRowWideClickTargets, 'function');
     assert.equal(typeof controller.attachCellClickListeners, 'function');
     assert.equal(
@@ -46,6 +51,10 @@ test('field-interaction-controller exports and global attach are available', () 
     assert.equal(
         globalThis.TimeTrackerFieldInteractionController.attachPlannedFieldSelectionListeners,
         controller.attachPlannedFieldSelectionListeners
+    );
+    assert.equal(
+        globalThis.TimeTrackerFieldInteractionController.attachTimeSlotMergeEntryListeners,
+        controller.attachTimeSlotMergeEntryListeners
     );
     assert.equal(
         globalThis.TimeTrackerFieldInteractionController.attachRowWideClickTargets,
@@ -69,6 +78,10 @@ test('script field interaction wrapper methods delegate to controller helpers', 
             calls.push(['planned', this, entryDiv, index, plannedField]);
             return 'planned-result';
         },
+        attachTimeSlotMergeEntryListeners(entryDiv, index) {
+            calls.push(['time-slot-merge', this, entryDiv, index]);
+            return 'time-slot-merge-result';
+        },
         attachRowWideClickTargets(entryDiv, index) {
             calls.push(['row', this, entryDiv, index]);
             return 'row-result';
@@ -90,6 +103,7 @@ test('script field interaction wrapper methods delegate to controller helpers', 
             attachPlannedFieldSelectionListenersWrapper.call(ctx, entryDiv, 4, plannedField),
             'planned-result'
         );
+        assert.equal(attachTimeSlotMergeEntryListenersWrapper.call(ctx, entryDiv, 4), 'time-slot-merge-result');
         assert.equal(attachRowWideClickTargetsWrapper.call(ctx, entryDiv, 4), 'row-result');
         assert.equal(attachCellClickListenersWrapper.call(ctx, entryDiv, 4), 'cell-result');
     } finally {
@@ -99,6 +113,7 @@ test('script field interaction wrapper methods delegate to controller helpers', 
     assert.deepEqual(calls, [
         ['merged', ctx, event],
         ['planned', ctx, entryDiv, 4, plannedField],
+        ['time-slot-merge', ctx, entryDiv, 4],
         ['row', ctx, entryDiv, 4],
         ['cell', ctx, entryDiv, 4],
     ]);
@@ -427,7 +442,7 @@ test('planned mousedown retap keeps open mobile inline plan sheet', () => {
     assert.equal(ctx.suppressInlinePlanClickOnce, null);
 });
 
-test('merged planned click capture keeps logical range but opens against the clicked field target', () => {
+test('merged planned click capture no longer starts merge selection from planned field target', () => {
     const wrapper = createListenerNode();
     wrapper.getBoundingClientRect = () => ({ width: 520 });
     const plannedField = createListenerNode();
@@ -471,20 +486,13 @@ test('merged planned click capture keeps logical range but opens against the cli
 
     controller.handleMergedClickCapture.call(ctx, event);
 
-    const openCall = calls.find((call) => call[0] === 'open');
-    assert.ok(openCall);
-    assert.equal(openCall[1], 8);
-    assert.equal(openCall[2], wrapper);
-    assert.equal(openCall[3], 14);
-    assert.equal(openCall[4].sheetTargetEl, wrapper);
-    assert.deepEqual(calls.slice(0, 3), [
-        ['prevent'],
-        ['stop'],
-        ['activate', 'planned-8-14', 14],
-    ]);
+    assert.equal(calls.some((call) => call[0] === 'activate'), false);
+    assert.equal(calls.some((call) => call[0] === 'open'), false);
+    assert.equal(calls.some((call) => call[0] === 'prevent'), false);
+    assert.equal(calls.some((call) => call[0] === 'stop'), false);
 });
 
-test('merged planned secondary click keeps dropdown anchored to base range but sheet target on tapped row', () => {
+test('merged planned secondary click no longer starts merge selection from planned field target', () => {
     const originalDocument = globalThis.document;
     const baseAnchor = createListenerNode();
     baseAnchor.getBoundingClientRect = () => ({ width: 640 });
@@ -560,18 +568,9 @@ test('merged planned secondary click keeps dropdown anchored to base range but s
         globalThis.document = originalDocument;
     }
 
-    const openCall = calls.find((call) => call[0] === 'open');
-    assert.ok(openCall);
-    assert.equal(openCall[1], 0);
-    assert.equal(openCall[2], baseAnchor);
-    assert.equal(openCall[3], 1);
-    const prepareCall = calls.find((call) => call[0] === 'prepare');
-    assert.ok(prepareCall);
-    assert.equal(prepareCall[1], secondaryField);
-    assert.equal(openCall[4].sheetTargetEl, secondaryField);
-    assert.equal(openCall[4].baseIndex, 0);
-    assert.equal(openCall[4].rangeStart, 0);
-    assert.equal(openCall[4].rangeEnd, 1);
+    assert.equal(calls.some((call) => call[0] === 'activate'), false);
+    assert.equal(calls.some((call) => call[0] === 'prepare'), false);
+    assert.equal(calls.some((call) => call[0] === 'open'), false);
 });
 
 test('attachCellClickListeners keeps desktop empty planned slot open immediate when no pre-scroll occurs', () => {
@@ -616,7 +615,156 @@ test('attachCellClickListeners keeps desktop empty planned slot open immediate w
     assert.equal(calls[1][4].sheetTargetEl, plannedField);
 });
 
-test('planned mouseup path pre-scrolls before opening empty planned slot sheet', () => {
+test('time-slot merge entry selects planned range through existing selection rules', () => {
+    const timeSlot = createListenerNode();
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        findMergeKey(type, index) {
+            assert.equal(type, 'planned');
+            assert.equal(index, 2);
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+    const event = {
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent(event);
+
+    assert.deepEqual(calls, [
+        ['close'],
+        ['clear', 'planned'],
+        ['select', 'planned', 2, 2],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.equal(ctx.currentColumnType, 'planned');
+    assert.equal(ctx.isSelectingPlanned, true);
+    assert.equal(ctx.dragStartIndex, 2);
+    assert.equal(ctx.dragBaseEndIndex, 2);
+});
+
+test('time-slot merge entry expands an existing planned merge range before reuse', () => {
+    const timeSlot = createListenerNode();
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        findMergeKey(type, index) {
+            return type === 'planned' && index === 3 ? 'planned-1-3' : null;
+        },
+        getMergeRangeBounds(mergeKey, fallbackIndex) {
+            calls.push(['bounds', mergeKey, fallbackIndex]);
+            return { start: 1, end: 3 };
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.deepEqual(calls, [
+        ['bounds', 'planned-1-3', 3],
+        ['close'],
+        ['clear', 'planned'],
+        ['select', 'planned', 1, 3],
+    ]);
+});
+
+test('time-slot merge entry does not intercept timer controls', () => {
+    const timerButton = {
+        closest(selector) {
+            return selector === '.timer-btn' ? timerButton : null;
+        },
+    };
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        findMergeKey() {
+            calls.push(['find']);
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timerButton,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, []);
+});
+
+test('planned mouseup path no longer starts merge selection from planned slot UI', () => {
     const previousWindow = global.window;
     const plannedField = createListenerNode();
     const wrapper = createListenerNode();
@@ -686,17 +834,10 @@ test('planned mouseup path pre-scrolls before opening empty planned slot sheet',
             stopPropagation() {},
         });
 
-        assert.deepEqual(calls.filter((call) => call[0] === 'prepare'), [['prepare', wrapper]]);
-        assert.equal(rafCalls.length, 1);
-        rafCalls[0]();
-        rafCalls[1]();
-        const openCall = calls.find((call) => call[0] === 'open');
-        assert.ok(openCall);
-        assert.equal(openCall[1], 4);
-        assert.equal(openCall[2], wrapper);
-        assert.equal(openCall[3], 4);
-        assert.equal(openCall[4].anchorMinWidth, 360);
-        assert.equal(openCall[4].sheetTargetEl, plannedField);
+        assert.equal(calls.some((call) => call[0] === 'select'), false);
+        assert.equal(calls.some((call) => call[0] === 'prepare'), false);
+        assert.equal(calls.some((call) => call[0] === 'open'), false);
+        assert.equal(rafCalls.length, 0);
     } finally {
         if (previousWindow === undefined) {
             delete global.window;

@@ -136,6 +136,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
                 this.attachFieldSelectionListeners(entryDiv, index);
                 this.attachCellClickListeners(entryDiv, index);
             }
+            if (typeof this.attachTimeSlotMergeEntryListeners === 'function') {
+                this.attachTimeSlotMergeEntryListeners(entryDiv, index);
+            }
             if (typeof this.attachVirtualRestGapListeners === 'function') {
                 this.attachVirtualRestGapListeners(entryDiv, index);
             }

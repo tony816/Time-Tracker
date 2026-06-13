@@ -104,10 +104,12 @@ test('planned selection overlay click closes same-range inline dropdown on mouse
     assert.match(selectionControllerSource, /if \(this\.isSameInlinePlanTarget\(clickedRange\)\) \{\s+this\.closeInlinePlanDropdown\(\);\s+\}/);
 });
 
-test('planned mouseup path suppresses reopen when same-slot toggle close is armed', () => {
-    assert.match(fieldInteractionControllerSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
-    assert.match(fieldInteractionControllerSource, /if \(!plannedMouseMoved\) \{\s+if \(suppressReopen\) \{\s+this\.clearSelection\('planned'\);\s+\} else \{/);
-    assert.match(fieldInteractionControllerSource, /openPlannedFieldDropdownWithViewportPreparation\(this, base\.start, plannedField, base\.end\);/);
+test('planned field listeners no longer own merge initiation while dropdown viewport prep remains shared', () => {
+    assert.doesNotMatch(fieldInteractionControllerSource, /const suppressReopen = this\.suppressInlinePlanClickOnce === index;/);
+    assert.doesNotMatch(fieldInteractionControllerSource, /plannedMouseMoved/);
+    assert.doesNotMatch(fieldInteractionControllerSource, /plannedField\.addEventListener\('touchstart'/);
+    assert.match(fieldInteractionControllerSource, /function attachTimeSlotMergeEntryListeners\(entryDiv, index\) \{/);
+    assert.match(fieldInteractionControllerSource, /this\.selectFieldRange\('planned', range\.start, range\.end\);/);
     assert.match(fieldInteractionControllerSource, /ctx\.preparePlannedSlotReplacementViewport\(viewportTargetEl \|\| sheetTargetEl \|\| plannedField\)/);
     assert.match(fieldInteractionControllerSource, /scheduleAfterAnimationFrame\(open\);/);
 });

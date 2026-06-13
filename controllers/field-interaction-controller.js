@@ -211,100 +211,13 @@
             }
         }
         const timeMerged = target.closest && target.closest('.time-slot-container.merged-time-main, .time-slot-container.merged-time-secondary');
-        if (timeMerged) {
-            if (target.closest('.timer-controls-container') || target.closest('.timer-btn')) {
-                return;
-            }
-            e.preventDefault();
-            e.stopPropagation();
+        if (timeMerged && (target.closest('.timer-controls-container') || target.closest('.timer-btn'))) {
             return;
-        }
-
-        const plannedEl = target.closest && target.closest('.planned-input[data-merge-key]');
-        if (plannedEl) {
-            const mergeKey = plannedEl.getAttribute('data-merge-key');
-            if (!mergeKey) return;
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.type === 'mousedown') {
-                this.queueMergedPlannedMouseSelection(
-                    mergeKey,
-                    parseInt(plannedEl.dataset.index, 10),
-                    e.clientX,
-                    e.clientY
-                );
-                return;
-            }
-            if (e.type === 'click') {
-                if (this.suppressMergedClickOnce) {
-                    this.suppressMergedClickOnce = false;
-                    return;
-                }
-                this.pendingMergedMouseSelection = null;
-                const range = this.activateMergedPlannedSelection(mergeKey, parseInt(plannedEl.dataset.index, 10));
-                if (!range) return;
-                const safeStart = range.start;
-                const safeEnd = range.end;
-                openPlannedFieldDropdownWithViewportPreparation(this, safeStart, plannedEl, safeEnd);
-            }
-            return;
-        }
-
-        const row = target.closest && target.closest('.time-entry');
-        if (row && typeof e.clientX === 'number') {
-            const rowRect = row.getBoundingClientRect();
-            const index = parseInt(row.getAttribute('data-index'), 10);
-            const x = e.clientX;
-            const y = e.clientY;
-
-            const prEl = row.querySelector('.planned-input');
-            if (prEl) {
-                const pr = prEl.getBoundingClientRect();
-                const inPlanned = (x >= pr.left && x <= pr.right && y >= rowRect.top && y <= rowRect.bottom);
-                if (inPlanned) {
-                    const mk = this.findMergeKey('planned', index);
-                    if (mk) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (e.type === 'mousedown') {
-                            this.queueMergedPlannedMouseSelection(mk, index, e.clientX, e.clientY);
-                            return;
-                        }
-                        if (e.type === 'click') {
-                            if (this.suppressMergedClickOnce) {
-                                this.suppressMergedClickOnce = false;
-                                return;
-                            }
-                            this.pendingMergedMouseSelection = null;
-                            const range = this.activateMergedPlannedSelection(mk, index);
-                            if (!range) return;
-                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, prEl, range.end);
-                        }
-                        return;
-                    }
-                }
-            }
         }
     }
 
     function attachPlannedFieldSelectionListeners(entryDiv, index, plannedField) {
         if (!plannedField) return;
-
-        plannedField.addEventListener('click', (e) => {
-            const mergeKey = this.findMergeKey('planned', index);
-            if (!mergeKey) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-            const range = this.activateMergedPlannedSelection(mergeKey, index);
-            if (!range) return;
-            const mergeStart = range.start;
-            const mergeEnd = range.end;
-            openPlannedFieldDropdownWithViewportPreparation(this, mergeStart, plannedField, mergeEnd);
-        });
-
-        let plannedMouseMoved = false;
-        let plannedMouseBaseRange = null;
 
         plannedField.addEventListener('mousedown', (e) => {
             const mouseRange = this.getPlannedRangeInfo(index);
@@ -314,8 +227,6 @@
                 if (e.preventDefault) e.preventDefault();
                 if (e.stopPropagation) e.stopPropagation();
                 syncOpenInlinePlanSheetTarget(this, plannedField);
-                plannedMouseMoved = false;
-                plannedMouseBaseRange = null;
                 return;
             }
             if (sameInlineTarget) {
@@ -323,189 +234,11 @@
                 this.clearSelection('planned');
             }
             this.closeInlinePlanDropdown();
-            if (e.target === plannedField && !plannedField.matches(':focus')) {
-                e.preventDefault();
-                plannedMouseMoved = false;
-
-                const mergeKeyAtStart = this.findMergeKey('planned', index);
-                let rangeStart = index;
-                let rangeEnd = index;
-                if (mergeKeyAtStart) {
-                    const [, sStr, eStr] = String(mergeKeyAtStart).split('-');
-                    const parsedStart = parseInt(sStr, 10);
-                    const parsedEnd = parseInt(eStr, 10);
-                    if (Number.isFinite(parsedStart) && Number.isFinite(parsedEnd)) {
-                        rangeStart = parsedStart;
-                        rangeEnd = parsedEnd;
-                    }
-                }
-
-                this.currentColumnType = 'planned';
-                this.dragStartIndex = rangeStart;
-                this.dragBaseEndIndex = rangeEnd;
-                this.isSelectingPlanned = true;
-
-                if (!e.ctrlKey && !e.metaKey) {
-                    this.clearSelection('planned');
-                }
-                this.selectFieldRange('planned', rangeStart, rangeEnd);
-                plannedMouseBaseRange = { start: rangeStart, end: rangeEnd };
-            }
         });
-
-        plannedField.addEventListener('mousemove', (e) => {
-            if (e.target === plannedField && this.currentColumnType === 'planned' && this.isSelectingPlanned) {
-                plannedMouseMoved = true;
-                if (!e.ctrlKey && !e.metaKey) {
-                    this.clearSelection('planned');
-                }
-                const base = plannedMouseBaseRange || { start: this.dragStartIndex, end: this.dragStartIndex };
-                const nextStart = Math.min(base.start, index);
-                const nextEnd = Math.max(base.end, index);
-                this.selectFieldRange('planned', nextStart, nextEnd);
-            }
-        });
-
-        plannedField.addEventListener('mouseup', (e) => {
-            if (e.target === plannedField && !plannedField.matches(':focus') && this.currentColumnType === 'planned') {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const base = plannedMouseBaseRange || { start: index, end: index };
-                const nextStart = Math.min(base.start, index);
-                const nextEnd = Math.max(base.end, index);
-                const suppressReopen = this.suppressInlinePlanClickOnce === index;
-
-                if (!plannedMouseMoved) {
-                    if (suppressReopen) {
-                        this.clearSelection('planned');
-                    } else {
-                        if (this.selectedPlannedFields.has(index) && this.selectedPlannedFields.size === 1) {
-                            this.clearSelection('planned');
-                        } else {
-                            this.clearAllSelections();
-                            this.selectFieldRange('planned', nextStart, nextEnd);
-                        }
-                        if (!e.ctrlKey && !e.metaKey) {
-                            openPlannedFieldDropdownWithViewportPreparation(this, base.start, plannedField, base.end);
-                        }
-                        this.suppressInlinePlanClickOnce = index;
-                    }
-                } else {
-                    if (!e.ctrlKey && !e.metaKey) {
-                        this.clearSelection('planned');
-                    }
-                    this.selectFieldRange('planned', nextStart, nextEnd);
-                }
-                this.isSelectingPlanned = false;
-                this.currentColumnType = null;
-                this.dragBaseEndIndex = -1;
-                plannedMouseBaseRange = null;
-            }
-        });
-
-        let plannedTouchLongPressTimer = null;
-        let plannedTouchLongPressActive = false;
-        let plannedTouchBaseRange = null;
-        const clearPlannedTouchLongPress = () => {
-            if (plannedTouchLongPressTimer) {
-                clearTimeout(plannedTouchLongPressTimer);
-                plannedTouchLongPressTimer = null;
-            }
-        };
-
-        plannedField.addEventListener('touchstart', (e) => {
-            if (!e.touches || e.touches.length !== 1) return;
-            plannedTouchLongPressActive = false;
-            plannedTouchBaseRange = null;
-            plannedMouseMoved = false;
-            clearPlannedTouchLongPress();
-
-            const mergeKeyAtStart = this.findMergeKey('planned', index);
-            let rangeStart = index;
-            let rangeEnd = index;
-            if (mergeKeyAtStart) {
-                const [, sStr, eStr] = String(mergeKeyAtStart).split('-');
-                const parsedStart = parseInt(sStr, 10);
-                const parsedEnd = parseInt(eStr, 10);
-                if (Number.isFinite(parsedStart) && Number.isFinite(parsedEnd)) {
-                    rangeStart = parsedStart;
-                    rangeEnd = parsedEnd;
-                }
-            }
-
-            plannedTouchLongPressTimer = setTimeout(() => {
-                plannedTouchLongPressActive = true;
-                plannedTouchBaseRange = { start: rangeStart, end: rangeEnd };
-                this.closeInlinePlanDropdown();
-                this.dragStartIndex = rangeStart;
-                this.dragBaseEndIndex = rangeEnd;
-                this.currentColumnType = 'planned';
-                this.isSelectingPlanned = true;
-                this.clearAllSelections();
-                this.selectFieldRange('planned', rangeStart, rangeEnd);
-                try {
-                    plannedField.blur();
-                } catch (_) {
-                    // no-op
-                }
-            }, 340);
-        }, { passive: true });
-
-        plannedField.addEventListener('touchmove', (e) => {
-            if (!plannedTouchLongPressActive) return;
-            const t = e.touches && e.touches[0];
-            if (!t) return;
-            e.preventDefault();
-            const hoverIndex = this.getIndexAtClientPosition('planned', t.clientX, t.clientY);
-            if (!Number.isInteger(hoverIndex)) return;
-            if (this.currentColumnType !== 'planned') return;
-            plannedMouseMoved = true;
-
-            const base = plannedTouchBaseRange || { start: this.dragStartIndex, end: this.dragStartIndex };
-            const nextStart = Math.min(base.start, hoverIndex);
-            const nextEnd = Math.max(base.end, hoverIndex);
-            this.clearSelection('planned');
-            this.selectFieldRange('planned', nextStart, nextEnd);
-        }, { passive: false });
-
-        plannedField.addEventListener('touchend', (e) => {
-            clearPlannedTouchLongPress();
-            if (plannedTouchLongPressActive) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.isSelectingPlanned = false;
-                this.currentColumnType = null;
-                this.dragStartIndex = -1;
-                this.dragBaseEndIndex = -1;
-            }
-            plannedTouchLongPressActive = false;
-            plannedTouchBaseRange = null;
-        }, { passive: false });
-
-        plannedField.addEventListener('touchcancel', () => {
-            clearPlannedTouchLongPress();
-            plannedTouchLongPressActive = false;
-            plannedTouchBaseRange = null;
-            this.isSelectingPlanned = false;
-            this.currentColumnType = null;
-            this.dragStartIndex = -1;
-            this.dragBaseEndIndex = -1;
-        }, { passive: true });
 
         plannedField.addEventListener('mouseenter', (e) => {
             if (!this.isSelectingPlanned) {
                 this.showScheduleButtonOnHover(index);
-            }
-            if (this.isSelectingPlanned && this.currentColumnType === 'planned') {
-                plannedMouseMoved = true;
-                if (!e.ctrlKey && !e.metaKey) {
-                    this.clearSelection('planned');
-                }
-                const base = plannedMouseBaseRange || { start: this.dragStartIndex, end: this.dragStartIndex };
-                const nextStart = Math.min(base.start, index);
-                const nextEnd = Math.max(base.end, index);
-                this.selectFieldRange('planned', nextStart, nextEnd);
             }
         });
 
@@ -550,33 +283,113 @@
     }
 
     function attachRowWideClickTargets(entryDiv, index) {
-        entryDiv.addEventListener('click', (e) => {
-            const plannedField = entryDiv.querySelector('.planned-input');
-            if (!plannedField) return;
+        void entryDiv;
+        void index;
+    }
 
-            const rowRect = entryDiv.getBoundingClientRect();
-            const x = e.clientX;
-            const y = e.clientY;
+    function attachTimeSlotMergeEntryListeners(entryDiv, index) {
+        const timeSlot = entryDiv && entryDiv.querySelector
+            ? entryDiv.querySelector('.time-slot-container')
+            : null;
+        if (!timeSlot) return;
 
-            if (plannedField) {
-                const pr = plannedField.getBoundingClientRect();
-                const inPlannedCol = (x >= pr.left && x <= pr.right && y >= rowRect.top && y <= rowRect.bottom);
-                if (inPlannedCol) {
-                    const mk = this.findMergeKey('planned', index);
-                    if (mk) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const range = this.activateMergedPlannedSelection(mk, index);
-                        if (!range) return;
-                        const anchor = entryDiv.querySelector('.planned-input') || document.querySelector(`[data-index="${range.start}"] .planned-input`);
-                        if (anchor) {
-                            openPlannedFieldDropdownWithViewportPreparation(this, range.start, anchor, range.end);
-                        }
-                        return;
-                    }
-                }
+        const getRange = () => {
+            const mergeKey = this.findMergeKey ? this.findMergeKey('planned', index) : null;
+            const bounds = mergeKey && this.getMergeRangeBounds
+                ? this.getMergeRangeBounds(mergeKey, index)
+                : null;
+            const start = bounds ? bounds.start : index;
+            const end = bounds ? bounds.end : index;
+            return { start, end };
+        };
+        const beginTimeSlotMergeSelection = (event) => {
+            if (event && event.target && event.target.closest && (
+                event.target.closest('.timer-controls-container') ||
+                event.target.closest('.timer-btn')
+            )) {
+                return false;
             }
+            const range = getRange();
+            this.closeInlinePlanDropdown();
+            this.currentColumnType = 'planned';
+            this.dragStartIndex = range.start;
+            this.dragBaseEndIndex = range.end;
+            this.isSelectingPlanned = true;
+            if (!event || (!event.ctrlKey && !event.metaKey)) {
+                this.clearSelection('planned');
+            }
+            this.selectFieldRange('planned', range.start, range.end);
+            return true;
+        };
+
+        timeSlot.addEventListener('mousedown', (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (!beginTimeSlotMergeSelection(e)) return;
+            e.preventDefault();
+            e.stopPropagation();
         });
+
+        let touchLongPressTimer = null;
+        let touchLongPressActive = false;
+        const clearTouchLongPress = () => {
+            if (touchLongPressTimer) {
+                clearTimeout(touchLongPressTimer);
+                touchLongPressTimer = null;
+            }
+        };
+
+        timeSlot.addEventListener('touchstart', (e) => {
+            if (!e.touches || e.touches.length !== 1) return;
+            if (e.target && e.target.closest && (
+                e.target.closest('.timer-controls-container') ||
+                e.target.closest('.timer-btn')
+            )) {
+                return;
+            }
+            touchLongPressActive = false;
+            clearTouchLongPress();
+            touchLongPressTimer = setTimeout(() => {
+                touchLongPressActive = beginTimeSlotMergeSelection(e);
+            }, 340);
+        }, { passive: true });
+
+        timeSlot.addEventListener('touchmove', (e) => {
+            if (!touchLongPressActive) return;
+            const t = e.touches && e.touches[0];
+            if (!t) return;
+            e.preventDefault();
+            const hoverIndex = this.getIndexAtClientPosition('planned', t.clientX, t.clientY);
+            if (!Number.isInteger(hoverIndex)) return;
+            if (this.currentColumnType !== 'planned') return;
+            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
+            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
+                ? this.dragBaseEndIndex
+                : baseStart;
+            this.clearSelection('planned');
+            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
+        }, { passive: false });
+
+        timeSlot.addEventListener('touchend', (e) => {
+            clearTouchLongPress();
+            if (touchLongPressActive) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.isSelectingPlanned = false;
+                this.currentColumnType = null;
+                this.dragStartIndex = -1;
+                this.dragBaseEndIndex = -1;
+            }
+            touchLongPressActive = false;
+        }, { passive: false });
+
+        timeSlot.addEventListener('touchcancel', () => {
+            clearTouchLongPress();
+            touchLongPressActive = false;
+            this.isSelectingPlanned = false;
+            this.currentColumnType = null;
+            this.dragStartIndex = -1;
+            this.dragBaseEndIndex = -1;
+        }, { passive: true });
     }
 
     function attachCellClickListeners(entryDiv, index) {
@@ -627,6 +440,7 @@
         openPlannedFieldDropdownWithViewportPreparation,
         handleMergedClickCapture,
         attachPlannedFieldSelectionListeners,
+        attachTimeSlotMergeEntryListeners,
         attachRowWideClickTargets,
         attachCellClickListeners,
     };

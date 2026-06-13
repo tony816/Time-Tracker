@@ -1578,6 +1578,10 @@ class TimeTracker {
         return globalThis.TimeTrackerFieldInteractionController.attachPlannedFieldSelectionListeners.call(this, entryDiv, index, plannedField);
     }
 
+    attachTimeSlotMergeEntryListeners(entryDiv, index) {
+        return globalThis.TimeTrackerFieldInteractionController.attachTimeSlotMergeEntryListeners.call(this, entryDiv, index);
+    }
+
     attachFieldSelectionListeners(entryDiv, index) {
         const plannedField = entryDiv.querySelector('.planned-input');
         const actualField = entryDiv.querySelector('.actual-input');
