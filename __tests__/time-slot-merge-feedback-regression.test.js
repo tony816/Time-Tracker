@@ -111,6 +111,7 @@ test('syncTimeSlotMergeSelectionState applies selected range classes to time-slo
         assert.equal(rows[1].timeSlot.classList.contains('merge-capable'), true);
         assert.equal(rows[1].timeSlot.classList.contains('merge-selected-range'), true);
         assert.equal(rows[1].timeSlot.classList.contains('merge-selecting'), true);
+        assert.equal(rows[1].row.classList.contains('merge-capable'), true);
         assert.equal(rows[1].row.classList.contains('selected-merged-planned'), true);
         assert.equal(rows[1].row.classList.contains('merge-selected-range'), true);
         assert.equal(rows[2].timeSlot.classList.contains('merge-selected-range'), true);

@@ -6,6 +6,7 @@ const path = require('node:path');
 require('../controllers/controller-state-access');
 const controller = require('../controllers/selection-overlay-controller');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
+const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'selection-overlay-controller.js'), 'utf8');
 
 test('selection-overlay-controller exports and global attach are available', () => {
     assert.equal(globalThis.TimeTrackerSelectionOverlayController.selectFieldRange, controller.selectFieldRange);
@@ -20,6 +21,11 @@ test('script selection wrapper methods delegate to controller helpers', () => {
     assert.match(scriptSource, /selectMergedRange\(type, mergeKey, opts = \{\}\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.selectMergedRange\.call\(this,\s*type,\s*mergeKey,\s*opts\);\s*\}/);
     assert.match(scriptSource, /showUndoButton\(type, mergeKey\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.showUndoButton\.call\(this,\s*type,\s*mergeKey\);\s*\}/);
     assert.match(scriptSource, /syncTimeSlotMergeSelectionState\(type\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.syncTimeSlotMergeSelectionState\.call\(this,\s*type\);\s*\}/);
+});
+
+test('selection overlay writes merge visual state metadata for planned selections', () => {
+    assert.match(controllerSource, /overlay\.dataset\.mergeVisualState\s*=\s*selectionContext\.exactExistingMerge\s*\?\s*'existing'\s*:\s*\(selectedSet\.size > 1\s*\?\s*'candidate'\s*:\s*'single'\)/);
+    assert.match(controllerSource, /delete el\.dataset\.mergeVisualState/);
 });
 
 test('clearSelection clears planned state and tears down floating UI', () => {

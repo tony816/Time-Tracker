@@ -40,6 +40,39 @@ function createListenerNode() {
     };
 }
 
+function createClassList(initial = []) {
+    const classes = new Set(initial);
+    return {
+        add(...names) {
+            names.forEach((name) => {
+                if (name) classes.add(name);
+            });
+        },
+        remove(...names) {
+            names.forEach((name) => classes.delete(name));
+        },
+        toggle(name, force) {
+            if (force === true) {
+                classes.add(name);
+                return true;
+            }
+            if (force === false) {
+                classes.delete(name);
+                return false;
+            }
+            if (classes.has(name)) {
+                classes.delete(name);
+                return false;
+            }
+            classes.add(name);
+            return true;
+        },
+        contains(name) {
+            return classes.has(name);
+        },
+    };
+}
+
 function createDocumentListenerHarness() {
     const listeners = {};
     return {
@@ -192,6 +225,97 @@ test('attachCellClickListeners passes planned slot width to empty slot dropdowns
     assert.equal(calls[0].options.sheetTargetEl, plannedField);
     assert.equal(calls[0].options.anchorAlign, undefined);
     assert.equal(calls[0].options.mode, undefined);
+});
+
+test('attachTimeSlotMergeEntryListeners toggles merge-hover on the row and clears it after selection reset', () => {
+    const listeners = {};
+    const timeSlot = {
+        classList: createClassList(['time-slot-container']),
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        dispatchEvent(event) {
+            const handlers = listeners[event.type] || [];
+            handlers.forEach((handler) => handler(event));
+        },
+        closest(selector) {
+            if (selector === '.time-slot-container') return timeSlot;
+            if (selector === '.time-entry') return entryDiv;
+            return null;
+        },
+    };
+    const entryDiv = {
+        classList: createClassList(['time-entry']),
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        pendingMergedMouseSelection: null,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        findMergeKey() {
+            return null;
+        },
+        getMergeRangeBounds() {
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push('closeInlinePlanDropdown');
+        },
+        clearSelection(type) {
+            calls.push(['clearSelection', type]);
+        },
+        selectFieldRange(type, startIndex, endIndex) {
+            calls.push(['selectFieldRange', type, startIndex, endIndex]);
+        },
+        clearAllSelections() {
+            calls.push('clearAllSelections');
+        },
+        selectMergedRange(type, mergeKey, opts) {
+            calls.push(['selectMergedRange', type, mergeKey, opts]);
+        },
+        getIndexAtClientPosition() {
+            return 3;
+        },
+    };
+    const doc = createDocumentListenerHarness();
+    const originalDocument = global.document;
+    global.document = doc;
+
+    try {
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+
+        timeSlot.dispatchEvent({ type: 'mouseenter' });
+        assert.equal(entryDiv.classList.contains('merge-hover'), true);
+
+        timeSlot.dispatchEvent({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(entryDiv.classList.contains('merge-hover'), true);
+        assert.equal(ctx.isSelectingPlanned, true);
+
+        doc.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(entryDiv.classList.contains('merge-hover'), false);
+        assert.equal(ctx.isSelectingPlanned, false);
+        assert.equal(ctx.currentColumnType, null);
+        assert.ok(calls.some((entry) => Array.isArray(entry) && entry[0] === 'selectFieldRange'));
+    } finally {
+        global.document = originalDocument;
+    }
 });
 
 test('attachCellClickListeners pre-scrolls mobile empty planned slots before opening dropdown', () => {

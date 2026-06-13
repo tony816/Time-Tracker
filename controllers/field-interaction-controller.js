@@ -331,6 +331,17 @@
         const resetTimeSlotMergeSelectionState = () => {
             resetPlannedSelectionDragState(this);
             this.pendingMergedMouseSelection = null;
+            if (entryDiv && entryDiv.classList) {
+                entryDiv.classList.remove('merge-hover');
+            }
+        };
+        const updateTimeSlotMergeHoverState = (isHovering) => {
+            if (!entryDiv || !entryDiv.classList) return;
+            if (this.isSelectingPlanned) {
+                entryDiv.classList.remove('merge-hover');
+                return;
+            }
+            entryDiv.classList.toggle('merge-hover', Boolean(isHovering));
         };
         const updateTimeSlotMergeSelection = (event) => {
             if (this.currentColumnType !== 'planned' || !this.isSelectingPlanned) return;
@@ -381,6 +392,30 @@
                 doc.removeEventListener('mouseup', handleDocumentMouseUp);
             }
         };
+
+        timeSlot.addEventListener('mouseenter', () => {
+            updateTimeSlotMergeHoverState(true);
+        });
+
+        timeSlot.addEventListener('mouseleave', (event) => {
+            const relatedTarget = event && event.relatedTarget ? event.relatedTarget : null;
+            if (relatedTarget && relatedTarget.closest && relatedTarget.closest('.time-slot-container') === timeSlot) {
+                return;
+            }
+            updateTimeSlotMergeHoverState(false);
+        });
+
+        timeSlot.addEventListener('focusin', () => {
+            updateTimeSlotMergeHoverState(true);
+        });
+
+        timeSlot.addEventListener('focusout', (event) => {
+            const relatedTarget = event && event.relatedTarget ? event.relatedTarget : null;
+            if (relatedTarget && relatedTarget.closest && relatedTarget.closest('.time-slot-container') === timeSlot) {
+                return;
+            }
+            updateTimeSlotMergeHoverState(false);
+        });
 
         timeSlot.addEventListener('mousedown', (e) => {
             if (e.button !== undefined && e.button !== 0) return;

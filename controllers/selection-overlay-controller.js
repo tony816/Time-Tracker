@@ -198,6 +198,7 @@
             const index = parseInt(row.getAttribute('data-index'), 10);
             const isSelected = Number.isInteger(index) && selectedSet && selectedSet.has(index);
             const timeSlot = row.querySelector ? row.querySelector('.time-slot-container') : null;
+            row.classList.toggle('merge-capable', Boolean(timeSlot));
             row.classList.toggle('selected-merged-planned', isSelected);
             row.classList.toggle('merge-selecting', isSelecting && isSelected);
             row.classList.toggle('merge-selected-range', isSelected);
@@ -774,6 +775,9 @@
 
     function removeSelectionOverlay(type) {
         const el = getSelectionOverlayElement.call(this, type);
+        if (el && el.dataset) {
+            delete el.dataset.mergeVisualState;
+        }
         if (el && el.parentNode) el.parentNode.removeChild(el);
         setSelectionOverlayElement.call(this, type, null);
     }
@@ -821,8 +825,12 @@
         const overlay   = this.ensureSelectionOverlay(type);
         if (type === 'planned') {
             overlay.dataset.fill = selectedSet.size > 1 ? 'solid' : 'outline';
+            overlay.dataset.mergeVisualState = selectionContext.exactExistingMerge
+                ? 'existing'
+                : (selectedSet.size > 1 ? 'candidate' : 'single');
         } else {
             delete overlay.dataset.fill;
+            delete overlay.dataset.mergeVisualState;
         }
         const left      = startRect.left + window.scrollX;
         const top       = startRect.top  + window.scrollY;

@@ -97,7 +97,7 @@ function renderTimeEntries(preserveInlineDropdown = false) {
 
         this.timeSlots.forEach((slot, index) => {
             const entryDiv = document.createElement('div');
-            entryDiv.className = 'time-entry';
+            entryDiv.className = 'time-entry merge-capable';
 
             const rowModel = this.buildTimeEntryRowModel(slot, index);
             entryDiv.innerHTML = rowModel.innerHtml;
