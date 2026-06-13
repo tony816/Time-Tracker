@@ -789,6 +789,9 @@
             this.removeSelectionOverlay(type);
             return;
         }
+        const selectionContext = type === 'planned'
+            ? getPlannedSelectionContext.call(this, type)
+            : { exactExistingMerge: false };
         this.removeHoverSelectionOverlay(type);
         if (type === 'planned') this.hoveredMergeKey = null;
 

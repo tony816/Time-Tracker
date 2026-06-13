@@ -24,8 +24,92 @@ test('script selection wrapper methods delegate to controller helpers', () => {
 });
 
 test('selection overlay writes merge visual state metadata for planned selections', () => {
+    assert.match(controllerSource, /const selectionContext = type === 'planned'\s*\?\s*getPlannedSelectionContext\.call\(this, type\)\s*:\s*\{ exactExistingMerge: false \};[\s\S]*overlay\.dataset\.mergeVisualState/);
     assert.match(controllerSource, /overlay\.dataset\.mergeVisualState\s*=\s*selectionContext\.exactExistingMerge\s*\?\s*'existing'\s*:\s*\(selectedSet\.size > 1\s*\?\s*'candidate'\s*:\s*'single'\)/);
     assert.match(controllerSource, /delete el\.dataset\.mergeVisualState/);
+});
+
+test('updateSelectionOverlay does not throw when planned selection overlay refreshes', () => {
+    const originalDocument = global.document;
+    const originalWindow = global.window;
+    const overlay = {
+        dataset: {},
+        style: {},
+        parentNode: { removeChild() {} },
+    };
+    const rows = [
+        {
+            classList: { toggle() {}, add() {}, remove() {} },
+            getAttribute(name) {
+                return name === 'data-index' ? '1' : null;
+            },
+            querySelector(selector) {
+                return selector === '.time-slot-container'
+                    ? { classList: { add() {}, toggle() {} } }
+                    : null;
+            },
+        },
+        {
+            classList: { toggle() {}, add() {}, remove() {} },
+            getAttribute(name) {
+                return name === 'data-index' ? '2' : null;
+            },
+            querySelector(selector) {
+                return selector === '.time-slot-container'
+                    ? { classList: { add() {}, toggle() {} } }
+                    : null;
+            },
+        },
+    ];
+    global.document = {
+        querySelectorAll(selector) {
+            if (selector === '.time-entry[data-index]') return rows;
+            return [];
+        },
+        querySelector(selector) {
+            if (selector === '[data-index="1"] .planned-input') return { getBoundingClientRect() { return { left: 10, top: 20, width: 80, height: 44 }; }, closest() { return null; } };
+            if (selector === '[data-index="2"] .planned-input') return { getBoundingClientRect() { return { left: 10, top: 64, width: 80, height: 44 }; }, closest() { return null; } };
+            return null;
+        },
+        documentElement: { scrollLeft: 0, scrollTop: 0 },
+        body: { appendChild() {} },
+    };
+    global.window = { scrollX: 0, scrollY: 0 };
+
+    const ctx = {
+        selectedPlannedFields: new Set([1, 2]),
+        isSelectingPlanned: false,
+        removeHoverSelectionOverlay() {},
+        ensureSelectionOverlay() {
+            return overlay;
+        },
+        getSelectionCellRect(type, index) {
+            assert.equal(type, 'planned');
+            return index === 1
+                ? { left: 10, top: 20, width: 80, height: 44 }
+                : { left: 10, top: 64, width: 80, height: 44 };
+        },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index, mergeKey: null };
+        },
+        findMergeKey() {
+            return null;
+        },
+        getMergeRangeBounds() {
+            return null;
+        },
+        removeSelectionOverlay() {},
+    };
+
+    try {
+        assert.doesNotThrow(() => {
+            controller.updateSelectionOverlay.call(ctx, 'planned');
+        });
+        assert.equal(overlay.dataset.mergeVisualState, 'candidate');
+    } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+    }
 });
 
 test('clearSelection clears planned state and tears down floating UI', () => {

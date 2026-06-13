@@ -77,6 +77,8 @@ test('time-slot merge affordance styling remains visible in CSS', () => {
     assert.match(cssSource, /\.time-entry\.merge-capable \.time-slot-container/);
     assert.match(cssSource, /\.time-entry\.merge-hover \.time-slot-merge-affordance/);
     assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container/);
+    assert.match(cssSource, /--merge-overlay-surface/);
+    assert.match(cssSource, /--merge-overlay-outline/);
     assert.match(cssSource, /\.time-entry\.existing-merged-range \.split-cell-wrapper\.split-type-planned/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]/);
     assert.match(cssSource, /@media \(hover: none\), \(pointer: coarse\)/);

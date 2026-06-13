@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const controller = require('../controllers/selection-overlay-controller');
+const cssSource = fs.readFileSync(path.join(__dirname, '..', 'styles', 'foundation.css'), 'utf8');
 
 function createClassList(initial = []) {
     const classes = new Set(initial);
@@ -207,4 +210,12 @@ test('repositionButtonsNextToSchedule keeps hover undo near the merged time-slot
 
     assert.equal(ctx.undoButton.style.left, '84px');
     assert.equal(ctx.undoButton.style.top, '58px');
+});
+
+test('existing merged and planned overlay styling uses merge tokens', () => {
+    assert.match(cssSource, /\.time-entry\.existing-merged-range \.time-slot-container\s*\{\s*background-color: var\(--merge-surface\);/);
+    assert.match(cssSource, /\.time-entry\.existing-merged-range \.time-label\s*\{\s*color: var\(--merge-accent\);/);
+    assert.match(cssSource, /\.time-entry\.existing-merged-range \.time-slot-merge-affordance\s*\{\s*background: var\(--merge-rail\);/);
+    assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\s*\{\s*--merge-overlay-surface:/);
+    assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]\s*\{\s*--merge-overlay-surface:/);
 });

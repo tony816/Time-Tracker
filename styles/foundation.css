@@ -431,18 +431,18 @@ h1 {
 }
 
 .time-entry.existing-merged-range .time-slot-container {
-  background-color: rgba(220, 252, 231, 0.96);
-  border-left-color: #4ade80;
-  border-right-color: #4ade80;
-  box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.34);
+  background-color: var(--merge-surface);
+  border-left-color: var(--merge-border);
+  border-right-color: var(--merge-border);
+  box-shadow: inset 0 0 0 2px var(--merge-outline);
 }
 
 .time-entry.existing-merged-range .time-label {
-  color: #166534;
+  color: var(--merge-accent);
 }
 
 .time-entry.existing-merged-range .time-slot-merge-affordance {
-  background: rgba(22, 163, 74, 0.84);
+  background: var(--merge-rail);
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -959,21 +959,24 @@ h1 {
   /* 肄섑뀗痢??ㅻ쾭?덉씠 ?? 踰꾪듉(1000) ?꾨옒 */
 }
 
-.selection-overlay[data-type="planned"][data-merge-visual-state="single"],
-.selection-overlay[data-type="planned"][data-merge-visual-state="candidate"] {
-  background-color: rgba(59, 130, 246, 0.22);
-  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.5);
+.selection-overlay[data-type="planned"] {
+  --merge-overlay-surface: rgba(37, 99, 235, 0.14);
+  --merge-overlay-outline: rgba(37, 99, 235, 0.44);
+  background-color: var(--merge-overlay-surface);
+  box-shadow: inset 0 0 0 2px var(--merge-overlay-outline);
 }
 
-.selection-overlay[data-type="planned"][data-merge-visual-state="single"] {
-  border-radius: 6px;
+.selection-overlay[data-type="planned"][data-merge-visual-state="candidate"] {
+  --merge-overlay-surface: rgba(37, 99, 235, 0.14);
+  --merge-overlay-outline: rgba(37, 99, 235, 0.44);
 }
 
 .selection-overlay[data-type="planned"][data-merge-visual-state="existing"] {
-  background-color: rgba(34, 197, 94, 0.18);
-  box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.5);
+  --merge-overlay-surface: rgba(22, 163, 74, 0.14);
+  --merge-overlay-outline: rgba(22, 163, 74, 0.42);
 }
 
+.selection-overlay[data-type="planned"][data-merge-visual-state="single"],
 .selection-overlay[data-type="planned"][data-fill="outline"] {
     background-color: transparent;
     pointer-events: none;
