@@ -34,6 +34,17 @@
                         placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">`;
     }
 
+    function buildTimeSlotContainerMarkup(formattedLabel, timerControls) {
+        const mergeHintLabel = '\ub4dc\ub798\uadf8\ud574 \ubcd1\ud569 \ubc94\uc704 \uc120\ud0dd';
+        return `<div class="time-slot-container merge-capable"
+                    title="${mergeHintLabel}"
+                    aria-label="${mergeHintLabel}">
+                    <span class="time-slot-merge-affordance" aria-hidden="true"></span>
+                    <div class="time-label">${formattedLabel}</div>
+                    ${timerControls}
+                </div>`;
+    }
+
     function buildRowRenderModel(options = {}) {
         const slot = (options && options.slot && typeof options.slot === 'object') ? options.slot : {};
         const index = Number(options.index);
@@ -70,10 +81,7 @@
             const formattedLabel = (typeof formatSlotTimeLabel === 'function')
                 ? formatSlotTimeLabel(rawLabel)
                 : String(rawLabel || '');
-            timeContent = `<div class="time-slot-container">
-                    <div class="time-label">${formattedLabel}</div>
-                    ${timerControls}
-                </div>`;
+            timeContent = buildTimeSlotContainerMarkup(formattedLabel, timerControls);
         }
 
         const plannedRange = parseMergeRange(plannedMergeKey);

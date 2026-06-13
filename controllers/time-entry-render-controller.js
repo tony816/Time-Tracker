@@ -49,7 +49,11 @@ function buildTimeEntryRowModel(slot, index) {
         if (timeMergeKey) {
             timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
         } else {
-            timeContent = `<div class="time-slot-container">
+            const mergeHintLabel = '드래그해 병합 범위 선택';
+            timeContent = `<div class="time-slot-container merge-capable"
+                    title="${mergeHintLabel}"
+                    aria-label="${mergeHintLabel}">
+                    <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                     <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
                     ${timerControls}
                 </div>`;
@@ -157,6 +161,10 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             this.attachRowWideClickTargets(entryDiv, index);
             container.appendChild(entryDiv);
         });
+
+        if (typeof this.syncTimeSlotMergeSelectionState === 'function') {
+            this.syncTimeSlotMergeSelectionState('planned');
+        }
 
         // 병합된 시간열 컨텐츠를 병합 블록의 세로 중앙으로 정렬
         this.centerMergedTimeContent(container);

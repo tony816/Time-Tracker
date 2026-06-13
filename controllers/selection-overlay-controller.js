@@ -82,6 +82,134 @@
                 : null);
     }
 
+    function getTimeSlotContainerElement(index) {
+        if (!Number.isInteger(index) || typeof document === 'undefined') return null;
+        return document.querySelector(`[data-index="${index}"] .time-slot-container`);
+    }
+
+    function getPlannedSelectionIndices(type) {
+        const selectedSet = getSelectionSetForType.call(this, type);
+        if (!selectedSet || selectedSet.size < 1) return [];
+        return Array.from(selectedSet).filter((value) => Number.isInteger(value)).sort((a, b) => a - b);
+    }
+
+    function getPlannedSelectionContext(type, mergeKey = null) {
+        const selectedIndices = getPlannedSelectionIndices.call(this, type);
+        const startIndex = selectedIndices.length > 0 ? selectedIndices[0] : null;
+        const endIndex = selectedIndices.length > 0 ? selectedIndices[selectedIndices.length - 1] : null;
+        const selectedSet = getSelectionSetForType.call(this, type);
+        const context = {
+            selectedIndices,
+            startIndex,
+            endIndex,
+            mergeKey: mergeKey || null,
+            anchor: null,
+            exactExistingMerge: false,
+        };
+
+        if (type !== 'planned') {
+            return context;
+        }
+
+        let resolvedMergeKey = context.mergeKey;
+        let resolvedStart = startIndex;
+        let resolvedEnd = endIndex;
+        if (!resolvedMergeKey && Number.isInteger(startIndex) && typeof this.findMergeKey === 'function') {
+            resolvedMergeKey = this.findMergeKey('planned', startIndex);
+        }
+        const bounds = resolvedMergeKey && typeof this.getMergeRangeBounds === 'function'
+            ? this.getMergeRangeBounds(resolvedMergeKey, Number.isInteger(startIndex) ? startIndex : undefined)
+            : null;
+        if (bounds && Number.isInteger(bounds.start)) resolvedStart = bounds.start;
+        if (bounds && Number.isInteger(bounds.end)) resolvedEnd = bounds.end;
+        if (!bounds && resolvedMergeKey) {
+            const parts = String(resolvedMergeKey).split('-');
+            const parsedStart = parseInt(parts[1], 10);
+            const parsedEnd = parseInt(parts[2], 10);
+            if (Number.isInteger(parsedStart)) resolvedStart = parsedStart;
+            if (Number.isInteger(parsedEnd)) resolvedEnd = parsedEnd;
+        }
+
+        context.mergeKey = resolvedMergeKey;
+        context.startIndex = resolvedStart;
+        context.endIndex = resolvedEnd;
+        context.anchor = Number.isInteger(resolvedStart) ? getTimeSlotContainerElement(resolvedStart) : null;
+        if (!context.anchor && Number.isInteger(startIndex)) {
+            context.anchor = getTimeSlotContainerElement(startIndex);
+        }
+
+        if (resolvedMergeKey && Number.isInteger(resolvedStart) && Number.isInteger(resolvedEnd)) {
+            const expectedSize = Math.max(1, resolvedEnd - resolvedStart + 1);
+            context.exactExistingMerge = selectedIndices.length === expectedSize
+                && selectedIndices[0] === resolvedStart
+                && selectedIndices[selectedIndices.length - 1] === resolvedEnd
+                && selectedIndices.every((idx) => {
+                    const keyAtIndex = typeof this.findMergeKey === 'function'
+                        ? this.findMergeKey('planned', idx)
+                        : null;
+                    return keyAtIndex === resolvedMergeKey;
+                });
+        }
+
+        return context;
+    }
+
+    function positionMergeActionButton(button, type, mergeKey = null) {
+        if (!button || !button.style) return false;
+        const isUndoButton = Boolean(button.classList && button.classList.contains('undo-button'));
+        const buttonWidth = isUndoButton ? 28 : 50;
+        const buttonHeight = isUndoButton ? 28 : 30;
+        const selectionContext = getPlannedSelectionContext.call(this, type, mergeKey);
+        const rootWindow = typeof window !== 'undefined' ? window : (root && root.window ? root.window : null);
+        const doc = typeof document !== 'undefined' ? document : (root && root.document ? root.document : null);
+        const scrollX = rootWindow ? (rootWindow.scrollX || (doc && doc.documentElement && doc.documentElement.scrollLeft) || 0) : 0;
+        const scrollY = rootWindow ? (rootWindow.scrollY || (doc && doc.documentElement && doc.documentElement.scrollTop) || 0) : 0;
+
+        if (selectionContext.anchor && typeof selectionContext.anchor.getBoundingClientRect === 'function') {
+            const rect = selectionContext.anchor.getBoundingClientRect();
+            const left = rect.left + scrollX - buttonWidth - 8;
+            const top = rect.top + scrollY + Math.max(0, Math.round((rect.height - buttonHeight) / 2));
+            button.style.left = `${Math.round(left)}px`;
+            button.style.top = `${Math.round(top)}px`;
+            return true;
+        }
+
+        const scheduleAnchor = getScheduleAnchorElement.call(this);
+        if (scheduleAnchor && typeof scheduleAnchor.getBoundingClientRect === 'function') {
+            const rect = scheduleAnchor.getBoundingClientRect();
+            const left = rect.left + scrollX + rect.width + 8;
+            const top = rect.top + scrollY;
+            button.style.left = `${Math.round(left)}px`;
+            button.style.top = `${Math.round(top)}px`;
+            return true;
+        }
+
+        return false;
+    }
+
+    function syncTimeSlotMergeSelectionState(type) {
+        if (type !== 'planned' || typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+        const selectedSet = getSelectionSetForType.call(this, type);
+        const selectedIndices = getPlannedSelectionIndices.call(this, type);
+        const selectionContext = getPlannedSelectionContext.call(this, type);
+        const isSelecting = Boolean(this.isSelectingPlanned && selectedIndices.length > 0);
+        const rows = document.querySelectorAll('.time-entry[data-index]');
+        rows.forEach((row) => {
+            const index = parseInt(row.getAttribute('data-index'), 10);
+            const isSelected = Number.isInteger(index) && selectedSet && selectedSet.has(index);
+            const timeSlot = row.querySelector ? row.querySelector('.time-slot-container') : null;
+            row.classList.toggle('selected-merged-planned', isSelected);
+            row.classList.toggle('merge-selecting', isSelecting && isSelected);
+            row.classList.toggle('merge-selected-range', isSelected);
+            row.classList.toggle('existing-merged-range', Boolean(isSelected && selectionContext.exactExistingMerge));
+            if (!timeSlot) return;
+            timeSlot.classList.add('merge-capable');
+            timeSlot.classList.toggle('merge-selecting', isSelecting && isSelected);
+            timeSlot.classList.toggle('merge-selected-range', isSelected);
+            timeSlot.classList.toggle('existing-merged-range', Boolean(isSelected && selectionContext.exactExistingMerge));
+        });
+    }
+
     function resolvePlanMergeSnapshotState(mergeKey, start, end) {
         const baseSlot = this.timeSlots && this.timeSlots[start] ? this.timeSlots[start] : {};
         const snapshot = baseSlot.planMergeSnapshot && typeof baseSlot.planMergeSnapshot === 'object'
@@ -197,6 +325,7 @@
             }
         });
         selectedSet.clear();
+        syncTimeSlotMergeSelectionState.call(this, type);
 
         this.hideMergeButton();
         this.hideUndoButton();
@@ -264,6 +393,7 @@
                 });
 
                 document.body.appendChild(this.mergeButton);
+                positionMergeActionButton.call(this, this.mergeButton, type);
                 // 병합 버튼과 스케줄 버튼은 동시 표기하지 않음
                 this.hideScheduleButton();
                 this.repositionButtonsNextToSchedule();
@@ -326,6 +456,8 @@
             });
 
             document.body.appendChild(this.undoButton);
+            this.activeUndoMergeKey = mergeKey;
+            positionMergeActionButton.call(this, this.undoButton, type, mergeKey);
             this.repositionButtonsNextToSchedule();
         }
     }
@@ -335,6 +467,7 @@
             this.undoButton.parentNode.removeChild(this.undoButton);
             this.undoButton = null;
         }
+        this.activeUndoMergeKey = null;
     }
 
     function undoMerge(type, mergeKey) {
@@ -647,6 +780,7 @@
 
     function updateSelectionOverlay(type) {
         const selectedSet = getSelectionSetForType.call(this, type);
+        syncTimeSlotMergeSelectionState.call(this, type);
         if (!selectedSet || selectedSet.size < 1) {
             this.removeSelectionOverlay(type);
             return;
@@ -898,20 +1032,11 @@
     }
 
     function repositionButtonsNextToSchedule() {
-        const anchor = getScheduleAnchorElement.call(this);
-        if (!anchor) return;
-        const spacing = 8;
-        const sbRect = anchor.getBoundingClientRect();
-        const baseLeft = window.scrollX + sbRect.left + sbRect.width + spacing;
-        const baseTop  = window.scrollY + sbRect.top;
-
         if (this.mergeButton) {
-            this.mergeButton.style.left = `${Math.round(baseLeft)}px`;
-            this.mergeButton.style.top  = `${Math.round(baseTop)}px`;
+            positionMergeActionButton.call(this, this.mergeButton, 'planned');
         }
         if (this.undoButton) {
-            this.undoButton.style.left = `${Math.round(baseLeft)}px`;
-            this.undoButton.style.top  = `${Math.round(baseTop)}px`;
+            positionMergeActionButton.call(this, this.undoButton, 'planned', this.activeUndoMergeKey || null);
         }
     }
 
@@ -929,6 +1054,7 @@
         getIndexAtClientPosition,
         removeSelectionOverlay,
         updateSelectionOverlay,
+        syncTimeSlotMergeSelectionState,
         getSelectionCellRect,
         ensureHoverSelectionOverlay,
         removeHoverSelectionOverlay,

@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const renderer = require('../ui/time-entry-renderer');
+const cssSource = fs.readFileSync(path.join(__dirname, '..', 'styles', 'foundation.css'), 'utf8');
 
 test('time-entry-renderer exports and global attach are available', () => {
     assert.equal(typeof renderer.buildRowRenderModel, 'function');
@@ -36,6 +39,8 @@ test('buildRowRenderModel renders non-merged row with wrapped planned content on
     assert.match(row.innerHtml, /deep &quot;work&quot;/);
     assert.match(row.innerHtml, /<div class="time-label">04<\/div>/);
     assert.match(row.innerHtml, /timer-btn/);
+    assert.match(row.innerHtml, /time-slot-container merge-capable/);
+    assert.match(row.innerHtml, /time-slot-merge-affordance/);
 });
 
 test('buildRowRenderModel uses planned/time merged builders and ignores actual merges', () => {
@@ -66,4 +71,10 @@ test('buildRowRenderModel uses planned/time merged builders and ignores actual m
     assert.match(row.innerHtml, /\[merged:planned-2-4:planned:2\]/);
     assert.doesNotMatch(row.innerHtml, /\[merged:actual-1-3:actual:2\]/);
     assert.match(row.innerHtml, /\[merged-time:time-2-4:2\]/);
+});
+
+test('time-slot merge affordance styling remains visible in CSS', () => {
+    assert.match(cssSource, /\.time-slot-container\.merge-capable \.time-slot-merge-affordance/);
+    assert.match(cssSource, /\.time-slot-container\.merge-capable\.merge-selected-range/);
+    assert.match(cssSource, /@media \(hover: none\), \(pointer: coarse\)/);
 });

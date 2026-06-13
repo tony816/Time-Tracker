@@ -936,6 +936,63 @@ test('time-slot merge entry does not intercept timer controls', () => {
     assert.deepEqual(calls, []);
 });
 
+test('time-slot merge entry ignores explicit controls and merge-ignore markers', () => {
+    const buttonTarget = {
+        closest(selector) {
+            return selector === 'button' ? buttonTarget : null;
+        },
+    };
+    const inputTarget = {
+        closest(selector) {
+            return selector === 'input' ? inputTarget : null;
+        },
+    };
+    const ignoreTarget = {
+        closest(selector) {
+            return selector === '[data-time-slot-merge-ignore="true"]' ? ignoreTarget : null;
+        },
+    };
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        findMergeKey() {
+            calls.push(['find']);
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    [buttonTarget, inputTarget, ignoreTarget].forEach((target) => {
+        timeSlot.dispatchEvent({
+            type: 'mousedown',
+            button: 0,
+            target,
+            preventDefault() {
+                calls.push(['prevent', target]);
+            },
+            stopPropagation() {
+                calls.push(['stop', target]);
+            },
+        });
+    });
+
+    assert.deepEqual(calls, []);
+});
+
 test('time-slot merge entry ignores future explicit time controls', () => {
     const futureControl = {
         closest(selector) {

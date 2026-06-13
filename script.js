@@ -4008,10 +4008,14 @@ class TimeTracker {
             const timeRangeDisplay = `${startTime} ~ ${endTime}`;
 
 
-            return `<div class="time-slot-container merged-time-main"
+            const mergeHintLabel = '드래그해 병합 범위 선택';
+            return `<div class="time-slot-container merged-time-main merge-capable"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}">
+                           data-merge-end="${end}"
+                           title="${mergeHintLabel}"
+                           aria-label="${mergeHintLabel}">
+                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="merged-time-content">
                             <div class="time-label">${timeRangeDisplay}</div>
                             ${timerControls}
@@ -4019,18 +4023,26 @@ class TimeTracker {
                     </div>`;
         } else if (index === end) {
             // 병합???�간 ?�드??마�?�?보조 ?� - ?�단 경계???��?
-            return `<div class="time-slot-container merged-time-secondary merged-time-last"
+            const mergeHintLabel = '드래그해 병합 범위 선택';
+            return `<div class="time-slot-container merged-time-secondary merged-time-last merge-capable"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}">
+                           data-merge-end="${end}"
+                           title="${mergeHintLabel}"
+                           aria-label="${mergeHintLabel}">
+                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         } else {
             // 병합???�간 ?�드??중간 보조 ?� - ?�전??경계???�거
-            return `<div class="time-slot-container merged-time-secondary"
+            const mergeHintLabel = '드래그해 병합 범위 선택';
+            return `<div class="time-slot-container merged-time-secondary merge-capable"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}">
+                           data-merge-end="${end}"
+                           title="${mergeHintLabel}"
+                           aria-label="${mergeHintLabel}">
+                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         }
@@ -5091,6 +5103,10 @@ class TimeTracker {
 
     updateSelectionOverlay(type) {
         return globalThis.TimeTrackerSelectionOverlayController.updateSelectionOverlay.call(this, type);
+    }
+
+    syncTimeSlotMergeSelectionState(type) {
+        return globalThis.TimeTrackerSelectionOverlayController.syncTimeSlotMergeSelectionState.call(this, type);
     }
 
     // ?�택 박스??기�? ?�각?�을 컬럼/병합 ?�태??맞춰 반환

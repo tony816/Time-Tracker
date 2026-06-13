@@ -19,6 +19,7 @@ test('script selection wrapper methods delegate to controller helpers', () => {
     assert.match(scriptSource, /clearSelection\(type\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.clearSelection\.call\(this,\s*type\);\s*\}/);
     assert.match(scriptSource, /selectMergedRange\(type, mergeKey, opts = \{\}\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.selectMergedRange\.call\(this,\s*type,\s*mergeKey,\s*opts\);\s*\}/);
     assert.match(scriptSource, /showUndoButton\(type, mergeKey\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.showUndoButton\.call\(this,\s*type,\s*mergeKey\);\s*\}/);
+    assert.match(scriptSource, /syncTimeSlotMergeSelectionState\(type\)\s*\{\s*return\s+globalThis\.TimeTrackerSelectionOverlayController\.syncTimeSlotMergeSelectionState\.call\(this,\s*type\);\s*\}/);
 });
 
 test('clearSelection clears planned state and tears down floating UI', () => {
