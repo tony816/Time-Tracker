@@ -309,6 +309,7 @@
                 '.timer-btn',
                 '.time-slot-control',
                 '[data-time-slot-control]',
+                '[data-time-slot-merge-ignore="true"]',
                 'button',
                 'input',
                 'select',
@@ -325,7 +326,25 @@
                 : null;
             const start = bounds ? bounds.start : index;
             const end = bounds ? bounds.end : index;
-            return { start, end };
+            return { start, end, mergeKey };
+        };
+        const resetTimeSlotMergeSelectionState = () => {
+            resetPlannedSelectionDragState(this);
+            this.pendingMergedMouseSelection = null;
+        };
+        const updateTimeSlotMergeSelection = (event) => {
+            if (this.currentColumnType !== 'planned' || !this.isSelectingPlanned) return;
+            const point = event && event.touches ? event.touches[0] : event;
+            if (!point) return;
+            const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
+            if (!Number.isInteger(hoverIndex)) return;
+            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
+            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
+                ? this.dragBaseEndIndex
+                : baseStart;
+            if (hoverIndex >= Math.min(baseStart, baseEnd) && hoverIndex <= Math.max(baseStart, baseEnd)) return;
+            this.clearSelection('planned');
+            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
         };
         const beginTimeSlotMergeSelection = (event) => {
             if (event && isNonMergeTimeSlotControl(event.target)) {
@@ -337,24 +356,16 @@
             this.dragStartIndex = range.start;
             this.dragBaseEndIndex = range.end;
             this.isSelectingPlanned = true;
-            if (!event || (!event.ctrlKey && !event.metaKey)) {
-                this.clearSelection('planned');
+            if (range.mergeKey && typeof this.selectMergedRange === 'function') {
+                this.clearAllSelections();
+                this.selectMergedRange('planned', range.mergeKey, { append: false });
+            } else {
+                if (!event || (!event.ctrlKey && !event.metaKey)) {
+                    this.clearSelection('planned');
+                }
+                this.selectFieldRange('planned', range.start, range.end);
             }
-            this.selectFieldRange('planned', range.start, range.end);
             return true;
-        };
-        const updateTimeSlotMergeSelection = (event) => {
-            if (!this.isSelectingPlanned || this.currentColumnType !== 'planned') return;
-            const point = event && event.touches ? event.touches[0] : event;
-            if (!point) return;
-            const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
-            if (!Number.isInteger(hoverIndex)) return;
-            const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
-            const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
-                ? this.dragBaseEndIndex
-                : baseStart;
-            this.clearSelection('planned');
-            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
         };
         const handleDocumentMouseMove = (event) => {
             if (typeof event.buttons === 'number' && event.buttons === 0) {
@@ -364,7 +375,7 @@
             updateTimeSlotMergeSelection(event);
         };
         const handleDocumentMouseUp = () => {
-            resetPlannedSelectionDragState(this);
+            resetTimeSlotMergeSelectionState();
             if (doc && typeof doc.removeEventListener === 'function') {
                 doc.removeEventListener('mousemove', handleDocumentMouseMove);
                 doc.removeEventListener('mouseup', handleDocumentMouseUp);
@@ -416,15 +427,15 @@
             if (touchLongPressActive) {
                 e.preventDefault();
                 e.stopPropagation();
-                resetPlannedSelectionDragState(this);
             }
+            resetTimeSlotMergeSelectionState();
             touchLongPressActive = false;
         }, { passive: false });
 
         timeSlot.addEventListener('touchcancel', () => {
             clearTouchLongPress();
             touchLongPressActive = false;
-            resetPlannedSelectionDragState(this);
+            resetTimeSlotMergeSelectionState();
         }, { passive: true });
     }
 

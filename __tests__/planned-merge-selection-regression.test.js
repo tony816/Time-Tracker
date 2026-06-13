@@ -127,6 +127,45 @@ function withDocumentQuery(value, fn) {
     }
 }
 
+function createListenerNode() {
+    const listeners = {};
+    return {
+        dataset: {},
+        closest() {
+            return null;
+        },
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).forEach((handler) => handler(event));
+        },
+    };
+}
+
+function withMockDocument(fn) {
+    const originalDocument = global.document;
+    const listeners = {};
+    global.document = {
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
+    };
+    try {
+        return fn(global.document);
+    } finally {
+        global.document = originalDocument;
+    }
+}
+
 test('selectFieldRange expands to merged planned slot boundaries', () => {
     const ctx = {
         timeSlots: new Array(12).fill({}),
@@ -374,6 +413,110 @@ test('mergeSelectedFields preserves segmented plan data, metadata, timers, and e
     assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-1-seg1'].status, 'running');
     assert.deepEqual(ctx.timeSlots[1].planActivities, []);
     assert.deepEqual(ctx.timeSlots[1].planSegmentTimers, {});
+});
+
+test('time-slot-initiated selection can reuse mergeSelectedFields and preserve segmented planned data', () => {
+    global.TimeTrackerPlanSegmentCore = planSegmentCore;
+    const ctx = createMergeContext([
+        createSlot({
+            time: '4',
+            planned: 'Morning',
+            planActivities: [
+                {
+                    label: 'Focus',
+                    activityId: 'focus-id',
+                    activityText: 'Focus',
+                    seconds: 1800,
+                    startMinute: 0,
+                    endMinute: 30,
+                    durationMinutes: 30,
+                },
+            ],
+        }),
+        createSlot({
+            time: '5',
+            planned: 'Review',
+            planActivities: [
+                {
+                    label: 'Review',
+                    activityId: 'review-id',
+                    activityText: 'Review',
+                    seconds: 1200,
+                    startMinute: 0,
+                    endMinute: 20,
+                    durationMinutes: 20,
+                },
+            ],
+        }),
+    ]);
+    ctx.closeInlinePlanDropdown = () => {};
+    ctx.clearSelection = (type) => {
+        if (type === 'planned') ctx.selectedPlannedFields.clear();
+    };
+    ctx.selectFieldRange = (type, start, end) => {
+        if (type !== 'planned') return;
+        for (let i = Math.min(start, end); i <= Math.max(start, end); i += 1) {
+            ctx.selectedPlannedFields.add(i);
+        }
+    };
+    ctx.getIndexAtClientPosition = () => 1;
+
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        const entryDiv = {
+            querySelector(selector) {
+                return selector === '.time-slot-container' ? timeSlot : null;
+            },
+        };
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 0);
+        timeSlot.dispatchEvent({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        mockDocument.dispatchEvent({
+            type: 'mousemove',
+            buttons: 1,
+            clientX: 10,
+            clientY: 20,
+        });
+        mockDocument.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+    });
+
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), [0, 1]);
+
+    withDocumentQuery('Morning', () => mergeSelectedFields.call(ctx, 'planned'));
+
+    assert.equal(ctx.mergedFields.get('planned-0-1'), 'Focus + Review');
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        {
+            label: 'Focus',
+            activityId: 'focus-id',
+            startMinute: 0,
+            endMinute: 30,
+            durationMinutes: 30,
+        },
+        {
+            label: 'Review',
+            activityId: 'review-id',
+            startMinute: 60,
+            endMinute: 80,
+            durationMinutes: 20,
+        },
+    ]);
+    assert.deepEqual(ctx.timeSlots[1].planActivities, []);
 });
 
 test('mergeSelectedFields concatenates existing segmented merge boundaries in chronological order', () => {
