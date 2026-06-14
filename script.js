@@ -131,6 +131,11 @@ class TimeTracker {
         this.activityModalEscHandler = null;
         this.dayStartHour = this.loadDayStartHour();
         this.lastRenderedCurrentTimeIndex = null;
+        this.plannedSlotMoveMode = false;
+        this.plannedSlotMoveDrag = null;
+        this.plannedSlotMoveHoverStart = null;
+        this.plannedSlotMoveModeButton = null;
+        this.plannedSlotMoveStatus = null;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -202,7 +207,11 @@ class TimeTracker {
             if (element) element.textContent = text;
         };
 
-        setText('.header-row .planned-label', UI_LABELS.plannedHeader);
+        setText('.header-row .planned-label-text', UI_LABELS.plannedHeader);
+        const plannedLabel = document.querySelector('.header-row .planned-label');
+        if (plannedLabel && !plannedLabel.querySelector('.planned-label-text')) {
+            plannedLabel.textContent = UI_LABELS.plannedHeader;
+        }
         setText('.header-row .time-label', UI_LABELS.timeHeader);
         setText('label[for="date"]', UI_LABELS.dateLabel);
         setText('#todayBtn', UI_LABELS.todayButton);
@@ -487,7 +496,44 @@ class TimeTracker {
         return globalThis.TimeEntryRenderController.renderTimeEntries.call(this, preserveInlineDropdown);
     }
 
+    initPlannedSlotMoveModeControls() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotMoveModeControls.call(this);
+    }
+
+    setPlannedSlotMoveMode(enabled) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotMoveMode.call(this, enabled);
+    }
+
+    togglePlannedSlotMoveMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.togglePlannedSlotMoveMode.call(this);
+    }
+
+    isPlannedSlotMoveMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotMoveMode.call(this);
+    }
+
+    attachPlannedSlotMoveListeners(entryDiv, index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.attachPlannedSlotMoveListeners.call(this, entryDiv, index);
+    }
+
+    movePlannedSlotBlock(sourceIndex, targetStartIndex) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.movePlannedSlotBlock.call(this, sourceIndex, targetStartIndex);
+    }
+
+    getPlannedSlotMoveContext(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.getPlannedSlotMoveContext.call(this, index);
+    }
+
+    canDropPlannedSlotBlock(sourceContext, targetStartIndex) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.canDropPlannedSlotBlock.call(this, sourceContext, targetStartIndex);
+    }
+
+    clearPlannedSlotMoveDragState() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.clearPlannedSlotMoveDragState.call(this);
+    }
+
     attachEventListeners() {
+        this.initPlannedSlotMoveModeControls();
         if (this.authButton) {
             this.authButton.addEventListener('click', () => {
                 if (!this.supabaseConfigured || !this.supabase) {
@@ -534,6 +580,7 @@ class TimeTracker {
             });
         }
         document.getElementById('date').addEventListener('change', (e) => {
+            this.setPlannedSlotMoveMode(false);
             this.transitionToDate(e.target.value);
         });
         // Recompute merged block layout on window resize.
@@ -559,6 +606,7 @@ class TimeTracker {
         });
 
         document.getElementById('timeEntries').addEventListener('keydown', (e) => {
+            if (this.isPlannedSlotMoveMode()) return;
             const planned = e.target.closest('.planned-input');
             if (!planned) return;
             if (e.key !== 'Enter' && e.key !== ' ') return;
@@ -572,18 +620,22 @@ class TimeTracker {
         // ?�동 ?�??불러?�기 ?�거(?�전 ?�동 ?�??
 
         document.getElementById('clearBtn').addEventListener('click', () => {
+            this.setPlannedSlotMoveMode(false);
             this.handleClearButtonClick();
         });
 
         document.getElementById('prevDayBtn').addEventListener('click', () => {
+            this.setPlannedSlotMoveMode(false);
             this.changeDate(-1);
         });
 
         document.getElementById('todayBtn').addEventListener('click', () => {
+            this.setPlannedSlotMoveMode(false);
             this.transitionToDate(this.getTodayLocalDateString());
         });
 
         document.getElementById('nextDayBtn').addEventListener('click', () => {
+            this.setPlannedSlotMoveMode(false);
             this.changeDate(1);
         });
 
@@ -597,6 +649,7 @@ class TimeTracker {
 
             // 좌측???�버만으로도 ?��?�?버튼???�연?�럽�??�라?�도�?마우???�동 추적
             timeEntries.addEventListener('mousemove', (e) => {
+                if (this.isPlannedSlotMoveMode()) return;
                 if (this.isSelectingPlanned) return; // Skip hover UI while dragging.
                 const idx = this.getIndexAtClientPosition('planned', e.clientX, e.clientY);
                 if (idx != null && !isNaN(idx)) {
@@ -612,6 +665,7 @@ class TimeTracker {
 
             // 계획 ?�력 ?�드 ?�릭 ???�롭?�운 바로 ?�기
             timeEntries.addEventListener('click', (e) => {
+                if (this.isPlannedSlotMoveMode()) return;
                 const planned = e.target.closest('.planned-input');
                 if (!planned || !timeEntries.contains(planned)) return;
                 const idx = parseInt(planned.dataset.index, 10);
@@ -653,6 +707,11 @@ class TimeTracker {
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (this.isPlannedSlotMoveMode()) {
+                    this.setPlannedSlotMoveMode(false);
+                    e.preventDefault();
+                    return;
+                }
                 this.clearAllSelections();
             }
         });
@@ -907,6 +966,9 @@ class TimeTracker {
     }
 
     async loadData() {
+        if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
+            this.setPlannedSlotMoveMode(false);
+        }
         return globalThis.TimeTrackerPersistenceController.loadData.call(this);
     }
 

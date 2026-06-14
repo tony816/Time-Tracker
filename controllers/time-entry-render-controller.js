@@ -146,6 +146,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachVirtualRestGapListeners === 'function') {
                 this.attachVirtualRestGapListeners(entryDiv, index);
             }
+            if (typeof this.attachPlannedSlotMoveListeners === 'function') {
+                this.attachPlannedSlotMoveListeners(entryDiv, index);
+            }
             if (typeof this.attachPlanSegmentResizeListeners === 'function') {
                 this.attachPlanSegmentResizeListeners(entryDiv, index);
             }

@@ -227,6 +227,82 @@ test('attachCellClickListeners passes planned slot width to empty slot dropdowns
     assert.equal(calls[0].options.mode, undefined);
 });
 
+test('move mode prevents inline plan dropdown open', () => {
+    const plannedField = createListenerNode();
+    plannedField.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        isPlannedSlotMoveMode() {
+            return true;
+        },
+        getPlannedRangeInfo() {
+            calls.push(['range']);
+            return { startIndex: 1, endIndex: 1 };
+        },
+        openInlinePlanDropdown() {
+            calls.push(['open']);
+        },
+    };
+
+    controller.attachCellClickListeners.call(ctx, entryDiv, 1);
+    plannedField.dispatchEvent({
+        type: 'click',
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [['prevent'], ['stop']]);
+});
+
+test('move mode prevents time-slot merge selection', () => {
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        isPlannedSlotMoveMode() {
+            return true;
+        },
+        findMergeKey() {
+            calls.push(['find']);
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        selectFieldRange() {
+            calls.push(['select']);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, []);
+});
+
 test('attachTimeSlotMergeEntryListeners toggles merge-hover on the row and clears it after selection reset', () => {
     const listeners = {};
     const timeSlot = {

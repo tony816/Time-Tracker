@@ -148,6 +148,15 @@
 
     function handleMergedClickCapture(e) {
         const target = e.target;
+        if (this && typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode()) {
+            if (target && target.closest && target.closest('.planned-input, .time-entry, .time-slot-container, .split-cell-wrapper.split-type-planned')) {
+                if (!target.closest('.planned-slot-move-handle')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                return;
+            }
+        }
         if (e.type === 'click') {
             const plannedInput = target.closest && target.closest('.planned-input');
             if (plannedInput) {
@@ -228,6 +237,11 @@
         if (!plannedField) return;
 
         plannedField.addEventListener('mousedown', (e) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             const mouseRange = this.getPlannedRangeInfo(index);
             const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(mouseRange);
             if (sameInlineTarget && isMobileInlinePlanSheetContext(this)) {
@@ -245,6 +259,7 @@
         });
 
         plannedField.addEventListener('mouseenter', (e) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
             if (!this.isSelectingPlanned) {
                 this.showScheduleButtonOnHover(index);
             }
@@ -358,6 +373,9 @@
             this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
         };
         const beginTimeSlotMergeSelection = (event) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
+                return false;
+            }
             if (event && isNonMergeTimeSlotControl(event.target)) {
                 return false;
             }
@@ -438,6 +456,7 @@
         };
 
         timeSlot.addEventListener('touchstart', (e) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
             if (!e.touches || e.touches.length !== 1) return;
             if (isNonMergeTimeSlotControl(e.target)) {
                 return;
@@ -478,6 +497,11 @@
         const plannedField = entryDiv.querySelector('.planned-input');
         if (plannedField && !plannedField.dataset.mergeKey) {
             plannedField.addEventListener('mousedown', (e) => {
+                if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 const range = this.getPlannedRangeInfo(index);
                 if (!this.inlinePlanDropdown || !this.isSameInlinePlanTarget(range)) return;
 
@@ -492,6 +516,11 @@
                 this.closeInlinePlanDropdown();
             });
             plannedField.addEventListener('click', (e) => {
+                if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 if (this.suppressInlinePlanClickOnce === index) {
                     this.suppressInlinePlanClickOnce = null;
                     e.preventDefault();

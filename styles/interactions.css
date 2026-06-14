@@ -2497,3 +2497,77 @@ button.activity-chip,
 .sub-activities-notice.ok {
   color: #2ecc71;
 }
+
+.planned-slot-move-status {
+  background: #eef6ff;
+  border-bottom: 1px solid #b6d8ff;
+  color: #1f4f7a;
+  font-size: 13px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.planned-slot-move-handle {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1d4ed8;
+  cursor: grab;
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-50%);
+  touch-action: manipulation;
+}
+
+.planned-slot-move-handle:active {
+  cursor: grabbing;
+}
+
+.planned-slot-moving {
+  outline: 2px solid rgba(37, 99, 235, 0.75);
+  outline-offset: -2px;
+  opacity: 0.72;
+}
+
+.planned-slot-move-drop-valid {
+  background: #e8f7ee;
+  outline: 2px solid #22c55e;
+  outline-offset: -2px;
+}
+
+.planned-slot-move-drop-invalid {
+  background: #fff1f2;
+  outline: 2px solid #ef4444;
+  outline-offset: -2px;
+}
+
+.planned-slot-move-mode .planned-input,
+.planned-slot-move-mode .split-grid-segment,
+.planned-slot-move-mode .plan-segment-graphic-title,
+.planned-slot-move-mode .plan-segment-label-text {
+  cursor: default !important;
+}
+
+.planned-slot-move-mode .plan-segment-resize-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .planned-slot-move-handle {
+    width: 44px;
+    height: 44px;
+    left: 6px;
+  }
+
+  .planned-slot-move-mode-btn {
+    min-height: 36px;
+    padding: 8px 10px;
+  }
+}
