@@ -319,11 +319,81 @@
         }, 1500);
     }
 
+    function createEmptySlotForTime(timeLabel) {
+        return {
+            time: String(timeLabel || ''),
+            planned: '',
+            actual: '',
+            planActivities: [],
+            planTitle: '',
+            planTitleBandOn: false,
+            timer: { running: false, elapsed: 0, elapsedSeconds: 0, rawElapsed: 0, startTime: null, startedAt: null, lastPausedAt: null, method: 'manual', status: 'idle' },
+            planSegmentTimers: {},
+            activityLog: {
+                title: '',
+                details: '',
+                subActivities: [],
+                titleBandOn: false,
+                actualGridUnits: [],
+                actualExtraGridUnits: [],
+                actualFailedGridUnits: [],
+                actualOverride: false,
+            },
+        };
+    }
+
+    function clonePlainObject(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            return { ...value };
+        }
+    }
+
     function applySlotsJson(slotsJson) {
     if (!slotsJson || typeof slotsJson !== 'object') return false;
     let changed = false;
     const nextMergedFields = new Map();
+    const beforeSlotsSignature = JSON.stringify(this.timeSlots || []);
     try {
+        const currentSlots = Array.isArray(this.timeSlots) ? this.timeSlots : [];
+        const templateSlots = (typeof this.createEmptyTimeSlots === 'function')
+            ? this.createEmptyTimeSlots()
+            : [];
+        this.timeSlots = currentSlots.map((slot, index) => {
+            const timeLabel = String(slot && slot.time || '');
+            const generated = Array.isArray(templateSlots)
+                ? (templateSlots.find(templateSlot => String(templateSlot && templateSlot.time) === timeLabel) || templateSlots[index])
+                : null;
+            const emptySlot = generated && typeof generated === 'object'
+                ? clonePlainObject(generated)
+                : createEmptySlotForTime(timeLabel);
+            emptySlot.time = timeLabel;
+            emptySlot.planned = '';
+            emptySlot.actual = '';
+            emptySlot.planActivities = [];
+            emptySlot.planTitle = '';
+            emptySlot.planTitleBandOn = false;
+            emptySlot.planSegmentTimers = {};
+            delete emptySlot.planMergeSnapshot;
+            emptySlot.timer = { running: false, elapsed: 0, elapsedSeconds: 0, rawElapsed: 0, startTime: null, startedAt: null, lastPausedAt: null, method: 'manual', status: 'idle' };
+            emptySlot.activityLog = {
+                title: '',
+                details: '',
+                subActivities: [],
+                titleBandOn: false,
+                actualGridUnits: [],
+                actualExtraGridUnits: [],
+                actualFailedGridUnits: [],
+                actualOverride: false,
+            };
+            return emptySlot;
+        });
+        if (beforeSlotsSignature !== JSON.stringify(this.timeSlots || [])) {
+            changed = true;
+        }
+
         Object.keys(slotsJson).forEach((k) => {
             const hour = parseInt(k, 10);
             if (isNaN(hour)) return;
@@ -369,6 +439,10 @@
                     : ((timerRow && String(timerRow.method || '') === 'plan-segment') ? 'plan-segment' : 'manual'),
                 status: this.normalizeTimerStatus(timerRow && timerRow.status, { timer: timerRow || {} }),
             };
+            const planSegmentTimersValue = (row.planSegmentTimers && typeof row.planSegmentTimers === 'object' && !Array.isArray(row.planSegmentTimers))
+                ? clonePlainObject(row.planSegmentTimers)
+                : {};
+            const planMergeSnapshotValue = sanitizePlanMergeSnapshot(row.planMergeSnapshot);
 
             if (row && row.merged && typeof row.timeRange === 'string') {
                 const parts = row.timeRange.split('~').map(part => String(part || '').trim()).filter(Boolean);
@@ -405,6 +479,20 @@
                             const desiredPlanTitle = (i === startIdx) ? planTitleValue : '';
                             if (slot.planTitle !== desiredPlanTitle) {
                                 slot.planTitle = desiredPlanTitle;
+                                changed = true;
+                            }
+                            const desiredPlanSegmentTimers = (i === startIdx) ? planSegmentTimersValue : {};
+                            if (JSON.stringify(slot.planSegmentTimers || {}) !== JSON.stringify(desiredPlanSegmentTimers)) {
+                                slot.planSegmentTimers = clonePlainObject(desiredPlanSegmentTimers);
+                                changed = true;
+                            }
+                            if (i === startIdx && planMergeSnapshotValue) {
+                                if (JSON.stringify(slot.planMergeSnapshot || null) !== JSON.stringify(planMergeSnapshotValue)) {
+                                    slot.planMergeSnapshot = planMergeSnapshotValue;
+                                    changed = true;
+                                }
+                            } else if (slot.planMergeSnapshot) {
+                                delete slot.planMergeSnapshot;
                                 changed = true;
                             }
                             const desiredTimer = (i === startIdx)
@@ -475,6 +563,19 @@
             const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
             const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
             if (slot.planTitle !== planTitleValue) { slot.planTitle = planTitleValue; changed = true; }
+            if (JSON.stringify(slot.planSegmentTimers || {}) !== JSON.stringify(planSegmentTimersValue)) {
+                slot.planSegmentTimers = clonePlainObject(planSegmentTimersValue);
+                changed = true;
+            }
+            if (planMergeSnapshotValue) {
+                if (JSON.stringify(slot.planMergeSnapshot || null) !== JSON.stringify(planMergeSnapshotValue)) {
+                    slot.planMergeSnapshot = planMergeSnapshotValue;
+                    changed = true;
+                }
+            } else if (slot.planMergeSnapshot) {
+                delete slot.planMergeSnapshot;
+                changed = true;
+            }
             const appliedPlanBand = planTitleBand && Boolean(planTitleValue);
             if (slot.planTitleBandOn !== appliedPlanBand) { slot.planTitleBandOn = appliedPlanBand; changed = true; }
             const appliedTitleBand = actualTitleBand && normalizedActivities.length > 0;
@@ -545,6 +646,11 @@
                     ? this.normalizeActivityText(startSlot.planTitle || '')
                     : String(startSlot.planTitle || '').trim();
                 const planTitleBand = Boolean(startSlot.planTitleBandOn && planTitleValue);
+                const planSegmentTimersValue = (startSlot.planSegmentTimers && typeof startSlot.planSegmentTimers === 'object' && !Array.isArray(startSlot.planSegmentTimers))
+                    ? clonePlainObject(startSlot.planSegmentTimers)
+                    : {};
+                const hasPlanSegmentTimers = Object.keys(planSegmentTimersValue).length > 0;
+                const planMergeSnapshotValue = sanitizePlanMergeSnapshot(startSlot.planMergeSnapshot);
                 const actualTitleBand = Boolean(startSlot.activityLog && startSlot.activityLog.titleBandOn);
                 const actualGridUnits = (startSlot.activityLog && Array.isArray(startSlot.activityLog.actualGridUnits))
                     ? startSlot.activityLog.actualGridUnits.map(value => Boolean(value))
@@ -589,6 +695,8 @@
                     && activitiesValue.length === 0
                     && planActivitiesValue.length === 0
                     && !planTitleValue
+                    && !hasPlanSegmentTimers
+                    && !planMergeSnapshotValue
                     && !hasTimerEntry) {
                     return;
                 }
@@ -612,6 +720,12 @@
                 }
                 if (planTitleBand) {
                     slots[storageKey].planTitleBandOn = true;
+                }
+                if (hasPlanSegmentTimers) {
+                    slots[storageKey].planSegmentTimers = clonePlainObject(planSegmentTimersValue);
+                }
+                if (planMergeSnapshotValue) {
+                    slots[storageKey].planMergeSnapshot = planMergeSnapshotValue;
                 }
                 if (actualTitleBand) {
                     slots[storageKey].actualTitleBandOn = true;
@@ -641,6 +755,11 @@
                 ? this.normalizeActivityText(slot.planTitle || '')
                 : String(slot.planTitle || '').trim();
             const planTitleBand = Boolean(slot.planTitleBandOn && planTitleValue);
+            const planSegmentTimersValue = (slot.planSegmentTimers && typeof slot.planSegmentTimers === 'object' && !Array.isArray(slot.planSegmentTimers))
+                ? clonePlainObject(slot.planSegmentTimers)
+                : {};
+            const hasPlanSegmentTimers = Object.keys(planSegmentTimersValue).length > 0;
+            const planMergeSnapshotValue = sanitizePlanMergeSnapshot(slot.planMergeSnapshot);
             const actualTitleBand = Boolean(slot.activityLog && slot.activityLog.titleBandOn);
             const actualGridUnits = (slot.activityLog && Array.isArray(slot.activityLog.actualGridUnits))
                 ? slot.activityLog.actualGridUnits.map(value => Boolean(value))
@@ -684,6 +803,8 @@
                 || activitiesValue.length > 0
                 || planActivitiesValue.length > 0
                 || planTitleValue
+                || hasPlanSegmentTimers
+                || planMergeSnapshotValue
                 || hasTimerEntry) {
                 const entry = { planned, actual, details };
                 if (activitiesValue.length > 0) {
@@ -697,6 +818,12 @@
                 }
                 if (planTitleBand) {
                     entry.planTitleBandOn = true;
+                }
+                if (hasPlanSegmentTimers) {
+                    entry.planSegmentTimers = clonePlainObject(planSegmentTimersValue);
+                }
+                if (planMergeSnapshotValue) {
+                    entry.planMergeSnapshot = planMergeSnapshotValue;
                 }
                 if (actualTitleBand) {
                     entry.actualTitleBandOn = true;
