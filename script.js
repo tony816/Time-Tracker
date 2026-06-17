@@ -7851,12 +7851,15 @@ class TimeTracker {
                     const span = Number.isFinite(segment && segment.span) ? Math.max(1, Math.floor(segment.span)) : 1;
                     const isVirtualRest = Boolean(segment && (segment.virtual || segment.kind === 'virtual-rest'));
                     const isEmpty = Boolean(segment && segment.empty);
+                    const isDeleteTarget = Boolean(segment && segment.deleteTarget);
                     const previewSegment = document.createElement('div');
                     previewSegment.className = isVirtualRest
                         ? 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
                         : 'plan-segment-resize-preview-segment';
                     if (isEmpty) {
                         previewSegment.className += ' plan-segment-resize-preview-empty';
+                    } else if (isDeleteTarget) {
+                        previewSegment.className += ' plan-segment-resize-preview-delete-target';
                     }
                     if (previewSegment.style) {
                         previewSegment.style.gridColumn = `span ${span}`;
@@ -7883,7 +7886,9 @@ class TimeTracker {
                     const duration = document.createElement('span');
                     duration.className = 'plan-segment-resize-preview-duration';
                     const minutes = Number.isFinite(segment && segment.durationMinutes) ? Math.max(0, Math.floor(segment.durationMinutes)) : span * 10;
-                    duration.textContent = isEmpty ? '' : `${minutes}m`;
+                    duration.textContent = isEmpty
+                        ? ''
+                        : (isDeleteTarget ? '놓으면 삭제' : `${minutes}m`);
                     previewSegment.appendChild(label);
                     previewSegment.appendChild(duration);
                     layer.appendChild(previewSegment);
@@ -7915,15 +7920,85 @@ class TimeTracker {
                         ? planSegmentCore.calculateVirtualRestGaps(resized, { startMinute: 0, endMinute: blockMinutes })
                         : [];
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
+                    const originalPreviewTarget = Array.isArray(originalPreviewActivities)
+                        ? originalPreviewActivities[segmentIndex]
+                        : null;
+                    const deleteTargetStartMinute = Number(originalPreviewTarget && originalPreviewTarget.startMinute);
+                    const deleteTargetDurationMinutes = Number(originalPreviewTarget && originalPreviewTarget.durationMinutes);
+                    const deleteTargetLabel = String(originalPreviewTarget && (originalPreviewTarget.activityText || originalPreviewTarget.label) || '');
+                    const renderedPreviewSegments = deletePending
+                        ? previewSegments.map((segment) => (
+                            segment
+                            && !segment.empty
+                            && !segment.virtual
+                            && segment.kind !== 'virtual-rest'
+                            && Number(segment.startMinute) === deleteTargetStartMinute
+                            && Number(segment.durationMinutes) === deleteTargetDurationMinutes
+                            && String(segment.activityText || segment.label || '') === deleteTargetLabel
+                                ? { ...segment, deleteTarget: true }
+                                : segment
+                        ))
+                        : previewSegments;
+                    const deleteTargetIndex = deletePending
+                        ? renderedPreviewSegments.findIndex(segment => segment && segment.deleteTarget)
+                        : -1;
+                    const fallbackDeleteTargetIndex = deletePending && deleteTargetIndex < 0
+                        ? renderedPreviewSegments.findIndex(segment => (
+                            segment
+                            && !segment.empty
+                            && !segment.virtual
+                            && segment.kind !== 'virtual-rest'
+                        ))
+                        : -1;
+                    const previewSegmentsToRender = (deletePending && fallbackDeleteTargetIndex >= 0)
+                        ? renderedPreviewSegments.map((segment, index) => (
+                            index === fallbackDeleteTargetIndex && segment && !segment.deleteTarget
+                                ? { ...segment, deleteTarget: true }
+                                : segment
+                        ))
+                        : renderedPreviewSegments;
                     layer.innerHTML = '';
-                    previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
+                    previewSegmentsToRender.forEach(segment => appendPreviewSegment(layer, segment));
                     if (deletePending) {
                         layer.classList.add('is-delete-pending-plan-resize');
-                        const deleteGuide = document.createElement('div');
-                        deleteGuide.className = 'plan-segment-resize-preview-delete-guide';
-                        deleteGuide.setAttribute('aria-hidden', 'true');
-                        deleteGuide.textContent = '놓으면 삭제';
-                        layer.appendChild(deleteGuide);
+                        if (typeof layer.querySelector === 'function') {
+                            let deleteTarget = layer.querySelector('.plan-segment-resize-preview-delete-target');
+                            if (!deleteTarget && typeof layer.querySelectorAll === 'function') {
+                                const previewSegments = layer.querySelectorAll('.plan-segment-resize-preview-segment') || [];
+                                deleteTarget = previewSegments.find((segment) => (
+                                    segment
+                                    && !segment.classList.contains('plan-segment-resize-preview-rest')
+                                    && !segment.classList.contains('plan-segment-resize-preview-empty')
+                                )) || null;
+                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
+                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
+                                }
+                            }
+                            if (!deleteTarget && Array.isArray(layer.children)) {
+                                deleteTarget = layer.children.find((segment) => (
+                                    segment
+                                    && segment.classList
+                                    && segment.classList.contains('plan-segment-resize-preview-segment')
+                                    && !segment.classList.contains('plan-segment-resize-preview-rest')
+                                    && !segment.classList.contains('plan-segment-resize-preview-empty')
+                                )) || null;
+                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
+                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
+                                }
+                            }
+                            if (!deleteTarget && Array.isArray(layer.children) && layer.children.length > 0) {
+                                deleteTarget = layer.children[0] || null;
+                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
+                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
+                                }
+                            }
+                            if (deleteTarget) {
+                                const durationNode = deleteTarget.querySelector('.plan-segment-resize-preview-duration');
+                                if (durationNode) {
+                                    durationNode.textContent = '\uB193\uC73C\uBA74 \uC0AD\uC81C';
+                                }
+                            }
+                        }
                     } else {
                         layer.classList.remove('is-delete-pending-plan-resize');
                     }
@@ -7941,9 +8016,11 @@ class TimeTracker {
                             guideBoundaryMinute = resizedBoundaryMinute;
                         }
                     }
-                    appendResizePreviewGuide(layer, guideBoundaryMinute, {
-                        hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10 && deltaMinutes >= 0,
-                    });
+                    if (!deletePending) {
+                        appendResizePreviewGuide(layer, guideBoundaryMinute, {
+                            hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10 && deltaMinutes >= 0,
+                        });
+                    }
                 };
 
                 function cleanup() {
