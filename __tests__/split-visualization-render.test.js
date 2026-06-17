@@ -412,6 +412,58 @@ test('buildSplitVisualization passes segment duration context to plan segment ti
     assert.doesNotMatch(html, /0m \/ 180m/);
 });
 
+test('buildSplitVisualization uses grouped same-activity timer context while keeping resize on the later segment', () => {
+    const seen = [];
+    const ctx = {
+        actualRecordingDisabled: true,
+        computeSplitSegments() {
+            return {
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: 'Exercise',
+                        span: 6,
+                        segmentIndex: 1,
+                        timerSegmentIndex: 0,
+                        startMinute: 0,
+                        durationMinutes: 60,
+                        endMinute: 60,
+                    },
+                ],
+            };
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        getPlanSegmentId(baseIndex, segmentIndex) {
+            return `planned-${baseIndex}-0-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
+            seen.push({ baseIndex, segmentId, segmentContext });
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: {
+                    icon: 'play',
+                    timeText: `0m / ${segmentContext.durationMinutes}m`,
+                    tone: 'under',
+                },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 0);
+
+    assert.deepEqual(seen.map(item => item.segmentId), ['planned-0-0-seg0']);
+    assert.deepEqual(seen.map(item => item.segmentContext.segmentIndex), [0]);
+    assert.deepEqual(seen.map(item => item.segmentContext.visualSegmentIndex), [1]);
+    assert.match(html, /data-segment-index="1"/);
+    assert.match(html, /data-segment-id="planned-0-0-seg0"/);
+    assert.match(html, /0m \/ 60m/);
+    assert.match(html, /plan-segment-resize-handle-right/);
+});
+
 test('buildSplitVisualization renders parent title above child activity inside plan segment', () => {
     const ctx = {
         actualRecordingDisabled: true,

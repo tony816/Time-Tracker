@@ -3647,6 +3647,44 @@ class TimeTracker {
                 };
             }).filter((segment) => segment && segment.durationMinutes > 0);
             if (realSegments.length === 0) return null;
+            const sortedRealSegments = realSegments.slice().sort((a, b) => {
+                return (a.startMinute - b.startMinute) || (a.segmentIndex - b.segmentIndex);
+            });
+            const annotateSameActivityGroup = (group) => {
+                if (!Array.isArray(group) || group.length === 0) return;
+                const first = group[0];
+                const last = group[group.length - 1];
+                const groupStartMinute = first.startMinute;
+                const groupEndMinute = last.endMinute;
+                const groupDurationMinutes = Math.max(0, groupEndMinute - groupStartMinute);
+                const timerSegmentIndex = Number.isInteger(first.segmentIndex) ? first.segmentIndex : null;
+                const resizeSegmentIndex = Number.isInteger(last.segmentIndex) ? last.segmentIndex : timerSegmentIndex;
+                group.forEach((segment) => {
+                    segment.planDisplayGroupStartMinute = groupStartMinute;
+                    segment.planDisplayGroupEndMinute = groupEndMinute;
+                    segment.planDisplayGroupDurationMinutes = groupDurationMinutes;
+                    segment.planTimerSegmentIndex = timerSegmentIndex;
+                    segment.planResizeSegmentIndex = resizeSegmentIndex;
+                    segment.planDisplayGroupSize = group.length;
+                });
+            };
+            let sameActivityGroup = [];
+            sortedRealSegments.forEach((segment) => {
+                const previous = sameActivityGroup[sameActivityGroup.length - 1];
+                const previousLabel = previous ? normalizeSegmentLabel(previous.activityText || previous.label || '') : '';
+                const currentLabel = normalizeSegmentLabel(segment.activityText || segment.label || '');
+                const continuesPrevious = previous
+                    && previous.endMinute === segment.startMinute
+                    && previousLabel
+                    && currentLabel
+                    && previousLabel === currentLabel;
+                if (!continuesPrevious) {
+                    annotateSameActivityGroup(sameActivityGroup);
+                    sameActivityGroup = [];
+                }
+                sameActivityGroup.push(segment);
+            });
+            annotateSameActivityGroup(sameActivityGroup);
             const virtualGaps = planSegmentCore.calculateVirtualRestGaps(realSegments, range);
 
             const renderSegments = realSegments.concat(virtualGaps)
@@ -3707,12 +3745,38 @@ class TimeTracker {
                     && sameUnit(slice[i + 1], item)
                 );
                 const label = item ? normalizeSegmentLabel(item.activityText || item.label || '') : '';
+                const segmentUnits = slice.slice(segmentStartIdx, i + 1).filter(Boolean);
+                const realUnitSegments = segmentUnits.filter((segment) => {
+                    return segment && segment.kind !== 'virtual-rest' && segment.virtual !== true;
+                });
+                const firstRealUnit = realUnitSegments[0] || null;
+                const lastRealUnit = realUnitSegments[realUnitSegments.length - 1] || null;
+                const groupStartMinute = firstRealUnit && Number.isFinite(firstRealUnit.planDisplayGroupStartMinute)
+                    ? firstRealUnit.planDisplayGroupStartMinute
+                    : (item && item.startMinute);
+                const groupEndMinute = lastRealUnit && Number.isFinite(lastRealUnit.planDisplayGroupEndMinute)
+                    ? lastRealUnit.planDisplayGroupEndMinute
+                    : (item && item.endMinute);
+                const groupDurationMinutes = firstRealUnit && Number.isFinite(firstRealUnit.planDisplayGroupDurationMinutes)
+                    ? firstRealUnit.planDisplayGroupDurationMinutes
+                    : (item && item.durationMinutes);
+                const timerSegmentIndex = firstRealUnit && Number.isInteger(firstRealUnit.planTimerSegmentIndex)
+                    ? firstRealUnit.planTimerSegmentIndex
+                    : (item && item.segmentIndex);
+                const resizeSegmentIndex = lastRealUnit && Number.isInteger(lastRealUnit.planResizeSegmentIndex)
+                    ? lastRealUnit.planResizeSegmentIndex
+                    : (item && item.segmentIndex);
                 gridSegments.push({
                     ...(item || {}),
                     label,
                     span,
                     connectTop,
                     connectBottom,
+                    startMinute: groupStartMinute,
+                    endMinute: groupEndMinute,
+                    durationMinutes: groupDurationMinutes,
+                    segmentIndex: resizeSegmentIndex,
+                    timerSegmentIndex,
                 });
                 segmentStartIdx = i + 1;
             }
@@ -7830,7 +7894,7 @@ class TimeTracker {
                         }
                     }
                     appendResizePreviewGuide(layer, guideBoundaryMinute, {
-                        hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10,
+                        hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10 && deltaMinutes >= 0,
                     });
                 };
 

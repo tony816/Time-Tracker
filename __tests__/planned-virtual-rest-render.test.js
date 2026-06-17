@@ -154,3 +154,43 @@ test('computeSplitSegments preserves parent title metadata on child planned segm
     assert.equal(result.gridSegments[0].label, 'english');
     assert.equal(result.gridSegments[0].titleLabel, 'study');
 });
+
+test('computeSplitSegments groups adjacent same planned activity for display timing and keeps resize on the later segment', () => {
+    const ctx = createContext([
+        { label: 'Exercise', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+        { label: 'Exercise', seconds: 40 * 60, startMinute: 20, durationMinutes: 40, endMinute: 60 },
+    ]);
+
+    const result = computeSplitSegments.call(ctx, 'planned', 0);
+
+    assert.ok(result);
+    assert.equal(result.gridSegments.length, 1);
+    assert.equal(result.gridSegments[0].label, 'Exercise');
+    assert.equal(result.gridSegments[0].durationMinutes, 60);
+    assert.equal(result.gridSegments[0].startMinute, 0);
+    assert.equal(result.gridSegments[0].endMinute, 60);
+    assert.equal(result.gridSegments[0].timerSegmentIndex, 0);
+    assert.equal(result.gridSegments[0].segmentIndex, 1);
+});
+
+test('computeSplitSegments keeps non-adjacent same planned activity timing separate', () => {
+    const ctx = createContext([
+        { label: 'Exercise', seconds: 20 * 60, startMinute: 0, durationMinutes: 20, endMinute: 20 },
+        { label: 'Study', seconds: 20 * 60, startMinute: 20, durationMinutes: 20, endMinute: 40 },
+        { label: 'Exercise', seconds: 20 * 60, startMinute: 40, durationMinutes: 20, endMinute: 60 },
+    ]);
+
+    const result = computeSplitSegments.call(ctx, 'planned', 0);
+
+    assert.ok(result);
+    assert.deepEqual(result.gridSegments.map(segment => ({
+        label: segment.label,
+        durationMinutes: segment.durationMinutes,
+        segmentIndex: segment.segmentIndex,
+        timerSegmentIndex: segment.timerSegmentIndex,
+    })), [
+        { label: 'Exercise', durationMinutes: 20, segmentIndex: 0, timerSegmentIndex: 0 },
+        { label: 'Study', durationMinutes: 20, segmentIndex: 1, timerSegmentIndex: 1 },
+        { label: 'Exercise', durationMinutes: 20, segmentIndex: 2, timerSegmentIndex: 2 },
+    ]);
+});

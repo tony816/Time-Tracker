@@ -251,14 +251,18 @@ function buildSplitVisualization(type, index) {
                 let isRunningPlanSegment = false;
                 if (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) {
                     const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-                    const segmentIndex = planSegmentIndex != null ? planSegmentIndex : (labeledSegmentCount > 1 ? idx : null);
+                    const visualSegmentIndex = planSegmentIndex != null ? planSegmentIndex : (labeledSegmentCount > 1 ? idx : null);
+                    const timerSegmentIndex = Number.isFinite(segment.timerSegmentIndex)
+                        ? Math.floor(segment.timerSegmentIndex)
+                        : visualSegmentIndex;
                     const segmentId = this.getPlanSegmentId
-                        ? this.getPlanSegmentId(baseIndex, segmentIndex != null ? segmentIndex : null)
-                        : `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`;
+                        ? this.getPlanSegmentId(baseIndex, timerSegmentIndex != null ? timerSegmentIndex : null)
+                        : `planned-${baseIndex}-${timerSegmentIndex != null ? timerSegmentIndex : baseIndex}`;
                     planSegmentId = segmentId;
-                    planSegmentIndex = segmentIndex;
+                    planSegmentIndex = visualSegmentIndex;
                     const timerSegmentContext = {
-                        segmentIndex,
+                        segmentIndex: timerSegmentIndex,
+                        visualSegmentIndex,
                         startMinute: Number(segment.startMinute),
                         durationMinutes: Number(segment.durationMinutes),
                         endMinute: Number(segment.endMinute),

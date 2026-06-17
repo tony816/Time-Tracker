@@ -486,7 +486,7 @@ function createTenMinuteResizeContext(applyCalls = []) {
     };
 }
 
-test('ten minute plan segment right-shrink preview clamps guide to current boundary', () => {
+test('ten minute plan segment right-shrink preview uses bidirectional guide at current boundary', () => {
     withDocument(({ listeners }) => {
         const applyCalls = [];
         const ctx = createTenMinuteResizeContext(applyCalls);
@@ -500,17 +500,18 @@ test('ten minute plan segment right-shrink preview clamps guide to current bound
         assert.ok(guide);
         assert.equal(guide.style.left, `${(1 / 6) * 100}%`);
         assert.notEqual(guide.style.left, '0%');
-        assert.equal(guide.getAttribute('viewBox'), '56 0 40 28');
-        assert.equal(guide.getAttribute('width'), '40');
-        assert.equal(guide.style.width, '40px');
-        assert.equal(guide.style.minWidth, '40px');
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(guide.getAttribute('viewBox'), '0 0 96 28');
+        assert.equal(guide.getAttribute('width'), '96');
+        assert.equal(guide.style.width || '', '');
+        assert.equal(guide.style.minWidth || '', '');
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
 
         const arrowShapes = guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape');
-        assert.equal(arrowShapes.length, 1);
-        assert.match(arrowShapes[0].getAttribute('d'), /^M61\.7/);
-        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
-        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+        assert.equal(arrowShapes.length, 2);
+        assert.match(arrowShapes[0].getAttribute('d'), /^M34\.3/);
+        assert.match(arrowShapes[1].getAttribute('d'), /^M61\.7/);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 4);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 4);
         assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -100));
@@ -528,7 +529,7 @@ test('ten minute plan segment right-shrink preview clamps guide to current bound
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('right-only preview guide anchors inside the 10m segment while bidirectional guide remains centered', () => {
+test('right-only preview guide anchors inside rightward 10m resize while bidirectional guide remains centered', () => {
     const defaultGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\s*\{[^}]*\}/);
     assert.ok(defaultGuideRule);
     assert.match(defaultGuideRule[0], /transform:\s*translate\(-50%,\s*-50%\);/);
@@ -546,18 +547,18 @@ test('right-only preview guide anchors inside the 10m segment while bidirectiona
         shrinkFixture.handle.dispatchEvent(createPointerEvent('pointerdown', shrinkFixture.handle, 0));
         listeners.pointermove(createPointerEvent('pointermove', shrinkFixture.handle, -100));
 
-        const rightOnlyGuide = latestGuide(shrinkFixture.grid);
-        assert.ok(rightOnlyGuide);
-        assert.equal(hasClass(rightOnlyGuide, 'plan-segment-resize-preview-arrow-right-only'), true);
-        assert.equal(rightOnlyGuide.style.left, `${(1 / 6) * 100}%`);
-        assert.notEqual(rightOnlyGuide.style.left, '0%');
-        assert.equal(rightOnlyGuide.getAttribute('viewBox'), '56 0 40 28');
-        assert.equal(rightOnlyGuide.getAttribute('width'), '40');
-        assert.equal(rightOnlyGuide.style.width, '40px');
-        assert.equal(rightOnlyGuide.style.minWidth, '40px');
-        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 1);
-        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
-        assert.equal(rightOnlyGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+        const shrinkGuide = latestGuide(shrinkFixture.grid);
+        assert.ok(shrinkGuide);
+        assert.equal(hasClass(shrinkGuide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(shrinkGuide.style.left, `${(1 / 6) * 100}%`);
+        assert.notEqual(shrinkGuide.style.left, '0%');
+        assert.equal(shrinkGuide.getAttribute('viewBox'), '0 0 96 28');
+        assert.equal(shrinkGuide.getAttribute('width'), '96');
+        assert.equal(shrinkGuide.style.width || '', '');
+        assert.equal(shrinkGuide.style.minWidth || '', '');
+        assert.equal(shrinkGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 2);
+        assert.equal(shrinkGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 4);
+        assert.equal(shrinkGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 4);
 
         listeners.pointerup(createPointerEvent('pointerup', shrinkFixture.handle, -100));
 
