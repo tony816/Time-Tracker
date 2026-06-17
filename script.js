@@ -7566,7 +7566,7 @@ class TimeTracker {
             }
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
             let previewLayer = null;
-            let lastPreviewDeltaUnits = null;
+            let lastPreviewKey = null;
             let deletePending = false;
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
@@ -7852,6 +7852,7 @@ class TimeTracker {
                     const isVirtualRest = Boolean(segment && (segment.virtual || segment.kind === 'virtual-rest'));
                     const isEmpty = Boolean(segment && segment.empty);
                     const isDeleteTarget = Boolean(segment && segment.deleteTarget);
+                    const visualDurationMinutes = Number(segment && segment.visualDurationMinutes);
                     const previewSegment = document.createElement('div');
                     previewSegment.className = isVirtualRest
                         ? 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
@@ -7863,6 +7864,18 @@ class TimeTracker {
                     }
                     if (previewSegment.style) {
                         previewSegment.style.gridColumn = `span ${span}`;
+                        if (!isVirtualRest && !isEmpty && Number.isFinite(visualDurationMinutes)) {
+                            const visualWidthRatio = Math.max(0.02, visualDurationMinutes / Math.max(1, span * 10));
+                            previewSegment.style.width = `${visualWidthRatio * 100}%`;
+                            previewSegment.style.justifySelf = 'start';
+                            if (typeof previewSegment.style.setProperty === 'function') {
+                                previewSegment.style.setProperty('--plan-resize-preview-ratio', String(visualWidthRatio));
+                                previewSegment.style.setProperty('--plan-resize-preview-duration-minutes', String(visualDurationMinutes));
+                            } else {
+                                previewSegment.style['--plan-resize-preview-ratio'] = String(visualWidthRatio);
+                                previewSegment.style['--plan-resize-preview-duration-minutes'] = String(visualDurationMinutes);
+                            }
+                        }
                         if (!isVirtualRest && !isEmpty && typeof this.getSplitColor === 'function') {
                             const color = this.getSplitColor(
                                 'planned',
@@ -7898,16 +7911,25 @@ class TimeTracker {
                     const unitsPerRow = 6;
                     const unitWidth = gridWidth / unitsPerRow;
                     if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+                    const rawDeltaMinutes = ((clientX - originX) / unitWidth) * 10;
                     const deltaUnits = Math.round((clientX - originX) / unitWidth);
-                    if (deltaUnits === lastPreviewDeltaUnits) return;
-                    lastPreviewDeltaUnits = deltaUnits;
+                    const previewKey = `${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}`;
+                    if (previewKey === lastPreviewKey) return;
+                    lastPreviewKey = previewKey;
                     const layer = ensurePreviewLayer();
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
                     const deltaMinutes = deltaUnits * 10;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     const initialDurationMinutes = Math.max(0, Math.floor(endMinute - startMinute));
-                    const canDeleteByShrink = initialDurationMinutes === 10 && deltaMinutes < 0 && effectiveEdge !== 'left';
+                    const visualStartMinute = effectiveEdge === 'left'
+                        ? Math.max(0, Math.min(endMinute, startMinute + rawDeltaMinutes))
+                        : startMinute;
+                    const visualEndMinute = effectiveEdge === 'left'
+                        ? endMinute
+                        : Math.max(startMinute, Math.min(blockMinutes, endMinute + rawDeltaMinutes));
+                    const visualDurationMinutes = Math.max(0, visualEndMinute - visualStartMinute);
+                    const canDeleteByShrink = initialDurationMinutes === 10 && rawDeltaMinutes < 0 && effectiveEdge !== 'left';
                     setDeletePendingState(canDeleteByShrink);
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPreviewActivities.map(item => ({ ...item })),
@@ -7924,21 +7946,35 @@ class TimeTracker {
                         ? originalPreviewActivities[segmentIndex]
                         : null;
                     const deleteTargetStartMinute = Number(originalPreviewTarget && originalPreviewTarget.startMinute);
-                    const deleteTargetDurationMinutes = Number(originalPreviewTarget && originalPreviewTarget.durationMinutes);
                     const deleteTargetLabel = String(originalPreviewTarget && (originalPreviewTarget.activityText || originalPreviewTarget.label) || '');
+                    const applyVisualTarget = (segment) => {
+                        if (!segment || segment.empty || segment.virtual || segment.kind === 'virtual-rest') return segment;
+                        const segmentMatchesTarget = Number(segment.segmentIndex) === segmentIndex
+                            || (
+                                Number(segment.startMinute) === deleteTargetStartMinute
+                                && String(segment.activityText || segment.label || '') === deleteTargetLabel
+                            );
+                        if (!segmentMatchesTarget) return segment;
+                        return {
+                            ...segment,
+                            visualDurationMinutes,
+                            visualStartMinute,
+                            visualEndMinute,
+                        };
+                    };
+                    const visualPreviewSegments = previewSegments.map(applyVisualTarget);
                     const renderedPreviewSegments = deletePending
-                        ? previewSegments.map((segment) => (
+                        ? visualPreviewSegments.map((segment) => (
                             segment
                             && !segment.empty
                             && !segment.virtual
                             && segment.kind !== 'virtual-rest'
                             && Number(segment.startMinute) === deleteTargetStartMinute
-                            && Number(segment.durationMinutes) === deleteTargetDurationMinutes
                             && String(segment.activityText || segment.label || '') === deleteTargetLabel
                                 ? { ...segment, deleteTarget: true }
                                 : segment
                         ))
-                        : previewSegments;
+                        : visualPreviewSegments;
                     const deleteTargetIndex = deletePending
                         ? renderedPreviewSegments.findIndex(segment => segment && segment.deleteTarget)
                         : -1;
@@ -7961,44 +7997,6 @@ class TimeTracker {
                     previewSegmentsToRender.forEach(segment => appendPreviewSegment(layer, segment));
                     if (deletePending) {
                         layer.classList.add('is-delete-pending-plan-resize');
-                        if (typeof layer.querySelector === 'function') {
-                            let deleteTarget = layer.querySelector('.plan-segment-resize-preview-delete-target');
-                            if (!deleteTarget && typeof layer.querySelectorAll === 'function') {
-                                const previewSegments = layer.querySelectorAll('.plan-segment-resize-preview-segment') || [];
-                                deleteTarget = previewSegments.find((segment) => (
-                                    segment
-                                    && !segment.classList.contains('plan-segment-resize-preview-rest')
-                                    && !segment.classList.contains('plan-segment-resize-preview-empty')
-                                )) || null;
-                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
-                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
-                                }
-                            }
-                            if (!deleteTarget && Array.isArray(layer.children)) {
-                                deleteTarget = layer.children.find((segment) => (
-                                    segment
-                                    && segment.classList
-                                    && segment.classList.contains('plan-segment-resize-preview-segment')
-                                    && !segment.classList.contains('plan-segment-resize-preview-rest')
-                                    && !segment.classList.contains('plan-segment-resize-preview-empty')
-                                )) || null;
-                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
-                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
-                                }
-                            }
-                            if (!deleteTarget && Array.isArray(layer.children) && layer.children.length > 0) {
-                                deleteTarget = layer.children[0] || null;
-                                if (deleteTarget && deleteTarget.classList && typeof deleteTarget.classList.add === 'function') {
-                                    deleteTarget.classList.add('plan-segment-resize-preview-delete-target');
-                                }
-                            }
-                            if (deleteTarget) {
-                                const durationNode = deleteTarget.querySelector('.plan-segment-resize-preview-duration');
-                                if (durationNode) {
-                                    durationNode.textContent = '\uB193\uC73C\uBA74 \uC0AD\uC81C';
-                                }
-                            }
-                        }
                     } else {
                         layer.classList.remove('is-delete-pending-plan-resize');
                     }

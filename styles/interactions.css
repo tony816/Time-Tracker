@@ -2321,8 +2321,6 @@ button.activity-chip,
 }
 
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-delete-target .plan-segment-resize-preview-label {
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
   opacity: 0.84;
 }
 
