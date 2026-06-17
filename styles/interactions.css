@@ -2307,28 +2307,6 @@ button.activity-chip,
   color: transparent;
 }
 
-.plan-segment-resize-preview-segment.plan-segment-resize-preview-delete-target {
-  position: relative;
-  border: 1px dashed rgba(192, 57, 43, 0.88);
-  border-bottom: 3px dashed rgba(192, 57, 43, 0.88);
-  background:
-    linear-gradient(180deg, rgba(252, 236, 234, 0.98), rgba(248, 213, 208, 0.9)),
-    var(--split-segment-color, rgba(231, 76, 60, 0.12));
-  box-shadow:
-    inset 0 0 0 1px rgba(192, 57, 43, 0.1),
-    0 0 0 1px rgba(192, 57, 43, 0.08);
-  color: #a93226;
-}
-
-.plan-segment-resize-preview-segment.plan-segment-resize-preview-delete-target .plan-segment-resize-preview-label {
-  opacity: 0.84;
-}
-
-.plan-segment-resize-preview-segment.plan-segment-resize-preview-delete-target .plan-segment-resize-preview-duration {
-  color: #c0392b;
-  font-weight: 800;
-}
-
 .plan-segment-resize-preview-label,
 .plan-segment-resize-preview-duration {
   display: block;

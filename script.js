@@ -7850,7 +7850,6 @@ class TimeTracker {
                     const span = Number.isFinite(segment && segment.span) ? Math.max(1, Math.floor(segment.span)) : 1;
                     const isVirtualRest = Boolean(segment && (segment.virtual || segment.kind === 'virtual-rest'));
                     const isEmpty = Boolean(segment && segment.empty);
-                    const isDeleteTarget = Boolean(segment && segment.deleteTarget);
                     const visualDurationMinutes = Number(segment && segment.visualDurationMinutes);
                     const previewSegment = document.createElement('div');
                     previewSegment.className = isVirtualRest
@@ -7858,8 +7857,6 @@ class TimeTracker {
                         : 'plan-segment-resize-preview-segment';
                     if (isEmpty) {
                         previewSegment.className += ' plan-segment-resize-preview-empty';
-                    } else if (isDeleteTarget) {
-                        previewSegment.className += ' plan-segment-resize-preview-delete-target';
                     }
                     if (previewSegment.style) {
                         previewSegment.style.gridColumn = `span ${span}`;
@@ -7900,7 +7897,7 @@ class TimeTracker {
                     const minutes = Number.isFinite(segment && segment.durationMinutes) ? Math.max(0, Math.floor(segment.durationMinutes)) : span * 10;
                     duration.textContent = isEmpty
                         ? ''
-                        : (isDeleteTarget ? '놓으면 삭제' : `${minutes}m`);
+                        : `${minutes}m`;
                     previewSegment.appendChild(label);
                     previewSegment.appendChild(duration);
                     layer.appendChild(previewSegment);
@@ -7920,7 +7917,6 @@ class TimeTracker {
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
                     const deltaMinutes = deltaUnits * 10;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    const initialDurationMinutes = Math.max(0, Math.floor(endMinute - startMinute));
                     const visualStartMinute = effectiveEdge === 'left'
                         ? Math.max(0, Math.min(endMinute, startMinute + rawDeltaMinutes))
                         : startMinute;
@@ -7928,7 +7924,8 @@ class TimeTracker {
                         ? endMinute
                         : Math.max(startMinute, Math.min(blockMinutes, endMinute + rawDeltaMinutes));
                     const visualDurationMinutes = Math.max(0, visualEndMinute - visualStartMinute);
-                    const canDeleteByShrink = initialDurationMinutes === 10 && rawDeltaMinutes < 0 && effectiveEdge !== 'left';
+                    const isShrinking = effectiveEdge === 'left' ? rawDeltaMinutes > 0 : rawDeltaMinutes < 0;
+                    const canDeleteByShrink = isShrinking && visualDurationMinutes <= 0;
                     setDeletePendingState(canDeleteByShrink);
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPreviewActivities.map(item => ({ ...item })),
@@ -7944,14 +7941,14 @@ class TimeTracker {
                     const originalPreviewTarget = Array.isArray(originalPreviewActivities)
                         ? originalPreviewActivities[segmentIndex]
                         : null;
-                    const deleteTargetStartMinute = Number(originalPreviewTarget && originalPreviewTarget.startMinute);
-                    const deleteTargetLabel = String(originalPreviewTarget && (originalPreviewTarget.activityText || originalPreviewTarget.label) || '');
+                    const previewTargetStartMinute = Number(originalPreviewTarget && originalPreviewTarget.startMinute);
+                    const previewTargetLabel = String(originalPreviewTarget && (originalPreviewTarget.activityText || originalPreviewTarget.label) || '');
                     const applyVisualTarget = (segment) => {
                         if (!segment || segment.empty || segment.virtual || segment.kind === 'virtual-rest') return segment;
                         const segmentMatchesTarget = Number(segment.segmentIndex) === segmentIndex
                             || (
-                                Number(segment.startMinute) === deleteTargetStartMinute
-                                && String(segment.activityText || segment.label || '') === deleteTargetLabel
+                                Number(segment.startMinute) === previewTargetStartMinute
+                                && String(segment.activityText || segment.label || '') === previewTargetLabel
                             );
                         if (!segmentMatchesTarget) return segment;
                         return {
@@ -7963,38 +7960,8 @@ class TimeTracker {
                         };
                     };
                     const visualPreviewSegments = previewSegments.map(applyVisualTarget);
-                    const renderedPreviewSegments = deletePending
-                        ? visualPreviewSegments.map((segment) => (
-                            segment
-                            && !segment.empty
-                            && !segment.virtual
-                            && segment.kind !== 'virtual-rest'
-                            && Number(segment.startMinute) === deleteTargetStartMinute
-                            && String(segment.activityText || segment.label || '') === deleteTargetLabel
-                                ? { ...segment, deleteTarget: true }
-                                : segment
-                        ))
-                        : visualPreviewSegments;
-                    const deleteTargetIndex = deletePending
-                        ? renderedPreviewSegments.findIndex(segment => segment && segment.deleteTarget)
-                        : -1;
-                    const fallbackDeleteTargetIndex = deletePending && deleteTargetIndex < 0
-                        ? renderedPreviewSegments.findIndex(segment => (
-                            segment
-                            && !segment.empty
-                            && !segment.virtual
-                            && segment.kind !== 'virtual-rest'
-                        ))
-                        : -1;
-                    const previewSegmentsToRender = (deletePending && fallbackDeleteTargetIndex >= 0)
-                        ? renderedPreviewSegments.map((segment, index) => (
-                            index === fallbackDeleteTargetIndex && segment && !segment.deleteTarget
-                                ? { ...segment, deleteTarget: true }
-                                : segment
-                        ))
-                        : renderedPreviewSegments;
                     layer.innerHTML = '';
-                    previewSegmentsToRender.forEach(segment => appendPreviewSegment(layer, segment));
+                    visualPreviewSegments.forEach(segment => appendPreviewSegment(layer, segment));
                     if (deletePending) {
                         layer.classList.add('is-delete-pending-plan-resize');
                     } else {

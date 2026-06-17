@@ -523,15 +523,8 @@ test('ten minute plan segment right-shrink preview uses bidirectional guide at c
         assert.equal(guide, null);
         const layer = latestPreviewLayer(fixture.grid);
         assert.equal(layer.classList.contains('is-delete-pending-plan-resize'), true);
-        const deleteTarget = layer.querySelector('.plan-segment-resize-preview-delete-target');
-        assert.ok(deleteTarget);
-        assert.equal(hasClass(deleteTarget, 'plan-segment-resize-preview-delete-target'), true);
-        const deleteDuration = deleteTarget.querySelector('.plan-segment-resize-preview-duration');
-        assert.ok(deleteDuration);
-        assert.match(deleteDuration.textContent, /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        const previewDurations = latestPreviewDurations(fixture.grid);
-        assert.match(previewDurations[0], /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        assert.equal(previewDurations[1], '50m');
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -100));
 
@@ -540,32 +533,35 @@ test('ten minute plan segment right-shrink preview uses bidirectional guide at c
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('delete-pending preview keeps label text unstruck', () => {
-    const deleteLabelRule = interactionsCss.match(
-        /\.plan-segment-resize-preview-segment\.plan-segment-resize-preview-delete-target \.plan-segment-resize-preview-label\s*\{[^}]*\}/
-    );
-    assert.ok(deleteLabelRule);
-    assert.doesNotMatch(deleteLabelRule[0], /text-decoration/);
+test('delete-pending preview no longer uses delete-target styling', () => {
+    assert.doesNotMatch(interactionsCss, /plan-segment-resize-preview-delete-target/);
 });
 
-test('ten minute delete-pending preview exposes continuous shrink sizing', () => {
+test('ten minute sub-ten preview shrinks without delete-target styling or deletion', () => {
     withDocument(({ listeners }) => {
+        const deleteCalls = [];
         const ctx = createTenMinuteResizeContext();
+        ctx.deletePlanSegment = function(baseIndex, segmentIndex) {
+            deleteCalls.push({ baseIndex, segmentIndex });
+            this.timeSlots[baseIndex].planActivities.splice(segmentIndex, 1);
+            return true;
+        };
         const fixture = createResizeFixture({ endMinute: 10 });
 
         attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
         fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -50));
 
-        const deleteTarget = latestDeleteTarget(fixture.grid);
-        assert.ok(deleteTarget);
-        assert.equal(deleteTarget.style.width, '50%');
-        assert.equal(previewRatio(deleteTarget), 0.5);
-        assert.match(deleteTarget.querySelector('.plan-segment-resize-preview-duration').textContent, /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
+        const activeSegment = latestPreviewSegments(fixture.grid)[0];
+        assert.equal(activeSegment.style.width, '50%');
+        assert.equal(previewRatio(activeSegment), 0.5);
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.equal(latestPreviewLayer(fixture.grid).classList.contains('is-delete-pending-plan-resize'), false);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -50));
 
-        assert.equal(ctx.timeSlots[0].planActivities.length, 0);
+        assert.deepEqual(deleteCalls, []);
+        assert.equal(ctx.timeSlots[0].planActivities.length, 1);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
@@ -588,15 +584,8 @@ test('ten minute plan segment right-shrink enters delete-pending preview and del
         const layer = latestPreviewLayer(fixture.grid);
         assert.ok(layer);
         assert.equal(layer.classList.contains('is-delete-pending-plan-resize'), true);
-        const deleteTarget = layer.querySelector('.plan-segment-resize-preview-delete-target');
-        assert.ok(deleteTarget);
-        assert.equal(hasClass(deleteTarget, 'plan-segment-resize-preview-delete-target'), true);
-        const deleteDuration = deleteTarget.querySelector('.plan-segment-resize-preview-duration');
-        assert.ok(deleteDuration);
-        assert.match(deleteDuration.textContent, /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        const previewDurations = latestPreviewDurations(fixture.grid);
-        assert.match(previewDurations[0], /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        assert.equal(previewDurations[1], '50m');
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -100));
 
@@ -691,6 +680,49 @@ test('longer segment right-shrink preview continues below ten minutes', () => {
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
+test('longer segment right-shrink deletes in one gesture when collapsed to start', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const deleteCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+                return true;
+            },
+            deletePlanSegment(baseIndex, segmentIndex) {
+                deleteCalls.push({ baseIndex, segmentIndex });
+                this.timeSlots[baseIndex].planActivities.splice(segmentIndex, 1);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 20 });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -200));
+
+        const activeSegment = latestPreviewSegments(fixture.grid)[0];
+        assert.equal(activeSegment.style.width, '0%');
+        assert.equal(latestPreviewLayer(fixture.grid).classList.contains('is-delete-pending-plan-resize'), true);
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -200));
+
+        assert.deepEqual(deleteCalls, [{ baseIndex: 0, segmentIndex: 0 }]);
+        assert.deepEqual(applyCalls, []);
+        assert.equal(ctx.timeSlots[0].planActivities.length, 0);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
 test('longer segment left-shrink preview continues below ten minutes from the right edge', () => {
     withDocument(({ listeners }) => {
         const applyCalls = [];
@@ -736,6 +768,49 @@ test('longer segment left-shrink preview continues below ten minutes from the ri
 
         assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'left', targetMinute: 20 }]);
         assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 10);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('longer segment left-shrink deletes in one gesture when collapsed to end', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const deleteCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+                return true;
+            },
+            deletePlanSegment(baseIndex, segmentIndex) {
+                deleteCalls.push({ baseIndex, segmentIndex });
+                this.timeSlots[baseIndex].planActivities.splice(segmentIndex, 1);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 20, handleEdge: 'left' });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 200));
+
+        const activeSegment = latestPreviewSegments(fixture.grid)[1];
+        assert.equal(activeSegment.style.width, '0%');
+        assert.equal(latestPreviewLayer(fixture.grid).classList.contains('is-delete-pending-plan-resize'), true);
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 200));
+
+        assert.deepEqual(deleteCalls, [{ baseIndex: 0, segmentIndex: 0 }]);
+        assert.deepEqual(applyCalls, []);
+        assert.equal(ctx.timeSlots[0].planActivities.length, 0);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
@@ -842,7 +917,7 @@ test('delete-pending clears when a ten minute resize reverses before release', (
         fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -100));
         assert.equal(latestPreviewLayer(fixture.grid).classList.contains('is-delete-pending-plan-resize'), true);
-        assert.ok(latestDeleteTarget(fixture.grid));
+        assert.equal(latestDeleteTarget(fixture.grid), null);
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
         const layer = latestPreviewLayer(fixture.grid);
@@ -888,7 +963,7 @@ test('right-only preview guide anchors inside rightward 10m resize while bidirec
         assert.equal(shrinkGuide, null);
         const shrinkLayer = latestPreviewLayer(shrinkFixture.grid);
         assert.equal(shrinkLayer.classList.contains('is-delete-pending-plan-resize'), true);
-        assert.ok(shrinkLayer.querySelector('.plan-segment-resize-preview-delete-target'));
+        assert.equal(shrinkLayer.querySelector('.plan-segment-resize-preview-delete-target'), null);
 
         listeners.pointerup(createPointerEvent('pointerup', shrinkFixture.handle, -100));
 
@@ -1352,23 +1427,14 @@ test('touch handle resize enters delete-pending and deletes on release for ten m
         assert.equal(listenerCounts.touchend, 1);
         assert.equal(listenerCounts.touchcancel, 1);
 
-        listeners.touchmove(createTouchEvent('touchmove', fixture.handle, -50));
+        listeners.touchmove(createTouchEvent('touchmove', fixture.handle, -100));
         const layer = latestPreviewLayer(fixture.grid);
         assert.ok(layer);
         assert.equal(layer.classList.contains('is-delete-pending-plan-resize'), true);
-        const deleteTarget = layer.querySelector('.plan-segment-resize-preview-delete-target');
-        assert.ok(deleteTarget);
-        assert.equal(hasClass(deleteTarget, 'plan-segment-resize-preview-delete-target'), true);
-        assert.equal(deleteTarget.style.width, '50%');
-        assert.equal(previewRatio(deleteTarget), 0.5);
-        const deleteDuration = deleteTarget.querySelector('.plan-segment-resize-preview-duration');
-        assert.ok(deleteDuration);
-        assert.match(deleteDuration.textContent, /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        const previewDurations = latestPreviewDurations(fixture.grid);
-        assert.match(previewDurations[0], /\uB193\uC73C\uBA74 \uC0AD\uC81C/);
-        assert.equal(previewDurations[1], '50m');
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
 
-        listeners.touchend(createTouchEvent('touchend', fixture.handle, -50));
+        listeners.touchend(createTouchEvent('touchend', fixture.handle, -100));
 
         assert.deepEqual(deleteCalls, [{ baseIndex: 0, segmentIndex: 0 }]);
         assert.equal(listenerCounts.touchmove, 0);
