@@ -7339,6 +7339,29 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
+        deletePlanSegment(baseIndex, segmentIndex) {
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
+        if (!slot || !Array.isArray(slot.planActivities)) return false;
+        if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= slot.planActivities.length) return false;
+
+        slot.planActivities = slot.planActivities
+            .filter((item, index) => index !== segmentIndex)
+            .map(item => ({ ...item }));
+        slot.planned = this.formatActivitiesSummary
+            ? this.formatActivitiesSummary(slot.planActivities)
+            : '';
+        this.renderTimeEntries(true);
+        if (typeof this.repositionOpenInlinePlanDropdown === 'function') {
+            this.repositionOpenInlinePlanDropdown();
+        }
+        this.calculateTotals();
+        this.autoSave();
+        return true;
+    }
         removePlanSegmentResizePreviewLayer(grid) {
         if (!grid) return false;
         let removed = false;
@@ -7544,6 +7567,7 @@ class TimeTracker {
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
             let previewLayer = null;
             let lastPreviewDeltaUnits = null;
+            let deletePending = false;
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
             let lastClientX = originX;
@@ -7597,6 +7621,17 @@ class TimeTracker {
                         grid.classList.add('is-previewing-plan-resize');
                     }
                     return previewLayer;
+                };
+
+                const setDeletePendingState = (nextDeletePending) => {
+                    deletePending = Boolean(nextDeletePending);
+                    if (grid && grid.classList) {
+                        if (deletePending && typeof grid.classList.add === 'function') {
+                            grid.classList.add('is-delete-pending-plan-resize');
+                        } else if (!deletePending && typeof grid.classList.remove === 'function') {
+                            grid.classList.remove('is-delete-pending-plan-resize');
+                        }
+                    }
                 };
 
                 const appendResizePreviewGuide = (layer, boundaryMinute, options = {}) => {
@@ -7866,6 +7901,9 @@ class TimeTracker {
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
                     const deltaMinutes = deltaUnits * 10;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
+                    const initialDurationMinutes = Math.max(0, Math.floor(endMinute - startMinute));
+                    const canDeleteByShrink = initialDurationMinutes === 10 && deltaMinutes < 0 && effectiveEdge !== 'left';
+                    setDeletePendingState(canDeleteByShrink);
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPreviewActivities.map(item => ({ ...item })),
                         segmentIndex,
@@ -7879,6 +7917,16 @@ class TimeTracker {
                     const previewSegments = buildPreviewDisplaySegments(resized.concat(gaps));
                     layer.innerHTML = '';
                     previewSegments.forEach(segment => appendPreviewSegment(layer, segment));
+                    if (deletePending) {
+                        layer.classList.add('is-delete-pending-plan-resize');
+                        const deleteGuide = document.createElement('div');
+                        deleteGuide.className = 'plan-segment-resize-preview-delete-guide';
+                        deleteGuide.setAttribute('aria-hidden', 'true');
+                        deleteGuide.textContent = '놓으면 삭제';
+                        layer.appendChild(deleteGuide);
+                    } else {
+                        layer.classList.remove('is-delete-pending-plan-resize');
+                    }
                     const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
                     let guideBoundaryMinute = originalBoundaryMinute;
                     if (Array.isArray(resized)) {
@@ -7901,6 +7949,7 @@ class TimeTracker {
                 function cleanup() {
                     if (cleanedUp) return;
                     cleanedUp = true;
+                    setDeletePendingState(false);
                     removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
                         resizeSurfaceEl.classList.remove('is-resizing-plan-segment', 'plan-segment-resize-edge-left', 'plan-segment-resize-edge-right');
@@ -7934,12 +7983,17 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
                     }
+                    const shouldDelete = deletePending;
                     cleanup();
                     const unitsPerRow = 6;
                     const unitWidth = gridWidth / unitsPerRow;
                     if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
                     const deltaUnits = Math.round((lastClientX - originX) / unitWidth);
                     const deltaMinutes = deltaUnits * 10;
+                    if (shouldDelete) {
+                        resizeController.deletePlanSegment(baseIndex, segmentIndex);
+                        return;
+                    }
                     if (deltaMinutes === 0) return;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
