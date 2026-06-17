@@ -208,14 +208,15 @@ function createResizeFixture(options = {}) {
     const grid = createNode('div', 'split-grid');
     const startMinute = Number.isFinite(options.startMinute) ? options.startMinute : 0;
     const endMinute = Number.isFinite(options.endMinute) ? options.endMinute : 30;
+    const handleEdge = options.handleEdge === 'left' ? 'left' : 'right';
     const segment = createNode('div', 'split-grid-segment', {
         segmentKind: 'real-plan',
         segmentIndex: '0',
         segmentStartMinute: String(startMinute),
         segmentEndMinute: String(endMinute),
     });
-    const handle = createNode('span', 'plan-segment-resize-handle plan-segment-resize-handle-right', {
-        resizeEdge: 'right',
+    const handle = createNode('span', `plan-segment-resize-handle plan-segment-resize-handle-${handleEdge}`, {
+        resizeEdge: handleEdge,
     });
     if (options.captureCalls) {
         handle.setPointerCapture = (pointerId) => {
@@ -639,6 +640,102 @@ test('longer segment preview responds to sub-unit shrink before commit snap chan
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -40));
 
         assert.deepEqual(applyCalls, []);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('longer segment right-shrink preview continues below ten minutes', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+                const slot = this.timeSlots[baseIndex];
+                slot.planActivities = realPlanSegmentCore.resizePlanSegmentInList(
+                    slot.planActivities,
+                    segmentIndex,
+                    edge,
+                    targetMinute,
+                    { startMinute: 0, endMinute: 60 }
+                );
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 20 });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -150));
+
+        const activeSegment = latestPreviewSegments(fixture.grid)[0];
+        assert.equal(activeSegment.style.width, '50%');
+        assert.equal(activeSegment.style.justifySelf, 'start');
+        assert.equal(previewRatio(activeSegment), 0.5);
+        assert.equal(activeSegment.style['--plan-resize-preview-duration-minutes'], '5');
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '50m']);
+        assert.equal(latestGuide(fixture.grid).style.left, `${(0.5 / 6) * 100}%`);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -150));
+
+        assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'right', targetMinute: 10 }]);
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 10);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('longer segment left-shrink preview continues below ten minutes from the right edge', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+                const slot = this.timeSlots[baseIndex];
+                slot.planActivities = realPlanSegmentCore.resizePlanSegmentInList(
+                    slot.planActivities,
+                    segmentIndex,
+                    edge,
+                    targetMinute,
+                    { startMinute: 0, endMinute: 60 }
+                );
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 20, handleEdge: 'left' });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150));
+
+        const activeSegment = latestPreviewSegments(fixture.grid)[1];
+        assert.equal(activeSegment.style.width, '50%');
+        assert.equal(activeSegment.style.justifySelf, 'end');
+        assert.equal(previewRatio(activeSegment), 0.5);
+        assert.equal(activeSegment.style['--plan-resize-preview-duration-minutes'], '5');
+        assert.equal(latestDeleteTarget(fixture.grid), null);
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['10m', '10m', '40m']);
+        assert.equal(latestGuide(fixture.grid).style.left, `${(1.5 / 6) * 100}%`);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 150));
+
+        assert.deepEqual(applyCalls, [{ baseIndex: 0, segmentIndex: 0, edge: 'left', targetMinute: 20 }]);
+        assert.equal(ctx.timeSlots[0].planActivities[0].durationMinutes, 10);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 

@@ -7648,11 +7648,10 @@ class TimeTracker {
                         const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
                         const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
                         if (!Number.isFinite(clampedMinute)) return;
-                        let boundaryUnit = Math.round(clampedMinute / 10);
-                        boundaryUnit = Math.max(0, Math.min(totalUnits, boundaryUnit));
-                        let rowIndex = Math.floor(boundaryUnit / unitsPerRow);
-                        let columnUnit = boundaryUnit % unitsPerRow;
-                        if (boundaryUnit > 0 && columnUnit === 0) {
+                        const boundaryUnits = Math.max(0, Math.min(totalUnits, clampedMinute / 10));
+                        let rowIndex = Math.floor(boundaryUnits / unitsPerRow);
+                        let columnUnit = boundaryUnits % unitsPerRow;
+                        if (boundaryUnits > 0 && columnUnit === 0) {
                             rowIndex -= 1;
                             columnUnit = unitsPerRow;
                         }
@@ -7865,9 +7864,9 @@ class TimeTracker {
                     if (previewSegment.style) {
                         previewSegment.style.gridColumn = `span ${span}`;
                         if (!isVirtualRest && !isEmpty && Number.isFinite(visualDurationMinutes)) {
-                            const visualWidthRatio = Math.max(0.02, visualDurationMinutes / Math.max(1, span * 10));
+                            const visualWidthRatio = Math.max(0, visualDurationMinutes / Math.max(1, span * 10));
                             previewSegment.style.width = `${visualWidthRatio * 100}%`;
-                            previewSegment.style.justifySelf = 'start';
+                            previewSegment.style.justifySelf = segment.visualResizeEdge === 'left' ? 'end' : 'start';
                             if (typeof previewSegment.style.setProperty === 'function') {
                                 previewSegment.style.setProperty('--plan-resize-preview-ratio', String(visualWidthRatio));
                                 previewSegment.style.setProperty('--plan-resize-preview-duration-minutes', String(visualDurationMinutes));
@@ -7960,6 +7959,7 @@ class TimeTracker {
                             visualDurationMinutes,
                             visualStartMinute,
                             visualEndMinute,
+                            visualResizeEdge: effectiveEdge,
                         };
                     };
                     const visualPreviewSegments = previewSegments.map(applyVisualTarget);
@@ -8000,8 +8000,7 @@ class TimeTracker {
                     } else {
                         layer.classList.remove('is-delete-pending-plan-resize');
                     }
-                    const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
-                    let guideBoundaryMinute = originalBoundaryMinute;
+                    let guideBoundaryMinute = effectiveEdge === 'left' ? visualStartMinute : visualEndMinute;
                     if (Array.isArray(resized)) {
                         const hasMatchingSegmentIndex = resized.some(item => Number(item && item.segmentIndex) === segmentIndex);
                         const resizedTarget = hasMatchingSegmentIndex
@@ -8010,7 +8009,7 @@ class TimeTracker {
                         const resizedBoundaryMinute = effectiveEdge === 'left'
                             ? toPreviewMinute(resizedTarget && resizedTarget.startMinute, null)
                             : toPreviewMinute(resizedTarget && resizedTarget.endMinute, null);
-                        if (Number.isFinite(resizedBoundaryMinute)) {
+                        if (!Number.isFinite(guideBoundaryMinute) && Number.isFinite(resizedBoundaryMinute)) {
                             guideBoundaryMinute = resizedBoundaryMinute;
                         }
                     }
