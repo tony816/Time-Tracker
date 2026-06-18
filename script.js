@@ -7638,6 +7638,8 @@ class TimeTracker {
                     try {
                         if (!layer || typeof document === 'undefined' || !document.createElement) return;
                         const hideLeftArrow = Boolean(options.hideLeftArrow);
+                        const hideRightArrow = Boolean(options.hideRightArrow);
+                        const isSingleArrow = hideLeftArrow || hideRightArrow;
                         const createSvgElement = (tagName) => (
                             typeof document.createElementNS === 'function'
                                 ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
@@ -7658,9 +7660,9 @@ class TimeTracker {
                         rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
 
                         const guide = createSvgElement('svg');
-                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}`);
-                        guide.setAttribute('viewBox', hideLeftArrow ? '56 0 40 28' : '0 0 96 28');
-                        guide.setAttribute('width', hideLeftArrow ? '40' : '96');
+                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}`);
+                        guide.setAttribute('viewBox', hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28'));
+                        guide.setAttribute('width', isSingleArrow ? '40' : '96');
                         guide.setAttribute('height', '28');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
@@ -7668,7 +7670,7 @@ class TimeTracker {
                             guide.style.left = `${(columnUnit / unitsPerRow) * 100}%`;
                             guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
                             guide.style.pointerEvents = 'none';
-                            if (hideLeftArrow) {
+                            if (isSingleArrow) {
                                 guide.style.width = '40px';
                                 guide.style.minWidth = '40px';
                             }
@@ -7741,15 +7743,19 @@ class TimeTracker {
                         if (!hideLeftArrow) {
                             guide.appendChild(leftArrow);
                         }
-                        guide.appendChild(rightArrow);
+                        if (!hideRightArrow) {
+                            guide.appendChild(rightArrow);
+                        }
 
                         [
                             ...(!hideLeftArrow ? [
                                 'M17 13.8C24.8 11 31.1 10 38.3 10.7',
                                 'M14 16.6C24 18.8 32.2 19.4 38.5 17.7',
                             ] : []),
-                            'M79 13.8C71.2 11 64.9 10 57.7 10.7',
-                            'M82 16.6C72 18.8 63.8 19.4 57.5 17.7',
+                            ...(!hideRightArrow ? [
+                                'M79 13.8C71.2 11 64.9 10 57.7 10.7',
+                                'M82 16.6C72 18.8 63.8 19.4 57.5 17.7',
+                            ] : []),
                         ].forEach((d) => {
                             guide.appendChild(setAttributes(createSvgElement('path'), {
                                 class: 'plan-segment-resize-preview-arrow-sheen',
@@ -7761,8 +7767,10 @@ class TimeTracker {
                                 ['16', '20.2', '0.85'],
                                 ['32', '8.6', '0.65'],
                             ] : []),
-                            ['64', '8.6', '0.65'],
-                            ['80', '20.2', '0.85'],
+                            ...(!hideRightArrow ? [
+                                ['64', '8.6', '0.65'],
+                                ['80', '20.2', '0.85'],
+                            ] : []),
                         ].forEach(([cx, cy, r]) => {
                             guide.appendChild(setAttributes(createSvgElement('circle'), {
                                 class: 'plan-segment-resize-preview-arrow-spark',
@@ -7982,7 +7990,8 @@ class TimeTracker {
                     }
                     if (!deletePending) {
                         appendResizePreviewGuide(layer, guideBoundaryMinute, {
-                            hideLeftArrow: Number.isFinite(endMinute - startMinute) && (endMinute - startMinute) <= 10 && deltaMinutes >= 0,
+                            hideLeftArrow: rawDeltaMinutes > 0,
+                            hideRightArrow: rawDeltaMinutes < 0,
                         });
                     }
                 };

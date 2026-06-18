@@ -950,6 +950,10 @@ test('right-only preview guide anchors inside rightward 10m resize while bidirec
     assert.ok(rightOnlyGuideRule);
     assert.match(rightOnlyGuideRule[0], /transform:\s*translate\(calc\(-100%\s*-\s*3px\),\s*-50%\);/);
 
+    const leftOnlyGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\.plan-segment-resize-preview-arrow-left-only\s*\{[^}]*\}/);
+    assert.ok(leftOnlyGuideRule);
+    assert.match(leftOnlyGuideRule[0], /transform:\s*translate\(3px,\s*-50%\);/);
+
     withDocument(({ listeners }) => {
         const shrinkCalls = [];
         const shrinkCtx = createTenMinuteResizeContext(shrinkCalls);
@@ -1002,6 +1006,49 @@ test('right-only preview guide anchors inside rightward 10m resize while bidirec
         assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 2);
         assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 4);
         assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 4);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('plan resize preview keeps only left arrow after leftward movement starts', () => {
+    withDocument(({ listeners }) => {
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -100));
+
+        const guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(guide.getAttribute('viewBox'), '0 0 40 28');
+        assert.equal(guide.getAttribute('width'), '40');
+
+        const arrowShapes = guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape');
+        assert.equal(arrowShapes.length, 1);
+        assert.match(arrowShapes[0].getAttribute('d'), /^M34\.3/);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 2);
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 2);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, -100));
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 20]]);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 

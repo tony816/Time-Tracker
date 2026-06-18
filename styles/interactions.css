@@ -2348,6 +2348,10 @@ button.activity-chip,
   transform: translate(calc(-100% - 3px), -50%);
 }
 
+.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-left-only {
+  transform: translate(3px, -50%);
+}
+
 .plan-segment-resize-preview-arrow-shape {
   stroke: rgba(255, 255, 255, 0.96);
   stroke-width: 1px;
