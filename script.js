@@ -7893,8 +7893,8 @@ class TimeTracker {
                     const visualDurationMinutes = Number(segment && segment.visualDurationMinutes);
                     const previewSegment = document.createElement('div');
                     previewSegment.className = isVirtualRest
-                        ? 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
-                        : 'plan-segment-resize-preview-segment';
+                        ? 'split-grid-segment split-grid-segment-virtual-rest plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
+                        : 'split-grid-segment has-plan-segment-timer plan-segment-resize-preview-segment';
                     if (isEmpty) {
                         previewSegment.className += ' plan-segment-resize-preview-empty';
                     }
@@ -7933,13 +7933,35 @@ class TimeTracker {
                     label.className = 'plan-segment-resize-preview-label';
                     label.textContent = isEmpty ? '' : (isVirtualRest ? '휴식' : String(segment.activityText || segment.label || ''));
                     const duration = document.createElement('span');
-                    duration.className = 'plan-segment-resize-preview-duration';
+                    duration.className = isVirtualRest || isEmpty
+                        ? 'plan-segment-resize-preview-duration'
+                        : 'plan-segment-timer-time plan-segment-resize-preview-duration tone-under';
                     const minutes = Number.isFinite(segment && segment.durationMinutes) ? Math.max(0, Math.floor(segment.durationMinutes)) : span * 10;
-                    duration.textContent = isEmpty
-                        ? ''
-                        : `${minutes}m`;
-                    previewSegment.appendChild(label);
-                    previewSegment.appendChild(duration);
+                    duration.textContent = isEmpty ? '' : `${minutes}m`;
+                    if (isVirtualRest || isEmpty) {
+                        label.className = 'split-grid-label plan-segment-resize-preview-label';
+                        previewSegment.appendChild(label);
+                        previewSegment.appendChild(duration);
+                    } else {
+                        const graphic = document.createElement('div');
+                        graphic.className = 'plan-segment-graphic plan-segment-resize-preview-graphic';
+                        const main = document.createElement('div');
+                        main.className = 'plan-segment-graphic-main';
+                        const graphicLabel = document.createElement('span');
+                        graphicLabel.className = 'plan-segment-graphic-label';
+                        graphicLabel.title = label.textContent;
+                        const labelText = document.createElement('span');
+                        labelText.className = 'plan-segment-label-text plan-segment-resize-preview-label';
+                        labelText.textContent = label.textContent;
+                        graphicLabel.appendChild(labelText);
+                        const timerRow = document.createElement('span');
+                        timerRow.className = 'plan-segment-timer-row plan-segment-resize-preview-timer-row';
+                        timerRow.appendChild(duration);
+                        main.appendChild(graphicLabel);
+                        main.appendChild(timerRow);
+                        graphic.appendChild(main);
+                        previewSegment.appendChild(graphic);
+                    }
                     layer.appendChild(previewSegment);
                 };
 

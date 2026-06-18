@@ -916,12 +916,21 @@ function cancelResizePreview(documentStub) {
 }
 
 function getPreviewSegments(container) {
+    const findByClass = (node, className) => {
+        if (!node) return null;
+        if (String(node.className || '').split(/\s+/).includes(className)) return node;
+        for (const child of node.children || []) {
+            const found = findByClass(child, className);
+            if (found) return found;
+        }
+        return null;
+    };
     return container.querySelectorAll('.plan-segment-resize-preview-segment').map((segment) => ({
         className: segment.className,
         gridColumn: segment.style.gridColumn,
         color: segment.style['--split-segment-color'] || '',
-        label: segment.children[0] ? segment.children[0].textContent : '',
-        duration: segment.children[1] ? segment.children[1].textContent : '',
+        label: findByClass(segment, 'plan-segment-resize-preview-label') ? findByClass(segment, 'plan-segment-resize-preview-label').textContent : '',
+        duration: findByClass(segment, 'plan-segment-resize-preview-duration') ? findByClass(segment, 'plan-segment-resize-preview-duration').textContent : '',
     }));
 }
 
@@ -1606,8 +1615,8 @@ test('plan segment resize preview updates adjacent boundary without mutating dat
         assert.equal(layer.style.gridTemplateColumns, 'repeat(6, 1fr)');
         assert.equal(container.querySelector('.split-grid').classList.contains('is-previewing-plan-resize'), true);
         assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 4', color: '#abcdef', label: '샤워', duration: '40m' },
-            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 2', color: '#abcdef', label: '이동/저녁준비', duration: '20m' },
+            { className: 'split-grid-segment has-plan-segment-timer plan-segment-resize-preview-segment', gridColumn: 'span 4', color: '#abcdef', label: '샤워', duration: '40m' },
+            { className: 'split-grid-segment has-plan-segment-timer plan-segment-resize-preview-segment', gridColumn: 'span 2', color: '#abcdef', label: '이동/저녁준비', duration: '20m' },
         ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
@@ -1855,8 +1864,8 @@ test('plan segment resize preview shows virtual rest gap and cancels without app
         moveResizePreview(document, -10);
 
         assert.deepEqual(getPreviewSegments(container), [
-            { className: 'plan-segment-resize-preview-segment', gridColumn: 'span 3', color: '#abcdef', label: '샤워', duration: '30m' },
-            { className: 'plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: 'span 3', color: '', label: '휴식', duration: '30m' },
+            { className: 'split-grid-segment has-plan-segment-timer plan-segment-resize-preview-segment', gridColumn: 'span 3', color: '#abcdef', label: '샤워', duration: '30m' },
+            { className: 'split-grid-segment split-grid-segment-virtual-rest plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: 'span 3', color: '', label: '휴식', duration: '30m' },
         ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);
