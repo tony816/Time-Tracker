@@ -4169,7 +4169,6 @@ class TimeTracker {
                            data-merge-end="${end}"
                            title="${mergeHintLabel}"
                            aria-label="${mergeHintLabel}">
-                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         } else {
@@ -4181,7 +4180,6 @@ class TimeTracker {
                            data-merge-end="${end}"
                            title="${mergeHintLabel}"
                            aria-label="${mergeHintLabel}">
-                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="time-label merged-secondary-hidden"></div>
                     </div>`;
         }

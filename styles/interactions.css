@@ -163,13 +163,15 @@
   border-top: none !important;
   border-bottom: none !important;
   padding-top: 0 !important;
+  padding-right: 0 !important;
   /* 오버레이 높이 계산과 일치시키기 위해 수직 패딩 제거 */
   padding-bottom: 0 !important;
+  padding-left: 0 !important;
   align-self: stretch !important;
   justify-self: stretch !important;
   position: relative;
   /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
-  overflow: visible;
+  overflow: visible !important;
   z-index: 5;
 }
 
@@ -202,6 +204,7 @@
 
   /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
   position: relative;
+  overflow: visible !important;
 }
 
 /* 병합된 시간열의 마지막 셀: 하단 경계선만 유지 */
@@ -211,6 +214,14 @@
 
 .merged-secondary-hidden {
   display: none !important;
+}
+
+.time-entry.merge-capable .merged-time-main .time-slot-merge-affordance {
+  top: calc(var(--merged-block-height, 100%) / 2) !important;
+}
+
+.merged-time-main .time-label {
+  white-space: nowrap;
 }
 
 /* 가운데 시간대 열 병합 시, 내부 가로 구분선 숨기기
