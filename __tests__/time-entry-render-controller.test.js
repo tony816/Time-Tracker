@@ -12,6 +12,10 @@ const createMergedFieldWrapper = buildMethod(
     'createMergedField(mergeKey, type, index, value)',
     '(mergeKey, type, index, value)'
 );
+const createMergedTimeFieldWrapper = buildMethod(
+    'createMergedTimeField(mergeKey, index, slot)',
+    '(mergeKey, index, slot)'
+);
 const renderTimeEntriesWrapper = buildMethod(
     'renderTimeEntries(preserveInlineDropdown = false)',
     '(preserveInlineDropdown = false)'
@@ -95,4 +99,31 @@ test('createMergedField renders readable Korean placeholder text for merged plan
     assert.match(markup, /계획을 입력하려면 클릭 또는 Enter/);
     assert.match(markup, /병합된 계획 활동 입력/);
     assert.match(markup, /클릭해서 계획 선택\/입력/);
+});
+test('createMergedTimeField renders merged slot time range through the ending boundary', () => {
+    const ctx = {
+        timeSlots: [
+            { time: '4' },
+            { time: '5' },
+            { time: '6' },
+        ],
+        normalizeMergeKey(mergeKey) {
+            return mergeKey;
+        },
+        formatSlotTimeLabel(rawHour) {
+            const hour = parseInt(String(rawHour), 10);
+            return Number.isFinite(hour) ? String(hour).padStart(2, '0') : String(rawHour || '');
+        },
+        createTimerControls() {
+            return '<button class="timer-btn">run</button>';
+        },
+    };
+
+    const mainMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 0, ctx.timeSlots[0]);
+    const secondaryMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 1, ctx.timeSlots[1]);
+
+    assert.match(mainMarkup, /<div class="time-label">04 ~ 06<\/div>/);
+    assert.match(mainMarkup, /timer-btn/);
+    assert.match(secondaryMarkup, /merged-time-secondary/);
+    assert.doesNotMatch(secondaryMarkup, />05<\/div>/);
 });

@@ -2013,9 +2013,19 @@ class TimeTracker {
                 this.mergedFields.set(mergeKey, mergedPlanValue);
                 // 중앙 ?�간 ??병합 (?�간 범위 ?�시)
                 const timeRangeKey = `time-${startIndex}-${endIndex}`;
-                const startTime = this.timeSlots[startIndex].time;
-                const endTime = this.timeSlots[endIndex].time;
-                const timeRangeValue = `${startTime}-${endTime}`;
+                const formatTimeBoundaryLabel = (rawHour) => {
+                    if (typeof this.formatSlotTimeLabel === 'function') {
+                        return this.formatSlotTimeLabel(rawHour);
+                    }
+                    const hour = parseInt(String(rawHour), 10);
+                    return Number.isFinite(hour) ? String(hour).padStart(2, '0') : String(rawHour || '');
+                };
+                const startTime = formatTimeBoundaryLabel(this.timeSlots[startIndex].time);
+                const endHour = parseInt(String(this.timeSlots[endIndex].time), 10);
+                const endTime = Number.isFinite(endHour)
+                    ? formatTimeBoundaryLabel(String((endHour + 1) % 24))
+                    : formatTimeBoundaryLabel(this.timeSlots[endIndex].time);
+                const timeRangeValue = `${startTime} ~ ${endTime}`;
                 this.mergedFields.set(timeRangeKey, timeRangeValue);
 
                 // ?�측 ?�제 ?�동 ??병합 (기존 값이 ?�다�??��?, ?�으�?�?�?
@@ -4130,7 +4140,10 @@ class TimeTracker {
             // Render timer controls once for the leading merged time cell.
             const timerControls = this.createTimerControls(index, slot);
             const startTime = this.formatSlotTimeLabel(this.timeSlots[start].time);
-            const endTime = this.formatSlotTimeLabel(this.timeSlots[end].time);
+            const endHour = parseInt(String(this.timeSlots[end].time), 10);
+            const endTime = Number.isFinite(endHour)
+                ? this.formatSlotTimeLabel(String((endHour + 1) % 24))
+                : this.formatSlotTimeLabel(this.timeSlots[end].time);
             const timeRangeDisplay = `${startTime} ~ ${endTime}`;
 
 

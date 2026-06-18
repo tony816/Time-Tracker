@@ -212,6 +212,99 @@
         }
     }
 
+    function getPlannedSlotMoveTargets(entryDiv) {
+        if (!entryDiv || !entryDiv.querySelectorAll) return [];
+        const realPlanSegments = Array.from(entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]'));
+        if (realPlanSegments.length > 0) return realPlanSegments;
+        const mergedMain = entryDiv.querySelector('.planned-merged-main-container');
+        if (mergedMain) return [mergedMain];
+        const plannedWrapper = entryDiv.querySelector('.split-cell-wrapper.split-type-planned.split-has-data');
+        return plannedWrapper ? [plannedWrapper] : [];
+    }
+
+    function isEventOnMoveBorder(target, event) {
+        if (!target || typeof target.getBoundingClientRect !== 'function' || !event) return true;
+        const rect = target.getBoundingClientRect();
+        if (!rect || !Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
+            return true;
+        }
+        const edgeSize = Math.min(14, Math.max(8, Math.min(rect.width, rect.height) * 0.28));
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        return x <= edgeSize
+            || x >= rect.width - edgeSize
+            || y <= edgeSize
+            || y >= rect.height - edgeSize;
+    }
+
+    function attachPlannedSlotMoveTargetListeners(ctx, target, index) {
+        if (!target || !target.addEventListener) return;
+        if (target.classList) target.classList.add('planned-slot-move-target');
+        if (target.dataset) {
+            target.dataset.plannedSlotMoveTarget = 'true';
+            target.dataset.timeSlotMergeIgnore = 'true';
+        }
+        if (target.setAttribute) {
+            target.setAttribute('aria-label', '계획 슬롯 이동');
+        }
+
+        target.addEventListener('pointerdown', (event) => {
+            if (!ctx.plannedSlotMoveMode || event.button !== undefined && event.button !== 0) return;
+            if (!isEventOnMoveBorder(target, event)) return;
+            const sourceContext = getPlannedSlotMoveContext.call(ctx, index);
+            if (!sourceContext.movable) return;
+            ctx.plannedSlotMoveDrag = {
+                pointerId: event.pointerId,
+                sourceContext,
+                startX: event.clientX,
+                startY: event.clientY,
+                dragging: false,
+                valid: false,
+                targetStart: null,
+            };
+            try { target.setPointerCapture(event.pointerId); } catch (_) {}
+            if (target.classList) target.classList.add('is-planned-slot-move-drag-origin');
+            if (event.preventDefault) event.preventDefault();
+            event.stopPropagation();
+        });
+
+        target.addEventListener('pointermove', (event) => {
+            const drag = ctx.plannedSlotMoveDrag;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            const dx = event.clientX - drag.startX;
+            const dy = event.clientY - drag.startY;
+            if (!drag.dragging && Math.hypot(dx, dy) < 4) return;
+            drag.dragging = true;
+            event.preventDefault();
+            clearMoveClasses();
+            markRows(drag.sourceContext.rangeStart, drag.sourceContext.rangeEnd, 'planned-slot-moving');
+            let targetIndex = typeof ctx.getIndexAtClientPosition === 'function'
+                ? ctx.getIndexAtClientPosition('planned', event.clientX, event.clientY)
+                : null;
+            if (!Number.isInteger(targetIndex)) return;
+            targetIndex = Math.max(0, Math.min(targetIndex, ctx.timeSlots.length - drag.sourceContext.blockLength));
+            drag.targetStart = targetIndex;
+            drag.valid = canDropPlannedSlotBlock.call(ctx, drag.sourceContext, targetIndex);
+            ctx.plannedSlotMoveHoverStart = targetIndex;
+            markRows(targetIndex, targetIndex + drag.sourceContext.blockLength - 1, drag.valid ? 'planned-slot-move-drop-valid' : 'planned-slot-move-drop-invalid');
+        });
+
+        const finish = (event, shouldMove) => {
+            const drag = ctx.plannedSlotMoveDrag;
+            if (!drag || drag.pointerId !== event.pointerId) return;
+            if (shouldMove && drag.dragging && drag.valid && drag.targetStart !== drag.sourceContext.rangeStart) {
+                movePlannedSlotBlock.call(ctx, drag.sourceContext.rangeStart, drag.targetStart);
+            }
+            clearPlannedSlotMoveDragState.call(ctx);
+            if (target.classList) target.classList.remove('is-planned-slot-move-drag-origin');
+            try { target.releasePointerCapture(event.pointerId); } catch (_) {}
+            event.stopPropagation();
+        };
+
+        target.addEventListener('pointerup', (event) => finish(event, true));
+        target.addEventListener('pointercancel', (event) => finish(event, false));
+    }
+
     function clearPlannedSlotMoveDragState() {
         clearMoveClasses();
         this.plannedSlotMoveDrag = null;
@@ -222,64 +315,9 @@
         if (!entryDiv || !entryDiv.querySelector || !this.plannedSlotMoveMode) return;
         const context = getPlannedSlotMoveContext.call(this, index);
         if (!context.movable || context.baseIndex !== index) return;
-        const plannedCell = entryDiv.querySelector('.split-cell-wrapper.split-type-planned, .planned-merged-main-container')
-            || entryDiv;
-        if (!plannedCell) return;
-        const handle = document.createElement('button');
-        handle.type = 'button';
-        handle.className = 'planned-slot-move-handle';
-        handle.setAttribute('aria-label', '계획 슬롯 이동');
-        handle.setAttribute('data-time-slot-merge-ignore', 'true');
-        handle.textContent = '↕';
-        plannedCell.appendChild(handle);
-        handle.addEventListener('pointerdown', (event) => {
-            if (!this.plannedSlotMoveMode || event.button !== undefined && event.button !== 0) return;
-            const sourceContext = getPlannedSlotMoveContext.call(this, index);
-            if (!sourceContext.movable) return;
-            this.plannedSlotMoveDrag = {
-                pointerId: event.pointerId,
-                sourceContext,
-                startX: event.clientX,
-                startY: event.clientY,
-                dragging: false,
-                valid: false,
-                targetStart: null,
-            };
-            try { handle.setPointerCapture(event.pointerId); } catch (_) {}
-            event.stopPropagation();
-        });
-        handle.addEventListener('pointermove', (event) => {
-            const drag = this.plannedSlotMoveDrag;
-            if (!drag || drag.pointerId !== event.pointerId) return;
-            const dx = event.clientX - drag.startX;
-            const dy = event.clientY - drag.startY;
-            if (!drag.dragging && Math.hypot(dx, dy) < 4) return;
-            drag.dragging = true;
-            event.preventDefault();
-            clearMoveClasses();
-            markRows(drag.sourceContext.rangeStart, drag.sourceContext.rangeEnd, 'planned-slot-moving');
-            let targetIndex = typeof this.getIndexAtClientPosition === 'function'
-                ? this.getIndexAtClientPosition('planned', event.clientX, event.clientY)
-                : null;
-            if (!Number.isInteger(targetIndex)) return;
-            targetIndex = Math.max(0, Math.min(targetIndex, this.timeSlots.length - drag.sourceContext.blockLength));
-            drag.targetStart = targetIndex;
-            drag.valid = canDropPlannedSlotBlock.call(this, drag.sourceContext, targetIndex);
-            this.plannedSlotMoveHoverStart = targetIndex;
-            markRows(targetIndex, targetIndex + drag.sourceContext.blockLength - 1, drag.valid ? 'planned-slot-move-drop-valid' : 'planned-slot-move-drop-invalid');
-        });
-        const finish = (event, shouldMove) => {
-            const drag = this.plannedSlotMoveDrag;
-            if (!drag || drag.pointerId !== event.pointerId) return;
-            if (shouldMove && drag.dragging && drag.valid && drag.targetStart !== drag.sourceContext.rangeStart) {
-                movePlannedSlotBlock.call(this, drag.sourceContext.rangeStart, drag.targetStart);
-            }
-            clearPlannedSlotMoveDragState.call(this);
-            try { handle.releasePointerCapture(event.pointerId); } catch (_) {}
-            event.stopPropagation();
-        };
-        handle.addEventListener('pointerup', (event) => finish(event, true));
-        handle.addEventListener('pointercancel', (event) => finish(event, false));
+        const moveTargets = getPlannedSlotMoveTargets(entryDiv);
+        if (moveTargets.length === 0) return;
+        moveTargets.forEach((target) => attachPlannedSlotMoveTargetListeners(this, target, index));
     }
 
     function snapshotSlot(slot, sourceStart, sourceEnd, targetStart, targetEnd) {

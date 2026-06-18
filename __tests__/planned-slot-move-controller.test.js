@@ -160,7 +160,7 @@ test('active plan segment timer blocks move', () => {
     assert.equal(ctx.notifications[0], '실행 중인 타이머가 있어 이동할 수 없습니다.');
 });
 
-test('move mode attaches planned-slot move handle only to movable base row', () => {
+test('move mode marks planned segment border only on movable base row', () => {
     const originalDocument = global.document;
     const created = [];
     global.document = {
@@ -190,6 +190,26 @@ test('move mode attaches planned-slot move handle only to movable base row', () 
         const baseChildren = [];
         const continuationChildren = [];
         const createEntry = (children) => ({
+            querySelectorAll(selector) {
+                if (selector !== '.split-grid-segment[data-segment-kind="real-plan"]') return [];
+                const target = {
+                    className: '',
+                    dataset: {},
+                    attributes: {},
+                    setAttribute(name, value) {
+                        this.attributes[name] = value;
+                    },
+                    addEventListener() {},
+                };
+                target.classList = {
+                    add(className) {
+                        target.className = className;
+                        children.push(target);
+                    },
+                    remove() {},
+                };
+                return [target];
+            },
             querySelector(selector) {
                 if (selector.includes('split-cell-wrapper')) {
                     return {
@@ -206,10 +226,10 @@ test('move mode attaches planned-slot move handle only to movable base row', () 
         controller.attachPlannedSlotMoveListeners.call(ctx, createEntry(continuationChildren), 2);
 
         assert.equal(baseChildren.length, 1);
-        assert.equal(baseChildren[0].className, 'planned-slot-move-handle');
+        assert.equal(baseChildren[0].className, 'planned-slot-move-target');
         assert.equal(baseChildren[0].attributes['aria-label'], '계획 슬롯 이동');
         assert.equal(continuationChildren.length, 0);
-        assert.equal(created.length, 1);
+        assert.equal(created.length, 0);
     } finally {
         global.document = originalDocument;
     }

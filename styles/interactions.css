@@ -2511,25 +2511,40 @@ button.activity-chip,
   text-align: center;
 }
 
-.planned-slot-move-handle {
-  position: absolute;
-  top: 50%;
-  left: 8px;
-  z-index: 30;
-  width: 36px;
-  height: 36px;
-  border: 1px solid #2563eb;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #1d4ed8;
+.planned-slot-move-target {
   cursor: grab;
-  font-size: 18px;
-  line-height: 1;
-  transform: translateY(-50%);
-  touch-action: manipulation;
+  touch-action: none;
 }
 
-.planned-slot-move-handle:active {
+.planned-slot-move-target::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: 24;
+  border: 2px solid rgba(37, 99, 235, 0.82);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.82),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.planned-slot-move-target::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  z-index: 25;
+  width: 14px;
+  height: 18px;
+  border-left: 2px dotted rgba(37, 99, 235, 0.92);
+  border-right: 2px dotted rgba(37, 99, 235, 0.92);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.planned-slot-move-target:active,
+.planned-slot-move-target.is-planned-slot-move-drag-origin {
   cursor: grabbing;
 }
 
@@ -2558,16 +2573,26 @@ button.activity-chip,
   cursor: default !important;
 }
 
+.planned-slot-move-mode .planned-slot-move-target,
+.planned-slot-move-mode .planned-slot-move-target .plan-segment-graphic-title,
+.planned-slot-move-mode .planned-slot-move-target .plan-segment-label-text {
+  cursor: grab !important;
+}
+
 .planned-slot-move-mode .plan-segment-resize-handle {
   opacity: 0;
   pointer-events: none;
 }
 
 @media (max-width: 640px) {
-  .planned-slot-move-handle {
-    width: 44px;
-    height: 44px;
-    left: 6px;
+  .planned-slot-move-target::before {
+    inset: -3px;
+    border-width: 3px;
+  }
+
+  .planned-slot-move-target::after {
+    left: 8px;
+    height: 24px;
   }
 
   .planned-slot-move-mode-btn {

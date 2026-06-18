@@ -306,6 +306,7 @@ test('time-slot initiated selection can merge selected fields and preserve segme
     withDocumentQuery('Morning', () => mergeSelectedFields.call(ctx, 'planned'));
 
     assert.equal(ctx.mergedFields.get('planned-0-1'), 'Focus + Review');
+    assert.equal(ctx.mergedFields.get('time-0-1'), '04 ~ 06');
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
         label: item.label,
         startMinute: item.startMinute,

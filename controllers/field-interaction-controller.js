@@ -150,10 +150,8 @@
         const target = e.target;
         if (this && typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode()) {
             if (target && target.closest && target.closest('.planned-input, .time-entry, .time-slot-container, .split-cell-wrapper.split-type-planned')) {
-                if (!target.closest('.planned-slot-move-handle')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
+                e.preventDefault();
+                e.stopPropagation();
                 return;
             }
         }
