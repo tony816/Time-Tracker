@@ -396,6 +396,159 @@
         };
     }
 
+    function normalizeMixedReorderId(value, fallbackKind = 'real') {
+        const text = String(value == null ? '' : value).trim();
+        if (/^(real|rest)-\d+$/.test(text)) return text;
+        const numeric = parseInt(text, 10);
+        return Number.isInteger(numeric) ? `${fallbackKind}-${numeric}` : '';
+    }
+
+    function buildPlanSegmentMixedLayout(segments = [], rangeInput = {}) {
+        const source = Array.isArray(segments) ? segments : [];
+        const range = normalizePlanSegmentRange({
+            startMinute: toFiniteNumber(rangeInput.startMinute, 0),
+            endMinute: toFiniteNumber(rangeInput.endMinute, 60),
+        });
+        const realItems = normalizePlanSegmentListForResize(source)
+            .map((item) => ({
+                type: 'real',
+                kind: 'real-plan',
+                reorderId: `real-${item.index}`,
+                realIndex: item.index,
+                segment: item.segment,
+                label: item.segment && (item.segment.titleLabel || item.segment.label || item.segment.activityText || item.segment.activity) || '',
+                startMinute: item.startMinute,
+                endMinute: item.endMinute,
+                durationMinutes: item.durationMinutes,
+            }));
+        const restItems = calculateVirtualRestGaps(realItems.map((item) => ({
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), range)
+            .map((gap, restIndex) => ({
+                type: 'virtual-rest',
+                kind: 'virtual-rest',
+                virtual: true,
+                reorderId: `rest-${restIndex}`,
+                restIndex,
+                label: gap.label || '?댁떇',
+                startMinute: gap.startMinute,
+                endMinute: gap.startMinute + gap.durationMinutes,
+                durationMinutes: gap.durationMinutes,
+            }));
+        return realItems.concat(restItems)
+            .filter((item) => item.durationMinutes > 0)
+            .sort((a, b) => (a.startMinute - b.startMinute)
+                || ((a.type === 'virtual-rest' ? 1 : 0) - (b.type === 'virtual-rest' ? 1 : 0))
+                || String(a.reorderId).localeCompare(String(b.reorderId)));
+    }
+
+    function cloneRealPlanSegmentFromMixedItem(item, normalizedRange) {
+        const source = item && item.segment && typeof item.segment === 'object' ? item.segment : {};
+        const next = { ...source };
+        delete next.kind;
+        delete next.virtual;
+        next.startMinute = normalizedRange.startMinute;
+        next.endMinute = normalizedRange.endMinute;
+        next.durationMinutes = normalizedRange.durationMinutes;
+        next.seconds = normalizedRange.durationMinutes * 60;
+        return next;
+    }
+
+    function reorderMixedPlanSegmentLayout(segments = [], sourceId = 0, targetId = 0, placement = 'before', rangeInput = {}) {
+        const source = Array.isArray(segments) ? segments : [];
+        const cleanSource = source
+            .filter((item) => item && typeof item === 'object' && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item) => ({ ...item }));
+        const range = normalizePlanSegmentRange({
+            startMinute: toFiniteNumber(rangeInput.startMinute, 0),
+            endMinute: toFiniteNumber(rangeInput.endMinute, 60),
+        });
+        const visualOrder = buildPlanSegmentMixedLayout(source, range);
+        const parsedSourceId = normalizeMixedReorderId(sourceId, 'real');
+        const parsedTargetId = normalizeMixedReorderId(targetId, 'real');
+        const insertAfter = placement === 'after';
+
+        if (!parsedSourceId || !parsedTargetId) {
+            return { changed: false, reason: 'invalid-id', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+        if (parsedSourceId === parsedTargetId) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+        if (visualOrder.length < 2) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+
+        const sourceItem = visualOrder.find((item) => item.reorderId === parsedSourceId);
+        const targetItem = visualOrder.find((item) => item.reorderId === parsedTargetId);
+        if (!sourceItem || !targetItem) {
+            return { changed: false, reason: 'missing-item', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+
+        const withoutSource = visualOrder.filter((item) => item.reorderId !== parsedSourceId);
+        const targetPosition = withoutSource.findIndex((item) => item.reorderId === parsedTargetId);
+        if (targetPosition < 0) {
+            return { changed: false, reason: 'missing-target', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+        const nextOrder = withoutSource.slice();
+        nextOrder.splice(targetPosition + (insertAfter ? 1 : 0), 0, sourceItem);
+
+        const unchanged = nextOrder.length === visualOrder.length
+            && nextOrder.every((item, index) => item.reorderId === visualOrder[index].reorderId);
+        if (unchanged) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+
+        const totalMinutes = nextOrder.reduce((sum, item) => sum + Math.max(0, item.durationMinutes), 0);
+        if (totalMinutes > range.durationMinutes) {
+            return { changed: false, reason: 'overflow', segments: cleanSource, indexMap: {}, layout: visualOrder };
+        }
+
+        const indexMap = {};
+        let cursor = range.startMinute;
+        let realCursor = 0;
+        const previewLayout = nextOrder.map((item) => {
+            const durationMinutes = Math.max(0, item.durationMinutes);
+            const startMinute = cursor;
+            const endMinute = startMinute + durationMinutes;
+            cursor = endMinute;
+            const next = {
+                ...item,
+                startMinute,
+                endMinute,
+                durationMinutes,
+            };
+            delete next.segment;
+            if (item.type === 'real') {
+                next.realIndex = realCursor;
+                next.previousRealIndex = item.realIndex;
+                indexMap[item.realIndex] = realCursor;
+                realCursor += 1;
+            }
+            return next;
+        });
+
+        const nextSegments = [];
+        nextOrder.forEach((item) => {
+            const previewItem = previewLayout.find((candidate) => candidate.reorderId === item.reorderId);
+            if (!previewItem || item.type !== 'real') return;
+            nextSegments.push(cloneRealPlanSegmentFromMixedItem(item, {
+                startMinute: previewItem.startMinute,
+                endMinute: previewItem.endMinute,
+                durationMinutes: previewItem.durationMinutes,
+            }));
+        });
+
+        return {
+            changed: true,
+            segments: nextSegments,
+            indexMap,
+            layout: previewLayout,
+            order: previewLayout.map((item) => item.reorderId),
+        };
+    }
+
     function clonePlainObject(value, fallback) {
         if (value == null) return fallback;
         if (typeof value !== 'object') return value;
@@ -704,6 +857,8 @@
         canResizePlanSegment,
         resizePlanSegmentInList,
         reorderPlanSegmentList,
+        buildPlanSegmentMixedLayout,
+        reorderMixedPlanSegmentLayout,
         buildMergedPlanSegmentPayload,
         sanitizePlanMergeSnapshot,
         createPlanMergeSnapshot,

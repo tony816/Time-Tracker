@@ -18,7 +18,11 @@ function matches(node, selector) {
     if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') {
         return hasClass(node, 'split-grid-segment') && node.dataset && node.dataset.segmentKind === 'real-plan';
     }
+    if (selector === '.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]') {
+        return hasClass(node, 'split-grid-segment-virtual-rest') && node.dataset && node.dataset.segmentKind === 'virtual-rest';
+    }
     if (selector === '.plan-segment-reorder-insert-marker') return hasClass(node, 'plan-segment-reorder-insert-marker');
+    if (selector === '.plan-segment-reorder-preview-layer') return hasClass(node, 'plan-segment-reorder-preview-layer');
     if (selector === '.split-grid') return hasClass(node, 'split-grid');
     if (selector.startsWith('.')) {
         return selector.slice(1).split('.').every((className) => hasClass(node, className));
@@ -170,7 +174,8 @@ function withDom(fn) {
             return root.querySelectorAll(selector);
         },
     };
-    global.setTimeout = (handler) => {
+    global.setTimeout = (handler, delay) => {
+        handler.delay = delay;
         timers.push(handler);
         return timers.length;
     };
@@ -190,15 +195,48 @@ function createEntry() {
     const first = createNode('div', 'split-grid-segment', {
         segmentKind: 'real-plan',
         segmentIndex: '0',
+        reorderItemType: 'real',
+        reorderItemId: 'real-0',
     }, { left: 0, top: 0, right: 150, bottom: 60, width: 150, height: 60 });
     const second = createNode('div', 'split-grid-segment', {
         segmentKind: 'real-plan',
         segmentIndex: '1',
+        reorderItemType: 'real',
+        reorderItemId: 'real-1',
     }, { left: 150, top: 0, right: 300, bottom: 60, width: 150, height: 60 });
     entry.appendChild(grid);
     grid.appendChild(first);
     grid.appendChild(second);
     return { entry, grid, first, second };
+}
+
+function createEntryWithRest() {
+    const entry = createNode('div', 'time-entry');
+    const grid = createNode('div', 'split-grid', {}, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const first = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        reorderItemType: 'real',
+        reorderItemId: 'real-0',
+    }, { left: 0, top: 0, right: 100, bottom: 60, width: 100, height: 60 });
+    const rest = createNode('div', 'split-grid-segment split-grid-segment-virtual-rest', {
+        segmentKind: 'virtual-rest',
+        reorderItemType: 'virtual-rest',
+        reorderItemId: 'rest-0',
+        gapStartMinute: '20',
+        gapDurationMinutes: '20',
+    }, { left: 100, top: 0, right: 200, bottom: 60, width: 100, height: 60 });
+    const second = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '1',
+        reorderItemType: 'real',
+        reorderItemId: 'real-1',
+    }, { left: 200, top: 0, right: 300, bottom: 60, width: 100, height: 60 });
+    entry.appendChild(grid);
+    grid.appendChild(first);
+    grid.appendChild(rest);
+    grid.appendChild(second);
+    return { entry, grid, first, rest, second };
 }
 
 function appendSegmentChrome(segment, options = {}) {
@@ -304,6 +342,74 @@ test('single planned slot reorders different activity segments and remaps timers
     assert.equal(ctx.saveCalls, 1);
 });
 
+test('single planned slot reorders virtual rest after a real segment without persisting rest', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', activityId: 'b', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {
+                    'planned-0-0-seg0': { status: 'idle', elapsedSeconds: 10 },
+                    'planned-0-0-seg1': { status: 'paused', elapsedSeconds: 90 },
+                },
+            },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentReorder.call(ctx, 0, 'rest-0', 'real-1', 'after'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20 },
+        { label: 'B', activityId: 'b', startMinute: 20, endMinute: 40, durationMinutes: 20 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planActivities.some((item) => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].elapsedSeconds, 90);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, { startMinute: 0, endMinute: 60 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 40, durationMinutes: 20 },
+    ]);
+});
+
+test('single planned slot drops a real segment before virtual rest and remaps timers', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', activityId: 'b', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {
+                    'planned-0-0-seg0': { status: 'idle', elapsedSeconds: 10 },
+                    'planned-0-0-seg1': { status: 'running', running: true, elapsedSeconds: 90, startedAt: 1234 },
+                },
+            },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentReorder.call(ctx, 0, 'real-1', 'rest-0', 'before'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 20 },
+        { label: 'B', startMinute: 20, endMinute: 40 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].running, true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].startedAt, 1234);
+});
+
 test('merged planned row reorders inside the base slot and refreshes merge snapshot signature', () => {
     const ctx = createCtx({
         timeSlots: [
@@ -356,6 +462,56 @@ test('merged planned row reorders inside the base slot and refreshes merge snaps
     assert.equal(ctx.timeSlots[0].planMergeSnapshot.postMergeSignature, planSegmentCore.buildPlanMergeBaseSignature(ctx.timeSlots[0]));
 });
 
+test('merged planned row supports virtual rest reorder and refreshes merge snapshot signature', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'B', activityId: 'b', startMinute: 90, endMinute: 120, durationMinutes: 30, seconds: 1800 },
+                ],
+                planSegmentTimers: {
+                    'planned-0-1-seg0': { status: 'idle', elapsedSeconds: 10 },
+                    'planned-0-1-seg1': { status: 'paused', elapsedSeconds: 90 },
+                },
+                planMergeSnapshot: {
+                    version: 2,
+                    mergeKey: 'planned-0-1',
+                    startIndex: 0,
+                    endIndex: 1,
+                    slots: [
+                        { time: '4', planned: 'A', planActivities: [{ label: 'A', seconds: 1800 }], activityLog: {} },
+                        { time: '5', planned: 'B', planActivities: [{ label: 'B', seconds: 1800 }], activityLog: {} },
+                    ],
+                    mergedFields: [{ key: 'planned-0-1', value: 'A, B' }],
+                },
+            },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+        resolvePlannedSlotContext() {
+            return { baseIndex: 0, rangeStart: 0, rangeEnd: 1, slotCount: 2, blockMinutes: 120, mergeKey: 'planned-0-1', isMerged: true };
+        },
+    });
+
+    assert.equal(controller.applyPlanSegmentReorder.call(ctx, 1, 'rest-0', 'real-1', 'after'), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 30 },
+        { label: 'B', startMinute: 30, endMinute: 60 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, { startMinute: 0, endMinute: 120 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 60, durationMinutes: 60 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planMergeSnapshot.postMergeSignature, planSegmentCore.buildPlanMergeBaseSignature(ctx.timeSlots[0]));
+});
+
 test('long press on planned segment body starts reorder without move mode', () => withDom(({ timers, root }) => {
     const ctx = createCtx({ plannedSlotMoveMode: false });
     const { entry, grid, first } = createEntry();
@@ -364,12 +520,26 @@ test('long press on planned segment body starts reorder without move mode', () =
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
     first.dispatchEvent(createPointerEvent('pointerdown', first, 40));
     assert.equal(timers.length, 1);
+    assert.equal(timers[0].delay, 220);
     timers[0]();
 
     assert.equal(ctx.plannedSegmentReorderState.active, true);
     assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
     assert.equal(hasClass(grid, 'is-plan-segment-reorder-active'), true);
     assert.equal(ctx.plannedSlotMoveMode, false);
+}));
+
+test('movement beyond threshold before activation cancels reorder', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, first } = createEntry();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    first.dispatchEvent(createPointerEvent('pointerdown', first, 40));
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 60));
+
+    assert.equal(timers.length, 1);
+    assert.equal(ctx.plannedSegmentReorderState, null);
 }));
 
 test('long press on planned segment label text starts reorder', () => withDom(({ timers, root }) => {
@@ -529,6 +699,166 @@ test('touch long press reorders before target segment', () => withDom(({ listene
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Interview', 'Prep']);
     assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].elapsedSeconds, 90);
     assert.equal(ctx.plannedSegmentReorderState, null);
+}));
+
+test('active drag over a valid target renders preview before drop and commit matches preview', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first, second } = createEntry();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+
+    const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
+    assert.ok(layer);
+    assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), true);
+    assert.match(layer.innerHTML, /Interview/);
+    assert.match(layer.innerHTML, /Prep/);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Prep', 'Interview']);
+
+    listeners.pointerup[0](createPointerEvent('pointerup', first, 40));
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Interview', 'Prep']);
+    assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), false);
+}));
+
+test('repeated pointermove over same target does not rebuild preview layer', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first, second } = createEntry();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+    const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
+    const html = layer.innerHTML;
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 42));
+
+    assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), layer);
+    assert.equal(layer.innerHTML, html);
+}));
+
+test('preview clears on outside drag and outside drop leaves data unchanged', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first, second } = createEntry();
+    root.appendChild(entry);
+    const original = JSON.stringify(ctx.timeSlots[0].planActivities);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+    assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
+
+    listeners.pointermove[0](createPointerEvent('pointermove', second, 400, 120));
+    assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), false);
+    listeners.pointerup[0](createPointerEvent('pointerup', second, 400, 120));
+
+    assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
+    assert.equal(ctx.renderCalls, 0);
+}));
+
+test('escape clears active preview and leaves data unchanged', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first, second } = createEntry();
+    root.appendChild(entry);
+    const original = JSON.stringify(ctx.timeSlots[0].planActivities);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+    assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
+
+    listeners.keydown[0]({ key: 'Escape' });
+
+    assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
+    assert.equal(ctx.plannedSegmentReorderState, null);
+}));
+
+test('virtual rest segment can start long press reorder and drop after real segment', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', activityId: 'b', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {
+                    'planned-0-0-seg0': { status: 'idle', elapsedSeconds: 10 },
+                    'planned-0-0-seg1': { status: 'paused', elapsedSeconds: 90 },
+                },
+            },
+        ],
+    });
+    const { entry, grid, rest, second } = createEntryWithRest();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    rest.dispatchEvent(createPointerEvent('pointerdown', rest, 140));
+    assert.equal(timers.length, 1);
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', second, 260));
+    assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
+    listeners.pointerup[0](createPointerEvent('pointerup', second, 260));
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 20 },
+        { label: 'B', startMinute: 20, endMinute: 40 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, { startMinute: 0, endMinute: 60 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 40, durationMinutes: 20 },
+    ]);
+}));
+
+test('real segment can use virtual rest as a drop target', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', activityId: 'b', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {
+                    'planned-0-0-seg0': { status: 'idle', elapsedSeconds: 10 },
+                    'planned-0-0-seg1': { status: 'running', running: true, elapsedSeconds: 90 },
+                },
+            },
+        ],
+    });
+    const { entry, rest, second } = createEntryWithRest();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 240));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', rest, 120));
+    listeners.pointerup[0](createPointerEvent('pointerup', rest, 120));
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 20 },
+        { label: 'B', startMinute: 20, endMinute: 40 },
+    ]);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg1'].running, true);
 }));
 
 test('dropping outside the origin planned grid cancels and reverts', () => withDom(({ listeners, timers, root }) => {

@@ -942,3 +942,87 @@ test('reorderPlanSegmentList rejects invalid and virtual-rest targets without mu
         { label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
     ]);
 });
+
+test('reorderMixedPlanSegmentLayout moves virtual rest after a real segment without persisting rest', () => {
+    const result = planSegmentCore.reorderMixedPlanSegmentLayout([
+        { label: 'A', activityId: 'a', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'B', activityId: 'b', startMinute: 60, endMinute: 90, durationMinutes: 30, seconds: 1800 },
+    ], 'rest-0', 'real-1', 'after', { startMinute: 0, endMinute: 90 });
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.order, ['real-0', 'real-1', 'rest-0']);
+    assert.deepEqual(result.layout.map((item) => ({
+        id: item.reorderId,
+        type: item.type,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { id: 'real-0', type: 'real', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { id: 'real-1', type: 'real', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+        { id: 'rest-0', type: 'virtual-rest', startMinute: 60, endMinute: 90, durationMinutes: 30 },
+    ]);
+    assert.deepEqual(result.segments.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'A', activityId: 'a', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { label: 'B', activityId: 'b', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+    ]);
+    assert.equal(result.segments.some((item) => item.kind === 'virtual-rest' || item.virtual === true), false);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result.segments, { startMinute: 0, endMinute: 90 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 60, durationMinutes: 30 },
+    ]);
+});
+
+test('reorderMixedPlanSegmentLayout moves real segment around virtual rest preserving timers index map', () => {
+    const result = planSegmentCore.reorderMixedPlanSegmentLayout([
+        { label: 'A', activityId: 'a', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'B', activityId: 'b', titleLabel: 'Call', startMinute: 60, endMinute: 90, durationMinutes: 30, seconds: 1800 },
+    ], 'real-1', 'rest-0', 'before', { startMinute: 0, endMinute: 90 });
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.indexMap, { 0: 0, 1: 1 });
+    assert.deepEqual(result.layout.map((item) => item.reorderId), ['real-0', 'real-1', 'rest-0']);
+    assert.deepEqual(result.segments.map((item) => ({
+        label: item.label,
+        titleLabel: item.titleLabel,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', titleLabel: undefined, startMinute: 0, endMinute: 30 },
+        { label: 'B', titleLabel: 'Call', startMinute: 30, endMinute: 60 },
+    ]);
+});
+
+test('reorderMixedPlanSegmentLayout keeps multiple rest gaps independent by visual id', () => {
+    const result = planSegmentCore.reorderMixedPlanSegmentLayout([
+        { label: 'A', startMinute: 10, endMinute: 30, durationMinutes: 20, seconds: 1200 },
+        { label: 'B', startMinute: 50, endMinute: 70, durationMinutes: 20, seconds: 1200 },
+    ], 'rest-1', 'real-0', 'before', { startMinute: 0, endMinute: 90 });
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.order, ['rest-0', 'rest-1', 'real-0', 'real-1', 'rest-2']);
+    assert.deepEqual(result.layout.filter((item) => item.type === 'virtual-rest').map((item) => ({
+        id: item.reorderId,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { id: 'rest-0', durationMinutes: 10 },
+        { id: 'rest-1', durationMinutes: 20 },
+        { id: 'rest-2', durationMinutes: 20 },
+    ]);
+    assert.deepEqual(result.segments.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 30, endMinute: 50 },
+        { label: 'B', startMinute: 50, endMinute: 70 },
+    ]);
+});

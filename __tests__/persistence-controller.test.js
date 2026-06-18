@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-require('../core/plan-segment-core');
+const planSegmentCore = require('../core/plan-segment-core');
 const controller = require('../controllers/persistence-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 
@@ -296,6 +296,41 @@ test('planned segment order and ranges roundtrip through slots JSON with preserv
         { label: 'Prep', activityId: 'prep', startMinute: 30, endMinute: 60, durationMinutes: 30 },
     ]);
     assert.equal(restored.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].elapsedSeconds, 90);
+});
+
+test('rest reorder roundtrip persists real ranges so derived rest gap reappears', () => {
+    const ctx = createCtx();
+    ctx.normalizePlanActivitiesPreservingSegments = function(items) {
+        return Array.isArray(items)
+            ? items.map((item) => ({ ...item }))
+            : [];
+    };
+    ctx.timeSlots[0].planned = 'A, B';
+    ctx.timeSlots[0].planActivities = [
+        { label: 'A', activityText: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+        { label: 'B', activityText: 'B', activityId: 'b', startMinute: 20, endMinute: 40, durationMinutes: 20, seconds: 1200 },
+    ];
+
+    const slots = controller.buildSlotsJson.call(ctx);
+    const restored = createCtx();
+    restored.normalizePlanActivitiesPreservingSegments = ctx.normalizePlanActivitiesPreservingSegments;
+    controller.applySlotsJson.call(restored, slots);
+
+    assert.deepEqual(restored.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+    })), [
+        { label: 'A', startMinute: 0, endMinute: 20 },
+        { label: 'B', startMinute: 20, endMinute: 40 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(restored.timeSlots[0].planActivities, { startMinute: 0, endMinute: 60 }).map((gap) => ({
+        startMinute: gap.startMinute,
+        durationMinutes: gap.durationMinutes,
+    })), [
+        { startMinute: 40, durationMinutes: 20 },
+    ]);
+    assert.equal(restored.timeSlots[0].planActivities.some((item) => item.kind === 'virtual-rest' || item.virtual === true), false);
 });
 
 test('applySlotsJson clears stale local source slot when remote sparse JSON omits that hour', () => {

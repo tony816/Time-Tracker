@@ -12,7 +12,7 @@
         root.TimeTrackerPlannedSegmentReorderController = Object.assign(existing, api);
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function buildTimeTrackerPlannedSegmentReorderController(root) {
-    const LONG_PRESS_MS = 320;
+    const LONG_PRESS_MS = 220;
     const MOVE_THRESHOLD_PX = 8;
     const CLICK_SUPPRESS_MS = 700;
     const BLOCKED_START_SELECTOR = [
@@ -67,6 +67,24 @@
         return root && root.TimeTrackerPlanSegmentCore
             ? root.TimeTrackerPlanSegmentCore
             : (typeof globalThis !== 'undefined' ? globalThis.TimeTrackerPlanSegmentCore : null);
+    }
+
+    function getReorderItemId(segmentEl) {
+        if (!segmentEl || !segmentEl.dataset) return '';
+        if (segmentEl.dataset.reorderItemId) return String(segmentEl.dataset.reorderItemId);
+        if (segmentEl.dataset.segmentKind === 'virtual-rest') {
+            const restIndex = parseInt(segmentEl.dataset.restIndex || segmentEl.dataset.gapIndex || '', 10);
+            return `rest-${Number.isInteger(restIndex) ? restIndex : 0}`;
+        }
+        const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+        return Number.isInteger(segmentIndex) ? `real-${segmentIndex}` : '';
+    }
+
+    function getRealIndexFromReorderId(value) {
+        const match = String(value || '').match(/^real-(\d+)$/);
+        if (!match) return null;
+        const index = parseInt(match[1], 10);
+        return Number.isInteger(index) ? index : null;
     }
 
     function getResolvedPlannedContext(ctx, index) {
@@ -173,20 +191,33 @@
         }
     }
 
-    function applyPlanSegmentReorder(baseIndex, sourceIndex, targetIndex, placement = 'before') {
+    function getReorderResult(ctx, baseIndex, sourceId, targetId, placement = 'before') {
         const core = getPlanSegmentCore();
-        if (!core || typeof core.reorderPlanSegmentList !== 'function') return false;
-        const context = getResolvedPlannedContext(this, baseIndex);
+        if (!core || typeof core.reorderMixedPlanSegmentLayout !== 'function') return null;
+        const context = getResolvedPlannedContext(ctx, baseIndex);
         const effectiveBaseIndex = context.baseIndex;
-        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
-        if (!slot) return false;
+        const slot = ctx.timeSlots && ctx.timeSlots[effectiveBaseIndex];
+        if (!slot) return null;
 
-        const current = getPlanActivities(this, slot);
-        const currentRelative = getBlockRelativePlanActivities(this, current, context);
-        const result = core.reorderPlanSegmentList(currentRelative, sourceIndex, targetIndex, placement, {
+        const current = getPlanActivities(ctx, slot);
+        const currentRelative = getBlockRelativePlanActivities(ctx, current, context);
+        const result = core.reorderMixedPlanSegmentLayout(currentRelative, sourceId, targetId, placement, {
             startMinute: 0,
             endMinute: context.blockMinutes || 60,
         });
+        return { context, effectiveBaseIndex, slot, result };
+    }
+
+    function applyPlanSegmentReorder(baseIndex, sourceIndex, targetIndex, placement = 'before') {
+        const sourceId = typeof sourceIndex === 'number' || /^\d+$/.test(String(sourceIndex || ''))
+            ? `real-${sourceIndex}`
+            : String(sourceIndex || '');
+        const targetId = typeof targetIndex === 'number' || /^\d+$/.test(String(targetIndex || ''))
+            ? `real-${targetIndex}`
+            : String(targetIndex || '');
+        const payload = getReorderResult(this, baseIndex, sourceId, targetId, placement);
+        if (!payload) return false;
+        const { context, effectiveBaseIndex, slot, result } = payload;
         if (!result || !result.changed || !Array.isArray(result.segments)) return false;
 
         slot.planActivities = result.segments.map((item) => {
@@ -201,8 +232,11 @@
             : (slot.planned || '');
         refreshPlanMergeSnapshotSignature(this, slot, context);
 
-        const newIndex = result.indexMap && Object.prototype.hasOwnProperty.call(result.indexMap, sourceIndex)
-            ? result.indexMap[sourceIndex]
+        const sourceRealIndex = getRealIndexFromReorderId(sourceId);
+        const newIndex = sourceRealIndex != null
+            && result.indexMap
+            && Object.prototype.hasOwnProperty.call(result.indexMap, sourceRealIndex)
+            ? result.indexMap[sourceRealIndex]
             : null;
         if (Number.isInteger(newIndex)) {
             this.selectedPlanSegment = { baseIndex: effectiveBaseIndex, segmentIndex: newIndex };
@@ -214,6 +248,14 @@
         return true;
     }
 
+    function clearReorderPreviewLayer(grid) {
+        if (!grid || typeof grid.querySelectorAll !== 'function') return;
+        grid.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
+            if (layer.parentNode) layer.parentNode.removeChild(layer);
+        });
+        if (grid.classList) grid.classList.remove('is-previewing-plan-reorder');
+    }
+
     function removePlanSegmentReorderPreview() {
         if (typeof document !== 'undefined' && document.querySelectorAll) {
             document.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
@@ -221,18 +263,72 @@
             });
         }
         if (typeof document !== 'undefined' && document.querySelectorAll) {
-            document.querySelectorAll('.is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel')
+            document.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
+                if (layer.parentNode) layer.parentNode.removeChild(layer);
+            });
+            document.querySelectorAll('.is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder')
                 .forEach((el) => {
                     if (el.classList) {
                         el.classList.remove(
                             'is-plan-segment-reorder-dragging',
                             'is-plan-segment-reorder-origin',
                             'is-plan-segment-reorder-active',
-                            'is-plan-segment-reorder-cancel'
+                            'is-plan-segment-reorder-cancel',
+                            'is-previewing-plan-reorder'
                         );
                     }
                 });
         }
+    }
+
+    function escapeHtml(ctx, value) {
+        return typeof ctx.escapeHtml === 'function'
+            ? ctx.escapeHtml(value)
+            : String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+    }
+
+    function buildPreviewChunks(layout = []) {
+        const chunks = [];
+        layout.forEach((item) => {
+            const startUnit = Math.max(0, Math.floor((Number(item.startMinute) || 0) / 10));
+            const endUnit = Math.max(startUnit, Math.floor((Number(item.endMinute) || 0) / 10));
+            let cursor = startUnit;
+            let chunkIndex = 0;
+            while (cursor < endUnit) {
+                const rowRemaining = 6 - (cursor % 6 || 0);
+                const span = Math.max(1, Math.min(endUnit - cursor, rowRemaining));
+                chunks.push({ item, span, chunkIndex });
+                cursor += span;
+                chunkIndex += 1;
+            }
+        });
+        return chunks;
+    }
+
+    function renderReorderPreview(ctx, grid, layout) {
+        if (!grid || !Array.isArray(layout) || layout.length <= 0 || typeof document === 'undefined') return;
+        let layer = grid.querySelector && grid.querySelector('.plan-segment-reorder-preview-layer');
+        if (!layer) {
+            layer = document.createElement('div');
+            layer.className = 'plan-segment-reorder-preview-layer';
+            layer.setAttribute('aria-hidden', 'true');
+            grid.appendChild(layer);
+        }
+        layer.innerHTML = buildPreviewChunks(layout).map(({ item, span, chunkIndex }) => {
+            const isRest = item.type === 'virtual-rest' || item.kind === 'virtual-rest' || item.virtual === true;
+            const label = chunkIndex === 0 ? (item.label || (isRest ? '?댁떇' : '')) : '';
+            const classes = [
+                'plan-segment-reorder-preview-segment',
+                isRest ? 'is-virtual-rest' : 'is-real-plan',
+            ].join(' ');
+            return `<div class="${classes}" data-preview-reorder-id="${escapeHtml(ctx, item.reorderId || '')}" style="grid-column: span ${span};">${escapeHtml(ctx, label)}</div>`;
+        }).join('');
+        if (grid.classList) grid.classList.add('is-previewing-plan-reorder');
     }
 
     function ensureInsertionMarker(grid) {
@@ -248,7 +344,7 @@
 
     function getSegmentAtPoint(grid, point) {
         if (!grid || !point || typeof grid.querySelectorAll !== 'function') return null;
-        const segments = Array.from(grid.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]'));
+        const segments = Array.from(grid.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"], .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]'));
         return segments.find((segment) => {
             const rect = segment && segment.getBoundingClientRect ? segment.getBoundingClientRect() : null;
             return rect && pointInRect(point, rect);
@@ -268,6 +364,7 @@
         marker.style.top = `${Math.round(targetRect.top - gridRect.top)}px`;
         marker.style.height = `${Math.max(12, Math.round(targetRect.height))}px`;
         marker.dataset.targetSegmentIndex = targetSegment.dataset ? String(targetSegment.dataset.segmentIndex || '') : '';
+        marker.dataset.targetReorderId = getReorderItemId(targetSegment);
         marker.dataset.placement = placement;
     }
 
@@ -290,12 +387,30 @@
         if (!grid || !gridRect || !pointInRect(point, gridRect)) return null;
         const targetSegment = getSegmentAtPoint(grid, point);
         if (!targetSegment || targetSegment === state.segmentEl) return null;
+        const targetId = getReorderItemId(targetSegment);
+        if (!targetId || targetId === state.sourceId) return null;
         const rect = targetSegment.getBoundingClientRect ? targetSegment.getBoundingClientRect() : null;
         if (!rect) return null;
-        const targetIndex = parseInt(targetSegment.dataset ? targetSegment.dataset.segmentIndex || '' : '', 10);
-        if (!Number.isInteger(targetIndex)) return null;
         const placement = point.clientX >= rect.left + (rect.width / 2) ? 'after' : 'before';
-        return { targetSegment, targetIndex, placement };
+        return { targetSegment, targetId, placement };
+    }
+
+    function updateReorderPreview(ctx, state, dropTarget) {
+        if (!state || !dropTarget) return false;
+        const previewKey = `${dropTarget.targetId}:${dropTarget.placement}`;
+        if (state.previewKey === previewKey && state.previewResult) return true;
+        const payload = getReorderResult(ctx, state.context.baseIndex, state.sourceId, dropTarget.targetId, dropTarget.placement);
+        const result = payload && payload.result;
+        if (!result || !result.changed || !Array.isArray(result.layout)) {
+            state.previewKey = '';
+            state.previewResult = null;
+            clearReorderPreviewLayer(state.grid);
+            return false;
+        }
+        state.previewKey = previewKey;
+        state.previewResult = result;
+        renderReorderPreview(ctx, state.grid, result.layout);
+        return true;
     }
 
     function activateReorderDrag(ctx, state) {
@@ -328,7 +443,7 @@
 
     function attachPlannedSegmentReorderListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
-        const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
+        const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"], .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
         segments.forEach((segmentEl) => {
             if (!segmentEl || segmentEl.dataset.planSegmentReorderListenerAttached === 'true') return;
             segmentEl.dataset.planSegmentReorderListenerAttached = 'true';
@@ -353,8 +468,8 @@
                 if (isBlockedReorderStart(this, event, segmentEl)) return;
                 const point = getPointFromEvent(event);
                 if (!point) return;
-                const sourceIndex = parseInt(segmentEl.dataset ? segmentEl.dataset.segmentIndex || '' : '', 10);
-                if (!Number.isInteger(sourceIndex)) return;
+                const sourceId = getReorderItemId(segmentEl);
+                if (!sourceId) return;
                 const grid = segmentEl.closest && segmentEl.closest('.split-grid');
                 if (!grid) return;
                 clearPlannedSegmentReorderState.call(this);
@@ -369,14 +484,16 @@
                     timer: null,
                     index,
                     context: getResolvedPlannedContext(this, index),
-                    sourceIndex,
+                    sourceId,
                     segmentEl,
                     grid,
                     startX: point.clientX,
                     startY: point.clientY,
                     pointerId: isPointerEvent ? event.pointerId : null,
-                    targetIndex: null,
+                    targetId: null,
                     placement: 'before',
+                    previewKey: '',
+                    previewResult: null,
                     moveType,
                     upType,
                     cancelType,
@@ -401,7 +518,10 @@
                     if (moveEvent.stopPropagation) moveEvent.stopPropagation();
                     const dropTarget = getActiveDropTarget(state, movePoint);
                     if (!dropTarget) {
-                        state.targetIndex = null;
+                        state.targetId = null;
+                        state.previewKey = '';
+                        state.previewResult = null;
+                        clearReorderPreviewLayer(state.grid);
                         if (state.grid.classList) state.grid.classList.add('is-plan-segment-reorder-cancel');
                         if (state.grid.querySelectorAll) {
                             state.grid.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
@@ -410,23 +530,24 @@
                         }
                         return;
                     }
-                    state.targetIndex = dropTarget.targetIndex;
+                    state.targetId = dropTarget.targetId;
                     state.placement = dropTarget.placement;
                     if (state.grid.classList) state.grid.classList.remove('is-plan-segment-reorder-cancel');
                     updateInsertionMarker(state.grid, dropTarget.targetSegment, dropTarget.placement);
+                    updateReorderPreview(this, state, dropTarget);
                 };
 
                 state.onUp = (upEvent) => {
                     const wasActive = state.active;
-                    const targetIndex = state.targetIndex;
+                    const targetId = state.targetId;
                     const placement = state.placement;
                     if (wasActive) {
                         if (upEvent.preventDefault) upEvent.preventDefault();
                         if (upEvent.stopPropagation) upEvent.stopPropagation();
                     }
                     clearPlannedSegmentReorderState.call(this);
-                    if (wasActive && Number.isInteger(targetIndex)) {
-                        applyPlanSegmentReorder.call(this, state.context.baseIndex, state.sourceIndex, targetIndex, placement);
+                    if (wasActive && targetId) {
+                        applyPlanSegmentReorder.call(this, state.context.baseIndex, state.sourceId, targetId, placement);
                     }
                 };
 
@@ -462,5 +583,6 @@
         clearPlannedSegmentReorderState,
         removePlanSegmentReorderPreview,
         remapPlanSegmentTimers,
+        LONG_PRESS_MS,
     };
 });

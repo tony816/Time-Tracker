@@ -221,6 +221,8 @@ function buildSplitVisualization(type, index) {
         const gridHtml = hasGrid
             ? `<div class="split-grid">${(() => {
                 const labeledSegmentCount = gridSegments.reduce((count, segment) => count + (segment && segment.label ? 1 : 0), 0);
+                const restKeyByRange = new Map();
+                let virtualRestCount = 0;
                 const getSegmentStartMinute = (item) => Number(item && item.startMinute) || 0;
                 const getSegmentEndMinute = (item) => {
                     const explicitEnd = Number(item && item.endMinute);
@@ -236,6 +238,17 @@ function buildSplitVisualization(type, index) {
                 const connTopClass = (useConnections && segment.connectTop) ? ' connect-top' : '';
                 const connBotClass = (useConnections && segment.connectBottom) ? ' connect-bottom' : '';
                 const isVirtualRest = Boolean(segment.virtual || segment.kind === 'virtual-rest');
+                const virtualRestKey = isVirtualRest
+                    ? `${Number(segment.startMinute) || 0}-${Number(segment.durationMinutes) || 0}`
+                    : '';
+                let virtualRestIndex = null;
+                if (isVirtualRest) {
+                    if (!restKeyByRange.has(virtualRestKey)) {
+                        restKeyByRange.set(virtualRestKey, virtualRestCount);
+                        virtualRestCount += 1;
+                    }
+                    virtualRestIndex = restKeyByRange.get(virtualRestKey);
+                }
                 const virtualRestClass = isVirtualRest ? ' split-grid-segment-virtual-rest' : '';
                 const canRenderLabel = Boolean(segment.label)
                     && !segment.suppressHoverLabel
@@ -335,10 +348,10 @@ function buildSplitVisualization(type, index) {
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
                 const virtualRestAttr = isVirtualRest
-                    ? ` data-segment-kind="virtual-rest" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
+                    ? ` data-segment-kind="virtual-rest" data-reorder-item-type="virtual-rest" data-reorder-item-id="rest-${Number.isFinite(virtualRestIndex) ? virtualRestIndex : 0}" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
                     : '';
                 const realPlanAttr = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest)
-                    ? ` data-segment-kind="real-plan" data-segment-id="${this.escapeAttribute ? this.escapeAttribute(planSegmentId) : planSegmentId}" data-segment-index="${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-start-minute="${Number(segment.startMinute) || 0}" data-segment-duration-minutes="${Number(segment.durationMinutes) || 0}" data-segment-end-minute="${Number(segment.endMinute) || 0}"`
+                    ? ` data-segment-kind="real-plan" data-reorder-item-type="real" data-reorder-item-id="real-${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-id="${this.escapeAttribute ? this.escapeAttribute(planSegmentId) : planSegmentId}" data-segment-index="${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-start-minute="${Number(segment.startMinute) || 0}" data-segment-duration-minutes="${Number(segment.durationMinutes) || 0}" data-segment-end-minute="${Number(segment.endMinute) || 0}"`
                     : '';
                 const resizeDisabledClass = isRunningPlanSegment ? ' is-plan-segment-resize-disabled' : '';
                 const resizeTitle = isRunningPlanSegment ? ' title="실행 중인 세그먼트는 조정할 수 없음"' : '';
