@@ -2332,33 +2332,12 @@ button.activity-chip,
   overflow: hidden;
 }
 
-.plan-segment-reorder-preview-segment {
-  min-height: 0;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 4px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-sizing: border-box;
-  border-bottom: 3px solid rgba(255, 255, 255, 0.95);
-  background: rgba(59, 130, 246, 0.26);
-  color: #1f2937;
-  box-shadow:
-    inset 0 0 0 1px rgba(37, 99, 235, 0.36),
-    0 3px 8px rgba(15, 23, 42, 0.12);
+.plan-segment-reorder-preview-real {
+  z-index: var(--split-segment-layer, 2);
 }
 
-.plan-segment-reorder-preview-segment.is-virtual-rest {
-  background: rgba(231, 236, 241, 0.76);
-  border: 1px dashed rgba(96, 110, 128, 0.68);
-  border-bottom: 1px dashed rgba(96, 110, 128, 0.68);
-  color: rgba(55, 65, 81, 0.82);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.48);
+.plan-segment-reorder-preview-rest {
+  pointer-events: none;
 }
 
 .plan-segment-resize-preview-layer {

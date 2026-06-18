@@ -281,17 +281,6 @@
         }
     }
 
-    function escapeHtml(ctx, value) {
-        return typeof ctx.escapeHtml === 'function'
-            ? ctx.escapeHtml(value)
-            : String(value == null ? '' : value)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-    }
-
     function buildPreviewChunks(layout = []) {
         const chunks = [];
         layout.forEach((item) => {
@@ -310,7 +299,101 @@
         return chunks;
     }
 
-    function renderReorderPreview(ctx, grid, layout) {
+    function setStyleProperty(el, name, value) {
+        if (!el || !el.style || value == null || value === '') return;
+        if (typeof el.style.setProperty === 'function') {
+            el.style.setProperty(name, String(value));
+        } else {
+            el.style[name] = String(value);
+        }
+    }
+
+    function getPreviewSourceSegment(payload, item) {
+        const slot = payload && payload.slot;
+        const planActivities = Array.isArray(slot && slot.planActivities) ? slot.planActivities : [];
+        const sourceIndex = Number.isInteger(Number(item && item.previousRealIndex))
+            ? Number(item.previousRealIndex)
+            : (Number.isInteger(Number(item && item.realIndex)) ? Number(item.realIndex) : null);
+        if (sourceIndex == null || !planActivities[sourceIndex]) return null;
+        return planActivities[sourceIndex];
+    }
+
+    function appendReorderPreviewSegment(ctx, layer, chunk, payload) {
+        const item = chunk && chunk.item ? chunk.item : {};
+        const span = Number.isFinite(Number(chunk && chunk.span)) ? Math.max(1, Math.floor(Number(chunk.span))) : 1;
+        const isRest = item.type === 'virtual-rest' || item.kind === 'virtual-rest' || item.virtual === true;
+        const segmentEl = document.createElement('div');
+
+        segmentEl.dataset.previewReorderId = String(item.reorderId || '');
+        setStyleProperty(segmentEl, 'grid-column', `span ${span}`);
+
+        if (isRest) {
+            const label = document.createElement('span');
+            segmentEl.className = 'split-grid-segment split-grid-segment-virtual-rest plan-segment-reorder-preview-rest';
+            segmentEl.dataset.segmentKind = 'virtual-rest';
+            segmentEl.dataset.reorderItemType = 'virtual-rest';
+            label.className = 'split-grid-label';
+            label.textContent = Number(chunk.chunkIndex) === 0 ? '휴식' : '';
+            segmentEl.appendChild(label);
+            layer.appendChild(segmentEl);
+            return;
+        }
+
+        const source = getPreviewSourceSegment(payload, item) || {};
+        const segmentLabel = String(source.activityText || source.label || item.label || '');
+        const titleLabel = String(source.titleText || item.titleLabel || '');
+        const durationMinutes = Number.isFinite(Number(item.durationMinutes))
+            ? Math.max(0, Math.floor(Number(item.durationMinutes)))
+            : span * 10;
+        const isContinuation = Number(chunk.chunkIndex) > 0;
+        const graphic = document.createElement('div');
+        const main = document.createElement('div');
+        const graphicLabel = document.createElement('span');
+        const labelText = document.createElement('span');
+        const timerRow = document.createElement('span');
+        const duration = document.createElement('span');
+
+        segmentEl.className = 'split-grid-segment has-plan-segment-timer plan-segment-reorder-preview-real';
+        segmentEl.dataset.segmentKind = 'real-plan';
+        segmentEl.dataset.reorderItemType = 'real';
+        if (Number.isInteger(Number(item.realIndex))) {
+            segmentEl.dataset.segmentIndex = String(item.realIndex);
+        }
+        const color = typeof ctx.getSplitColor === 'function'
+            ? ctx.getSplitColor('planned', segmentLabel, source.isExtra, source.reservedIndices, 'grid')
+            : '';
+        setStyleProperty(segmentEl, '--split-segment-color', color);
+
+        graphic.className = isContinuation
+            ? 'plan-segment-graphic is-plan-segment-continuation'
+            : 'plan-segment-graphic';
+        main.className = titleLabel && !isContinuation
+            ? 'plan-segment-graphic-main has-segment-title'
+            : 'plan-segment-graphic-main';
+        if (titleLabel && !isContinuation) {
+            const title = document.createElement('span');
+            title.className = 'plan-segment-graphic-title';
+            title.title = titleLabel;
+            title.textContent = titleLabel;
+            main.appendChild(title);
+        }
+        graphicLabel.className = 'plan-segment-graphic-label';
+        graphicLabel.title = segmentLabel;
+        labelText.className = 'plan-segment-label-text';
+        labelText.textContent = segmentLabel;
+        graphicLabel.appendChild(labelText);
+        timerRow.className = 'plan-segment-timer-row';
+        duration.className = 'plan-segment-timer-time tone-under';
+        duration.textContent = `${durationMinutes}m`;
+        timerRow.appendChild(duration);
+        main.appendChild(graphicLabel);
+        main.appendChild(timerRow);
+        graphic.appendChild(main);
+        segmentEl.appendChild(graphic);
+        layer.appendChild(segmentEl);
+    }
+
+    function renderReorderPreview(ctx, grid, layout, payload = null) {
         if (!grid || !Array.isArray(layout) || layout.length <= 0 || typeof document === 'undefined') return;
         let layer = grid.querySelector && grid.querySelector('.plan-segment-reorder-preview-layer');
         if (!layer) {
@@ -319,15 +402,8 @@
             layer.setAttribute('aria-hidden', 'true');
             grid.appendChild(layer);
         }
-        layer.innerHTML = buildPreviewChunks(layout).map(({ item, span, chunkIndex }) => {
-            const isRest = item.type === 'virtual-rest' || item.kind === 'virtual-rest' || item.virtual === true;
-            const label = chunkIndex === 0 ? (item.label || (isRest ? '?댁떇' : '')) : '';
-            const classes = [
-                'plan-segment-reorder-preview-segment',
-                isRest ? 'is-virtual-rest' : 'is-real-plan',
-            ].join(' ');
-            return `<div class="${classes}" data-preview-reorder-id="${escapeHtml(ctx, item.reorderId || '')}" style="grid-column: span ${span};">${escapeHtml(ctx, label)}</div>`;
-        }).join('');
+        layer.innerHTML = '';
+        buildPreviewChunks(layout).forEach((chunk) => appendReorderPreviewSegment(ctx, layer, chunk, payload));
         if (grid.classList) grid.classList.add('is-previewing-plan-reorder');
     }
 
@@ -409,7 +485,7 @@
         }
         state.previewKey = previewKey;
         state.previewResult = result;
-        renderReorderPreview(ctx, state.grid, result.layout);
+        renderReorderPreview(ctx, state.grid, result.layout, payload);
         return true;
     }
 

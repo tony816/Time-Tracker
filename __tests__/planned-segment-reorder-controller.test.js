@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const planSegmentCore = require('../core/plan-segment-core');
 const controller = require('../controllers/planned-segment-reorder-controller');
@@ -38,6 +40,25 @@ function findAll(root, selector, result = []) {
     return result;
 }
 
+function serializeNode(node) {
+    if (!node) return '';
+    const tag = String(node.tagName || 'div').toLowerCase();
+    const classAttr = node.className ? ` class="${node.className}"` : '';
+    const datasetAttrs = Object.entries(node.dataset || {})
+        .map(([key, value]) => ` data-${key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}="${value}"`)
+        .join('');
+    const styleEntries = Object.entries(node.style || {})
+        .filter(([key, value]) => key !== 'setProperty' && value != null && value !== '')
+        .map(([key, value]) => `${key}: ${value};`)
+        .join(' ');
+    const styleAttr = styleEntries ? ` style="${styleEntries}"` : '';
+    const attrs = Object.entries(node.attributes || {})
+        .map(([key, value]) => ` ${key}="${value}"`)
+        .join('');
+    const text = node.textContent || '';
+    return `<${tag}${classAttr}${datasetAttrs}${styleAttr}${attrs}>${text}${(node.children || []).map(serializeNode).join('')}</${tag}>`;
+}
+
 function createNode(tagName = 'div', className = '', dataset = {}, rect = null) {
     const listeners = {};
     const node = {
@@ -46,9 +67,25 @@ function createNode(tagName = 'div', className = '', dataset = {}, rect = null) 
         dataset: { ...dataset },
         children: [],
         parentNode: null,
-        style: {},
+        style: {
+            setProperty(name, value) {
+                this[name] = String(value);
+            },
+        },
         attributes: {},
+        textContent: '',
+        title: '',
         _rect: rect || { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 },
+        get innerHTML() {
+            return this.children.map(serializeNode).join('');
+        },
+        set innerHTML(value) {
+            this.children.forEach((child) => {
+                child.parentNode = null;
+            });
+            this.children = [];
+            this._innerHTML = String(value || '');
+        },
         classList: {
             add(...classNames) {
                 const next = new Set(classesOf(node));
@@ -299,6 +336,11 @@ function createCtx(overrides = {}) {
         autoSave() {
             this.saveCalls += 1;
         },
+        getSplitColor(type, label, isExtra, reservedIndices, role) {
+            this.colorCalls = this.colorCalls || [];
+            this.colorCalls.push({ type, label, isExtra, reservedIndices, role });
+            return label === 'Interview' ? '#123456' : '#abcdef';
+        },
         closeInlinePlanDropdown() {
             this.closedDropdown = true;
         },
@@ -317,6 +359,12 @@ test('planned segment reorder controller exports and attaches to global', () => 
     assert.equal(typeof controller.attachPlannedSegmentReorderListeners, 'function');
     assert.equal(typeof controller.applyPlanSegmentReorder, 'function');
     assert.equal(globalThis.TimeTrackerPlannedSegmentReorderController.applyPlanSegmentReorder, controller.applyPlanSegmentReorder);
+});
+
+test('planned segment reorder preview css does not keep obsolete blue preview segment styling', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    assert.doesNotMatch(css, /\.plan-segment-reorder-preview-segment\s*\{/);
+    assert.doesNotMatch(css, /plan-segment-reorder-preview-segment[\s\S]*rgba\(59,\s*130,\s*246/);
 });
 
 test('single planned slot reorders different activity segments and remaps timers', () => {
@@ -716,6 +764,24 @@ test('active drag over a valid target renders preview before drop and commit mat
     assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), true);
     assert.match(layer.innerHTML, /Interview/);
     assert.match(layer.innerHTML, /Prep/);
+    const previewSegments = layer.querySelectorAll('.split-grid-segment');
+    assert.equal(previewSegments.length, 2);
+    previewSegments.forEach((segment) => {
+        assert.equal(hasClass(segment, 'split-grid-segment'), true);
+        assert.equal(hasClass(segment, 'plan-segment-reorder-preview-segment'), false);
+        assert.equal(segment.dataset.segmentKind, 'real-plan');
+        assert.ok(segment.querySelector('.plan-segment-graphic'));
+        assert.ok(segment.style['--split-segment-color']);
+    });
+    assert.equal(previewSegments[0].style['--split-segment-color'], '#123456');
+    assert.deepEqual(ctx.colorCalls.map((call) => ({
+        type: call.type,
+        label: call.label,
+        role: call.role,
+    })), [
+        { type: 'planned', label: 'Interview', role: 'grid' },
+        { type: 'planned', label: 'Prep', role: 'grid' },
+    ]);
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Prep', 'Interview']);
 
     listeners.pointerup[0](createPointerEvent('pointerup', first, 40));
@@ -806,7 +872,14 @@ test('virtual rest segment can start long press reorder and drop after real segm
     assert.equal(timers.length, 1);
     timers[0]();
     listeners.pointermove[0](createPointerEvent('pointermove', second, 260));
-    assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
+    const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
+    assert.ok(layer);
+    const restPreview = layer.querySelector('.split-grid-segment-virtual-rest');
+    assert.ok(restPreview);
+    assert.equal(restPreview.dataset.segmentKind, 'virtual-rest');
+    assert.equal(hasClass(restPreview, 'plan-segment-reorder-preview-rest'), true);
+    assert.equal(hasClass(restPreview, 'plan-segment-reorder-preview-segment'), false);
+    assert.match(layer.innerHTML, /휴식/);
     listeners.pointerup[0](createPointerEvent('pointerup', second, 260));
 
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
