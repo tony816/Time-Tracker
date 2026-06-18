@@ -2344,11 +2344,11 @@ button.activity-chip,
     drop-shadow(0 0 17px rgba(220, 251, 254, 0.48));
 }
 
-.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-right-only {
+.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-inside-before {
   transform: translate(calc(-100% - 3px), -50%);
 }
 
-.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-left-only {
+.plan-segment-resize-preview-guide.plan-segment-resize-preview-arrow-inside-after {
   transform: translate(3px, -50%);
 }
 

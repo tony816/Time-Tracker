@@ -7571,6 +7571,8 @@ class TimeTracker {
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
             let lastClientX = originX;
+            let lastPreviewClientX = originX;
+            let previewArrowDirection = null;
             let cleanedUp = false;
             const pointerId = event && event.pointerId;
             const moveType = isPointerEvent ? 'pointermove' : (isTouchEvent ? 'touchmove' : 'mousemove');
@@ -7640,6 +7642,11 @@ class TimeTracker {
                         const hideLeftArrow = Boolean(options.hideLeftArrow);
                         const hideRightArrow = Boolean(options.hideRightArrow);
                         const isSingleArrow = hideLeftArrow || hideRightArrow;
+                        const insidePositionClass = isSingleArrow
+                            ? (options.insidePosition === 'after'
+                                ? ' plan-segment-resize-preview-arrow-inside-after'
+                                : ' plan-segment-resize-preview-arrow-inside-before')
+                            : '';
                         const createSvgElement = (tagName) => (
                             typeof document.createElementNS === 'function'
                                 ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
@@ -7660,7 +7667,7 @@ class TimeTracker {
                         rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
 
                         const guide = createSvgElement('svg');
-                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}`);
+                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}${insidePositionClass}`);
                         guide.setAttribute('viewBox', hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28'));
                         guide.setAttribute('width', isSingleArrow ? '40' : '96');
                         guide.setAttribute('height', '28');
@@ -7915,9 +7922,17 @@ class TimeTracker {
                     const unitsPerRow = 6;
                     const unitWidth = gridWidth / unitsPerRow;
                     if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+                    const movementDeltaX = clientX - lastPreviewClientX;
+                    if (Math.abs(movementDeltaX) >= 0.5) {
+                        previewArrowDirection = movementDeltaX > 0 ? 'right' : 'left';
+                    }
+                    if (Math.abs(clientX - originX) < 0.5) {
+                        previewArrowDirection = null;
+                    }
+                    lastPreviewClientX = clientX;
                     const rawDeltaMinutes = ((clientX - originX) / unitWidth) * 10;
                     const deltaUnits = Math.round((clientX - originX) / unitWidth);
-                    const previewKey = `${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}`;
+                    const previewKey = `${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewArrowDirection || 'both'}`;
                     if (previewKey === lastPreviewKey) return;
                     lastPreviewKey = previewKey;
                     const layer = ensurePreviewLayer();
@@ -7925,16 +7940,12 @@ class TimeTracker {
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
                     const deltaMinutes = deltaUnits * 10;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    const visualStartMinute = effectiveEdge === 'left'
+                    let visualStartMinute = effectiveEdge === 'left'
                         ? Math.max(0, Math.min(endMinute, startMinute + rawDeltaMinutes))
                         : startMinute;
-                    const visualEndMinute = effectiveEdge === 'left'
+                    let visualEndMinute = effectiveEdge === 'left'
                         ? endMinute
                         : Math.max(startMinute, Math.min(blockMinutes, endMinute + rawDeltaMinutes));
-                    const visualDurationMinutes = Math.max(0, visualEndMinute - visualStartMinute);
-                    const isShrinking = effectiveEdge === 'left' ? rawDeltaMinutes > 0 : rawDeltaMinutes < 0;
-                    const canDeleteByShrink = isShrinking && visualDurationMinutes <= 0;
-                    setDeletePendingState(canDeleteByShrink);
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPreviewActivities.map(item => ({ ...item })),
                         segmentIndex,
@@ -7942,6 +7953,27 @@ class TimeTracker {
                         targetMinute,
                         { startMinute: 0, endMinute: blockMinutes }
                     );
+                    let resizedBoundaryMinute = null;
+                    if (Array.isArray(resized)) {
+                        const hasMatchingSegmentIndex = resized.some(item => Number(item && item.segmentIndex) === segmentIndex);
+                        const resizedTarget = hasMatchingSegmentIndex
+                            ? resized.find(item => Number(item && item.segmentIndex) === segmentIndex)
+                            : resized[segmentIndex];
+                        resizedBoundaryMinute = effectiveEdge === 'left'
+                            ? toPreviewMinute(resizedTarget && resizedTarget.startMinute, null)
+                            : toPreviewMinute(resizedTarget && resizedTarget.endMinute, null);
+                    }
+                    if (deltaMinutes !== 0 && Number.isFinite(resizedBoundaryMinute)) {
+                        if (effectiveEdge === 'right' && rawDeltaMinutes > 0 && visualEndMinute > resizedBoundaryMinute) {
+                            visualEndMinute = resizedBoundaryMinute;
+                        } else if (effectiveEdge === 'left' && rawDeltaMinutes < 0 && visualStartMinute < resizedBoundaryMinute) {
+                            visualStartMinute = resizedBoundaryMinute;
+                        }
+                    }
+                    const visualDurationMinutes = Math.max(0, visualEndMinute - visualStartMinute);
+                    const isShrinking = effectiveEdge === 'left' ? rawDeltaMinutes > 0 : rawDeltaMinutes < 0;
+                    const canDeleteByShrink = isShrinking && visualDurationMinutes <= 0;
+                    setDeletePendingState(canDeleteByShrink);
                     const gaps = (typeof planSegmentCore.calculateVirtualRestGaps === 'function')
                         ? planSegmentCore.calculateVirtualRestGaps(resized, { startMinute: 0, endMinute: blockMinutes })
                         : [];
@@ -7976,22 +8008,14 @@ class TimeTracker {
                         layer.classList.remove('is-delete-pending-plan-resize');
                     }
                     let guideBoundaryMinute = effectiveEdge === 'left' ? visualStartMinute : visualEndMinute;
-                    if (Array.isArray(resized)) {
-                        const hasMatchingSegmentIndex = resized.some(item => Number(item && item.segmentIndex) === segmentIndex);
-                        const resizedTarget = hasMatchingSegmentIndex
-                            ? resized.find(item => Number(item && item.segmentIndex) === segmentIndex)
-                            : resized[segmentIndex];
-                        const resizedBoundaryMinute = effectiveEdge === 'left'
-                            ? toPreviewMinute(resizedTarget && resizedTarget.startMinute, null)
-                            : toPreviewMinute(resizedTarget && resizedTarget.endMinute, null);
-                        if (!Number.isFinite(guideBoundaryMinute) && Number.isFinite(resizedBoundaryMinute)) {
-                            guideBoundaryMinute = resizedBoundaryMinute;
-                        }
+                    if (!Number.isFinite(guideBoundaryMinute) && Number.isFinite(resizedBoundaryMinute)) {
+                        guideBoundaryMinute = resizedBoundaryMinute;
                     }
                     if (!deletePending) {
                         appendResizePreviewGuide(layer, guideBoundaryMinute, {
-                            hideLeftArrow: rawDeltaMinutes > 0,
-                            hideRightArrow: rawDeltaMinutes < 0,
+                            hideLeftArrow: previewArrowDirection === 'right',
+                            hideRightArrow: previewArrowDirection === 'left',
+                            insidePosition: effectiveEdge === 'left' ? 'after' : 'before',
                         });
                     }
                 };
