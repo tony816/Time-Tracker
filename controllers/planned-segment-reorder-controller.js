@@ -270,6 +270,9 @@
             document.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
                 if (layer.parentNode) layer.parentNode.removeChild(layer);
             });
+            document.querySelectorAll('.plan-segment-reorder-drag-ghost').forEach((ghost) => {
+                if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+            });
             document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder')
                 .forEach((el) => {
                     if (el.classList) {
@@ -284,6 +287,9 @@
                         );
                     }
                 });
+            if (document.body && document.body.classList) {
+                document.body.classList.remove('is-plan-segment-reorder-ghost-active');
+            }
         }
     }
 
@@ -498,6 +504,131 @@
         if (grid.classList) grid.classList.add('is-previewing-plan-reorder');
     }
 
+    function removeListenerSensitiveAttributes(el) {
+        if (!el) return;
+        if (typeof el.removeAttribute === 'function') {
+            el.removeAttribute('id');
+            el.removeAttribute('aria-describedby');
+            el.removeAttribute('aria-controls');
+        } else if (el.attributes) {
+            delete el.attributes.id;
+            delete el.attributes['aria-describedby'];
+            delete el.attributes['aria-controls'];
+        }
+        if (el.dataset) {
+            Object.keys(el.dataset)
+                .filter((key) => /listener|suppress/i.test(key))
+                .forEach((key) => {
+                    delete el.dataset[key];
+                });
+        }
+    }
+
+    function sanitizeReorderDragGhostNode(el) {
+        if (!el) return;
+        removeListenerSensitiveAttributes(el);
+        if (el.classList) {
+            el.classList.remove(
+                'is-plan-segment-reorder-armed',
+                'is-plan-segment-reorder-suppressing-selection',
+                'is-plan-segment-reorder-dragging',
+                'is-plan-segment-reorder-origin',
+                'is-selected-plan-segment'
+            );
+            el.classList.add('plan-segment-reorder-drag-ghost');
+        }
+        if (typeof el.querySelectorAll === 'function') {
+            el.querySelectorAll('*').forEach((child) => removeListenerSensitiveAttributes(child));
+        }
+        if (el.setAttribute) {
+            el.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function createFallbackReorderDragGhost(state) {
+        if (!state || !state.segmentEl || typeof document === 'undefined' || !document.createElement) return null;
+        const source = state.segmentEl;
+        const ghost = document.createElement('div');
+        ghost.className = source.className || 'split-grid-segment';
+        if (source.dataset) {
+            Object.keys(source.dataset).forEach((key) => {
+                if (/listener|suppress/i.test(key)) return;
+                ghost.dataset[key] = source.dataset[key];
+            });
+        }
+        if (source.style && ghost.style) {
+            Object.keys(source.style)
+                .filter((key) => key !== 'setProperty')
+                .forEach((key) => {
+                    ghost.style[key] = source.style[key];
+                });
+        }
+        if (source.innerHTML != null) {
+            ghost.innerHTML = source.innerHTML;
+        }
+        return ghost;
+    }
+
+    function getDragGhostHost() {
+        if (typeof document === 'undefined') return null;
+        return document.body || document.documentElement || null;
+    }
+
+    function updateReorderDragGhost(state, point) {
+        if (!state || !state.dragGhostEl || !point) return;
+        const left = point.clientX - (Number(state.dragGhostOffsetX) || 0);
+        const top = point.clientY - (Number(state.dragGhostOffsetY) || 0);
+        if (state.dragGhostEl.style) {
+            state.dragGhostEl.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+        }
+        state.dragGhostX = left;
+        state.dragGhostY = top;
+    }
+
+    function createReorderDragGhost(ctx, state) {
+        if (!state || state.dragGhostEl || !state.segmentEl || typeof document === 'undefined') return null;
+        const host = getDragGhostHost();
+        if (!host || typeof host.appendChild !== 'function') return null;
+        const rect = state.segmentEl.getBoundingClientRect ? state.segmentEl.getBoundingClientRect() : null;
+        const width = rect && Number.isFinite(rect.width) ? rect.width : 0;
+        const height = rect && Number.isFinite(rect.height) ? rect.height : 0;
+        const ghost = typeof state.segmentEl.cloneNode === 'function'
+            ? state.segmentEl.cloneNode(true)
+            : createFallbackReorderDragGhost(state);
+        if (!ghost) return null;
+        sanitizeReorderDragGhostNode(ghost);
+        if (ghost.style) {
+            ghost.style.position = 'fixed';
+            ghost.style.left = '0px';
+            ghost.style.top = '0px';
+            if (width > 0) ghost.style.width = `${Math.round(width)}px`;
+            if (height > 0) ghost.style.height = `${Math.round(height)}px`;
+            ghost.style.gridColumn = '';
+            ghost.style.pointerEvents = 'none';
+        }
+        state.dragGhostOffsetX = rect && Number.isFinite(rect.left) ? state.startX - rect.left : width / 2;
+        state.dragGhostOffsetY = rect && Number.isFinite(rect.top) ? state.startY - rect.top : height / 2;
+        host.appendChild(ghost);
+        state.dragGhostEl = ghost;
+        if (document.body && document.body.classList) {
+            document.body.classList.add('is-plan-segment-reorder-ghost-active');
+        }
+        updateReorderDragGhost(state, { clientX: state.startX, clientY: state.startY });
+        return ghost;
+    }
+
+    function removeReorderDragGhost(state) {
+        if (!state) return;
+        const ghost = state.dragGhostEl;
+        if (ghost && ghost.parentNode) {
+            ghost.parentNode.removeChild(ghost);
+        }
+        state.dragGhostEl = null;
+        if (typeof document !== 'undefined' && document.body && document.body.classList) {
+            document.body.classList.remove('is-plan-segment-reorder-ghost-active');
+        }
+    }
+
     function ensureInsertionMarker(grid) {
         if (!grid || typeof document === 'undefined' || !document.createElement) return null;
         let marker = grid.querySelector && grid.querySelector('.plan-segment-reorder-insert-marker');
@@ -538,6 +669,7 @@
     function clearPlannedSegmentReorderState() {
         const state = this.plannedSegmentReorderState;
         if (state && state.timer) clearTimeout(state.timer);
+        removeReorderDragGhost(state);
         removeReorderBrowserGestureSuppression(state);
         releaseReorderPointer(state);
         setReorderSuppressionClasses(state, false);
@@ -594,6 +726,7 @@
         preventNativeBrowserGesture(state.startEvent);
         clearNativeSelection();
         captureReorderPointer(state);
+        createReorderDragGhost(ctx, state);
         ctx.planSegmentReorderClickSuppressUntil = Date.now() + CLICK_SUPPRESS_MS;
         if (state.segmentEl && state.segmentEl.dataset) {
             state.segmentEl.dataset.planReorderClickSuppressUntil = String(ctx.planSegmentReorderClickSuppressUntil);
@@ -704,6 +837,7 @@
                     }
                     if (moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent.stopPropagation) moveEvent.stopPropagation();
+                    updateReorderDragGhost(state, movePoint);
                     const dropTarget = getActiveDropTarget(state, movePoint);
                     if (!dropTarget) {
                         state.targetId = null;

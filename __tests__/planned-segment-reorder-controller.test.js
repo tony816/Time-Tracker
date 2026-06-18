@@ -17,6 +17,7 @@ function hasClass(node, className) {
 function matches(node, selector) {
     if (!node || !selector) return false;
     if (selector.includes(',')) return selector.split(',').some((part) => matches(node, part.trim()));
+    if (selector === '*') return true;
     if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') {
         return hasClass(node, 'split-grid-segment') && node.dataset && node.dataset.segmentKind === 'real-plan';
     }
@@ -103,6 +104,9 @@ function createNode(tagName = 'div', className = '', dataset = {}, rect = null) 
         setAttribute(name, value) {
             this.attributes[name] = String(value);
         },
+        removeAttribute(name) {
+            delete this.attributes[name];
+        },
         appendChild(child) {
             child.parentNode = this;
             this.children.push(child);
@@ -127,6 +131,23 @@ function createNode(tagName = 'div', className = '', dataset = {}, rect = null) 
         },
         releasePointerCapture(pointerId) {
             node.releasedPointerId = pointerId;
+        },
+        cloneNode(deep = false) {
+            const clone = createNode(tagName, node.className, { ...node.dataset }, node._rect ? { ...node._rect } : null);
+            Object.entries(node.style || {})
+                .filter(([key]) => key !== 'setProperty')
+                .forEach(([key, value]) => {
+                    clone.style[key] = value;
+                });
+            clone.attributes = { ...node.attributes };
+            clone.textContent = node.textContent;
+            clone.title = node.title;
+            if (deep) {
+                node.children.forEach((child) => {
+                    clone.appendChild(child.cloneNode ? child.cloneNode(true) : child);
+                });
+            }
+            return clone;
         },
         dispatchEvent(event) {
             if (!event.target) event.target = this;
@@ -220,6 +241,8 @@ function withDom(fn) {
     const timers = [];
     const root = createNode('div', 'document-root');
     global.document = {
+        body: root,
+        documentElement: root,
         createElement(tagName) {
             return createNode(tagName);
         },
@@ -388,6 +411,9 @@ test('planned segment reorder preview css does not keep obsolete blue preview se
     const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
     assert.doesNotMatch(css, /\.plan-segment-reorder-preview-segment\s*\{/);
     assert.doesNotMatch(css, /plan-segment-reorder-preview-segment[\s\S]*rgba\(59,\s*130,\s*246/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*position:\s*fixed/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*pointer-events:\s*none/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*z-index:\s*10000/);
 });
 
 test('mobile planned reorder css scopes native selection and zoom protections to segment surfaces', () => {
@@ -601,6 +627,7 @@ test('merged planned row supports virtual rest reorder and refreshes merge snaps
 test('long press on planned segment body starts reorder without move mode', () => withDom(({ timers, root }) => {
     const ctx = createCtx({ plannedSlotMoveMode: false });
     const { entry, grid, first } = createEntry();
+    appendSegmentChrome(first);
     root.appendChild(entry);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
@@ -613,6 +640,46 @@ test('long press on planned segment body starts reorder without move mode', () =
     assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
     assert.equal(hasClass(grid, 'is-plan-segment-reorder-active'), true);
     assert.equal(ctx.plannedSlotMoveMode, false);
+    const ghost = root.querySelector('.plan-segment-reorder-drag-ghost');
+    assert.ok(ghost);
+    assert.equal(ctx.plannedSegmentReorderState.dragGhostEl, ghost);
+    assert.equal(hasClass(ghost, 'split-grid-segment'), true);
+    assert.equal(hasClass(ghost, 'plan-segment-reorder-preview-segment'), false);
+    assert.equal(ghost.dataset.segmentKind, 'real-plan');
+    assert.ok(ghost.querySelector('.plan-segment-graphic'));
+    assert.equal(ghost.style.width, '150px');
+    assert.equal(ghost.style.height, '60px');
+    assert.equal(ghost.style.transform, 'translate3d(0px, 0px, 0)');
+    assert.equal(hasClass(root, 'is-plan-segment-reorder-ghost-active'), true);
+}));
+
+test('drag ghost follows horizontal vertical and diagonal movement while outside valid targets', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, second } = createEntry();
+    appendSegmentChrome(second);
+    root.appendChild(entry);
+    const original = JSON.stringify(ctx.timeSlots[0].planActivities);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    const ghost = root.querySelector('.plan-segment-reorder-drag-ghost');
+    assert.ok(ghost);
+
+    listeners.pointermove[0](createPointerEvent('pointermove', second, 280, 80));
+    assert.equal(ghost.style.transform, 'translate3d(210px, 60px, 0)');
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), ghost);
+    assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-cancel'), true);
+
+    listeners.pointermove[0](createPointerEvent('pointermove', second, 90, -40));
+    assert.equal(ghost.style.transform, 'translate3d(20px, -60px, 0)');
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), ghost);
+
+    listeners.pointerup[0](createPointerEvent('pointerup', second, 90, -40));
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
+    assert.equal(hasClass(root, 'is-plan-segment-reorder-ghost-active'), false);
+    assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
 }));
 
 test('movement beyond threshold before activation cancels reorder', () => withDom(({ listeners, timers, root }) => {
@@ -866,11 +933,14 @@ test('reorder activation prevents default on armed touch and pointer paths', () 
 test('active drag over a valid target renders preview before drop and commit matches preview', () => withDom(({ listeners, timers, root }) => {
     const ctx = createCtx();
     const { entry, grid, first, second } = createEntry();
+    appendSegmentChrome(second);
     root.appendChild(entry);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
     second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
     timers[0]();
+    const ghost = root.querySelector('.plan-segment-reorder-drag-ghost');
+    assert.ok(ghost);
     listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
 
     const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
@@ -902,8 +972,10 @@ test('active drag over a valid target renders preview before drop and commit mat
 
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Interview', 'Prep']);
     assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
     assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), false);
     assert.equal(hasClass(grid, 'is-plan-segment-reorder-active'), false);
+    assert.equal(hasClass(root, 'is-plan-segment-reorder-ghost-active'), false);
     assert.equal(hasClass(grid, 'is-plan-segment-reorder-armed'), false);
     assert.equal(hasClass(grid, 'is-plan-segment-reorder-suppressing-selection'), false);
     assert.equal(hasClass(second, 'is-plan-segment-reorder-armed'), false);
@@ -933,20 +1005,24 @@ test('repeated pointermove over same target does not rebuild preview layer', () 
 test('preview clears on outside drag and outside drop leaves data unchanged', () => withDom(({ listeners, timers, root }) => {
     const ctx = createCtx();
     const { entry, grid, first, second } = createEntry();
+    appendSegmentChrome(second);
     root.appendChild(entry);
     const original = JSON.stringify(ctx.timeSlots[0].planActivities);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
     second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
     timers[0]();
+    assert.ok(root.querySelector('.plan-segment-reorder-drag-ghost'));
     listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
     assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
 
     listeners.pointermove[0](createPointerEvent('pointermove', second, 400, 120));
     assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.ok(root.querySelector('.plan-segment-reorder-drag-ghost'));
     assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), false);
     listeners.pointerup[0](createPointerEvent('pointerup', second, 400, 120));
 
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
     assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
     assert.equal(ctx.renderCalls, 0);
 }));
@@ -962,10 +1038,12 @@ test('escape clears active preview and leaves data unchanged', () => withDom(({ 
     timers[0]();
     listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
     assert.ok(grid.querySelector('.plan-segment-reorder-preview-layer'));
+    assert.ok(root.querySelector('.plan-segment-reorder-drag-ghost'));
 
     listeners.keydown[0]({ key: 'Escape' });
 
     assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
     assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
     assert.equal(ctx.plannedSegmentReorderState, null);
 }));
@@ -993,6 +1071,11 @@ test('virtual rest segment can start long press reorder and drop after real segm
     rest.dispatchEvent(createPointerEvent('pointerdown', rest, 140));
     assert.equal(timers.length, 1);
     timers[0]();
+    const ghost = root.querySelector('.plan-segment-reorder-drag-ghost');
+    assert.ok(ghost);
+    assert.equal(hasClass(ghost, 'split-grid-segment-virtual-rest'), true);
+    assert.equal(ghost.dataset.segmentKind, 'virtual-rest');
+    assert.equal(hasClass(ghost, 'plan-segment-reorder-preview-segment'), false);
     listeners.pointermove[0](createPointerEvent('pointermove', second, 260));
     const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
     assert.ok(layer);
@@ -1003,6 +1086,7 @@ test('virtual rest segment can start long press reorder and drop after real segm
     assert.equal(hasClass(restPreview, 'plan-segment-reorder-preview-segment'), false);
     assert.match(layer.innerHTML, /휴식/);
     listeners.pointerup[0](createPointerEvent('pointerup', second, 260));
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
 
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
         label: item.label,
@@ -1018,6 +1102,26 @@ test('virtual rest segment can start long press reorder and drop after real segm
     })), [
         { startMinute: 40, durationMinutes: 20 },
     ]);
+}));
+
+test('pointer cancel removes active drag ghost and leaves data unchanged', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, second } = createEntry();
+    appendSegmentChrome(second);
+    root.appendChild(entry);
+    const original = JSON.stringify(ctx.timeSlots[0].planActivities);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    assert.ok(root.querySelector('.plan-segment-reorder-drag-ghost'));
+
+    listeners.pointercancel[0](createPointerEvent('pointercancel', second, 260, 80));
+
+    assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
+    assert.equal(hasClass(root, 'is-plan-segment-reorder-ghost-active'), false);
+    assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), original);
+    assert.equal(ctx.plannedSegmentReorderState, null);
 }));
 
 test('virtual rest reorder arms the same no-selection and no-callout protection', () => withDom(({ timers, root }) => {
