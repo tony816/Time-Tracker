@@ -242,6 +242,62 @@ test('applySlotsJson restores valid planMergeSnapshot for single planned rows', 
     assert.deepEqual(ctx.timeSlots[0].planMergeSnapshot, snapshot);
 });
 
+test('planned segment order and ranges roundtrip through slots JSON with preserving normalizer', () => {
+    const ctx = createCtx();
+    ctx.normalizePlanActivitiesArray = function(items) {
+        return Array.isArray(items)
+            ? items.map((item) => ({
+                label: String(item.label || '').trim(),
+                seconds: Number(item.seconds) || 0,
+                activityId: item.activityId || null,
+                activityText: item.activityText || item.label || '',
+            }))
+            : [];
+    };
+    ctx.normalizePlanActivitiesPreservingSegments = function(items) {
+        return Array.isArray(items)
+            ? items.map((item) => ({ ...item }))
+            : [];
+    };
+    ctx.timeSlots[0].planned = 'Interview, Prep';
+    ctx.timeSlots[0].planActivities = [
+        { label: 'Interview', activityText: 'Interview', activityId: 'interview', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'Prep', activityText: 'Prep', activityId: 'prep', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ];
+    ctx.timeSlots[0].planSegmentTimers = {
+        'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 90 },
+        'planned-0-0-seg1': { status: 'idle', elapsedSeconds: 10 },
+    };
+
+    const slots = controller.buildSlotsJson.call(ctx);
+    const restored = createCtx();
+    restored.normalizePlanActivitiesArray = ctx.normalizePlanActivitiesArray;
+    restored.normalizePlanActivitiesPreservingSegments = ctx.normalizePlanActivitiesPreservingSegments;
+    controller.applySlotsJson.call(restored, slots);
+
+    assert.deepEqual(slots['4'].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Interview', activityId: 'interview', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { label: 'Prep', activityId: 'prep', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+    ]);
+    assert.deepEqual(restored.timeSlots[0].planActivities.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Interview', activityId: 'interview', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { label: 'Prep', activityId: 'prep', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+    ]);
+    assert.equal(restored.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].elapsedSeconds, 90);
+});
+
 test('applySlotsJson clears stale local source slot when remote sparse JSON omits that hour', () => {
     const ctx = createCtx();
     ctx.timeSlots[0].planned = 'Old source';

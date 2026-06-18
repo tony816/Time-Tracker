@@ -309,6 +309,93 @@
             });
     }
 
+    function cloneRealPlanSegmentForOrder(item, normalizedRange) {
+        const source = item && item.segment && typeof item.segment === 'object' ? item.segment : {};
+        const next = { ...source };
+        delete next.kind;
+        delete next.virtual;
+        next.startMinute = normalizedRange.startMinute;
+        next.endMinute = normalizedRange.endMinute;
+        next.durationMinutes = normalizedRange.durationMinutes;
+        next.seconds = normalizedRange.durationMinutes * 60;
+        return next;
+    }
+
+    function reorderPlanSegmentList(segments = [], sourceIndex = 0, targetIndex = 0, placement = 'before', rangeInput = {}) {
+        const source = Array.isArray(segments) ? segments : [];
+        const cleanSource = source
+            .filter((item) => item && typeof item === 'object' && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .map((item) => ({ ...item }));
+        const normalized = normalizePlanSegmentListForResize(source);
+        const parsedSourceIndex = parseInt(sourceIndex, 10);
+        const parsedTargetIndex = parseInt(targetIndex, 10);
+        const insertAfter = placement === 'after';
+
+        if (!Number.isInteger(parsedSourceIndex) || !Number.isInteger(parsedTargetIndex)) {
+            return { changed: false, reason: 'invalid-index', segments: cleanSource, indexMap: {} };
+        }
+        if (parsedSourceIndex === parsedTargetIndex) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {} };
+        }
+
+        const visualOrder = normalized.slice().sort((a, b) => {
+            return (a.startMinute - b.startMinute) || (a.index - b.index);
+        });
+        const sourceItem = visualOrder.find((item) => item.index === parsedSourceIndex);
+        const targetItem = visualOrder.find((item) => item.index === parsedTargetIndex);
+        if (!sourceItem || !targetItem) {
+            return { changed: false, reason: 'missing-segment', segments: cleanSource, indexMap: {} };
+        }
+        if (normalized.length < 2) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {} };
+        }
+
+        const withoutSource = visualOrder.filter((item) => item.index !== parsedSourceIndex);
+        const targetPosition = withoutSource.findIndex((item) => item.index === parsedTargetIndex);
+        if (targetPosition < 0) {
+            return { changed: false, reason: 'missing-target', segments: cleanSource, indexMap: {} };
+        }
+        const insertPosition = targetPosition + (insertAfter ? 1 : 0);
+        const nextOrder = withoutSource.slice();
+        nextOrder.splice(insertPosition, 0, sourceItem);
+
+        const unchanged = nextOrder.length === visualOrder.length
+            && nextOrder.every((item, index) => item.index === visualOrder[index].index);
+        if (unchanged) {
+            return { changed: false, reason: 'same-position', segments: cleanSource, indexMap: {} };
+        }
+
+        const range = normalizePlanSegmentRange({
+            startMinute: toFiniteNumber(rangeInput.startMinute, 0),
+            endMinute: toFiniteNumber(rangeInput.endMinute, Math.max(60, visualOrder[visualOrder.length - 1].endMinute)),
+        });
+        const totalMinutes = nextOrder.reduce((sum, item) => sum + Math.max(0, item.durationMinutes), 0);
+        if (totalMinutes > range.durationMinutes) {
+            return { changed: false, reason: 'overflow', segments: cleanSource, indexMap: {} };
+        }
+
+        const indexMap = {};
+        let cursor = range.startMinute;
+        const nextSegments = nextOrder.map((item, nextIndex) => {
+            const durationMinutes = Math.max(0, item.durationMinutes);
+            const nextRange = {
+                startMinute: cursor,
+                endMinute: cursor + durationMinutes,
+                durationMinutes,
+            };
+            cursor = nextRange.endMinute;
+            indexMap[item.index] = nextIndex;
+            return cloneRealPlanSegmentForOrder(item, nextRange);
+        });
+
+        return {
+            changed: true,
+            segments: nextSegments,
+            indexMap,
+            order: nextOrder.map((item) => item.index),
+        };
+    }
+
     function clonePlainObject(value, fallback) {
         if (value == null) return fallback;
         if (typeof value !== 'object') return value;
@@ -616,6 +703,7 @@
         normalizePlanSegmentListForResize,
         canResizePlanSegment,
         resizePlanSegmentInList,
+        reorderPlanSegmentList,
         buildMergedPlanSegmentPayload,
         sanitizePlanMergeSnapshot,
         createPlanMergeSnapshot,

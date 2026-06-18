@@ -152,6 +152,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachPlanSegmentResizeListeners === 'function') {
                 this.attachPlanSegmentResizeListeners(entryDiv, index);
             }
+            if (typeof this.attachPlannedSegmentReorderListeners === 'function') {
+                this.attachPlannedSegmentReorderListeners(entryDiv, index);
+            }
             if (typeof this.attachPlanSegmentTitleEditListeners === 'function') {
                 this.attachPlanSegmentTitleEditListeners(entryDiv, index);
             }

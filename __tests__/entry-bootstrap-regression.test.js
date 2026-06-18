@@ -45,6 +45,8 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     const selectionOverlayControllerIdx = scriptTagIndex('controllers/selection-overlay-controller.js');
     const schedulePreviewControllerIdx = scriptTagIndex('controllers/schedule-preview-controller.js');
     const fieldInteractionControllerIdx = scriptTagIndex('controllers/field-interaction-controller.js');
+    const plannedSlotMoveControllerIdx = scriptTagIndex('controllers/planned-slot-move-controller.js');
+    const plannedSegmentReorderControllerIdx = scriptTagIndex('controllers/planned-segment-reorder-controller.js');
     const scriptIdx = scriptTagIndex('script.js');
     const mainIdx = scriptTagIndex('main.js');
 
@@ -72,6 +74,8 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(selectionOverlayControllerIdx >= 0, 'controllers/selection-overlay-controller.js include should exist');
     assert.ok(schedulePreviewControllerIdx >= 0, 'controllers/schedule-preview-controller.js include should exist');
     assert.ok(fieldInteractionControllerIdx >= 0, 'controllers/field-interaction-controller.js include should exist');
+    assert.ok(plannedSlotMoveControllerIdx >= 0, 'controllers/planned-slot-move-controller.js include should exist');
+    assert.ok(plannedSegmentReorderControllerIdx >= 0, 'controllers/planned-segment-reorder-controller.js include should exist');
     assert.ok(scriptIdx >= 0, 'script.js include should exist');
     assert.ok(mainIdx >= 0, 'main.js include should exist');
     assert.ok(timeCoreIdx < durationCoreIdx, 'duration-core.js should load after time-core.js');
@@ -94,6 +98,9 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(lifecycleControllerIdx < selectionOverlayControllerIdx, 'controllers/selection-overlay-controller.js should load after controllers/lifecycle-controller.js');
     assert.ok(selectionOverlayControllerIdx < schedulePreviewControllerIdx, 'controllers/schedule-preview-controller.js should load after controllers/selection-overlay-controller.js');
     assert.ok(schedulePreviewControllerIdx < fieldInteractionControllerIdx, 'controllers/field-interaction-controller.js should load after controllers/schedule-preview-controller.js');
+    assert.ok(fieldInteractionControllerIdx < plannedSlotMoveControllerIdx, 'controllers/planned-slot-move-controller.js should load after controllers/field-interaction-controller.js');
+    assert.ok(plannedSlotMoveControllerIdx < plannedSegmentReorderControllerIdx, 'controllers/planned-segment-reorder-controller.js should load after controllers/planned-slot-move-controller.js');
+    assert.ok(plannedSegmentReorderControllerIdx < scriptIdx, 'controllers/planned-segment-reorder-controller.js should load before script.js');
     assert.ok(fieldInteractionControllerIdx < scriptIdx, 'controllers/field-interaction-controller.js should load before script.js');
     assert.ok(selectionOverlayControllerIdx < scriptIdx, 'controllers/selection-overlay-controller.js should load before script.js');
     assert.ok(lifecycleControllerIdx < scriptIdx, 'controllers/lifecycle-controller.js should load before script.js');
@@ -106,5 +113,6 @@ test('index.html loads dependency modules before script.js and main.js', () => {
     assert.ok(inlinePlanDropdownControllerIdx < scriptIdx, 'controllers/inline-plan-dropdown-controller.js should load before script.js');
     assert.ok(timeControlRendererIdx < scriptIdx, 'ui/time-control-renderer.js should load before script.js');
     assert.ok(schedulePreviewControllerIdx < scriptIdx, 'controllers/schedule-preview-controller.js should load before script.js');
+    assert.ok(plannedSlotMoveControllerIdx < scriptIdx, 'controllers/planned-slot-move-controller.js should load before script.js');
     assert.ok(scriptIdx < mainIdx, 'main.js should load after script.js');
 });

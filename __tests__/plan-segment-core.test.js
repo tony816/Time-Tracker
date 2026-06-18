@@ -886,3 +886,59 @@ test('resizePlanSegmentInList strips virtual-rest from resize apply output while
         { startMinute: 20, durationMinutes: 40 },
     ]);
 });
+
+test('reorderPlanSegmentList moves a real segment before another while preserving metadata and duration', () => {
+    const result = planSegmentCore.reorderPlanSegmentList([
+        { label: 'Prep', activityText: 'Prep', activityId: 'prep-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'Interview', activityText: 'Interview', activityId: 'interview-id', timer: { status: 'paused' }, startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ], 1, 0, 'before', { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.indexMap, { 1: 0, 0: 1 });
+    assert.deepEqual(result.segments.map((item) => ({
+        label: item.label,
+        activityId: item.activityId,
+        timer: item.timer,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+        seconds: item.seconds,
+    })), [
+        { label: 'Interview', activityId: 'interview-id', timer: { status: 'paused' }, startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { label: 'Prep', activityId: 'prep-id', timer: undefined, startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+    ]);
+});
+
+test('reorderPlanSegmentList rebuilds merged row order contiguously and leaves trailing rest only', () => {
+    const result = planSegmentCore.reorderPlanSegmentList([
+        { label: 'Move', startMinute: 0, endMinute: 90, durationMinutes: 90, seconds: 5400 },
+        { label: 'Shower', startMinute: 90, endMinute: 150, durationMinutes: 60, seconds: 3600 },
+        { label: 'Prep', startMinute: 150, endMinute: 180, durationMinutes: 30, seconds: 1800 },
+    ], 2, 1, 'before', { startMinute: 0, endMinute: 180 });
+
+    assert.equal(result.changed, true);
+    assert.deepEqual(result.segments.map((item) => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Move', startMinute: 0, endMinute: 90, durationMinutes: 90 },
+        { label: 'Prep', startMinute: 90, endMinute: 120, durationMinutes: 30 },
+        { label: 'Shower', startMinute: 120, endMinute: 180, durationMinutes: 60 },
+    ]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(result.segments, { startMinute: 0, endMinute: 180 }), []);
+});
+
+test('reorderPlanSegmentList rejects invalid and virtual-rest targets without mutation', () => {
+    const result = planSegmentCore.reorderPlanSegmentList([
+        { label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+        { kind: 'virtual-rest', virtual: true, label: 'Rest', startMinute: 30, durationMinutes: 30 },
+    ], 0, 1, 'after', { startMinute: 0, endMinute: 60 });
+
+    assert.equal(result.changed, false);
+    assert.equal(result.reason, 'missing-segment');
+    assert.deepEqual(result.segments, [
+        { label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+    ]);
+});

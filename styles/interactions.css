@@ -2274,6 +2274,46 @@ button.activity-chip,
   opacity: 0;
 }
 
+.split-grid.is-plan-segment-reorder-active {
+  cursor: grabbing;
+}
+
+.split-grid.is-plan-segment-reorder-active > .split-grid-segment[data-segment-kind="real-plan"] {
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.split-grid-segment.is-plan-segment-reorder-dragging {
+  z-index: 24;
+  opacity: 0.78;
+  transform: translateY(-2px) scale(1.015);
+  box-shadow: 0 9px 20px rgba(15, 23, 42, 0.22);
+}
+
+.split-grid.is-plan-segment-reorder-cancel {
+  cursor: no-drop;
+}
+
+.split-grid.is-plan-segment-reorder-cancel > .split-grid-segment.is-plan-segment-reorder-dragging {
+  opacity: 0.5;
+}
+
+.plan-segment-reorder-insert-marker {
+  position: absolute;
+  z-index: 25;
+  width: 4px;
+  min-height: 18px;
+  border-radius: 999px;
+  background: #111827;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 5px rgba(59, 130, 246, 0.28);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 .plan-segment-resize-preview-layer {
   position: absolute;
   inset: 0;

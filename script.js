@@ -136,6 +136,8 @@ class TimeTracker {
         this.plannedSlotMoveHoverStart = null;
         this.plannedSlotMoveModeButton = null;
         this.plannedSlotMoveStatus = null;
+        this.plannedSegmentReorderState = null;
+        this.planSegmentReorderClickSuppressUntil = 0;
 
         // Routines (planned auto-fill)
         this.routines = [];
@@ -530,6 +532,18 @@ class TimeTracker {
 
     clearPlannedSlotMoveDragState() {
         return globalThis.TimeTrackerPlannedSlotMoveController.clearPlannedSlotMoveDragState.call(this);
+    }
+
+    attachPlannedSegmentReorderListeners(entryDiv, index) {
+        return globalThis.TimeTrackerPlannedSegmentReorderController.attachPlannedSegmentReorderListeners.call(this, entryDiv, index);
+    }
+
+    applyPlanSegmentReorder(baseIndex, sourceIndex, targetIndex, placement = 'before') {
+        return globalThis.TimeTrackerPlannedSegmentReorderController.applyPlanSegmentReorder.call(this, baseIndex, sourceIndex, targetIndex, placement);
+    }
+
+    clearPlannedSegmentReorderState() {
+        return globalThis.TimeTrackerPlannedSegmentReorderController.clearPlannedSegmentReorderState.call(this);
     }
 
     attachEventListeners() {

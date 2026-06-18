@@ -36,6 +36,13 @@
         return null;
     }
 
+    function normalizePlanActivitiesForPersistence(ctx, items) {
+        const normalize = ctx && (ctx.normalizePlanActivitiesPreservingSegments || ctx.normalizePlanActivitiesArray);
+        return normalize
+            ? normalize.call(ctx, items).map((item) => ({ ...item }))
+            : (Array.isArray(items) ? items.filter((item) => item && typeof item === 'object').map((item) => ({ ...item })) : []);
+    }
+
     function serializeSnapshotFallback() {
         let mergedFieldsObject = {};
         if (this.mergedFields instanceof Map) {
@@ -135,7 +142,7 @@
                 if (stateCore && typeof stateCore.restoreStateSnapshot === 'function') {
                     const restored = stateCore.restoreStateSnapshot(parsed, {
                         templateSlots: this.createEmptyTimeSlots(),
-                        normalizePlanActivitiesArray: (items) => this.normalizePlanActivitiesArray(items),
+                        normalizePlanActivitiesArray: (items) => normalizePlanActivitiesForPersistence(this, items),
                         normalizeActivityText: this.normalizeActivityText
                             ? (value) => this.normalizeActivityText(value)
                             : undefined,
@@ -155,7 +162,7 @@
                             const targetSlot = nextSlots[index];
                             targetSlot.planned = String(sourceSlot.planned || '');
                             targetSlot.actual = String(sourceSlot.actual || '');
-                            targetSlot.planActivities = this.normalizePlanActivitiesArray(sourceSlot.planActivities);
+                            targetSlot.planActivities = normalizePlanActivitiesForPersistence(this, sourceSlot.planActivities);
                             targetSlot.planTitle = this.normalizeActivityText
                                 ? this.normalizeActivityText(sourceSlot.planTitle || '')
                                 : String(sourceSlot.planTitle || '').trim();
@@ -457,7 +464,7 @@
                         const plannedTrimmed = String(plannedValue || '').trim();
                         const actualTrimmed = String(actualValue || '').trim();
                         const activitiesValue = hasActivities ? this.normalizeActivitiesArray(row.activities) : null;
-                        const planActivitiesValue = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : null;
+                        const planActivitiesValue = hasPlanActivities ? normalizePlanActivitiesForPersistence(this, row.planActivities) : null;
                         nextMergedFields.set(plannedKey, plannedTrimmed);
                         nextMergedFields.set(timeKey, `${startLabel}-${endLabel}`);
                         nextMergedFields.set(actualKey, actualTrimmed);
@@ -561,7 +568,7 @@
             if (!slot.activityLog || typeof slot.activityLog !== 'object') slot.activityLog = { title: '', details: '', subActivities: [], titleBandOn: false, actualGridUnits: [], actualExtraGridUnits: [], actualFailedGridUnits: [], actualOverride: false };
             if (slot.activityLog.details !== detailsValue) { slot.activityLog.details = detailsValue; changed = true; }
             const normalizedActivities = hasActivities ? this.normalizeActivitiesArray(row.activities) : [];
-            const normalizedPlanActivities = hasPlanActivities ? this.normalizePlanActivitiesArray(row.planActivities) : [];
+            const normalizedPlanActivities = hasPlanActivities ? normalizePlanActivitiesForPersistence(this, row.planActivities) : [];
             if (slot.planTitle !== planTitleValue) { slot.planTitle = planTitleValue; changed = true; }
             if (JSON.stringify(slot.planSegmentTimers || {}) !== JSON.stringify(planSegmentTimersValue)) {
                 slot.planSegmentTimers = clonePlainObject(planSegmentTimersValue);
@@ -641,7 +648,7 @@
                 const actualValue = String((this.mergedFields.get(actualKey) ?? startSlot.actual ?? '')).trim();
                 const detailsValue = String((startSlot.activityLog && startSlot.activityLog.details) || '').trim();
                 const activitiesValue = this.normalizeActivitiesArray(startSlot.activityLog && startSlot.activityLog.subActivities);
-                const planActivitiesValue = this.normalizePlanActivitiesArray(startSlot.planActivities);
+                const planActivitiesValue = normalizePlanActivitiesForPersistence(this, startSlot.planActivities);
                 const planTitleValue = this.normalizeActivityText
                     ? this.normalizeActivityText(startSlot.planTitle || '')
                     : String(startSlot.planTitle || '').trim();
@@ -750,7 +757,7 @@
             const actual = String(slot.actual || '').trim();
             const details = String((slot.activityLog && slot.activityLog.details) || '').trim();
             const activitiesValue = this.normalizeActivitiesArray(slot.activityLog && slot.activityLog.subActivities);
-            const planActivitiesValue = this.normalizePlanActivitiesArray(slot.planActivities);
+            const planActivitiesValue = normalizePlanActivitiesForPersistence(this, slot.planActivities);
             const planTitleValue = this.normalizeActivityText
                 ? this.normalizeActivityText(slot.planTitle || '')
                 : String(slot.planTitle || '').trim();
