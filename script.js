@@ -4154,9 +4154,9 @@ class TimeTracker {
                            data-merge-end="${end}"
                            title="${mergeHintLabel}"
                            aria-label="${mergeHintLabel}">
-                        <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                         <div class="merged-time-content">
                             <div class="time-label">${timeRangeDisplay}</div>
+                            <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                             ${timerControls}
                         </div>
                     </div>`;

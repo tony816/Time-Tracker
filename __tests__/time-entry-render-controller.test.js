@@ -123,6 +123,7 @@ test('createMergedTimeField renders merged slot time range through the ending bo
     const secondaryMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 1, ctx.timeSlots[1]);
 
     assert.match(mainMarkup, /<div class="time-label">04 ~ 06<\/div>/);
+    assert.match(mainMarkup, /<div class="time-label">04 ~ 06<\/div>\s*<span class="time-slot-merge-affordance"/);
     assert.match(mainMarkup, /timer-btn/);
     assert.match(mainMarkup, /time-slot-merge-affordance/);
     assert.match(secondaryMarkup, /merged-time-secondary/);

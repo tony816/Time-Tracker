@@ -217,9 +217,18 @@
 }
 
 .time-entry.merge-capable .merged-time-main .time-slot-merge-affordance {
-  left: 50% !important;
-  top: calc((var(--merged-block-height, 100%) / 2) + 14px) !important;
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
   bottom: auto !important;
+  flex: 0 0 auto;
+  margin-top: 5px;
+  transform: none !important;
+}
+
+.time-entry.merge-hover .merged-time-main .time-slot-merge-affordance,
+.time-entry.merge-selecting .merged-time-main .time-slot-merge-affordance {
+  transform: scaleY(1.18) !important;
 }
 
 .merged-time-main .time-label {
