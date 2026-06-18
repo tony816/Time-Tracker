@@ -118,6 +118,16 @@ function createNode(tagName = 'div', className = '', dataset = {}, rect = null) 
             listeners[type].push({ handler, capture: options === true || Boolean(options && options.capture) });
             node._listeners = listeners;
         },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((listener) => listener.handler !== handler);
+            node._listeners = listeners;
+        },
+        setPointerCapture(pointerId) {
+            node.capturedPointerId = pointerId;
+        },
+        releasePointerCapture(pointerId) {
+            node.releasedPointerId = pointerId;
+        },
         dispatchEvent(event) {
             if (!event.target) event.target = this;
             const path = [];
@@ -182,6 +192,19 @@ function createTouchEvent(type, target, clientX, clientY = 20) {
         target,
         touches: type === 'touchend' || type === 'touchcancel' ? [] : [touch],
         changedTouches: [touch],
+        defaultPrevented: false,
+        propagationStopped: false,
+        preventDefault() { this.defaultPrevented = true; },
+        stopPropagation() { this.propagationStopped = true; },
+    };
+}
+
+function createBrowserGestureEvent(type, target) {
+    return {
+        type,
+        target,
+        bubbles: true,
+        cancelable: true,
         defaultPrevented: false,
         propagationStopped: false,
         preventDefault() { this.defaultPrevented = true; },
@@ -365,6 +388,21 @@ test('planned segment reorder preview css does not keep obsolete blue preview se
     const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
     assert.doesNotMatch(css, /\.plan-segment-reorder-preview-segment\s*\{/);
     assert.doesNotMatch(css, /plan-segment-reorder-preview-segment[\s\S]*rgba\(59,\s*130,\s*246/);
+});
+
+test('mobile planned reorder css scopes native selection and zoom protections to segment surfaces', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    assert.match(css, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]/);
+    assert.match(css, /\.split-visualization-planned \.split-grid-segment-virtual-rest\[data-segment-kind="virtual-rest"\]/);
+    assert.match(css, /-webkit-touch-callout:\s*none/);
+    assert.match(css, /-webkit-user-select:\s*none/);
+    assert.match(css, /user-select:\s*none/);
+    assert.match(css, /-webkit-tap-highlight-color:\s*transparent/);
+    assert.match(css, /touch-action:\s*manipulation/);
+    assert.match(css, /\.is-plan-segment-reorder-suppressing-selection[\s\S]*touch-action:\s*none/);
+    assert.match(css, /\.plan-segment-title-edit-input[\s\S]*user-select:\s*text/);
+    assert.doesNotMatch(css, /body\s*\{[\s\S]*user-select:\s*none/);
+    assert.doesNotMatch(css, /meta name="viewport"[\s\S]*user-scalable=no/);
 });
 
 test('single planned slot reorders different activity segments and remaps timers', () => {
@@ -579,7 +617,7 @@ test('long press on planned segment body starts reorder without move mode', () =
 
 test('movement beyond threshold before activation cancels reorder', () => withDom(({ listeners, timers, root }) => {
     const ctx = createCtx();
-    const { entry, first } = createEntry();
+    const { entry, grid, first } = createEntry();
     root.appendChild(entry);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
@@ -588,6 +626,9 @@ test('movement beyond threshold before activation cancels reorder', () => withDo
 
     assert.equal(timers.length, 1);
     assert.equal(ctx.plannedSegmentReorderState, null);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-armed'), false);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-armed'), false);
+    assert.equal(((first._listeners && first._listeners.selectstart) || []).length, 0);
 }));
 
 test('long press on planned segment label text starts reorder', () => withDom(({ timers, root }) => {
@@ -619,6 +660,53 @@ test('long press on planned segment graphic title starts reorder', () => withDom
 
     assert.equal(ctx.plannedSegmentReorderState.active, true);
     assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
+}));
+
+test('long press on planned segment timer display starts reorder', () => withDom(({ timers, root }) => {
+    const ctx = createCtx();
+    const { entry, first } = createEntry();
+    const { timerTime } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    timerTime.dispatchEvent(createPointerEvent('pointerdown', timerTime, 40));
+    assert.equal(timers.length, 1);
+    timers[0]();
+
+    assert.equal(ctx.plannedSegmentReorderState.active, true);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
+}));
+
+test('armed mobile reorder suppresses text selection, callout, and native drag on segment chrome', () => withDom(({ timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first } = createEntry();
+    const { label, title, timerTime } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    const startEvent = createTouchEvent('touchstart', label, 40);
+    label.dispatchEvent(startEvent);
+
+    assert.equal(timers.length, 1);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-armed'), true);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-armed'), true);
+
+    const selectEvent = createBrowserGestureEvent('selectstart', title);
+    title.dispatchEvent(selectEvent);
+    const calloutEvent = createBrowserGestureEvent('contextmenu', timerTime);
+    timerTime.dispatchEvent(calloutEvent);
+    const dragEvent = createBrowserGestureEvent('dragstart', label);
+    label.dispatchEvent(dragEvent);
+
+    assert.equal(selectEvent.defaultPrevented, true);
+    assert.equal(calloutEvent.defaultPrevented, true);
+    assert.equal(dragEvent.defaultPrevented, true);
+    assert.equal(ctx.plannedSegmentReorderState.active, false);
+
+    timers[0]();
+    assert.equal(startEvent.defaultPrevented, true);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-suppressing-selection'), true);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-suppressing-selection'), true);
 }));
 
 test('normal tap before long press does not start reorder or suppress click', () => withDom(({ listeners, timers, root }) => {
@@ -663,7 +751,7 @@ test('normal tap on label or title still allows click handling', () => withDom((
     assert.equal(ctx.plannedSegmentReorderState, null);
 }));
 
-test('resize handle, edge-zone, and timer controls never start reorder', () => withDom(({ timers, root }) => {
+test('resize handle, edge-zone, and timer button controls never start reorder', () => withDom(({ timers, root }) => {
     const ctx = createCtx({
         isCoarsePlanSegmentPointerContext() {
             return true;
@@ -672,18 +760,15 @@ test('resize handle, edge-zone, and timer controls never start reorder', () => w
     const { entry, first } = createEntry();
     const handle = createNode('span', 'plan-segment-resize-handle');
     const timerButton = createNode('button', 'plan-segment-timer-button');
-    const timerTime = createNode('span', 'plan-segment-timer-time');
     const input = createNode('input', 'plan-segment-title-edit-input');
     first.appendChild(handle);
     first.appendChild(timerButton);
-    first.appendChild(timerTime);
     first.appendChild(input);
     root.appendChild(entry);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
     handle.dispatchEvent(createPointerEvent('pointerdown', handle, 40));
     timerButton.dispatchEvent(createPointerEvent('pointerdown', timerButton, 40));
-    timerTime.dispatchEvent(createPointerEvent('pointerdown', timerTime, 40));
     input.dispatchEvent(createPointerEvent('pointerdown', input, 40));
     first.dispatchEvent(createPointerEvent('pointerdown', first, 4));
 
@@ -749,6 +834,35 @@ test('touch long press reorders before target segment', () => withDom(({ listene
     assert.equal(ctx.plannedSegmentReorderState, null);
 }));
 
+test('reorder activation prevents default on armed touch and pointer paths', () => withDom(({ timers, root }) => {
+    const touchCtx = createCtx();
+    const touchEntry = createEntry();
+    root.appendChild(touchEntry.entry);
+    controller.attachPlannedSegmentReorderListeners.call(touchCtx, touchEntry.entry, 0);
+
+    const touchStart = createTouchEvent('touchstart', touchEntry.second, 220);
+    touchEntry.second.dispatchEvent(touchStart);
+    timers[0]();
+
+    assert.equal(touchStart.defaultPrevented, true);
+    assert.equal(touchStart.propagationStopped, true);
+
+    controller.clearPlannedSegmentReorderState.call(touchCtx);
+
+    const pointerCtx = createCtx();
+    const pointerEntry = createEntry();
+    root.appendChild(pointerEntry.entry);
+    controller.attachPlannedSegmentReorderListeners.call(pointerCtx, pointerEntry.entry, 0);
+
+    const pointerStart = createPointerEvent('pointerdown', pointerEntry.second, 220);
+    pointerEntry.second.dispatchEvent(pointerStart);
+    timers[1]();
+
+    assert.equal(pointerStart.defaultPrevented, true);
+    assert.equal(pointerStart.propagationStopped, true);
+    assert.equal(pointerEntry.second.capturedPointerId, 1);
+}));
+
 test('active drag over a valid target renders preview before drop and commit matches preview', () => withDom(({ listeners, timers, root }) => {
     const ctx = createCtx();
     const { entry, grid, first, second } = createEntry();
@@ -789,6 +903,14 @@ test('active drag over a valid target renders preview before drop and commit mat
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Interview', 'Prep']);
     assert.equal(grid.querySelector('.plan-segment-reorder-preview-layer'), null);
     assert.equal(hasClass(grid, 'is-previewing-plan-reorder'), false);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-active'), false);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-armed'), false);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-suppressing-selection'), false);
+    assert.equal(hasClass(second, 'is-plan-segment-reorder-armed'), false);
+    assert.equal(hasClass(second, 'is-plan-segment-reorder-suppressing-selection'), false);
+    assert.equal(((second._listeners && second._listeners.selectstart) || []).length, 0);
+    assert.equal(((grid._listeners && grid._listeners.contextmenu) || []).length, 0);
+    assert.equal(second.releasedPointerId, 1);
 }));
 
 test('repeated pointermove over same target does not rebuild preview layer', () => withDom(({ listeners, timers, root }) => {
@@ -896,6 +1018,38 @@ test('virtual rest segment can start long press reorder and drop after real segm
     })), [
         { startMinute: 40, durationMinutes: 20 },
     ]);
+}));
+
+test('virtual rest reorder arms the same no-selection and no-callout protection', () => withDom(({ timers, root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', activityId: 'b', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const { entry, grid, rest } = createEntryWithRest();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    rest.dispatchEvent(createTouchEvent('touchstart', rest, 140));
+
+    assert.equal(timers.length, 1);
+    assert.equal(hasClass(rest, 'is-plan-segment-reorder-armed'), true);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-armed'), true);
+
+    const selectEvent = createBrowserGestureEvent('selectstart', rest);
+    rest.dispatchEvent(selectEvent);
+    const calloutEvent = createBrowserGestureEvent('contextmenu', rest);
+    rest.dispatchEvent(calloutEvent);
+
+    assert.equal(selectEvent.defaultPrevented, true);
+    assert.equal(calloutEvent.defaultPrevented, true);
 }));
 
 test('real segment can use virtual rest as a drop target', () => withDom(({ listeners, timers, root }) => {

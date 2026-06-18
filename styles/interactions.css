@@ -2256,10 +2256,41 @@ button.activity-chip,
   position: relative;
   overflow: visible;
   pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] {
   overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+  .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"],
+  .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"] .plan-segment-title-edit-input {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
+    touch-action: manipulation;
+  }
+
+  .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-plan-segment-reorder-armed,
+  .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-plan-segment-reorder-suppressing-selection,
+  .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"].is-plan-segment-reorder-armed,
+  .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"].is-plan-segment-reorder-suppressing-selection,
+  .split-visualization-planned .split-grid.is-plan-segment-reorder-active,
+  .split-visualization-planned .split-grid.is-plan-segment-reorder-suppressing-selection {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
 }
 
 .split-visualization-planned .split-grid-segment.has-shared-plan-boundary-handle {

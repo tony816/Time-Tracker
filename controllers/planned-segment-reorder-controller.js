@@ -15,10 +15,14 @@
     const LONG_PRESS_MS = 220;
     const MOVE_THRESHOLD_PX = 8;
     const CLICK_SUPPRESS_MS = 700;
+    const BROWSER_GESTURE_SUPPRESSION_EVENTS = [
+        'selectstart',
+        'contextmenu',
+        'dragstart',
+    ];
     const BLOCKED_START_SELECTOR = [
         '.plan-segment-resize-handle',
         '.plan-segment-timer-button',
-        '.plan-segment-timer-time',
         '.plan-segment-title-edit-input',
         '.inline-plan-dropdown',
         '.activity-chip-board',
@@ -266,10 +270,12 @@
             document.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
                 if (layer.parentNode) layer.parentNode.removeChild(layer);
             });
-            document.querySelectorAll('.is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder')
+            document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder')
                 .forEach((el) => {
                     if (el.classList) {
                         el.classList.remove(
+                            'is-plan-segment-reorder-armed',
+                            'is-plan-segment-reorder-suppressing-selection',
                             'is-plan-segment-reorder-dragging',
                             'is-plan-segment-reorder-origin',
                             'is-plan-segment-reorder-active',
@@ -279,6 +285,91 @@
                     }
                 });
         }
+    }
+
+    function preventNativeBrowserGesture(event) {
+        if (!event) return;
+        if (event.cancelable === false) return;
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+    }
+
+    function clearNativeSelection() {
+        const doc = typeof document !== 'undefined' ? document : null;
+        const selection = doc && typeof doc.getSelection === 'function'
+            ? doc.getSelection()
+            : (root && typeof root.getSelection === 'function' ? root.getSelection() : null);
+        if (selection && typeof selection.removeAllRanges === 'function') {
+            try {
+                selection.removeAllRanges();
+            } catch (_) {}
+        }
+    }
+
+    function setReorderSuppressionClasses(state, enabled) {
+        if (!state) return;
+        [
+            state.segmentEl,
+            state.grid,
+        ].forEach((el) => {
+            if (!el || !el.classList) return;
+            if (enabled) {
+                el.classList.add('is-plan-segment-reorder-armed');
+            } else {
+                el.classList.remove(
+                    'is-plan-segment-reorder-armed',
+                    'is-plan-segment-reorder-suppressing-selection'
+                );
+            }
+        });
+    }
+
+    function addReorderBrowserGestureSuppression(state) {
+        if (!state || state.onSuppressBrowserGesture) return;
+        const targets = [];
+        [state.segmentEl, state.grid].forEach((target) => {
+            if (!target || typeof target.addEventListener !== 'function' || targets.includes(target)) return;
+            targets.push(target);
+        });
+        state.suppressionTargets = targets;
+        state.onSuppressBrowserGesture = (event) => {
+            if (!state.armed && !state.active) return;
+            preventNativeBrowserGesture(event);
+            clearNativeSelection();
+        };
+        targets.forEach((target) => {
+            BROWSER_GESTURE_SUPPRESSION_EVENTS.forEach((type) => {
+                target.addEventListener(type, state.onSuppressBrowserGesture, true);
+            });
+        });
+    }
+
+    function removeReorderBrowserGestureSuppression(state) {
+        if (!state || !state.onSuppressBrowserGesture || !Array.isArray(state.suppressionTargets)) return;
+        state.suppressionTargets.forEach((target) => {
+            if (!target || typeof target.removeEventListener !== 'function') return;
+            BROWSER_GESTURE_SUPPRESSION_EVENTS.forEach((type) => {
+                target.removeEventListener(type, state.onSuppressBrowserGesture, true);
+            });
+        });
+        state.onSuppressBrowserGesture = null;
+        state.suppressionTargets = [];
+    }
+
+    function captureReorderPointer(state) {
+        if (!state || state.pointerId == null || !state.segmentEl || typeof state.segmentEl.setPointerCapture !== 'function') return;
+        try {
+            state.segmentEl.setPointerCapture(state.pointerId);
+            state.didSetPointerCapture = true;
+        } catch (_) {}
+    }
+
+    function releaseReorderPointer(state) {
+        if (!state || !state.didSetPointerCapture || state.pointerId == null || !state.segmentEl || typeof state.segmentEl.releasePointerCapture !== 'function') return;
+        try {
+            state.segmentEl.releasePointerCapture(state.pointerId);
+        } catch (_) {}
+        state.didSetPointerCapture = false;
     }
 
     function buildPreviewChunks(layout = []) {
@@ -447,6 +538,9 @@
     function clearPlannedSegmentReorderState() {
         const state = this.plannedSegmentReorderState;
         if (state && state.timer) clearTimeout(state.timer);
+        removeReorderBrowserGestureSuppression(state);
+        releaseReorderPointer(state);
+        setReorderSuppressionClasses(state, false);
         if (state && state.moveType && typeof document !== 'undefined') {
             document.removeEventListener(state.moveType, state.onMove, state.listenerOptions);
             document.removeEventListener(state.upType, state.onUp, state.listenerOptions);
@@ -492,10 +586,14 @@
     function activateReorderDrag(ctx, state) {
         if (!state || state.active) return;
         state.active = true;
+        state.armed = true;
         if (state.timer) {
             clearTimeout(state.timer);
             state.timer = null;
         }
+        preventNativeBrowserGesture(state.startEvent);
+        clearNativeSelection();
+        captureReorderPointer(state);
         ctx.planSegmentReorderClickSuppressUntil = Date.now() + CLICK_SUPPRESS_MS;
         if (state.segmentEl && state.segmentEl.dataset) {
             state.segmentEl.dataset.planReorderClickSuppressUntil = String(ctx.planSegmentReorderClickSuppressUntil);
@@ -510,10 +608,17 @@
             ctx.cleanupPlanSegmentResizeState(state.grid);
         }
         if (state.segmentEl && state.segmentEl.classList) {
-            state.segmentEl.classList.add('is-plan-segment-reorder-dragging', 'is-plan-segment-reorder-origin');
+            state.segmentEl.classList.add(
+                'is-plan-segment-reorder-dragging',
+                'is-plan-segment-reorder-origin',
+                'is-plan-segment-reorder-suppressing-selection'
+            );
         }
         if (state.grid && state.grid.classList) {
-            state.grid.classList.add('is-plan-segment-reorder-active');
+            state.grid.classList.add(
+                'is-plan-segment-reorder-active',
+                'is-plan-segment-reorder-suppressing-selection'
+            );
         }
     }
 
@@ -555,6 +660,7 @@
                 const cancelType = isTouchEvent ? 'touchcancel' : 'pointercancel';
                 const listenerOptions = isTouchEvent ? { capture: true, passive: false } : true;
                 const state = {
+                    armed: true,
                     active: false,
                     cancelled: false,
                     timer: null,
@@ -565,7 +671,9 @@
                     grid,
                     startX: point.clientX,
                     startY: point.clientY,
+                    startEvent: event,
                     pointerId: isPointerEvent ? event.pointerId : null,
+                    didSetPointerCapture: false,
                     targetId: null,
                     placement: 'before',
                     previewKey: '',
@@ -578,7 +686,11 @@
                     onUp: null,
                     onCancel: null,
                     onKeyDown: null,
+                    onSuppressBrowserGesture: null,
+                    suppressionTargets: [],
                 };
+                setReorderSuppressionClasses(state, true);
+                addReorderBrowserGestureSuppression(state);
 
                 state.onMove = (moveEvent) => {
                     const movePoint = getPointFromEvent(moveEvent);
@@ -649,7 +761,7 @@
             };
 
             segmentEl.addEventListener('pointerdown', start, true);
-            segmentEl.addEventListener('touchstart', start, { capture: true, passive: true });
+            segmentEl.addEventListener('touchstart', start, { capture: true, passive: false });
         });
     }
 
