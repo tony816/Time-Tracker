@@ -24,15 +24,11 @@
         '.activity-chip-board',
         '.inline-plan-subsection',
         '.inline-plan-child-popover-layer',
-        '.plan-segment-graphic-title',
-        '.plan-segment-label-text',
-        '[data-title-edit-trigger="true"]',
-        '[data-activity-edit-trigger="true"]',
-        '[data-segment-title-edit-trigger="true"]',
         'button',
         'input',
         'select',
         'textarea',
+        '[contenteditable="true"]',
     ].join(', ');
 
     function getPointFromEvent(event) {
@@ -112,9 +108,10 @@
     function isBlockedReorderStart(ctx, event, segmentEl) {
         const target = event && event.target;
         if (!target || !segmentEl) return true;
+        if (ctx && typeof ctx.isPlannedSlotMoveMode === 'function' && ctx.isPlannedSlotMoveMode()) return true;
+        if (ctx && ctx.plannedSlotMoveMode === true) return true;
         if (segmentEl.classList && (
             segmentEl.classList.contains('is-resizing-plan-segment')
-            || segmentEl.classList.contains('is-plan-segment-resize-disabled')
         )) {
             return true;
         }

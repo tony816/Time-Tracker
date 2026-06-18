@@ -201,6 +201,27 @@ function createEntry() {
     return { entry, grid, first, second };
 }
 
+function appendSegmentChrome(segment, options = {}) {
+    const graphic = createNode('div', 'plan-segment-graphic');
+    const main = createNode('div', 'plan-segment-graphic-main');
+    const label = createNode('span', 'plan-segment-label-text', {
+        titleEditTrigger: 'true',
+        activityEditTrigger: 'true',
+    });
+    const title = createNode('span', 'plan-segment-graphic-title', {
+        segmentTitleEditTrigger: 'true',
+    });
+    const input = createNode('input', 'plan-segment-title-edit-input');
+    const timerTime = createNode('span', 'plan-segment-timer-time');
+    graphic.appendChild(main);
+    if (options.title !== false) main.appendChild(title);
+    main.appendChild(label);
+    main.appendChild(timerTime);
+    if (options.input) main.appendChild(input);
+    segment.appendChild(graphic);
+    return { graphic, main, label, title, input, timerTime };
+}
+
 function createCtx(overrides = {}) {
     const ctx = {
         timeSlots: [
@@ -351,6 +372,37 @@ test('long press on planned segment body starts reorder without move mode', () =
     assert.equal(ctx.plannedSlotMoveMode, false);
 }));
 
+test('long press on planned segment label text starts reorder', () => withDom(({ timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first } = createEntry();
+    const { label } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    label.dispatchEvent(createPointerEvent('pointerdown', label, 40));
+    assert.equal(timers.length, 1);
+    timers[0]();
+
+    assert.equal(ctx.plannedSegmentReorderState.active, true);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
+    assert.equal(hasClass(grid, 'is-plan-segment-reorder-active'), true);
+}));
+
+test('long press on planned segment graphic title starts reorder', () => withDom(({ timers, root }) => {
+    const ctx = createCtx();
+    const { entry, first } = createEntry();
+    const { title } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    title.dispatchEvent(createPointerEvent('pointerdown', title, 40));
+    assert.equal(timers.length, 1);
+    timers[0]();
+
+    assert.equal(ctx.plannedSegmentReorderState.active, true);
+    assert.equal(hasClass(first, 'is-plan-segment-reorder-dragging'), true);
+}));
+
 test('normal tap before long press does not start reorder or suppress click', () => withDom(({ listeners, timers, root }) => {
     const ctx = createCtx();
     const { entry, first } = createEntry();
@@ -368,6 +420,31 @@ test('normal tap before long press does not start reorder or suppress click', ()
     assert.equal(ctx.plannedSegmentReorderState, null);
 }));
 
+test('normal tap on label or title still allows click handling', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, first } = createEntry();
+    const { label, title } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+
+    label.dispatchEvent(createPointerEvent('pointerdown', label, 40));
+    listeners.pointerup[0](createPointerEvent('pointerup', label, 40));
+    const labelClick = createPointerEvent('click', label, 40);
+    label.dispatchEvent(labelClick);
+
+    title.dispatchEvent(createPointerEvent('pointerdown', title, 40));
+    listeners.pointerup[0](createPointerEvent('pointerup', title, 40));
+    const titleClick = createPointerEvent('click', title, 40);
+    title.dispatchEvent(titleClick);
+
+    assert.equal(timers.length, 2);
+    assert.equal(labelClick.defaultPrevented, false);
+    assert.equal(titleClick.defaultPrevented, false);
+    assert.equal(ctx.renderCalls, 0);
+    assert.equal(ctx.plannedSegmentReorderState, null);
+}));
+
 test('resize handle, edge-zone, and timer controls never start reorder', () => withDom(({ timers, root }) => {
     const ctx = createCtx({
         isCoarsePlanSegmentPointerContext() {
@@ -377,14 +454,62 @@ test('resize handle, edge-zone, and timer controls never start reorder', () => w
     const { entry, first } = createEntry();
     const handle = createNode('span', 'plan-segment-resize-handle');
     const timerButton = createNode('button', 'plan-segment-timer-button');
+    const timerTime = createNode('span', 'plan-segment-timer-time');
+    const input = createNode('input', 'plan-segment-title-edit-input');
     first.appendChild(handle);
     first.appendChild(timerButton);
+    first.appendChild(timerTime);
+    first.appendChild(input);
     root.appendChild(entry);
 
     controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
     handle.dispatchEvent(createPointerEvent('pointerdown', handle, 40));
     timerButton.dispatchEvent(createPointerEvent('pointerdown', timerButton, 40));
+    timerTime.dispatchEvent(createPointerEvent('pointerdown', timerTime, 40));
+    input.dispatchEvent(createPointerEvent('pointerdown', input, 40));
     first.dispatchEvent(createPointerEvent('pointerdown', first, 4));
+
+    assert.equal(timers.length, 0);
+    assert.equal(ctx.plannedSegmentReorderState, undefined);
+}));
+
+test('resize-disabled running segment can reorder and keeps running timer state', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    ctx.timeSlots[0].planSegmentTimers = {
+        'planned-0-0-seg0': { status: 'idle', elapsedSeconds: 10 },
+        'planned-0-0-seg1': { status: 'running', running: true, elapsedSeconds: 90, startedAt: 1234 },
+    };
+    const { entry, first, second } = createEntry();
+    second.classList.add('is-plan-segment-resize-disabled');
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    assert.equal(timers.length, 1);
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+    listeners.pointerup[0](createPointerEvent('pointerup', first, 40));
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Interview', 'Prep']);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].status, 'running');
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].running, true);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'].startedAt, 1234);
+}));
+
+test('planned slot move mode blocks planned segment reorder start', () => withDom(({ timers, root }) => {
+    const ctx = createCtx({
+        plannedSlotMoveMode: true,
+        isPlannedSlotMoveMode() {
+            return true;
+        },
+    });
+    const { entry, first } = createEntry();
+    const { label } = appendSegmentChrome(first);
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    first.dispatchEvent(createPointerEvent('pointerdown', first, 40));
+    label.dispatchEvent(createPointerEvent('pointerdown', label, 40));
 
     assert.equal(timers.length, 0);
     assert.equal(ctx.plannedSegmentReorderState, undefined);
