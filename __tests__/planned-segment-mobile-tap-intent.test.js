@@ -354,7 +354,7 @@ function withMockWindow(overrides, callback) {
     }
 }
 
-test('mobile title hit area tap starts title inline edit without opening replacement dropdown', () => {
+test('mobile title hit area tap opens replacement dropdown without inline text edit', () => {
     const prepareCalls = [];
     const harness = createHarness({
         preparePlanSegmentReplacementViewport(segmentEl) {
@@ -368,13 +368,13 @@ test('mobile title hit area tap starts title inline edit without opening replace
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['title-edit', harness.title, 0, true, true],
+        ['dropdown', 0, 0, harness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile activity hit area tap starts activity inline edit and opens replacement dropdown', () => {
+test('mobile activity hit area tap opens replacement dropdown without inline text edit', () => {
     const prepareCalls = [];
     const harness = createHarness({
         preparePlanSegmentReplacementViewport(segmentEl) {
@@ -388,20 +388,13 @@ test('mobile activity hit area tap starts activity inline edit and opens replace
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['activity-edit', harness.label, 0, true, true, {
-            openDropdown: true,
-            dropdownAnchor: harness.label,
-        }],
-        ['dropdown', 0, 0, harness.segment, {
-            openDropdown: true,
-            dropdownAnchor: harness.label,
-        }],
+        ['dropdown', 0, 0, harness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile segment background tap outside text hit areas starts activity inline edit and opens replacement dropdown', () => {
+test('mobile segment background tap opens replacement dropdown without inline text edit', () => {
     const prepareCalls = [];
     const harness = createHarness({
         preparePlanSegmentReplacementViewport(segmentEl) {
@@ -415,14 +408,7 @@ test('mobile segment background tap outside text hit areas starts activity inlin
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(harness.calls, [
-        ['activity-edit', harness.label, 0, true, true, {
-            openDropdown: true,
-            dropdownAnchor: harness.segment,
-        }],
-        ['dropdown', 0, 0, harness.segment, {
-            openDropdown: true,
-            dropdownAnchor: harness.segment,
-        }],
+        ['dropdown', 0, 0, harness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
@@ -452,7 +438,7 @@ test('mobile segment click after resize rerender is suppressed from controller s
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile segment background tap starts activity inline edit without pre-scroll when segment would be covered', () => {
+test('mobile segment background tap opens replacement dropdown without pre-scroll when segment would be covered', () => {
     const scrollCalls = [];
     const rafCalls = [];
     const prepareCalls = [];
@@ -479,14 +465,7 @@ test('mobile segment background tap starts activity inline edit without pre-scro
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(rafCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
-            ['dropdown', 0, 0, harness.segment, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
+            ['dropdown', 0, 0, harness.segment, {}],
         ]);
         assert.equal(event.defaultPrevented, true);
         assert.equal(event.propagationStopped, true);
@@ -513,19 +492,12 @@ test('mobile segment background tap skips minimal pre-scroll when segment is sli
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(rafCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
-            ['dropdown', 0, 0, harness.segment, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
+            ['dropdown', 0, 0, harness.segment, {}],
         ]);
     });
 });
 
-test('mobile segment background tap starts activity inline edit when segment is already safe', () => {
+test('mobile segment background tap opens replacement dropdown when segment is already safe', () => {
     const scrollCalls = [];
     withMockWindow({
         scrollBy(options) {
@@ -540,14 +512,7 @@ test('mobile segment background tap starts activity inline edit when segment is 
 
         assert.deepEqual(scrollCalls, []);
         assert.deepEqual(harness.calls, [
-            ['activity-edit', harness.label, 0, true, true, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
-            ['dropdown', 0, 0, harness.segment, {
-                openDropdown: true,
-                dropdownAnchor: harness.segment,
-            }],
+            ['dropdown', 0, 0, harness.segment, {}],
         ]);
     });
 });
@@ -813,11 +778,11 @@ test('desktop segment background click starts activity inline edit and opens rep
     assert.equal(event.propagationStopped, true);
 });
 
-test('mobile text hit area expansion is clamped to the segment bounds', () => {
+test('mobile text hit area tap intent resolves to dropdown instead of text edit', () => {
     const harness = createHarness();
     harness.title.getBoundingClientRect = () => rect(2, 2, 18, 12);
 
-    assert.equal(resolvePlanSegmentTapIntent.call(harness.ctx, createClickEvent(harness.segment, 0, 0), harness.segment), 'title-edit');
+    assert.equal(resolvePlanSegmentTapIntent.call(harness.ctx, createClickEvent(harness.segment, 0, 0), harness.segment), 'dropdown');
     assert.equal(resolvePlanSegmentTapIntent.call(harness.ctx, createClickEvent(harness.segment, -1, 0), harness.segment), 'dropdown');
 });
 

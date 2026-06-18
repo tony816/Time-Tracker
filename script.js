@@ -6382,52 +6382,6 @@ class TimeTracker {
         if (target && target.closest && target.closest(ignoredSelector)) {
             return 'ignore';
         }
-        const getPoint = () => {
-            if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-                return { clientX: event.clientX, clientY: event.clientY };
-            }
-            const touch = event.changedTouches && event.changedTouches[0];
-            if (touch && Number.isFinite(touch.clientX) && Number.isFinite(touch.clientY)) {
-                return { clientX: touch.clientX, clientY: touch.clientY };
-            }
-            return null;
-        };
-        const point = getPoint();
-        const titleEl = this.getPlanSegmentTitleEditElement
-            ? this.getPlanSegmentTitleEditElement(segmentEl)
-            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-graphic-title') : null);
-        const activityEl = this.getPlanSegmentActivityEditElement
-            ? this.getPlanSegmentActivityEditElement(segmentEl)
-            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
-        if (!point) {
-            if (target && target.closest && titleEl && target.closest('.plan-segment-graphic-title')) return 'title-edit';
-            if (target && target.closest && activityEl && target.closest('.plan-segment-label-text, [data-activity-edit-trigger="true"], [data-title-edit-trigger="true"]')) {
-                return 'activity-edit';
-            }
-            return 'dropdown';
-        }
-        const bounds = typeof segmentEl.getBoundingClientRect === 'function'
-            ? segmentEl.getBoundingClientRect()
-            : null;
-        if (!bounds) return 'dropdown';
-        const titleRect = titleEl && this.getPlanSegmentTapTextRect
-            ? this.getPlanSegmentTapTextRect(titleEl)
-            : null;
-        const expandedTitleRect = titleRect && this.expandRectWithinBounds
-            ? this.expandRectWithinBounds(titleRect, bounds, { x: 12, y: 8 })
-            : null;
-        if (expandedTitleRect && this.isPointInRect(point.clientX, point.clientY, expandedTitleRect)) {
-            return 'title-edit';
-        }
-        const activityRect = activityEl && this.getPlanSegmentTapTextRect
-            ? this.getPlanSegmentTapTextRect(activityEl)
-            : null;
-        const expandedActivityRect = activityRect && this.expandRectWithinBounds
-            ? this.expandRectWithinBounds(activityRect, bounds, { x: 12, y: 8 })
-            : null;
-        if (expandedActivityRect && this.isPointInRect(point.clientX, point.clientY, expandedActivityRect)) {
-            return 'activity-edit';
-        }
         return 'dropdown';
     }
     applyPlanSegmentTitleEdit(baseIndex, segmentIndex, rawTitle) {
@@ -7189,32 +7143,15 @@ class TimeTracker {
                     if (intent === 'ignore') return;
                     event.preventDefault();
                     event.stopPropagation();
-                    if (intent === 'title-edit') {
-                        const titleEl = this.getPlanSegmentTitleEditElement
-                            ? this.getPlanSegmentTitleEditElement(segmentEl)
-                            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-graphic-title') : null);
-                        if (titleEl && typeof this.startPlanSegmentParentTitleEdit === 'function') {
-                            this.startPlanSegmentParentTitleEdit(titleEl, index, event);
-                        }
+                    if (
+                        Number.isInteger(segmentIndex)
+                        && typeof this.openPlanSegmentReplacementDropdown === 'function'
+                        && this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl)
+                    ) {
                         return;
                     }
-                    if (intent === 'activity-edit') {
-                        const activityEl = this.getPlanSegmentActivityEditElement
-                            ? this.getPlanSegmentActivityEditElement(segmentEl)
-                            : (segmentEl.querySelector ? segmentEl.querySelector('.plan-segment-label-text') : null);
-                        if (activityEl && typeof this.startPlanSegmentActivityEdit === 'function') {
-                            this.startPlanSegmentActivityEdit(activityEl, index, event, {
-                                openDropdown: true,
-                                dropdownAnchor: activityEl,
-                            });
-                        }
-                        return;
-                    }
-                    if (typeof this.startPlanSegmentInlineActivityEdit === 'function') {
-                        this.startPlanSegmentInlineActivityEdit(segmentEl, index, event, {
-                            openDropdown: true,
-                            dropdownAnchor: segmentEl,
-                        });
+                    if (Number.isInteger(segmentIndex)) {
+                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
                     }
                     return;
                 }

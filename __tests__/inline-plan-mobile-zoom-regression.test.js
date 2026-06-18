@@ -7,6 +7,14 @@ const interactionsSource = fs.readFileSync(
     path.join(__dirname, '..', 'styles', 'interactions.css'),
     'utf8'
 );
+const responsiveSource = fs.readFileSync(
+    path.join(__dirname, '..', 'styles', 'responsive.css'),
+    'utf8'
+);
+const indexSource = fs.readFileSync(
+    path.join(__dirname, '..', 'index.html'),
+    'utf8'
+);
 
 test('inline plan input uses at least 16px font-size to avoid iOS auto zoom', () => {
     assert.match(
@@ -16,6 +24,24 @@ test('inline plan input uses at least 16px font-size to avoid iOS auto zoom', ()
     assert.match(
         interactionsSource,
         /\.inline-plan-input-row\.inline-plan-input-row-mobile-close \.inline-plan-input\s*\{[\s\S]*?font-size:\s*16px;/
+    );
+});
+
+test('mobile viewport disables browser zoom gestures', () => {
+    assert.match(
+        indexSource,
+        /<meta name="viewport" content="[^"]*maximum-scale=1\.0[^"]*user-scalable=no[^"]*" \/>/
+    );
+});
+
+test('planned segment inline editor keeps mobile input font at 16px if invoked', () => {
+    assert.match(
+        interactionsSource,
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\] \.plan-segment-title-edit-input\s*\{[\s\S]*?font-size:\s*16px;/
+    );
+    assert.match(
+        responsiveSource,
+        /\.plan-segment-title-edit-input\s*\{[\s\S]*?font-size:\s*16px;/
     );
 });
 

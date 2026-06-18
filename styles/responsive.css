@@ -765,7 +765,7 @@ textarea:focus-visible,
     }
 
     .plan-segment-title-edit-input {
-        font-size: inherit;
+        font-size: 16px;
     }
 
     .activity-child-composer-input,
