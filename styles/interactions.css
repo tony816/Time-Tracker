@@ -217,7 +217,9 @@
 }
 
 .time-entry.merge-capable .merged-time-main .time-slot-merge-affordance {
-  top: calc(var(--merged-block-height, 100%) / 2) !important;
+  left: 50% !important;
+  top: calc((var(--merged-block-height, 100%) / 2) + 14px) !important;
+  bottom: auto !important;
 }
 
 .merged-time-main .time-label {

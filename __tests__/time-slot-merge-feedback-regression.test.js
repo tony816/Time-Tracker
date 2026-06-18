@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const controller = require('../controllers/selection-overlay-controller');
 const cssSource = fs.readFileSync(path.join(__dirname, '..', 'styles', 'foundation.css'), 'utf8');
+const interactionsCssSource = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
 function createClassList(initial = []) {
     const classes = new Set(initial);
@@ -218,4 +219,10 @@ test('existing merged and planned overlay styling uses merge tokens', () => {
     assert.match(cssSource, /\.time-entry\.existing-merged-range \.time-slot-merge-affordance\s*\{\s*background: var\(--merge-rail\);/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\s*\{\s*--merge-overlay-surface:/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]\s*\{\s*--merge-overlay-surface:/);
+});
+
+test('time-slot merge affordance sits on the lower edge for single and merged slots', () => {
+    assert.match(cssSource, /\.time-entry\.merge-capable \.time-slot-merge-affordance\s*\{[\s\S]*left: calc\(50% \+ 5px\);[\s\S]*top: calc\(50% \+ 14px\);[\s\S]*width: 18px;[\s\S]*height: 5px;[\s\S]*transform: translateX\(-50%\);/);
+    assert.match(cssSource, /\.time-entry\.merge-hover \.time-slot-merge-affordance,[\s\S]*\.time-entry\.merge-selecting \.time-slot-merge-affordance\s*\{[\s\S]*transform: translateX\(-50%\) scaleY\(1\.18\);/);
+    assert.match(interactionsCssSource, /\.time-entry\.merge-capable \.merged-time-main \.time-slot-merge-affordance\s*\{[\s\S]*left: 50% !important;[\s\S]*top: calc\(\(var\(--merged-block-height, 100%\) \/ 2\) \+ 14px\) !important;[\s\S]*bottom: auto !important;/);
 });
