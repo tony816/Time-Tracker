@@ -255,6 +255,7 @@
   height: var(--merged-block-height, 100%);
   background: #ecf0f1;
   border: none;
+  border-bottom: 2px solid #ccc;
   box-sizing: border-box;
   box-shadow: inset -2px 0 0 #ddd;
   pointer-events: none;
@@ -264,10 +265,10 @@
 .time-entry.merge-selecting .time-slot-container.merged-time-main::before,
 .time-entry.merge-selected-range .time-slot-container.merged-time-main::before,
 .time-entry.existing-merged-range .time-slot-container.merged-time-main::before {
+  border-bottom-color: var(--merge-outline);
   box-shadow:
     inset -2px 0 0 var(--merge-outline),
-    inset 0 2px 0 var(--merge-outline),
-    inset 0 -2px 0 var(--merge-outline);
+    inset 0 2px 0 var(--merge-outline);
 }
 
 /* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */

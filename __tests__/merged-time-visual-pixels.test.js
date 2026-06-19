@@ -74,6 +74,13 @@ function isNearWhite(pixel) {
     return pixel[0] >= 245 && pixel[1] >= 245 && pixel[2] >= 245 && pixel[3] >= 245;
 }
 
+function isGridBorder(pixel) {
+    const grayBorder = Math.abs(pixel[0] - 204) <= 10 && Math.abs(pixel[1] - 204) <= 10 && Math.abs(pixel[2] - 204) <= 10;
+    const railBorder = Math.abs(pixel[0] - 221) <= 10 && Math.abs(pixel[1] - 221) <= 10 && Math.abs(pixel[2] - 221) <= 10;
+    const mergeOutline = pixel[0] >= 25 && pixel[0] <= 45 && pixel[1] >= 80 && pixel[1] <= 115 && pixel[2] >= 200 && pixel[2] <= 245;
+    return pixel[3] >= 245 && (grayBorder || railBorder || mergeOutline);
+}
+
 function maxNearWhiteRun(image, rect) {
     let maxRun = 0;
     const left = Math.ceil(rect.left + 4);
@@ -84,6 +91,26 @@ function maxNearWhiteRun(image, rect) {
             run = isNearWhite(rgbaAt(image, x, y)) ? run + 1 : 0;
             maxRun = Math.max(maxRun, run);
         }
+    }
+    return maxRun;
+}
+
+function maxHorizontalRunAtY(image, rect, y, predicate) {
+    let maxRun = 0;
+    let run = 0;
+    const left = Math.ceil(rect.left + 4);
+    const right = Math.floor(rect.right - 6);
+    for (let x = left; x <= right; x += 1) {
+        run = predicate(rgbaAt(image, x, y)) ? run + 1 : 0;
+        maxRun = Math.max(maxRun, run);
+    }
+    return maxRun;
+}
+
+function maxHorizontalRunInBand(image, rect, centerY, radius, predicate) {
+    let maxRun = 0;
+    for (let y = Math.round(centerY - radius); y <= Math.round(centerY + radius); y += 1) {
+        maxRun = Math.max(maxRun, maxHorizontalRunAtY(image, rect, y, predicate));
     }
     return maxRun;
 }
@@ -114,26 +141,37 @@ async function withServer(fn) {
     }
 }
 
-async function renderMergedTimeCase(page, url, viewport, plannedMerge) {
+async function renderMergedTimeCase(page, url, viewport, plannedMerge, stateClass = '') {
     await page.setViewportSize(viewport);
     await page.goto(url, { waitUntil: 'networkidle' });
     await page.waitForSelector('.time-entry[data-index="5"] .time-slot-container');
-    await page.evaluate((includePlannedMerge) => {
+    await page.evaluate(({ includePlannedMerge, stateClass: visualStateClass }) => {
         tracker.mergedFields = new Map();
         tracker.mergedFields.set('time-5-7', { type: 'time', start: 5, end: 7 });
         if (includePlannedMerge) tracker.mergedFields.set('planned-5-7', { type: 'planned', start: 5, end: 7 });
         tracker.renderTimeEntries();
         tracker.centerMergedTimeContent();
-        document.querySelectorAll('.time-entry[data-index="5"], .time-entry[data-index="6"], .time-entry[data-index="7"]').forEach((row) => {
-            row.classList.add('existing-merged-range');
-        });
-    }, plannedMerge);
+        if (visualStateClass) {
+            document.querySelectorAll('.time-entry[data-index="5"], .time-entry[data-index="6"], .time-entry[data-index="7"]').forEach((row) => {
+                row.classList.add(visualStateClass);
+            });
+        }
+    }, { includePlannedMerge: plannedMerge, stateClass });
     return page.evaluate(() => {
         const first = document.querySelector('.time-entry[data-index="5"] .time-slot-container');
+        const second = document.querySelector('.time-entry[data-index="6"] .time-slot-container');
         const last = document.querySelector('.time-entry[data-index="7"] .time-slot-container');
         const a = first.getBoundingClientRect();
+        const internal = second.getBoundingClientRect();
         const b = last.getBoundingClientRect();
-        return { left: a.left, top: a.top, right: a.right, bottom: b.bottom };
+        return {
+            left: a.left,
+            top: a.top,
+            right: a.right,
+            bottom: b.bottom,
+            internalY: Math.round(internal.top),
+            bottomEdgeY: b.bottom - 1,
+        };
     });
 }
 
@@ -144,12 +182,18 @@ test('merged time slot paints continuous gray interior with balanced vertical ed
         try {
             for (const viewport of [{ width: 1000, height: 900 }, { width: 390, height: 900 }]) {
                 for (const plannedMerge of [false, true]) {
-                    const rect = await renderMergedTimeCase(page, url, viewport, plannedMerge);
-                    const image = parsePng(await page.screenshot({ fullPage: true }));
-                    assert.equal(maxNearWhiteRun(image, rect), 0, `near-white run inside merged time slot at ${viewport.width}px`);
-                    const left = borderThickness(image, rect, 'left');
-                    const right = borderThickness(image, rect, 'right');
-                    assert.ok(Math.abs(left - right) <= 1, `left/right border mismatch at ${viewport.width}px: ${left}/${right}`);
+                    for (const stateClass of ['', 'existing-merged-range']) {
+                        const rect = await renderMergedTimeCase(page, url, viewport, plannedMerge, stateClass);
+                        const image = parsePng(await page.screenshot({ fullPage: true }));
+                        const label = `${viewport.width}px planned=${plannedMerge} state=${stateClass || 'normal'}`;
+                        assert.equal(maxNearWhiteRun(image, rect), 0, `near-white run inside merged time slot at ${label}`);
+                        const left = borderThickness(image, rect, 'left');
+                        const right = borderThickness(image, rect, 'right');
+                        assert.ok(Math.abs(left - right) <= 1, `left/right border mismatch at ${label}: ${left}/${right}`);
+                        assert.ok(maxHorizontalRunInBand(image, rect, rect.bottomEdgeY, 2, isGridBorder) >= Math.floor((rect.right - rect.left) / 2), `missing bottom boundary at ${label}`);
+                        assert.equal(maxHorizontalRunInBand(image, rect, rect.internalY, 1, isGridBorder), 0, `internal horizontal border appeared at ${label}`);
+                        assert.equal(maxHorizontalRunInBand(image, rect, rect.internalY, 1, isNearWhite), 0, `internal white run appeared at ${label}`);
+                    }
                 }
             }
         } finally {

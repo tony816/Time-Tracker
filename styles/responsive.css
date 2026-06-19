@@ -180,6 +180,7 @@
         height: var(--merged-block-height, 100%);
         background: #ecf0f1;
         border: none !important;
+        border-bottom: 2px solid #ccc !important;
         box-shadow: inset -2px 0 0 #ddd;
         pointer-events: none;
         z-index: 1;
@@ -189,10 +190,10 @@
     .time-entry.merge-selecting .time-slot-container.merged-time-main::before,
     .time-entry.merge-selected-range .time-slot-container.merged-time-main::before,
     .time-entry.existing-merged-range .time-slot-container.merged-time-main::before {
+        border-bottom-color: var(--merge-outline) !important;
         box-shadow:
             inset -2px 0 0 var(--merge-outline),
-            inset 0 2px 0 var(--merge-outline),
-            inset 0 -2px 0 var(--merge-outline);
+            inset 0 2px 0 var(--merge-outline);
     }
 
     .timer-raw-display {
