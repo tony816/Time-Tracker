@@ -99,10 +99,16 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
     assert.match(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 40px;/);
-    assert.match(responsiveCss, /\.time-slot-container \.time-range-label\s*\{[\s\S]*font-size:\s*10px;/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container \.timer-controls-container\s*\{[\s\S]*display:\s*none !important;/);
+    assert.doesNotMatch(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 36px;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\s*\{[\s\S]*width:\s*40px;[\s\S]*max-width:\s*40px;[\s\S]*overflow:\s*hidden !important;[\s\S]*box-shadow:\s*none !important;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container \.time-range-label\s*\{[\s\S]*font-size:\s*9px;[\s\S]*letter-spacing:\s*-0\.7px;[\s\S]*font-variant-numeric:\s*tabular-nums;/);
+    assert.match(responsiveCss, /\.time-entry\.merge-capable \.time-slot-merge-affordance,[\s\S]*\.time-entry \.time-slot-container \.timer-controls-container,[\s\S]*\.time-entry \.time-slot-container \.timer-raw-display\s*\{[\s\S]*display:\s*none !important;[\s\S]*pointer-events:\s*none !important;/);
+    assert.match(responsiveCss, /\.time-entry\.current-time-slot \.time-slot-container,[\s\S]*\.time-entry\.completed-timer-slot \.time-slot-container\s*\{[\s\S]*background-color:\s*#ecf0f1 !important;[\s\S]*box-shadow:\s*none !important;/);
     assert.doesNotMatch(responsiveCss, /\.time-entry\.time-ui-visible \.time-slot-container\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 2px #7fa7cf;/);
     assert.doesNotMatch(responsiveCss, /border-left:\s*2px solid #7ea7d4;/);
+    assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-button/);
+    assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-row/);
+    assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-time/);
     assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*hidden !important;/);
     assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;/);
 });

@@ -29,6 +29,116 @@ const buildSplitVisualizationWrapper = buildMethod(
     '(type, index)'
 );
 
+function createClassList(node) {
+    const set = new Set();
+    const syncFromName = () => {
+        set.clear();
+        String(node.className || '').split(/\s+/).filter(Boolean).forEach((name) => set.add(name));
+    };
+    const syncToName = () => {
+        node.className = Array.from(set).join(' ');
+    };
+    return {
+        add(...classes) {
+            syncFromName();
+            classes.forEach((name) => set.add(name));
+            syncToName();
+        },
+        contains(name) {
+            syncFromName();
+            return set.has(name);
+        },
+    };
+}
+
+function createRenderNode(tagName = 'div') {
+    const node = {
+        tagName: String(tagName).toUpperCase(),
+        children: [],
+        parentNode: null,
+        className: '',
+        dataset: {},
+        _innerHTML: '',
+        appendChild(child) {
+            child.parentNode = this;
+            this.children.push(child);
+            return child;
+        },
+        querySelector(selector) {
+            if (selector === '.planned-input' && this._innerHTML.includes('planned-input')) {
+                return { className: 'planned-input', dataset: {} };
+            }
+            return null;
+        },
+    };
+    node.classList = createClassList(node);
+    Object.defineProperty(node, 'innerHTML', {
+        get() {
+            return this._innerHTML;
+        },
+        set(value) {
+            this._innerHTML = String(value || '');
+        },
+    });
+    return node;
+}
+
+function createRenderTimeEntriesContext({ mobile }) {
+    const container = createRenderNode('div');
+    const documentStub = {
+        createElement(tagName) {
+            return createRenderNode(tagName);
+        },
+        getElementById(id) {
+            return id === 'timeEntries' ? container : null;
+        },
+    };
+    const ctx = {
+        timeSlots: [{ time: '6', planned: 'Focus', timer: { status: 'running', running: true } }],
+        closeInlinePlanDropdown() {},
+        validateSelectedPlanSegment() {},
+        getCurrentTimeIndex() {
+            return 0;
+        },
+        isMobileTimeExpansionEnabled() {
+            return mobile;
+        },
+        buildTimeEntryRowModel() {
+            return {
+                routineMatch: null,
+                hasPlannedMergeContinuation: false,
+                hasActualMergeContinuation: false,
+                innerHtml: '<input class="planned-input"><div class="time-slot-container"><div class="time-label time-slot-label">06</div></div>',
+            };
+        },
+        getMobileTimeUiState() {
+            if (mobile) assert.fail('mobile render should not query time UI state');
+            return {
+                hostIndex: 0,
+                mode: 'running',
+                showControls: true,
+                isCurrent: true,
+                status: 'running',
+            };
+        },
+        attachFieldSelectionListeners() {},
+        attachCellClickListeners() {},
+        attachTimeSlotMergeEntryListeners() {},
+        attachVirtualRestGapListeners() {},
+        attachPlannedSlotMoveListeners() {},
+        attachPlanSegmentResizeListeners() {},
+        attachPlannedSegmentReorderListeners() {},
+        attachPlanSegmentTitleEditListeners() {},
+        attachPlanSegmentSelectionListeners() {},
+        attachTimerListeners() {},
+        attachRowWideClickTargets() {},
+        syncTimeSlotMergeSelectionState() {},
+        centerMergedTimeContent() {},
+        resizeMergedPlannedContent() {},
+    };
+    return { ctx, container, documentStub };
+}
+
 test('time-entry-render-controller exports and global attach are available', () => {
     assert.ok(controller);
     assert.equal(typeof controller.buildTimeEntryRowModel, 'function');
@@ -83,6 +193,46 @@ test('script time-entry render wrapper methods delegate to controller helpers', 
     ]);
 });
 
+test('renderTimeEntries does not apply time UI state classes on mobile', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, documentStub } = createRenderTimeEntriesContext({ mobile: true });
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const row = container.children[0];
+    assert.ok(row);
+    assert.equal(row.classList.contains('time-ui-running'), false);
+    assert.equal(row.classList.contains('time-ui-visible'), false);
+    assert.equal(row.classList.contains('current-time-slot'), false);
+    assert.equal(row.classList.contains('running-timer-slot'), false);
+    assert.equal(row.classList.contains('paused-timer-slot'), false);
+    assert.equal(row.classList.contains('completed-timer-slot'), false);
+});
+
+test('renderTimeEntries keeps desktop time UI state classes', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const row = container.children[0];
+    assert.ok(row);
+    assert.equal(row.classList.contains('time-ui-running'), true);
+    assert.equal(row.classList.contains('time-ui-visible'), true);
+    assert.equal(row.classList.contains('current-time-slot'), true);
+    assert.equal(row.classList.contains('running-timer-slot'), true);
+});
+
 test('createMergedField renders readable Korean placeholder text for merged planned slots', () => {
     const ctx = {
         mergedFields: new Map([['planned-2-4', '계획 내용']]),
@@ -121,6 +271,8 @@ test('createMergedTimeField renders merged slot time range through the ending bo
 
     const mainMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 0, ctx.timeSlots[0]);
     const secondaryMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 1, ctx.timeSlots[1]);
+    assert.equal(mainMarkup.includes('04\u201306'), true);
+    assert.equal(mainMarkup.includes('04 \u2013 06'), false);
 
     assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>/);
     assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>\s*<span class="time-slot-merge-affordance"/);
@@ -154,6 +306,8 @@ test('createMergedTimeField keeps mobile merged range compact and omits time-col
     };
 
     const markup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 0, ctx.timeSlots[0]);
+    assert.equal(markup.includes('06\u201308'), true);
+    assert.equal(markup.includes('06 \u2013 08'), false);
 
     assert.match(markup, /class="time-label time-slot-label time-range-label">06–08<\/div>/);
     assert.doesNotMatch(markup, /06\s*<br/i);

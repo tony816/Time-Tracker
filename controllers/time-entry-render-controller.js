@@ -94,6 +94,7 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             this.validateSelectedPlanSegment();
         }
         this.lastRenderedCurrentTimeIndex = this.getCurrentTimeIndex();
+        const isMobileTimeColumn = this.isMobileTimeExpansionEnabled && this.isMobileTimeExpansionEnabled();
         const container = document.getElementById('timeEntries');
         container.innerHTML = '';
 
@@ -118,21 +119,23 @@ function renderTimeEntries(preserveInlineDropdown = false) {
                 entryDiv.classList.add('has-actual-merge');
             }
 
-            const timeUiState = this.getMobileTimeUiState(index, slot);
-            if (timeUiState.hostIndex === index) {
-                entryDiv.classList.add(`time-ui-${timeUiState.mode}`);
-                if (timeUiState.showControls) {
-                    entryDiv.classList.add('time-ui-visible');
-                }
-                if (timeUiState.isCurrent) {
-                    entryDiv.classList.add('current-time-slot');
-                }
-                if (timeUiState.status === 'running') {
-                    entryDiv.classList.add('running-timer-slot');
-                } else if (timeUiState.status === 'paused') {
-                    entryDiv.classList.add('paused-timer-slot');
-                } else if (timeUiState.status === 'completed') {
-                    entryDiv.classList.add('completed-timer-slot');
+            if (!isMobileTimeColumn) {
+                const timeUiState = this.getMobileTimeUiState(index, slot);
+                if (timeUiState.hostIndex === index) {
+                    entryDiv.classList.add(`time-ui-${timeUiState.mode}`);
+                    if (timeUiState.showControls) {
+                        entryDiv.classList.add('time-ui-visible');
+                    }
+                    if (timeUiState.isCurrent) {
+                        entryDiv.classList.add('current-time-slot');
+                    }
+                    if (timeUiState.status === 'running') {
+                        entryDiv.classList.add('running-timer-slot');
+                    } else if (timeUiState.status === 'paused') {
+                        entryDiv.classList.add('paused-timer-slot');
+                    } else if (timeUiState.status === 'completed') {
+                        entryDiv.classList.add('completed-timer-slot');
+                    }
                 }
             }
 
