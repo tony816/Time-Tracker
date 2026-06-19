@@ -616,10 +616,20 @@
                     e.stopPropagation();
                     return;
                 }
+
+                const range = this.getPlannedRangeInfo(index);
+                const rangeStart = Number.isInteger(range && range.startIndex) ? range.startIndex : index;
+                const rangeEnd = Number.isInteger(range && range.endIndex) ? range.endIndex : rangeStart;
+                if (isPlainPrimaryPointerEvent(e) && isPlannedRangeSelected(this, rangeStart, rangeEnd)) {
+                    if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range) && typeof this.closeInlinePlanDropdown === 'function') {
+                        this.closeInlinePlanDropdown();
+                    }
+                    clearSelectedPlannedRangeFromEvent(this, e);
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
 
-                const range = this.getPlannedRangeInfo(index);
                 if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range)) {
                     if (isMobileInlinePlanSheetContext(this)) {
                         syncOpenInlinePlanSheetTarget(this, plannedField);

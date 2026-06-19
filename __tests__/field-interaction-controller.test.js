@@ -807,6 +807,72 @@ test('merged planned field retap clears an already selected merged planned range
     assert.equal(ctx.suppressInlinePlanClickOnce, 2);
 });
 
+test('mobile planned click retap clears an already selected single planned slot', () => {
+    const plannedField = createListenerNode();
+    const calls = [];
+    plannedField.dataset.index = '4';
+    plannedField.matches = (selector) => selector === '.planned-input';
+    plannedField.classList = {
+        contains(className) {
+            return className === 'planned-input';
+        },
+        add() {},
+        remove() {},
+    };
+    plannedField.closest = () => null;
+    plannedField.blur = () => {
+        calls.push(['blur']);
+    };
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const ctx = {
+        selectedPlannedFields: new Set([4]),
+        suppressInlinePlanClickOnce: null,
+        inlinePlanDropdown: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 4);
+            return { startIndex: 4, endIndex: 4, mergeKey: null };
+        },
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        openInlinePlanDropdown() {
+            calls.push(['open']);
+        },
+    };
+
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent({
+        type: 'click',
+        target: plannedField,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [
+        ['clear', 'planned'],
+        ['blur'],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
+    assert.equal(calls.some((call) => call[0] === 'open'), false);
+});
+
 test('merged planned click capture no longer starts merge selection from planned field target', () => {
     const wrapper = createListenerNode();
     wrapper.getBoundingClientRect = () => ({ width: 520 });
