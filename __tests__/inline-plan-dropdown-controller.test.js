@@ -1,9 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 require('../controllers/controller-state-access');
 const controller = require('../controllers/inline-plan-dropdown-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
+const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
 
 const buildPlannedActivityOptionsWrapper = buildMethod(
     'buildPlannedActivityOptions(extraLabels = [])',

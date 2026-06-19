@@ -32,7 +32,10 @@ function createListenerNode() {
         },
         dispatchEvent(event) {
             const handlers = listeners[event.type] || [];
-            handlers.forEach((handler) => handler(event));
+            for (const handler of handlers) {
+                handler(event);
+                if (event.immediatePropagationStopped) break;
+            }
         },
         closest() {
             return null;
@@ -675,6 +678,104 @@ test('planned mousedown retap keeps open mobile inline plan sheet', () => {
     assert.equal(ctx.suppressInlinePlanClickOnce, null);
 });
 
+test('selected planned retap closes an open mobile inline plan sheet and clears selection', () => {
+    const plannedField = createListenerNode();
+    const calls = [];
+    plannedField.dataset.index = '4';
+    plannedField.matches = (selector) => selector === '.planned-input';
+    plannedField.classList = {
+        contains(className) {
+            return className === 'planned-input';
+        },
+        add() {},
+        remove() {},
+    };
+    plannedField.closest = () => null;
+    plannedField.blur = () => {
+        calls.push(['blur']);
+    };
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        selectedPlannedFields: new Set([4]),
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 4);
+            return { startIndex: 4, endIndex: 4, mergeKey: null };
+        },
+        isSameInlinePlanTarget(range) {
+            assert.deepEqual(range, { startIndex: 4, endIndex: 4, mergeKey: null });
+            return true;
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        findMergeKey() {
+            return null;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            calls.push(['sync', targetEl]);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+            this.inlinePlanDropdown = null;
+        },
+        openInlinePlanDropdown() {
+            calls.push(['open']);
+        },
+    };
+    const makeEvent = (type) => ({
+        type,
+        target: plannedField,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent', type]);
+        },
+        stopPropagation() {
+            calls.push(['stop', type]);
+        },
+        stopImmediatePropagation() {
+            calls.push(['stopImmediate', type]);
+            this.immediatePropagationStopped = true;
+        },
+    });
+
+    controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 4, plannedField);
+    controller.attachCellClickListeners.call(ctx, entryDiv, 4);
+    plannedField.dispatchEvent(makeEvent('mousedown'));
+    plannedField.dispatchEvent(makeEvent('click'));
+
+    assert.deepEqual(calls, [
+        ['close'],
+        ['clear', 'planned'],
+        ['blur'],
+        ['prevent', 'mousedown'],
+        ['stop', 'mousedown'],
+        ['stopImmediate', 'mousedown'],
+        ['prevent', 'click'],
+        ['stop', 'click'],
+    ]);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
+    assert.equal(ctx.suppressInlinePlanClickOnce, null);
+    assert.equal(calls.some((call) => call[0] === 'sync'), false);
+    assert.equal(calls.some((call) => call[0] === 'open'), false);
+});
+
 test('planned field retap clears an already selected single planned slot', () => {
     const plannedField = createListenerNode();
     plannedField.dataset.index = '4';
@@ -694,6 +795,7 @@ test('planned field retap clears an already selected single planned slot', () =>
     plannedField.blur = () => {
         calls.push(['blur']);
     };
+    const calls = [];
     const ctx = {
         selectedPlannedFields: new Set([4]),
         suppressInlinePlanClickOnce: null,
@@ -732,10 +834,10 @@ test('planned field retap clears an already selected single planned slot', () =>
     });
 
     assert.deepEqual(calls, [
-        ['clear', 'planned'],
-        ['blur'],
         ['prevent'],
         ['stop'],
+        ['clear', 'planned'],
+        ['blur'],
     ]);
     assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
     assert.equal(ctx.suppressInlinePlanClickOnce, 4);
@@ -809,7 +911,6 @@ test('merged planned field retap clears an already selected merged planned range
 
 test('mobile planned click retap clears an already selected single planned slot', () => {
     const plannedField = createListenerNode();
-    const calls = [];
     plannedField.dataset.index = '4';
     plannedField.matches = (selector) => selector === '.planned-input';
     plannedField.classList = {

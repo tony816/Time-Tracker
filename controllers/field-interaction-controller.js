@@ -92,6 +92,16 @@
         ctx.dragBaseEndIndex = -1;
     }
 
+    function closeSameInlinePlanTarget(ctx) {
+        if (!ctx) return;
+        if (typeof ctx.clearSelection === 'function') {
+            ctx.clearSelection('planned');
+        }
+        if (typeof ctx.closeInlinePlanDropdown === 'function') {
+            ctx.closeInlinePlanDropdown();
+        }
+    }
+
     function isPlannedRangeSelected(ctx, start, end) {
         const selectedSet = ctx && ctx.selectedPlannedFields;
         if (!selectedSet || !Number.isInteger(start) || !Number.isInteger(end)) return false;
@@ -166,6 +176,7 @@
         suppressPlannedInputFocusRing(resolvePlannedInputFromEvent(event));
         if (event && typeof event.preventDefault === 'function') event.preventDefault();
         if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+        if (event && typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
     }
 
     function openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex = null, options = {}) {
@@ -246,15 +257,7 @@
                     if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(plannedRange)) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (isMobileInlinePlanSheetContext(this)) {
-                            const sheetTargetEl = plannedInput.closest && plannedInput.closest('.split-cell-wrapper.split-type-planned')
-                                ? plannedInput.closest('.split-cell-wrapper.split-type-planned')
-                                : plannedInput;
-                            syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
-                            return;
-                        }
-                        this.clearSelection('planned');
-                        this.closeInlinePlanDropdown();
+                        closeSameInlinePlanTarget(this);
                         return;
                     }
                 }
@@ -284,15 +287,7 @@
                                 if (inPlannedColumn) {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    if (isMobileInlinePlanSheetContext(this)) {
-                                        const sheetTargetEl = plannedCell.closest && plannedCell.closest('.split-cell-wrapper.split-type-planned')
-                                            ? plannedCell.closest('.split-cell-wrapper.split-type-planned')
-                                            : plannedCell;
-                                        syncOpenInlinePlanSheetTarget(this, sheetTargetEl);
-                                        return;
-                                    }
-                                    this.clearSelection('planned');
-                                    this.closeInlinePlanDropdown();
+                                    closeSameInlinePlanTarget(this);
                                     return;
                                 }
                             }
@@ -320,18 +315,18 @@
             const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(mouseRange);
             const rangeStart = Number.isInteger(mouseRange && mouseRange.startIndex) ? mouseRange.startIndex : index;
             const rangeEnd = Number.isInteger(mouseRange && mouseRange.endIndex) ? mouseRange.endIndex : rangeStart;
-            if (sameInlineTarget && isMobileInlinePlanSheetContext(this)) {
-                this.suppressInlinePlanClickOnce = index;
-                if (e.preventDefault) e.preventDefault();
-                if (e.stopPropagation) e.stopPropagation();
-                syncOpenInlinePlanSheetTarget(this, plannedField);
-                return;
-            }
             if (isPlainPrimaryPointerEvent(e) && isPlannedRangeSelected(this, rangeStart, rangeEnd)) {
                 if (sameInlineTarget && typeof this.closeInlinePlanDropdown === 'function') {
                     this.closeInlinePlanDropdown();
                 }
                 clearSelectedPlannedRangeFromEvent(this, e, index);
+                return;
+            }
+            if (sameInlineTarget && isMobileInlinePlanSheetContext(this)) {
+                this.suppressInlinePlanClickOnce = index;
+                if (e.preventDefault) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+                closeSameInlinePlanTarget(this);
                 return;
             }
             if (sameInlineTarget) {
@@ -592,17 +587,22 @@
                     return;
                 }
                 const range = this.getPlannedRangeInfo(index);
-                if (!this.inlinePlanDropdown || !this.isSameInlinePlanTarget(range)) return;
+                const rangeStart = Number.isInteger(range && range.startIndex) ? range.startIndex : index;
+                const rangeEnd = Number.isInteger(range && range.endIndex) ? range.endIndex : rangeStart;
+                const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(range);
+                if (isPlainPrimaryPointerEvent(e) && isPlannedRangeSelected(this, rangeStart, rangeEnd)) {
+                    if (sameInlineTarget && typeof this.closeInlinePlanDropdown === 'function') {
+                        this.closeInlinePlanDropdown();
+                    }
+                    clearSelectedPlannedRangeFromEvent(this, e, index);
+                    return;
+                }
+                if (!sameInlineTarget) return;
 
                 e.preventDefault();
                 e.stopPropagation();
                 this.suppressInlinePlanClickOnce = index;
-                if (isMobileInlinePlanSheetContext(this)) {
-                    syncOpenInlinePlanSheetTarget(this, plannedField);
-                    return;
-                }
-                this.clearSelection('planned');
-                this.closeInlinePlanDropdown();
+                closeSameInlinePlanTarget(this);
             });
             plannedField.addEventListener('click', (e) => {
                 if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
@@ -616,6 +616,8 @@
                     e.stopPropagation();
                     return;
                 }
+                e.preventDefault();
+                e.stopPropagation();
 
                 const range = this.getPlannedRangeInfo(index);
                 const rangeStart = Number.isInteger(range && range.startIndex) ? range.startIndex : index;
@@ -627,16 +629,8 @@
                     clearSelectedPlannedRangeFromEvent(this, e);
                     return;
                 }
-                e.preventDefault();
-                e.stopPropagation();
-
                 if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range)) {
-                    if (isMobileInlinePlanSheetContext(this)) {
-                        syncOpenInlinePlanSheetTarget(this, plannedField);
-                        return;
-                    }
-                    this.clearSelection('planned');
-                    this.closeInlinePlanDropdown();
+                    closeSameInlinePlanTarget(this);
                     return;
                 }
 
@@ -648,6 +642,7 @@
     return {
         getAnchorMinWidthFromElement,
         resetPlannedSelectionDragState,
+        closeSameInlinePlanTarget,
         openPlannedFieldDropdownWithViewportPreparation,
         handleMergedClickCapture,
         attachPlannedFieldSelectionListeners,

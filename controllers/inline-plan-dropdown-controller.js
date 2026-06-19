@@ -46,6 +46,20 @@ function setInlinePlanAnchorState(anchor) {
         return target.anchor;
     }
 
+function clearPlannedSelectionForMobileSheetDismiss() {
+        const dropdown = this.inlinePlanDropdown;
+        const isMobileSheet = Boolean(
+            dropdown
+            && dropdown.classList
+            && dropdown.classList.contains('inline-plan-dropdown-sheet')
+        );
+        if (!isMobileSheet) return;
+        if (!this.selectedPlannedFields || this.selectedPlannedFields.size < 1) return;
+        if (typeof this.clearSelection === 'function') {
+            this.clearSelection('planned');
+        }
+    }
+
 function buildPlannedActivityOptions(extraLabels = []) {
         const grouped = { local: [], notion: [] };
         const seen = new Set();
@@ -2300,7 +2314,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         if (isMobileInputContext) {
             const backdrop = document.createElement('div');
             backdrop.className = 'inline-plan-backdrop';
-            backdrop.addEventListener('click', () => this.closeInlinePlanDropdown());
+            backdrop.addEventListener('click', () => {
+                clearPlannedSelectionForMobileSheetDismiss.call(this);
+                this.closeInlinePlanDropdown();
+            });
             document.body.appendChild(backdrop);
             this.inlinePlanBackdrop = backdrop;
             document.body.classList.add('inline-plan-sheet-open');
@@ -2498,12 +2515,16 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             const currentAnchor = getInlinePlanAnchorState.call(this);
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
+            clearPlannedSelectionForMobileSheetDismiss.call(this);
             this.closeInlinePlanDropdown();
         };
         document.addEventListener('click', this.inlinePlanOutsideHandler, true);
 
         this.inlinePlanEscHandler = (event) => {
-            if (event.key === 'Escape') this.closeInlinePlanDropdown();
+            if (event.key === 'Escape') {
+                clearPlannedSelectionForMobileSheetDismiss.call(this);
+                this.closeInlinePlanDropdown();
+            }
         };
         document.addEventListener('keydown', this.inlinePlanEscHandler);
 

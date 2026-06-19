@@ -77,7 +77,9 @@ test('attachCellClickListeners binds direct planned-input click handler for same
 });
 
 test('same-slot toggle clears planned selection before closing dropdown', () => {
-    assert.match(fieldInteractionControllerSource, /this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;/);
+    assert.match(fieldInteractionControllerSource, /function closeSameInlinePlanTarget\(ctx\) \{/);
+    assert.match(fieldInteractionControllerSource, /ctx\.clearSelection\('planned'\);/);
+    assert.match(fieldInteractionControllerSource, /ctx\.closeInlinePlanDropdown\(\);/);
 });
 
 test('merged click capture closes same planned target before bubble reopen', () => {
@@ -85,13 +87,13 @@ test('merged click capture closes same planned target before bubble reopen', () 
     assert.match(fieldInteractionControllerSource, /const plannedInput = target\.closest && target\.closest\('\.planned-input'\);/);
     assert.match(fieldInteractionControllerSource, /if \(this\.suppressInlinePlanClickOnce === plannedIndex\) \{/);
     assert.match(fieldInteractionControllerSource, /if \(this\.inlinePlanDropdown && this\.isSameInlinePlanTarget\(plannedRange\)\) \{/);
-    assert.match(fieldInteractionControllerSource, /this\.closeInlinePlanDropdown\(\);\s+return;/);
+    assert.match(fieldInteractionControllerSource, /closeSameInlinePlanTarget\(this\);\s+return;/);
 });
 
 test('merged click capture closes dropdown when clicking planned column inside current range', () => {
     assert.match(fieldInteractionControllerSource, /const currentRow = target\.closest && target\.closest\('\.time-entry\[data-index\]'\);/);
     assert.match(fieldInteractionControllerSource, /const inPlannedColumn = e\.clientX >= plannedRect\.left/);
-    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+if \(isMobileInlinePlanSheetContext\(this\)\) \{\s+const sheetTargetEl = plannedCell\.closest && plannedCell\.closest\('\.split-cell-wrapper\.split-type-planned'\)\s+\? plannedCell\.closest\('\.split-cell-wrapper\.split-type-planned'\)\s+: plannedCell;\s+syncOpenInlinePlanSheetTarget\(this, sheetTargetEl\);\s+return;\s+\}\s+this\.clearSelection\('planned'\);\s+this\.closeInlinePlanDropdown\(\);\s+return;\s+\}/);
+    assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+closeSameInlinePlanTarget\(this\);\s+return;\s+\}/);
 });
 
 test('inline add auto-apply on empty slots forces dropdown close', () => {
