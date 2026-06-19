@@ -59,6 +59,11 @@
         grid-template-columns: 40px minmax(0, 1fr);
     }
 
+    .has-planned-merge::after {
+        left: 40px;
+        right: 0;
+    }
+
     .summary-row {
         grid-template-columns: minmax(0, 1fr) 40px;
     }
@@ -175,7 +180,7 @@
         height: calc(var(--merged-block-height, 100%) - 2px);
         background: #ecf0f1;
         border: none !important;
-        box-shadow: inset 2px 0 0 #ddd;
+        box-shadow: inset -2px 0 0 #ddd;
         pointer-events: none;
         z-index: 1;
     }
@@ -185,7 +190,7 @@
     .time-entry.merge-selected-range .time-slot-container.merged-time-main::before,
     .time-entry.existing-merged-range .time-slot-container.merged-time-main::before {
         box-shadow:
-            inset 2px 0 0 var(--merge-outline),
+            inset -2px 0 0 var(--merge-outline),
             inset 0 2px 0 var(--merge-outline),
             inset 0 -2px 0 var(--merge-outline);
     }
@@ -193,7 +198,7 @@
     .time-entry .time-slot-container.merged-time-main::after {
         content: "";
         position: absolute;
-        left: 2px;
+        left: 0;
         right: 2px;
         bottom: -2px;
         height: 2px;
@@ -203,7 +208,7 @@
     }
 
     .time-entry .time-slot-container.merged-time-secondary:not(.merged-time-last)::after {
-        left: 2px;
+        left: 0;
         right: 2px;
     }
 
@@ -455,6 +460,11 @@
     .header-row,
     .time-entry {
         grid-template-columns: 40px minmax(0, 1fr);
+    }
+
+    .has-planned-merge::after {
+        left: 40px;
+        right: 0;
     }
 
     .summary-row {

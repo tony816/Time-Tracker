@@ -221,9 +221,8 @@ test('existing merged and planned overlay styling uses merge tokens', () => {
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]\s*\{\s*--merge-overlay-surface:/);
 });
 
-test('time-slot merge affordance sits on the lower edge for single and merged slots', () => {
+test('time-slot merge affordance stays visible only for single slots', () => {
     assert.match(cssSource, /\.time-entry\.merge-capable \.time-slot-merge-affordance\s*\{[\s\S]*position: static;[\s\S]*order: 2;[\s\S]*width: 18px;[\s\S]*height: 5px;[\s\S]*margin-top: 4px;[\s\S]*transform: none;/);
     assert.match(cssSource, /\.time-entry\.merge-hover \.time-slot-merge-affordance,[\s\S]*\.time-entry\.merge-selecting \.time-slot-merge-affordance\s*\{[\s\S]*transform: scaleY\(1\.18\);/);
-    assert.match(interactionsCssSource, /\.time-entry\.merge-capable \.merged-time-main \.time-slot-merge-affordance\s*\{[\s\S]*position: static !important;[\s\S]*left: auto !important;[\s\S]*top: auto !important;[\s\S]*bottom: auto !important;[\s\S]*margin-top: 5px;[\s\S]*transform: none !important;/);
-    assert.match(interactionsCssSource, /\.time-entry\.merge-hover \.merged-time-main \.time-slot-merge-affordance,[\s\S]*\.time-entry\.merge-selecting \.merged-time-main \.time-slot-merge-affordance\s*\{[\s\S]*transform: scaleY\(1\.18\) !important;/);
+    assert.match(interactionsCssSource, /\.time-entry\.merge-capable \.merged-time-main \.time-slot-merge-affordance\s*\{[\s\S]*display:\s*none !important;[\s\S]*pointer-events:\s*none !important;/);
 });

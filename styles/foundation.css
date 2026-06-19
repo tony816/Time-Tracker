@@ -424,8 +424,8 @@ h1 {
   text-align: center;
   font-weight: 600;
   background-color: #ecf0f1;
-  border-right: none;
-  border-left: 2px solid #ddd;
+  border-left: none;
+  border-right: 2px solid #ddd;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1033,8 +1033,8 @@ h1 {
   content: "";
   position: absolute;
   bottom: -2px;
-  left: 0;
-  right: calc(50% + 40px);
+  left: 80px;
+  right: 0;
   height: 2px;
   background-color: white;
   z-index: 1;
@@ -1048,6 +1048,13 @@ h1 {
 
 .has-planned-merge.merge-hover::after {
   background-color: #ecf0f1;
+}
+
+@media (max-width: 768px) {
+  .has-planned-merge::after {
+    left: 60px;
+    right: 0;
+  }
 }
 
 .selection-overlay {

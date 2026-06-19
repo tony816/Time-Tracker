@@ -217,18 +217,8 @@
 }
 
 .time-entry.merge-capable .merged-time-main .time-slot-merge-affordance {
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  flex: 0 0 auto;
-  margin-top: 5px;
-  transform: none !important;
-}
-
-.time-entry.merge-hover .merged-time-main .time-slot-merge-affordance,
-.time-entry.merge-selecting .merged-time-main .time-slot-merge-affordance {
-  transform: scaleY(1.18) !important;
+  display: none !important;
+  pointer-events: none !important;
 }
 
 .merged-time-main .time-label {
@@ -261,7 +251,7 @@
 .merged-time-secondary:not(.merged-time-last)::after {
   content: "";
   position: absolute;
-  left: 2px;
+  left: 0;
   right: 2px;
   bottom: -2px;
   /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
@@ -277,7 +267,7 @@
 .merged-time-main::after {
   content: "";
   position: absolute;
-  left: 2px;
+  left: 0;
   right: 2px;
   bottom: -2px;
   height: 2px;
@@ -300,7 +290,7 @@
   background: #ecf0f1;
 }
 
-/* 병합된 시간열: 좌측 선은 전체 병합 높이에 한 번만 그리고, 상/하는 행 경계선 유지 */
+/* Merged time rail: draw the inner edge once across the whole block. */
 .merged-time-main::before {
   content: "";
   position: absolute;
@@ -308,11 +298,21 @@
   right: 0;
   top: 0;
   height: var(--merged-block-height, 100%);
+  background: #ecf0f1;
   border: none;
   box-sizing: border-box;
-  box-shadow: inset 2px 0 0 #ddd;
+  box-shadow: inset -2px 0 0 #ddd;
   pointer-events: none;
   z-index: 6;
+}
+.time-entry.merge-hover .time-slot-container.merged-time-main::before,
+.time-entry.merge-selecting .time-slot-container.merged-time-main::before,
+.time-entry.merge-selected-range .time-slot-container.merged-time-main::before,
+.time-entry.existing-merged-range .time-slot-container.merged-time-main::before {
+  box-shadow:
+    inset -2px 0 0 var(--merge-outline),
+    inset 0 2px 0 var(--merge-outline),
+    inset 0 -2px 0 var(--merge-outline);
 }
 
 /* 병합된 시간열 컨텐츠(레이블+버튼) 중앙 정렬용 래퍼 */

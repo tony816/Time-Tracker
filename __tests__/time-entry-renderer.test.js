@@ -114,15 +114,16 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.match(cssSource, /\.header-row > div\.planned-label\s*\{[\s\S]*border-right:\s*none;[\s\S]*order:\s*2;/);
     assert.doesNotMatch(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 36px;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\s*\{[\s\S]*width:\s*40px;[\s\S]*max-width:\s*40px;[\s\S]*overflow:\s*hidden !important;[\s\S]*box-shadow:\s*none !important;/);
+    assert.match(cssSource, /\.time-entry\.merge-capable \.time-slot-container\s*\{[\s\S]*border-left:\s*none;[\s\S]*border-right:\s*2px solid #ddd;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container \.time-range-label\s*\{[\s\S]*font-size:\s*9px;[\s\S]*letter-spacing:\s*-0\.7px;[\s\S]*font-variant-numeric:\s*tabular-nums;/);
     assert.match(responsiveCss, /\.time-entry\.merge-capable \.time-slot-merge-affordance,[\s\S]*\.time-entry \.time-slot-container \.timer-controls-container,[\s\S]*\.time-entry \.time-slot-container \.timer-raw-display\s*\{[\s\S]*display:\s*none !important;[\s\S]*pointer-events:\s*none !important;/);
     assert.match(responsiveCss, /\.time-entry\.current-time-slot \.time-slot-container,[\s\S]*\.time-entry\.completed-timer-slot \.time-slot-container\s*\{[\s\S]*background-color:\s*#ecf0f1 !important;[\s\S]*box-shadow:\s*none !important;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main\s*\{[\s\S]*overflow:\s*visible !important;[\s\S]*isolation:\s*isolate;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main \.time-label,[\s\S]*\.time-entry \.time-slot-container\.merged-time-main \.time-range-label\s*\{[\s\S]*z-index:\s*3;[\s\S]*visibility:\s*visible !important;[\s\S]*opacity:\s*1 !important;[\s\S]*display:\s*block;/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*left:\s*0;[\s\S]*right:\s*0;[\s\S]*height:\s*calc\(var\(--merged-block-height, 100%\) - 2px\);[\s\S]*background:\s*#ecf0f1;[\s\S]*box-shadow:\s*inset 2px 0 0 #ddd;[\s\S]*z-index:\s*1;/);
-    assert.match(responsiveCss, /\.time-entry\.merge-hover \.time-slot-container\.merged-time-main::before,[\s\S]*\.time-entry\.existing-merged-range \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*box-shadow:\s*[\s\S]*inset 2px 0 0 var\(--merge-outline\),[\s\S]*inset 0 2px 0 var\(--merge-outline\),[\s\S]*inset 0 -2px 0 var\(--merge-outline\);/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;[\s\S]*z-index:\s*2;/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*left:\s*0;[\s\S]*right:\s*0;[\s\S]*height:\s*calc\(var\(--merged-block-height, 100%\) - 2px\);[\s\S]*background:\s*#ecf0f1;[\s\S]*box-shadow:\s*inset -2px 0 0 #ddd;[\s\S]*z-index:\s*1;/);
+    assert.match(responsiveCss, /\.time-entry\.merge-hover \.time-slot-container\.merged-time-main::before,[\s\S]*\.time-entry\.existing-merged-range \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*box-shadow:\s*[\s\S]*inset -2px 0 0 var\(--merge-outline\),[\s\S]*inset 0 2px 0 var\(--merge-outline\),[\s\S]*inset 0 -2px 0 var\(--merge-outline\);/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::after\s*\{[\s\S]*left:\s*0;[\s\S]*right:\s*2px;[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;[\s\S]*z-index:\s*2;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*left:\s*0;[\s\S]*right:\s*2px;/);
     assert.match(interactionsCss, /\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;/);
     assert.doesNotMatch(responsiveCss, /\.merged-time-last::after/);
     assert.doesNotMatch(interactionsCss, /\.merged-time-last::after/);
@@ -138,12 +139,13 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*border-left:\s*none !important;[\s\S]*border-right:\s*none !important;/);
     assert.match(interactionsCss, /\.merged-time-secondary\s*\{[\s\S]*border-left:\s*none !important;[\s\S]*border-right:\s*none !important;/);
     assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*font-size:\s*12px;[\s\S]*line-height:\s*1\.1;/);
-    assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;/);
-    assert.match(interactionsCss, /\.merged-time-main::before\s*\{[\s\S]*box-shadow:\s*inset 2px 0 0 #ddd;[\s\S]*z-index:\s*6;/);
+    assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*0;[\s\S]*right:\s*2px;/);
+    assert.match(interactionsCss, /\.merged-time-main::before\s*\{[\s\S]*background:\s*#ecf0f1;[\s\S]*box-shadow:\s*inset -2px 0 0 #ddd;[\s\S]*z-index:\s*6;/);
     assert.match(interactionsCss, /\.time-entry\.merge-selected-range \.merged-time-main::after,[\s\S]*\.time-entry\.existing-merged-range \.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*background:\s*#ecf0f1;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {
+    const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
     assert.match(cssSource, /\.time-entry\.merge-capable \.time-slot-container/);
     assert.match(cssSource, /\.time-entry\.merge-hover \.time-slot-merge-affordance/);
     assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container/);
@@ -153,6 +155,10 @@ test('time-slot merge affordance styling remains visible in CSS', () => {
     assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container\.merged-time-main::before,[\s\S]*\.time-entry\.existing-merged-range \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 2px var\(--merge-outline\);/);
     assert.match(cssSource, /\.time-entry\.existing-merged-range \.split-cell-wrapper\.split-type-planned/);
     assert.match(cssSource, /\.has-planned-merge\s*\{[\s\S]*border-bottom-color:\s*#ecf0f1;/);
+    assert.match(cssSource, /\.has-planned-merge::after\s*\{[\s\S]*left:\s*80px;[\s\S]*right:\s*0;/);
+    assert.match(cssSource, /@media \(max-width:\s*768px\)\s*\{[\s\S]*\.has-planned-merge::after\s*\{[\s\S]*left:\s*60px;[\s\S]*right:\s*0;/);
+    assert.match(responsiveCss, /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.has-planned-merge::after\s*\{[\s\S]*left:\s*40px;[\s\S]*right:\s*0;/);
+    assert.ok(cssSource.lastIndexOf('@media (max-width: 768px)') > cssSource.indexOf('.has-planned-merge::after {'));
     assert.match(cssSource, /\.has-planned-merge\.merge-selected-range,[\s\S]*\.has-planned-merge\.existing-merged-range\s*\{[\s\S]*border-bottom-color:\s*#ecf0f1;/);
     assert.match(cssSource, /\.has-planned-merge\.merge-selected-range::after,[\s\S]*\.has-planned-merge\.existing-merged-range::after\s*\{[\s\S]*background-color:\s*#ecf0f1;/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]/);

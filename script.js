@@ -4172,7 +4172,6 @@ class TimeTracker {
                            aria-label="${mergeHintLabel}">
                         <div class="merged-time-content">
                             <div class="time-label time-slot-label time-range-label">${timeRangeDisplay}</div>
-                            <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                             ${timerControls}
                         </div>
                     </div>`;

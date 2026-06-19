@@ -315,9 +315,8 @@ test('createMergedTimeField renders merged slot time range through the ending bo
     assert.equal(mainMarkup.includes('04 \u2013 06'), false);
 
     assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>/);
-    assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>\s*<span class="time-slot-merge-affordance"/);
     assert.match(mainMarkup, /timer-btn/);
-    assert.match(mainMarkup, /time-slot-merge-affordance/);
+    assert.doesNotMatch(mainMarkup, /time-slot-merge-affordance/);
     assert.match(secondaryMarkup, /merged-time-secondary/);
     assert.doesNotMatch(secondaryMarkup, /time-slot-merge-affordance/);
     assert.doesNotMatch(secondaryMarkup, />05<\/div>/);
