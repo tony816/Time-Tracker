@@ -585,6 +585,15 @@ h1 {
   outline-offset: -2px;
 }
 
+.input-field.planned-input:focus,
+.input-field.planned-input:focus-visible {
+  outline: none;
+}
+
+.input-field.planned-input.planned-input-suppress-focus-ring:focus {
+  outline: none;
+}
+
 .input-field:hover {
   background-color: #e8f4fd;
 }

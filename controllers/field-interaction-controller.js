@@ -109,6 +109,51 @@
         return !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
     }
 
+    function resolvePlannedInputFromEvent(event) {
+        const target = event && event.target;
+        if (target && target.matches && target.matches('.planned-input')) {
+            return target;
+        }
+        if (target && target.closest) {
+            const plannedInput = target.closest('.planned-input');
+            if (plannedInput) return plannedInput;
+        }
+        const doc = target && target.ownerDocument
+            ? target.ownerDocument
+            : (typeof document !== 'undefined' ? document : null);
+        const activeEl = doc && doc.activeElement;
+        return activeEl && activeEl.matches && activeEl.matches('.planned-input')
+            ? activeEl
+            : null;
+    }
+
+    function suppressPlannedInputFocusRing(plannedInput) {
+        if (!plannedInput) return;
+        if (plannedInput.classList && typeof plannedInput.classList.add === 'function') {
+            plannedInput.classList.add('planned-input-suppress-focus-ring');
+        }
+        const blur = () => {
+            if (typeof plannedInput.blur === 'function') {
+                plannedInput.blur();
+            }
+        };
+        blur();
+        const rootWindow = typeof window !== 'undefined' ? window : root;
+        if (rootWindow && typeof rootWindow.setTimeout === 'function') {
+            rootWindow.setTimeout(() => {
+                blur();
+                if (plannedInput.classList && typeof plannedInput.classList.remove === 'function') {
+                    plannedInput.classList.remove('planned-input-suppress-focus-ring');
+                }
+            }, 80);
+        } else if (plannedInput.classList && typeof plannedInput.classList.remove === 'function') {
+            plannedInput.classList.remove('planned-input-suppress-focus-ring');
+        }
+        if (rootWindow && typeof rootWindow.requestAnimationFrame === 'function') {
+            rootWindow.requestAnimationFrame(blur);
+        }
+    }
+
     function clearSelectedPlannedRangeFromEvent(ctx, event, suppressClickIndex = null) {
         if (!ctx) return;
         if (typeof ctx.clearSelection === 'function') {
@@ -118,6 +163,7 @@
         if (Number.isInteger(suppressClickIndex)) {
             ctx.suppressInlinePlanClickOnce = suppressClickIndex;
         }
+        suppressPlannedInputFocusRing(resolvePlannedInputFromEvent(event));
         if (event && typeof event.preventDefault === 'function') event.preventDefault();
         if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
     }

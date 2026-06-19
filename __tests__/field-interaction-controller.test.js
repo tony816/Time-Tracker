@@ -678,6 +678,12 @@ test('planned mousedown retap keeps open mobile inline plan sheet', () => {
 test('planned field retap clears an already selected single planned slot', () => {
     const plannedField = createListenerNode();
     plannedField.dataset.index = '4';
+    plannedField.matches = (selector) => selector === '.planned-input';
+    plannedField.classList = {
+        contains(className) {
+            return className === 'planned-input';
+        },
+    };
     plannedField.closest = () => null;
     const entryDiv = {
         querySelector(selector) {
@@ -685,6 +691,9 @@ test('planned field retap clears an already selected single planned slot', () =>
         },
     };
     const calls = [];
+    plannedField.blur = () => {
+        calls.push(['blur']);
+    };
     const ctx = {
         selectedPlannedFields: new Set([4]),
         suppressInlinePlanClickOnce: null,
@@ -711,6 +720,7 @@ test('planned field retap clears an already selected single planned slot', () =>
     controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 4, plannedField);
     plannedField.dispatchEvent({
         type: 'mousedown',
+        target: plannedField,
         ctrlKey: false,
         metaKey: false,
         preventDefault() {
@@ -723,6 +733,7 @@ test('planned field retap clears an already selected single planned slot', () =>
 
     assert.deepEqual(calls, [
         ['clear', 'planned'],
+        ['blur'],
         ['prevent'],
         ['stop'],
     ]);
@@ -733,6 +744,12 @@ test('planned field retap clears an already selected single planned slot', () =>
 test('merged planned field retap clears an already selected merged planned range', () => {
     const plannedField = createListenerNode();
     plannedField.dataset.index = '2';
+    plannedField.matches = (selector) => selector === '.planned-input';
+    plannedField.classList = {
+        contains(className) {
+            return className === 'planned-input';
+        },
+    };
     plannedField.closest = () => null;
     const entryDiv = {
         querySelector(selector) {
@@ -740,6 +757,9 @@ test('merged planned field retap clears an already selected merged planned range
         },
     };
     const calls = [];
+    plannedField.blur = () => {
+        calls.push(['blur']);
+    };
     const ctx = {
         selectedPlannedFields: new Set([1, 2, 3]),
         suppressInlinePlanClickOnce: null,
@@ -766,6 +786,7 @@ test('merged planned field retap clears an already selected merged planned range
     controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 2, plannedField);
     plannedField.dispatchEvent({
         type: 'mousedown',
+        target: plannedField,
         ctrlKey: false,
         metaKey: false,
         preventDefault() {
@@ -778,6 +799,7 @@ test('merged planned field retap clears an already selected merged planned range
 
     assert.deepEqual(calls, [
         ['clear', 'planned'],
+        ['blur'],
         ['prevent'],
         ['stop'],
     ]);
