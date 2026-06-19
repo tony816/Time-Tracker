@@ -147,9 +147,45 @@
         color: #2c3e50 !important;
     }
 
+    .time-entry .time-slot-container.merged-time-main {
+        overflow: visible !important;
+        position: relative;
+        isolation: isolate;
+    }
+
+    .time-entry .time-slot-container.merged-time-main .time-label,
+    .time-entry .time-slot-container.merged-time-main .time-slot-label,
+    .time-entry .time-slot-container.merged-time-main .time-range-label {
+        position: relative;
+        z-index: 3;
+        visibility: visible !important;
+        opacity: 1 !important;
+        display: block;
+    }
+
     .time-entry .time-slot-container.merged-time-main::before {
-        background-color: transparent !important;
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: var(--merged-block-height, 100%);
+        background: #ecf0f1;
         border: none !important;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .time-entry .time-slot-container.merged-time-main::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -2px;
+        height: 2px;
+        background: #ecf0f1;
+        pointer-events: none;
+        z-index: 2;
     }
 
     .timer-raw-display {
