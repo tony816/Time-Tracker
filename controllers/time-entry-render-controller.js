@@ -80,8 +80,8 @@ function buildTimeEntryRowModel(slot, index) {
             hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
             hasActualMergeContinuation: false,
             innerHtml: `
-                ${plannedContent}
                 ${timeContent}
+                ${plannedContent}
             `,
         };
     }

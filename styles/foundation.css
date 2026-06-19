@@ -238,7 +238,7 @@ h1 {
 
 .time-entry {
   display: grid;
-  grid-template-columns: 1fr 80px;
+  grid-template-columns: 80px 1fr;
   border-bottom: 2px solid #ccc;
   background-color: white;
   user-select: none;
@@ -253,8 +253,22 @@ h1 {
 }
 
 .header-row,
+.time-entry {
+  grid-template-columns: 80px 1fr;
+}
+
 .summary-row {
   grid-template-columns: 1fr 80px;
+}
+
+.header-row > div.time-label {
+  border-right: 1px solid #2c3e50;
+  order: 1;
+}
+
+.header-row > div.planned-label {
+  border-right: none;
+  order: 2;
 }
 
 .time-slot-container .timer-controls-container {
@@ -739,7 +753,10 @@ h1 {
   }
 
   .header-row,
-  .time-entry,
+  .time-entry {
+    grid-template-columns: 60px 1fr;
+  }
+
   .summary-row {
     grid-template-columns: 1fr 60px;
   }

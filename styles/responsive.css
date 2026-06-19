@@ -55,7 +55,10 @@
     }
 
     .header-row,
-    .time-entry,
+    .time-entry {
+        grid-template-columns: 40px minmax(0, 1fr);
+    }
+
     .summary-row {
         grid-template-columns: minmax(0, 1fr) 40px;
     }
@@ -450,7 +453,10 @@
     }
 
     .header-row,
-    .time-entry,
+    .time-entry {
+        grid-template-columns: 40px minmax(0, 1fr);
+    }
+
     .summary-row {
         grid-template-columns: minmax(0, 1fr) 40px;
     }

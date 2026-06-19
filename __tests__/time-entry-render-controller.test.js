@@ -108,7 +108,7 @@ function createRenderTimeEntriesContext({ mobile }) {
                 routineMatch: null,
                 hasPlannedMergeContinuation: false,
                 hasActualMergeContinuation: false,
-                innerHtml: '<input class="planned-input"><div class="time-slot-container"><div class="time-label time-slot-label">06</div></div>',
+                innerHtml: '<div class="time-slot-container"><div class="time-label time-slot-label">06</div></div><input class="planned-input">',
             };
         },
         getMobileTimeUiState() {
@@ -149,6 +149,46 @@ test('time-entry-render-controller exports and global attach are available', () 
         globalThis.TimeEntryRenderController.renderTimeEntries,
         controller.renderTimeEntries
     );
+});
+
+test('renderTimeEntries keeps planned and time interaction listeners bound after column order swap', () => {
+    const { ctx, container, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    const calls = [];
+    [
+        'attachFieldSelectionListeners',
+        'attachCellClickListeners',
+        'attachTimeSlotMergeEntryListeners',
+        'attachPlannedSlotMoveListeners',
+        'attachPlanSegmentResizeListeners',
+        'attachPlannedSegmentReorderListeners',
+        'attachTimerListeners',
+        'attachRowWideClickTargets',
+    ].forEach((name) => {
+        ctx[name] = (entryDiv, index) => {
+            calls.push([name, index, entryDiv.innerHTML.indexOf('time-slot-container') < entryDiv.innerHTML.indexOf('planned-input')]);
+        };
+    });
+
+    const previousDocument = global.document;
+    global.document = documentStub;
+    try {
+        renderTimeEntriesWrapper.call(ctx);
+    } finally {
+        global.document = previousDocument;
+    }
+
+    assert.equal(container.children.length, 1);
+    assert.equal(container.children[0].innerHTML.indexOf('time-slot-container') < container.children[0].innerHTML.indexOf('planned-input'), true);
+    assert.deepEqual(calls.map(([name, index, timeFirst]) => [name, index, timeFirst]), [
+        ['attachFieldSelectionListeners', 0, true],
+        ['attachCellClickListeners', 0, true],
+        ['attachTimeSlotMergeEntryListeners', 0, true],
+        ['attachPlannedSlotMoveListeners', 0, true],
+        ['attachPlanSegmentResizeListeners', 0, true],
+        ['attachPlannedSegmentReorderListeners', 0, true],
+        ['attachTimerListeners', 0, true],
+        ['attachRowWideClickTargets', 0, true],
+    ]);
 });
 
 test('script time-entry render wrapper methods delegate to controller helpers', () => {

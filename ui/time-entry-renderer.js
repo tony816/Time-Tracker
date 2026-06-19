@@ -101,8 +101,8 @@
             hasPlannedMergeContinuation: Boolean(plannedRange && index >= plannedRange.start && index < plannedRange.end),
             hasActualMergeContinuation: false,
             innerHtml: `
-                ${plannedContent}
                 ${timeContent}
+                ${plannedContent}
             `,
         };
     }

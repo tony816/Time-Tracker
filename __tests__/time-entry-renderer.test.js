@@ -41,6 +41,12 @@ test('buildRowRenderModel renders non-merged row with wrapped planned content on
     assert.match(row.innerHtml, /timer-btn/);
     assert.match(row.innerHtml, /time-slot-container merge-capable/);
     assert.match(row.innerHtml, /time-slot-merge-affordance/);
+    assert.ok(
+        row.innerHtml.indexOf('time-slot-container merge-capable') < row.innerHtml.indexOf('wrapped-planned'),
+        'time-slot column should render before planned slot column'
+    );
+    assert.match(row.innerHtml, /class="input-field planned-input"[\s\S]*data-type="planned"/);
+    assert.match(row.innerHtml, /class="time-slot-container merge-capable"[\s\S]*aria-label=/);
 });
 
 test('buildRowRenderModel uses planned/time merged builders and ignores actual merges', () => {
@@ -71,6 +77,10 @@ test('buildRowRenderModel uses planned/time merged builders and ignores actual m
     assert.match(row.innerHtml, /\[merged:planned-2-4:planned:2\]/);
     assert.doesNotMatch(row.innerHtml, /\[merged:actual-1-3:actual:2\]/);
     assert.match(row.innerHtml, /\[merged-time:time-2-4:2\]/);
+    assert.ok(
+        row.innerHtml.indexOf('[merged-time:time-2-4:2]') < row.innerHtml.indexOf('[merged:planned-2-4:planned:2]'),
+        'merged time-slot content should render before merged planned content'
+    );
 });
 
 test('buildRowRenderModel does not render mobile time-column timer controls', () => {
@@ -98,7 +108,10 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
     const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
-    assert.match(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 40px;/);
+    assert.match(responsiveCss, /grid-template-columns:\s*40px minmax\(0,\s*1fr\);/);
+    assert.match(cssSource, /\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*80px 1fr;/);
+    assert.match(cssSource, /\.header-row > div\.time-label\s*\{[\s\S]*border-right:\s*1px solid #2c3e50;[\s\S]*order:\s*1;/);
+    assert.match(cssSource, /\.header-row > div\.planned-label\s*\{[\s\S]*border-right:\s*none;[\s\S]*order:\s*2;/);
     assert.doesNotMatch(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 36px;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\s*\{[\s\S]*width:\s*40px;[\s\S]*max-width:\s*40px;[\s\S]*overflow:\s*hidden !important;[\s\S]*box-shadow:\s*none !important;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container \.time-range-label\s*\{[\s\S]*font-size:\s*9px;[\s\S]*letter-spacing:\s*-0\.7px;[\s\S]*font-variant-numeric:\s*tabular-nums;/);
