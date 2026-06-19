@@ -675,6 +675,116 @@ test('planned mousedown retap keeps open mobile inline plan sheet', () => {
     assert.equal(ctx.suppressInlinePlanClickOnce, null);
 });
 
+test('planned field retap clears an already selected single planned slot', () => {
+    const plannedField = createListenerNode();
+    plannedField.dataset.index = '4';
+    plannedField.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        selectedPlannedFields: new Set([4]),
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 4);
+            return { startIndex: 4, endIndex: 4, mergeKey: null };
+        },
+        inlinePlanDropdown: null,
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        findMergeKey() {
+            return null;
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+    };
+
+    controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 4, plannedField);
+    plannedField.dispatchEvent({
+        type: 'mousedown',
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [
+        ['clear', 'planned'],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
+    assert.equal(ctx.suppressInlinePlanClickOnce, 4);
+});
+
+test('merged planned field retap clears an already selected merged planned range', () => {
+    const plannedField = createListenerNode();
+    plannedField.dataset.index = '2';
+    plannedField.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.planned-input' ? plannedField : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        selectedPlannedFields: new Set([1, 2, 3]),
+        suppressInlinePlanClickOnce: null,
+        getPlannedRangeInfo(index) {
+            assert.equal(index, 2);
+            return { startIndex: 1, endIndex: 3, mergeKey: 'planned-1-3' };
+        },
+        inlinePlanDropdown: null,
+        isSameInlinePlanTarget() {
+            return false;
+        },
+        findMergeKey(type, rowIndex) {
+            return type === 'planned' && rowIndex >= 1 && rowIndex <= 3 ? 'planned-1-3' : null;
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+    };
+
+    controller.attachPlannedFieldSelectionListeners.call(ctx, entryDiv, 2, plannedField);
+    plannedField.dispatchEvent({
+        type: 'mousedown',
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [
+        ['clear', 'planned'],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
+    assert.equal(ctx.suppressInlinePlanClickOnce, 2);
+});
+
 test('merged planned click capture no longer starts merge selection from planned field target', () => {
     const wrapper = createListenerNode();
     wrapper.getBoundingClientRect = () => ({ width: 520 });
@@ -950,6 +1060,125 @@ test('time-slot merge entry expands an existing planned merge range and shows un
         ['clearAll'],
         ['selectMerged', 'planned', 'planned-1-3', { append: false }],
     ]);
+});
+
+test('time-slot merge entry retap clears an already selected single slot', () => {
+    const timeSlot = createListenerNode();
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        selectedPlannedFields: new Set([2]),
+        findMergeKey() {
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        ctrlKey: false,
+        metaKey: false,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [
+        ['close'],
+        ['clear', 'planned'],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
+    assert.equal(ctx.isSelectingPlanned, false);
+    assert.equal(ctx.currentColumnType, null);
+    assert.equal(ctx.dragStartIndex, -1);
+    assert.equal(ctx.dragBaseEndIndex, -1);
+});
+
+test('merged time-slot entry retap clears an already selected merged range', () => {
+    const timeSlot = createListenerNode();
+    timeSlot.closest = () => null;
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        selectedPlannedFields: new Set([1, 2, 3]),
+        findMergeKey(type, rowIndex) {
+            return type === 'planned' && rowIndex === 2 ? 'planned-1-3' : null;
+        },
+        getMergeRangeBounds(mergeKey, fallbackIndex) {
+            calls.push(['bounds', mergeKey, fallbackIndex]);
+            return { start: 1, end: 3 };
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        clearAllSelections() {
+            calls.push(['clearAll']);
+        },
+        selectMergedRange(type, mergeKey, options) {
+            calls.push(['selectMerged', type, mergeKey, options]);
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({
+        type: 'mousedown',
+        button: 0,
+        target: timeSlot,
+        preventDefault() {
+            calls.push(['prevent']);
+        },
+        stopPropagation() {
+            calls.push(['stop']);
+        },
+    });
+
+    assert.deepEqual(calls, [
+        ['bounds', 'planned-1-3', 2],
+        ['close'],
+        ['clear', 'planned'],
+        ['prevent'],
+        ['stop'],
+    ]);
+    assert.equal(calls.some((call) => call[0] === 'selectMerged'), false);
+    assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
 });
 
 test('desktop time-slot drag selects multiple planned slots and mouseup resets state', () => {

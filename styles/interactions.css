@@ -199,8 +199,8 @@
   /* 더 이상 숨기지 않음 */
   opacity: 1 !important;
   visibility: visible !important;
-  pointer-events: none !important;
-  /* 클릭은 막되, 모양만 유지 */
+  pointer-events: auto !important;
+  /* 보조 셀도 병합 시간 슬롯의 전 영역 선택 타깃으로 사용 */
 
   /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
   position: relative;

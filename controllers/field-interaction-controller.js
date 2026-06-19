@@ -92,6 +92,36 @@
         ctx.dragBaseEndIndex = -1;
     }
 
+    function isPlannedRangeSelected(ctx, start, end) {
+        const selectedSet = ctx && ctx.selectedPlannedFields;
+        if (!selectedSet || !Number.isInteger(start) || !Number.isInteger(end)) return false;
+        const safeStart = Math.min(start, end);
+        const safeEnd = Math.max(start, end);
+        if (selectedSet.size !== safeEnd - safeStart + 1) return false;
+        for (let i = safeStart; i <= safeEnd; i += 1) {
+            if (!selectedSet.has(i)) return false;
+        }
+        return true;
+    }
+
+    function isPlainPrimaryPointerEvent(event) {
+        if (!event) return true;
+        return !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+    }
+
+    function clearSelectedPlannedRangeFromEvent(ctx, event, suppressClickIndex = null) {
+        if (!ctx) return;
+        if (typeof ctx.clearSelection === 'function') {
+            ctx.clearSelection('planned');
+        }
+        resetPlannedSelectionDragState(ctx);
+        if (Number.isInteger(suppressClickIndex)) {
+            ctx.suppressInlinePlanClickOnce = suppressClickIndex;
+        }
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    }
+
     function openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex = null, options = {}) {
         if (!ctx || !plannedField || typeof ctx.openInlinePlanDropdown !== 'function') return;
         const context = getPlannedContextForIndex(ctx, index);
@@ -242,11 +272,20 @@
             }
             const mouseRange = this.getPlannedRangeInfo(index);
             const sameInlineTarget = this.inlinePlanDropdown && this.isSameInlinePlanTarget(mouseRange);
+            const rangeStart = Number.isInteger(mouseRange && mouseRange.startIndex) ? mouseRange.startIndex : index;
+            const rangeEnd = Number.isInteger(mouseRange && mouseRange.endIndex) ? mouseRange.endIndex : rangeStart;
             if (sameInlineTarget && isMobileInlinePlanSheetContext(this)) {
                 this.suppressInlinePlanClickOnce = index;
                 if (e.preventDefault) e.preventDefault();
                 if (e.stopPropagation) e.stopPropagation();
                 syncOpenInlinePlanSheetTarget(this, plannedField);
+                return;
+            }
+            if (isPlainPrimaryPointerEvent(e) && isPlannedRangeSelected(this, rangeStart, rangeEnd)) {
+                if (sameInlineTarget && typeof this.closeInlinePlanDropdown === 'function') {
+                    this.closeInlinePlanDropdown();
+                }
+                clearSelectedPlannedRangeFromEvent(this, e, index);
                 return;
             }
             if (sameInlineTarget) {
@@ -379,6 +418,10 @@
             }
             const range = getRange();
             this.closeInlinePlanDropdown();
+            if (isPlainPrimaryPointerEvent(event) && isPlannedRangeSelected(this, range.start, range.end)) {
+                clearSelectedPlannedRangeFromEvent(this, event);
+                return 'cleared';
+            }
             this.currentColumnType = 'planned';
             this.dragStartIndex = range.start;
             this.dragBaseEndIndex = range.end;
@@ -435,7 +478,9 @@
 
         timeSlot.addEventListener('mousedown', (e) => {
             if (e.button !== undefined && e.button !== 0) return;
-            if (!beginTimeSlotMergeSelection(e)) return;
+            const result = beginTimeSlotMergeSelection(e);
+            if (!result) return;
+            if (result === 'cleared') return;
             if (doc && typeof doc.addEventListener === 'function') {
                 doc.addEventListener('mousemove', handleDocumentMouseMove);
                 doc.addEventListener('mouseup', handleDocumentMouseUp);
