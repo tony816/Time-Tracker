@@ -159,7 +159,7 @@
   background-color: #ecf0f1 !important;
   /* 좌우 테두리는 각 셀이 직접 그리도록 하여 두께 일관성 확보 */
   border-left: 2px solid #ddd !important;
-  border-right: 2px solid #ddd !important;
+  border-right: none !important;
   border-top: none !important;
   border-bottom: none !important;
   padding-top: 0 !important;
@@ -182,7 +182,7 @@
   /* 시간열 기본 배경 유지 */
   /* 세로 경계는 셀 자체가 그림 (겹침과 두께 불일치 방지) */
   border-left: 2px solid #ddd !important;
-  border-right: 2px solid #ddd !important;
+  border-right: none !important;
   border-top: none !important;
   /* 상단 경계선 제거 */
   border-bottom: none !important;
@@ -261,8 +261,8 @@
 .merged-time-secondary:not(.merged-time-last)::after {
   content: "";
   position: absolute;
-  left: -2px;
-  right: -2px;
+  left: 2px;
+  right: 2px;
   bottom: -2px;
   /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
   height: 2px;
@@ -277,8 +277,8 @@
 .merged-time-main::after {
   content: "";
   position: absolute;
-  left: -2px;
-  right: -2px;
+  left: 2px;
+  right: 2px;
   bottom: -2px;
   height: 2px;
   background: #ecf0f1;

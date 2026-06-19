@@ -179,8 +179,8 @@
     .time-entry .time-slot-container.merged-time-main::after {
         content: "";
         position: absolute;
-        left: -2px;
-        right: -2px;
+        left: 2px;
+        right: 2px;
         bottom: -2px;
         height: 2px;
         background: #ecf0f1;
@@ -189,8 +189,8 @@
     }
 
     .time-entry .time-slot-container.merged-time-secondary:not(.merged-time-last)::after {
-        left: -2px;
-        right: -2px;
+        left: 2px;
+        right: 2px;
     }
 
     .timer-raw-display {

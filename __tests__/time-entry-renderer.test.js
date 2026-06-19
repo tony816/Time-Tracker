@@ -107,8 +107,8 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main\s*\{[\s\S]*overflow:\s*visible !important;[\s\S]*isolation:\s*isolate;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main \.time-label,[\s\S]*\.time-entry \.time-slot-container\.merged-time-main \.time-range-label\s*\{[\s\S]*z-index:\s*3;[\s\S]*visibility:\s*visible !important;[\s\S]*opacity:\s*1 !important;[\s\S]*display:\s*block;/);
     assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;[\s\S]*height:\s*calc\(var\(--merged-block-height, 100%\) - 2px\);[\s\S]*background:\s*#ecf0f1;[\s\S]*z-index:\s*1;/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::after\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;[\s\S]*z-index:\s*2;/);
-    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-main::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;[\s\S]*z-index:\s*2;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;/);
     assert.match(interactionsCss, /\.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*bottom:\s*-2px;[\s\S]*height:\s*2px;/);
     assert.doesNotMatch(responsiveCss, /\.merged-time-last::after/);
     assert.doesNotMatch(interactionsCss, /\.merged-time-last::after/);
@@ -121,8 +121,10 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-row/);
     assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-time/);
     assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*visible !important;[\s\S]*isolation:\s*isolate;/);
+    assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*border-left:\s*2px solid #ddd !important;[\s\S]*border-right:\s*none !important;/);
+    assert.match(interactionsCss, /\.merged-time-secondary\s*\{[\s\S]*border-left:\s*2px solid #ddd !important;[\s\S]*border-right:\s*none !important;/);
     assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*font-size:\s*12px;[\s\S]*line-height:\s*1\.1;/);
-    assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;/);
+    assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*2px;[\s\S]*right:\s*2px;/);
     assert.match(interactionsCss, /\.time-entry\.merge-selected-range \.merged-time-main::after,[\s\S]*\.time-entry\.existing-merged-range \.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*background:\s*#ecf0f1;/);
 });
 
