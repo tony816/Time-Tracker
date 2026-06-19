@@ -286,6 +286,20 @@
   z-index: 2;
 }
 
+.time-entry.merge-selected-range .merged-time-main::after,
+.time-entry.merge-selecting .merged-time-main::after,
+.time-entry.existing-merged-range .merged-time-main::after,
+.time-entry.merge-selected-range .merged-time-secondary:not(.merged-time-last)::after,
+.time-entry.merge-selecting .merged-time-secondary:not(.merged-time-last)::after,
+.time-entry.existing-merged-range .merged-time-secondary:not(.merged-time-last)::after {
+  background: #ecf0f1;
+}
+
+.time-entry.merge-hover .merged-time-main::after,
+.time-entry.merge-hover .merged-time-secondary:not(.merged-time-last)::after {
+  background: #ecf0f1;
+}
+
 /* 병합된 시간열: 상/하 라인은 행 경계선(2px)을 그대로 사용 (중복 두께 방지) */
 .merged-time-main::before {
   content: "";

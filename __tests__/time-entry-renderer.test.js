@@ -123,6 +123,7 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*visible !important;[\s\S]*isolation:\s*isolate;/);
     assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*font-size:\s*12px;[\s\S]*line-height:\s*1\.1;/);
     assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;/);
+    assert.match(interactionsCss, /\.time-entry\.merge-selected-range \.merged-time-main::after,[\s\S]*\.time-entry\.existing-merged-range \.merged-time-secondary:not\(\.merged-time-last\)::after\s*\{[\s\S]*background:\s*#ecf0f1;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {
@@ -131,8 +132,12 @@ test('time-slot merge affordance styling remains visible in CSS', () => {
     assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container/);
     assert.match(cssSource, /--merge-overlay-surface/);
     assert.match(cssSource, /--merge-overlay-outline/);
+    assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container\.merged-time-main,[\s\S]*\.time-entry\.existing-merged-range \.time-slot-container\.merged-time-secondary\s*\{[\s\S]*box-shadow:\s*none;/);
+    assert.match(cssSource, /\.time-entry\.merge-selected-range \.time-slot-container\.merged-time-main::before,[\s\S]*\.time-entry\.existing-merged-range \.time-slot-container\.merged-time-main::before\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 2px var\(--merge-outline\);/);
     assert.match(cssSource, /\.time-entry\.existing-merged-range \.split-cell-wrapper\.split-type-planned/);
     assert.match(cssSource, /\.has-planned-merge\s*\{[\s\S]*border-bottom-color:\s*#ecf0f1;/);
+    assert.match(cssSource, /\.has-planned-merge\.merge-selected-range,[\s\S]*\.has-planned-merge\.existing-merged-range\s*\{[\s\S]*border-bottom-color:\s*#ecf0f1;/);
+    assert.match(cssSource, /\.has-planned-merge\.merge-selected-range::after,[\s\S]*\.has-planned-merge\.existing-merged-range::after\s*\{[\s\S]*background-color:\s*#ecf0f1;/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]/);
     assert.match(cssSource, /@media \(hover: none\), \(pointer: coarse\)/);
 });
