@@ -966,6 +966,7 @@ h1 {
 
 .has-planned-merge {
   position: relative;
+  border-bottom-color: #ecf0f1;
 }
 
 .has-planned-merge::after {

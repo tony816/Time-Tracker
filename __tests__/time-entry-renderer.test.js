@@ -120,8 +120,9 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-button/);
     assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-row/);
     assert.doesNotMatch(responsiveCss, /\.time-entry \.time-slot-container \.plan-segment-timer-time/);
-    assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*hidden !important;/);
-    assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;/);
+    assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*visible !important;[\s\S]*isolation:\s*isolate;/);
+    assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*font-size:\s*12px;[\s\S]*line-height:\s*1\.1;/);
+    assert.match(interactionsCss, /\.merged-time-main::after\s*\{[\s\S]*left:\s*-2px;[\s\S]*right:\s*-2px;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {
@@ -131,6 +132,7 @@ test('time-slot merge affordance styling remains visible in CSS', () => {
     assert.match(cssSource, /--merge-overlay-surface/);
     assert.match(cssSource, /--merge-overlay-outline/);
     assert.match(cssSource, /\.time-entry\.existing-merged-range \.split-cell-wrapper\.split-type-planned/);
+    assert.match(cssSource, /\.has-planned-merge\s*\{[\s\S]*border-bottom-color:\s*#ecf0f1;/);
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]/);
     assert.match(cssSource, /@media \(hover: none\), \(pointer: coarse\)/);
 });

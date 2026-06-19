@@ -170,7 +170,8 @@
   align-self: stretch !important;
   justify-self: stretch !important;
   position: relative;
-  overflow: hidden !important;
+  overflow: visible !important;
+  isolation: isolate;
   z-index: 5;
 }
 
@@ -249,6 +250,8 @@
 .time-range-label {
   padding: 0 1px;
   font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
@@ -258,9 +261,8 @@
 .merged-time-secondary:not(.merged-time-last)::after {
   content: "";
   position: absolute;
-  left: 0;
-  /* 셀 내부 폭만 덮어, 좌우 열에 침범하지 않음 */
-  right: 0;
+  left: -2px;
+  right: -2px;
   bottom: -2px;
   /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
   height: 2px;
@@ -275,9 +277,8 @@
 .merged-time-main::after {
   content: "";
   position: absolute;
-  left: 0;
-  /* 셀 내부 폭만 덮음 */
-  right: 0;
+  left: -2px;
+  right: -2px;
   bottom: -2px;
   height: 2px;
   background: #ecf0f1;
