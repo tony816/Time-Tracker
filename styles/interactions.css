@@ -245,51 +245,6 @@
   letter-spacing: 0;
 }
 
-/* 가운데 시간대 열 병합 시, 내부 가로 구분선 숨기기
-   - 각 병합 구간의 중간(마지막 제외) 보조셀 아래쪽에
-     배경색 바를 덮어써서 .time-entry 의 하단 테두리를 가린다 */
-.merged-time-secondary:not(.merged-time-last)::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 2px;
-  bottom: -2px;
-  /* .time-entry 의 border-bottom 두께(2px)에 맞춤 */
-  height: 2px;
-  background: #ecf0f1;
-  /* 시간열 배경과 동일 */
-  pointer-events: none;
-  z-index: 2;
-  /* 부모 행의 테두리 위에 표시 */
-}
-
-/* 병합된 시간열의 첫 번째(메인) 셀 아래 구분선도 가리기 */
-.merged-time-main::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 2px;
-  bottom: -2px;
-  height: 2px;
-  background: #ecf0f1;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.time-entry.merge-selected-range .merged-time-main::after,
-.time-entry.merge-selecting .merged-time-main::after,
-.time-entry.existing-merged-range .merged-time-main::after,
-.time-entry.merge-selected-range .merged-time-secondary:not(.merged-time-last)::after,
-.time-entry.merge-selecting .merged-time-secondary:not(.merged-time-last)::after,
-.time-entry.existing-merged-range .merged-time-secondary:not(.merged-time-last)::after {
-  background: #ecf0f1;
-}
-
-.time-entry.merge-hover .merged-time-main::after,
-.time-entry.merge-hover .merged-time-secondary:not(.merged-time-last)::after {
-  background: #ecf0f1;
-}
-
 /* Merged time rail: draw the inner edge once across the whole block. */
 .merged-time-main::before {
   content: "";

@@ -177,7 +177,7 @@
         left: 0;
         right: 0;
         top: 0;
-        height: calc(var(--merged-block-height, 100%) - 2px);
+        height: var(--merged-block-height, 100%);
         background: #ecf0f1;
         border: none !important;
         box-shadow: inset -2px 0 0 #ddd;
@@ -193,23 +193,6 @@
             inset -2px 0 0 var(--merge-outline),
             inset 0 2px 0 var(--merge-outline),
             inset 0 -2px 0 var(--merge-outline);
-    }
-
-    .time-entry .time-slot-container.merged-time-main::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 2px;
-        bottom: -2px;
-        height: 2px;
-        background: #ecf0f1;
-        pointer-events: none;
-        z-index: 2;
-    }
-
-    .time-entry .time-slot-container.merged-time-secondary:not(.merged-time-last)::after {
-        left: 0;
-        right: 2px;
     }
 
     .timer-raw-display {
