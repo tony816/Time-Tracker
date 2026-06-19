@@ -4139,9 +4139,10 @@ class TimeTracker {
     createMergedTimeField(mergeKey, index, slot) {
         const safeMergeKey = this.normalizeMergeKey(mergeKey, 'time');
         if (!safeMergeKey) {
-            const timerControls = this.createTimerControls(index, slot);
+            const isMobileTimeColumn = this.isMobileTimeExpansionEnabled && this.isMobileTimeExpansionEnabled();
+            const timerControls = isMobileTimeColumn ? '' : this.createTimerControls(index, slot);
             return `<div class="time-slot-container">
-                        <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
+                        <div class="time-label time-slot-label">${this.formatSlotTimeLabel(slot.time)}</div>
                         ${timerControls}
                     </div>`;
         }
@@ -4151,14 +4152,15 @@ class TimeTracker {
         const end = parseInt(endStr, 10);
 
         if (index === start) {
-            // Render timer controls once for the leading merged time cell.
-            const timerControls = this.createTimerControls(index, slot);
+            // Render timer controls once for the leading merged time cell on desktop.
+            const isMobileTimeColumn = this.isMobileTimeExpansionEnabled && this.isMobileTimeExpansionEnabled();
+            const timerControls = isMobileTimeColumn ? '' : this.createTimerControls(index, slot);
             const startTime = this.formatSlotTimeLabel(this.timeSlots[start].time);
             const endHour = parseInt(String(this.timeSlots[end].time), 10);
             const endTime = Number.isFinite(endHour)
                 ? this.formatSlotTimeLabel(String((endHour + 1) % 24))
                 : this.formatSlotTimeLabel(this.timeSlots[end].time);
-            const timeRangeDisplay = `${startTime} ~ ${endTime}`;
+            const timeRangeDisplay = `${startTime}\u2013${endTime}`;
 
 
             const mergeHintLabel = '드래그해 병합 범위 선택';
@@ -4169,7 +4171,7 @@ class TimeTracker {
                            title="${mergeHintLabel}"
                            aria-label="${mergeHintLabel}">
                         <div class="merged-time-content">
-                            <div class="time-label">${timeRangeDisplay}</div>
+                            <div class="time-label time-slot-label time-range-label">${timeRangeDisplay}</div>
                             <span class="time-slot-merge-affordance" aria-hidden="true"></span>
                             ${timerControls}
                         </div>

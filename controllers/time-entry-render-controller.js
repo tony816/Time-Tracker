@@ -30,6 +30,7 @@ function buildTimeEntryRowModel(slot, index) {
                 formatSlotTimeLabel: (rawHour) => this.formatSlotTimeLabel(rawHour),
                 escapeAttribute: (value) => this.escapeAttribute(value),
                 getRoutineForPlannedIndex: (rowIndex, date) => this.getRoutineForPlannedIndex(rowIndex, date),
+                isMobileTimeColumn: () => this.isMobileTimeExpansionEnabled && this.isMobileTimeExpansionEnabled(),
             });
         }
 
@@ -44,7 +45,8 @@ function buildTimeEntryRowModel(slot, index) {
         plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
 
         const timeMergeKey = this.findMergeKey('time', index);
-        const timerControls = this.createTimerControls(index, slot);
+        const isMobileTimeColumn = this.isMobileTimeExpansionEnabled && this.isMobileTimeExpansionEnabled();
+        const timerControls = isMobileTimeColumn ? '' : this.createTimerControls(index, slot);
         let timeContent;
         if (timeMergeKey) {
             timeContent = this.createMergedTimeField(timeMergeKey, index, slot);
@@ -54,7 +56,7 @@ function buildTimeEntryRowModel(slot, index) {
                     title="${mergeHintLabel}"
                     aria-label="${mergeHintLabel}">
                     <span class="time-slot-merge-affordance" aria-hidden="true"></span>
-                    <div class="time-label">${this.formatSlotTimeLabel(slot.time)}</div>
+                    <div class="time-label time-slot-label">${this.formatSlotTimeLabel(slot.time)}</div>
                     ${timerControls}
                 </div>`;
         }

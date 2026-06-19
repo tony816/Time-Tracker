@@ -40,7 +40,7 @@
                     title="${mergeHintLabel}"
                     aria-label="${mergeHintLabel}">
                     <span class="time-slot-merge-affordance" aria-hidden="true"></span>
-                    <div class="time-label">${formattedLabel}</div>
+                    <div class="time-label time-slot-label">${formattedLabel}</div>
                     ${timerControls}
                 </div>`;
     }
@@ -57,6 +57,9 @@
         const formatSlotTimeLabel = options.formatSlotTimeLabel;
         const escapeAttribute = options.escapeAttribute;
         const getRoutineForPlannedIndex = options.getRoutineForPlannedIndex;
+        const isMobileTimeColumn = typeof options.isMobileTimeColumn === 'function'
+            ? options.isMobileTimeColumn()
+            : Boolean(options.isMobileTimeColumn);
 
         const plannedMergeKey = (typeof findMergeKey === 'function') ? findMergeKey('planned', index) : null;
 
@@ -71,7 +74,9 @@
         }
 
         const timeMergeKey = (typeof findMergeKey === 'function') ? findMergeKey('time', index) : null;
-        const timerControls = (typeof createTimerControls === 'function') ? createTimerControls(index, slot) : '';
+        const timerControls = (!isMobileTimeColumn && typeof createTimerControls === 'function')
+            ? createTimerControls(index, slot)
+            : '';
 
         let timeContent;
         if (timeMergeKey && typeof createMergedTimeField === 'function') {

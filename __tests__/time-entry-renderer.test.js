@@ -37,7 +37,7 @@ test('buildRowRenderModel renders non-merged row with wrapped planned content on
     assert.doesNotMatch(row.innerHtml, /actual-input/);
     assert.match(row.innerHtml, /data-index="3"/);
     assert.match(row.innerHtml, /deep &quot;work&quot;/);
-    assert.match(row.innerHtml, /<div class="time-label">04<\/div>/);
+    assert.match(row.innerHtml, /<div class="time-label time-slot-label">04<\/div>/);
     assert.match(row.innerHtml, /timer-btn/);
     assert.match(row.innerHtml, /time-slot-container merge-capable/);
     assert.match(row.innerHtml, /time-slot-merge-affordance/);
@@ -71,6 +71,40 @@ test('buildRowRenderModel uses planned/time merged builders and ignores actual m
     assert.match(row.innerHtml, /\[merged:planned-2-4:planned:2\]/);
     assert.doesNotMatch(row.innerHtml, /\[merged:actual-1-3:actual:2\]/);
     assert.match(row.innerHtml, /\[merged-time:time-2-4:2\]/);
+});
+
+test('buildRowRenderModel does not render mobile time-column timer controls', () => {
+    const row = renderer.buildRowRenderModel({
+        slot: { time: '6', planned: 'Focus', timer: { status: 'idle' } },
+        index: 0,
+        currentDate: '2026-06-19',
+        findMergeKey: () => null,
+        createMergedField: () => '<div class="merged"></div>',
+        wrapWithSplitVisualization: (_type, _index, content) => content,
+        createTimerControls: () => '<button class="timer-btn timer-start-pause">run</button>',
+        createMergedTimeField: () => '<div>merged-time</div>',
+        formatSlotTimeLabel: (rawHour) => String(rawHour).padStart(2, '0'),
+        escapeAttribute: (value) => String(value),
+        getRoutineForPlannedIndex: () => null,
+        isMobileTimeColumn: true,
+    });
+
+    assert.match(row.innerHtml, /<div class="time-label time-slot-label">06<\/div>/);
+    assert.doesNotMatch(row.innerHtml, /timer-btn/);
+    assert.doesNotMatch(row.innerHtml, /timer-controls-container/);
+});
+
+test('mobile time-column CSS contains labels and suppresses obsolete timer box controls', () => {
+    const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
+    const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+
+    assert.match(responsiveCss, /grid-template-columns:\s*minmax\(0,\s*1fr\) 40px;/);
+    assert.match(responsiveCss, /\.time-slot-container \.time-range-label\s*\{[\s\S]*font-size:\s*10px;/);
+    assert.match(responsiveCss, /\.time-entry \.time-slot-container \.timer-controls-container\s*\{[\s\S]*display:\s*none !important;/);
+    assert.doesNotMatch(responsiveCss, /\.time-entry\.time-ui-visible \.time-slot-container\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 2px #7fa7cf;/);
+    assert.doesNotMatch(responsiveCss, /border-left:\s*2px solid #7ea7d4;/);
+    assert.match(interactionsCss, /\.merged-time-main\s*\{[\s\S]*overflow:\s*hidden !important;/);
+    assert.match(interactionsCss, /\.time-range-label\s*\{[\s\S]*white-space:\s*nowrap;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {

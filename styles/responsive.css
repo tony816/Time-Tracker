@@ -73,6 +73,15 @@
 
     .time-slot-container .time-label {
         font-size: 11px;
+        line-height: 1.1;
+        max-width: 100%;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .time-slot-container .time-range-label {
+        font-size: 10px;
+        letter-spacing: 0;
     }
 
     .input-field {
@@ -103,7 +112,7 @@
     }
 
     .time-entry .time-slot-container .timer-controls-container {
-        display: none;
+        display: none !important;
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
@@ -114,16 +123,8 @@
         padding: 0;
     }
 
-    .time-entry.time-ui-visible .time-slot-container {
-        min-height: 52px;
-        padding: 1px;
-        gap: 1px;
-        background-color: #dfe9f5;
-        box-shadow: inset 0 0 0 2px #7fa7cf;
-    }
-
     .time-entry.time-ui-visible .time-slot-container .timer-controls-container {
-        display: flex;
+        display: none !important;
         gap: 1px;
     }
 
@@ -196,11 +197,6 @@
         color: #c0392b;
     }
 
-    .time-entry.time-ui-visible .time-slot-container .time-label {
-        font-size: 10px;
-        line-height: 1;
-    }
-
     .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container {
         background-color: #eef5ff;
     }
@@ -211,22 +207,13 @@
     }
 
     .time-entry.current-time-slot:not(.running-timer-slot):not(.paused-timer-slot):not(.completed-timer-slot) .time-slot-container.merged-time-main::before {
-        background-color: #eef5ff;
-        box-sizing: border-box;
-        border-left: 2px solid #7ea7d4;
-        border-right: 2px solid #7ea7d4;
-        border-top: 2px solid #7ea7d4;
-        border-bottom: 2px solid #7ea7d4;
+        background-color: transparent;
+        border: none;
     }
 
-    .time-entry.paused-timer-slot .time-slot-container {
-        background-color: #fff7e7;
-        box-shadow: inset 0 0 0 2px rgba(214, 142, 0, 0.28);
-    }
-
+    .time-entry.paused-timer-slot .time-slot-container,
     .time-entry.completed-timer-slot .time-slot-container {
-        background-color: #f1f8f2;
-        box-shadow: inset 0 0 0 2px rgba(46, 125, 50, 0.24);
+        box-shadow: none;
     }
 
     .time-entry.paused-timer-slot .timer-display,
@@ -509,10 +496,11 @@
 
     .time-entry.time-ui-visible .time-slot-container {
         min-height: 46px;
-        padding: 4px 1px 5px;
+        padding: 5px 2px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
+        display: none !important;
         gap: 2px;
         flex-direction: row;
         align-items: center;
@@ -520,6 +508,7 @@
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
+        display: none !important;
         width: 14px;
         min-width: 14px;
         height: 14px;
@@ -529,6 +518,7 @@
 
     .time-entry.time-ui-visible .time-slot-container .timer-display,
     .time-entry.time-ui-visible .time-slot-container .timer-raw-display {
+        display: none !important;
         max-width: 34px;
         font-size: 6px;
         letter-spacing: -0.6px;
@@ -586,14 +576,16 @@
 
     .time-entry.time-ui-visible .time-slot-container {
         min-height: 46px;
-        padding: 1px;
+        padding: 5px 2px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-controls {
+        display: none !important;
         gap: 1px;
     }
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn {
+        display: none !important;
         width: 12px;
         min-width: 12px;
         height: 12px;
@@ -604,6 +596,7 @@
 
     .time-entry.time-ui-visible .time-slot-container .timer-display,
     .time-entry.time-ui-visible .time-slot-container .timer-raw-display {
+        display: none !important;
         max-width: 30px;
         font-size: 5px;
         letter-spacing: -0.7px;

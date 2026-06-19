@@ -170,8 +170,7 @@
   align-self: stretch !important;
   justify-self: stretch !important;
   position: relative;
-  /* 내부 컨텐츠 중앙 정렬 오버플로우 허용 */
-  overflow: visible !important;
+  overflow: hidden !important;
   z-index: 5;
 }
 
@@ -204,7 +203,7 @@
 
   /* 하위 구분선(행 경계선) 가리기용 포지셔닝 */
   position: relative;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 /* 병합된 시간열의 마지막 셀: 하단 경계선만 유지 */
@@ -233,6 +232,24 @@
 
 .merged-time-main .time-label {
   white-space: nowrap;
+}
+
+.time-slot-label,
+.time-range-label {
+  box-sizing: border-box;
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.time-range-label {
+  padding: 0 1px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 /* 가운데 시간대 열 병합 시, 내부 가로 구분선 숨기기
@@ -291,6 +308,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Multi-select dropdown for schedule modal */

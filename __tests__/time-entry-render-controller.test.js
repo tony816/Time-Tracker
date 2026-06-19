@@ -122,11 +122,42 @@ test('createMergedTimeField renders merged slot time range through the ending bo
     const mainMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 0, ctx.timeSlots[0]);
     const secondaryMarkup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 1, ctx.timeSlots[1]);
 
-    assert.match(mainMarkup, /<div class="time-label">04 ~ 06<\/div>/);
-    assert.match(mainMarkup, /<div class="time-label">04 ~ 06<\/div>\s*<span class="time-slot-merge-affordance"/);
+    assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>/);
+    assert.match(mainMarkup, /<div class="time-label time-slot-label time-range-label">04–06<\/div>\s*<span class="time-slot-merge-affordance"/);
     assert.match(mainMarkup, /timer-btn/);
     assert.match(mainMarkup, /time-slot-merge-affordance/);
     assert.match(secondaryMarkup, /merged-time-secondary/);
     assert.doesNotMatch(secondaryMarkup, /time-slot-merge-affordance/);
     assert.doesNotMatch(secondaryMarkup, />05<\/div>/);
+});
+
+test('createMergedTimeField keeps mobile merged range compact and omits time-column timer controls', () => {
+    const ctx = {
+        timeSlots: [
+            { time: '6' },
+            { time: '7' },
+            { time: '8' },
+        ],
+        normalizeMergeKey(mergeKey) {
+            return mergeKey;
+        },
+        formatSlotTimeLabel(rawHour) {
+            const hour = parseInt(String(rawHour), 10);
+            return Number.isFinite(hour) ? String(hour).padStart(2, '0') : String(rawHour || '');
+        },
+        isMobileTimeExpansionEnabled() {
+            return true;
+        },
+        createTimerControls() {
+            return '<button class="timer-btn">run</button>';
+        },
+    };
+
+    const markup = createMergedTimeFieldWrapper.call(ctx, 'time-0-1', 0, ctx.timeSlots[0]);
+
+    assert.match(markup, /class="time-label time-slot-label time-range-label">06–08<\/div>/);
+    assert.doesNotMatch(markup, /06\s*<br/i);
+    assert.doesNotMatch(markup, /06\s*<\/div>\s*<div[^>]*>\s*08/);
+    assert.doesNotMatch(markup, /timer-btn/);
+    assert.doesNotMatch(markup, /timer-controls-container/);
 });

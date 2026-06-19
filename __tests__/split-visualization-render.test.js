@@ -553,6 +553,8 @@ test('buildSplitVisualization renders resize handles only for idle real plan seg
 
     const idleHtml = buildSplitVisualization.call(idleCtx, 'planned', 0);
     assert.match(idleHtml, /data-segment-kind="real-plan"/);
+    assert.match(idleHtml, /class="plan-segment-timer-button"/);
+    assert.match(idleHtml, /class="plan-segment-timer-time tone-under"/);
     assert.doesNotMatch(idleHtml, /plan-segment-resize-handle-left/);
     assert.doesNotMatch(idleHtml, /data-resize-edge="left"/);
     assert.match(idleHtml, /plan-segment-resize-handle-right/);
