@@ -43,7 +43,7 @@ function createClassList(initial = []) {
     };
 }
 
-function createTimeEntry(index, rect = { left: 100, top: 40, width: 80, height: 44 }) {
+function createTimeEntry(index, rect = { left: 100, top: 40, width: 80, height: 44 }, plannedRect = null) {
     const timeSlot = {
         classList: createClassList(['time-slot-container']),
         getBoundingClientRect() {
@@ -53,16 +53,42 @@ function createTimeEntry(index, rect = { left: 100, top: 40, width: 80, height: 
             return null;
         },
     };
+    const planned = {
+        getBoundingClientRect() {
+            return plannedRect || {
+                left: rect.left + rect.width,
+                top: rect.top,
+                right: rect.left + rect.width + 200,
+                bottom: rect.top + rect.height,
+                width: 200,
+                height: rect.height,
+            };
+        },
+        closest(selector) {
+            return selector === '.time-entry' ? row : null;
+        },
+    };
     const row = {
         classList: createClassList(['time-entry']),
         getAttribute(name) {
             return name === 'data-index' ? String(index) : null;
         },
+        getBoundingClientRect() {
+            const plannedBox = planned.getBoundingClientRect();
+            return {
+                left: rect.left,
+                top: rect.top,
+                right: plannedBox.right,
+                bottom: Math.max(rect.top + rect.height, plannedBox.bottom),
+                width: plannedBox.right - rect.left,
+                height: Math.max(rect.height, plannedBox.bottom - rect.top),
+            };
+        },
         querySelector(selector) {
             return selector === '.time-slot-container' ? timeSlot : null;
         },
     };
-    return { row, timeSlot };
+    return { row, timeSlot, planned };
 }
 
 function withMockDocument(rows, fn) {
@@ -81,6 +107,12 @@ function withMockDocument(rows, fn) {
                 const index = parseInt(match[1], 10);
                 const entry = rows[index];
                 return entry ? entry.timeSlot : null;
+            }
+            const plannedMatch = selector.match(/\[data-index="(\d+)"\] \.planned-input/);
+            if (plannedMatch) {
+                const index = parseInt(plannedMatch[1], 10);
+                const entry = rows[index];
+                return entry ? entry.planned : null;
             }
             return null;
         },
@@ -169,12 +201,12 @@ test('syncTimeSlotMergeSelectionState marks exact merged ranges as existing-merg
     });
 });
 
-test('repositionButtonsNextToSchedule anchors merge and undo buttons beside the selected time-slot range', () => {
+test('repositionButtonsNextToSchedule anchors merge and undo buttons inside the selected planned range', () => {
     const rows = [
         createTimeEntry(0),
         createTimeEntry(1, { left: 100, top: 40, width: 80, height: 44 }),
-        createTimeEntry(2),
-        createTimeEntry(3),
+        createTimeEntry(2, { left: 100, top: 84, width: 80, height: 44 }),
+        createTimeEntry(3, { left: 100, top: 128, width: 80, height: 44 }),
     ];
     const ctx = {
         selectedPlannedFields: new Set([1, 2, 3]),
@@ -186,18 +218,22 @@ test('repositionButtonsNextToSchedule anchors merge and undo buttons beside the 
         controller.repositionButtonsNextToSchedule.call(ctx);
     });
 
-    assert.equal(ctx.mergeButton.style.left, '42px');
-    assert.equal(ctx.mergeButton.style.top, '47px');
-    assert.equal(ctx.undoButton.style.left, '64px');
-    assert.equal(ctx.undoButton.style.top, '48px');
+    const mergeLeft = parseInt(ctx.mergeButton.style.left, 10);
+    const undoLeft = parseInt(ctx.undoButton.style.left, 10);
+    assert.ok(mergeLeft > 180);
+    assert.ok(undoLeft > 180);
+    assert.ok(mergeLeft >= 184 && mergeLeft + 50 <= 376);
+    assert.ok(undoLeft >= 184 && undoLeft + 28 <= 376);
+    assert.equal(ctx.mergeButton.style.top, '91px');
+    assert.equal(ctx.undoButton.style.top, '92px');
 });
 
-test('repositionButtonsNextToSchedule keeps hover undo near the merged time-slot range even without an active selection', () => {
+test('repositionButtonsNextToSchedule keeps hover undo inside merged planned range even without an active selection', () => {
     const rows = [
         createTimeEntry(0),
         createTimeEntry(1),
         createTimeEntry(2, { left: 120, top: 50, width: 80, height: 44 }),
-        createTimeEntry(3),
+        createTimeEntry(3, { left: 120, top: 94, width: 80, height: 44 }),
     ];
     const ctx = {
         selectedPlannedFields: new Set(),
@@ -209,8 +245,10 @@ test('repositionButtonsNextToSchedule keeps hover undo near the merged time-slot
         controller.repositionButtonsNextToSchedule.call(ctx);
     });
 
-    assert.equal(ctx.undoButton.style.left, '84px');
-    assert.equal(ctx.undoButton.style.top, '58px');
+    const undoLeft = parseInt(ctx.undoButton.style.left, 10);
+    assert.ok(undoLeft > 200);
+    assert.ok(undoLeft >= 204 && undoLeft + 28 <= 396);
+    assert.equal(ctx.undoButton.style.top, '80px');
 });
 
 test('existing merged and planned overlay styling uses merge tokens', () => {

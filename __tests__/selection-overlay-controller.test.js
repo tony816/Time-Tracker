@@ -237,6 +237,203 @@ test('repositionButtonsNextToSchedule can consume the shared schedule anchor sur
     assert.equal(ctx.undoButton.style.top, '26px');
 });
 
+function createButtonNode() {
+    const node = {
+        style: {},
+        className: '',
+        textContent: '',
+        parentNode: null,
+        listeners: {},
+        classList: {
+            contains(name) {
+                return String(node.className || '').split(/\s+/).includes(name);
+            },
+        },
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
+        },
+    };
+    return node;
+}
+
+function withPlannedSelectionDocument(fn) {
+    const originalDocument = global.document;
+    const originalWindow = global.window;
+    const appended = [];
+    const body = {
+        appendChild(node) {
+            appended.push(node);
+            node.parentNode = body;
+        },
+        removeChild(node) {
+            node.parentNode = null;
+        },
+    };
+    const rects = {
+        planned5: { left: 110, top: 200, right: 310, bottom: 244, width: 200, height: 44 },
+        planned6: { left: 110, top: 244, right: 310, bottom: 288, width: 200, height: 44 },
+        time5: { left: 30, top: 200, right: 110, bottom: 244, width: 80, height: 44 },
+    };
+    const row6 = {
+        getBoundingClientRect() {
+            return { left: 30, top: 244, right: 310, bottom: 290, width: 280, height: 46 };
+        },
+    };
+    const planned5 = {
+        getBoundingClientRect() {
+            return rects.planned5;
+        },
+        closest() {
+            return null;
+        },
+    };
+    const planned6 = {
+        getBoundingClientRect() {
+            return rects.planned6;
+        },
+        closest(selector) {
+            return selector === '.time-entry' ? row6 : null;
+        },
+    };
+    const time5 = {
+        getBoundingClientRect() {
+            return rects.time5;
+        },
+    };
+    global.document = {
+        querySelector(selector) {
+            if (selector === '[data-index="5"] .planned-input') return planned5;
+            if (selector === '[data-index="6"] .planned-input') return planned6;
+            if (selector === '[data-index="5"] .time-slot-container') return time5;
+            return null;
+        },
+        createElement() {
+            return createButtonNode();
+        },
+        body,
+        documentElement: { scrollLeft: 0, scrollTop: 0 },
+    };
+    global.window = { scrollX: 0, scrollY: 0 };
+
+    try {
+        return fn({ appended, rects });
+    } finally {
+        global.document = originalDocument;
+        global.window = originalWindow;
+    }
+}
+
+test('showMergeButton positions planned merge action inside the planned selection', () => {
+    withPlannedSelectionDocument(({ rects }) => {
+        const ctx = {
+            selectedPlannedFields: new Set([5, 6]),
+            selectedActualFields: new Set(),
+            mergeButton: null,
+            hideMergeButton() {
+                return controller.hideMergeButton.call(this);
+            },
+            repositionButtonsNextToSchedule() {
+                return controller.repositionButtonsNextToSchedule.call(this);
+            },
+            hideScheduleButton() {},
+            mergeSelectedFields() {},
+            getSelectionCellRect(type, index) {
+                assert.equal(type, 'planned');
+                return index === 5 ? rects.planned5 : rects.planned6;
+            },
+            findMergeKey() {
+                return null;
+            },
+            getMergeRangeBounds() {
+                return null;
+            },
+        };
+
+        controller.showMergeButton.call(ctx, 'planned');
+
+        assert.ok(ctx.mergeButton);
+        const left = parseInt(ctx.mergeButton.style.left, 10);
+        const top = parseInt(ctx.mergeButton.style.top, 10);
+        assert.ok(left >= rects.planned5.left + 4, `left ${left} should stay inside planned rect`);
+        assert.ok(left + 50 <= rects.planned5.right - 4, `right ${left + 50} should stay inside planned rect`);
+        assert.ok(left > rects.time5.right, `left ${left} should be right of time column ${rects.time5.right}`);
+        assert.ok(top >= rects.planned5.top);
+        assert.ok(top + 30 <= 290);
+    });
+});
+
+test('showUndoButton positions existing planned merge action inside the planned selection', () => {
+    withPlannedSelectionDocument(({ rects }) => {
+        const ctx = {
+            selectedPlannedFields: new Set([5, 6]),
+            selectedActualFields: new Set(),
+            undoButton: null,
+            timeSlots: Array.from({ length: 8 }, () => ({})),
+            hideUndoButton() {
+                return controller.hideUndoButton.call(this);
+            },
+            repositionButtonsNextToSchedule() {
+                return controller.repositionButtonsNextToSchedule.call(this);
+            },
+            undoMerge() {},
+            getSelectionCellRect(type, index) {
+                assert.equal(type, 'planned');
+                return index === 5 ? rects.planned5 : rects.planned6;
+            },
+            findMergeKey(type, index) {
+                return type === 'planned' && (index === 5 || index === 6) ? 'planned-5-6' : null;
+            },
+            getMergeRangeBounds() {
+                return { start: 5, end: 6 };
+            },
+        };
+
+        controller.showUndoButton.call(ctx, 'planned', 'planned-5-6');
+
+        assert.ok(ctx.undoButton);
+        const left = parseInt(ctx.undoButton.style.left, 10);
+        const top = parseInt(ctx.undoButton.style.top, 10);
+        assert.ok(left >= rects.planned5.left + 4, `left ${left} should stay inside planned rect`);
+        assert.ok(left + 28 <= rects.planned5.right - 4, `right ${left + 28} should stay inside planned rect`);
+        assert.ok(left > rects.time5.right, `left ${left} should be right of time column ${rects.time5.right}`);
+        assert.ok(top >= rects.planned5.top);
+        assert.ok(top + 28 <= 290);
+    });
+});
+
+test('repositionButtonsNextToSchedule keeps planned merge actions on planned range instead of time slot', () => {
+    withPlannedSelectionDocument(({ rects }) => {
+        const ctx = {
+            selectedPlannedFields: new Set([5, 6]),
+            selectedActualFields: new Set(),
+            mergeButton: createButtonNode(),
+            undoButton: createButtonNode(),
+            activeUndoMergeKey: 'planned-5-6',
+            getSelectionCellRect(type, index) {
+                assert.equal(type, 'planned');
+                return index === 5 ? rects.planned5 : rects.planned6;
+            },
+            findMergeKey(type, index) {
+                return type === 'planned' && (index === 5 || index === 6) ? 'planned-5-6' : null;
+            },
+            getMergeRangeBounds() {
+                return { start: 5, end: 6 };
+            },
+        };
+        ctx.mergeButton.className = 'merge-button';
+        ctx.undoButton.className = 'undo-button';
+
+        controller.repositionButtonsNextToSchedule.call(ctx);
+
+        const mergeLeft = parseInt(ctx.mergeButton.style.left, 10);
+        const undoLeft = parseInt(ctx.undoButton.style.left, 10);
+        assert.ok(mergeLeft > rects.time5.right);
+        assert.ok(undoLeft > rects.time5.right);
+        assert.ok(mergeLeft >= rects.planned5.left + 4);
+        assert.ok(undoLeft >= rects.planned5.left + 4);
+    });
+});
+
 test('showScheduleButtonOnHover creates and clears a hover button for a planned slot', () => {
     const originalDocument = global.document;
     const originalWindow = global.window;

@@ -154,21 +154,78 @@
         return context;
     }
 
+    function getPlannedSelectionActionRect(type, mergeKey = null) {
+        if (type !== 'planned') return null;
+        const selectionContext = getPlannedSelectionContext.call(this, type, mergeKey);
+        let { startIndex, endIndex } = selectionContext;
+        if ((!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) && mergeKey) {
+            const parts = String(mergeKey).split('-');
+            const parsedStart = parseInt(parts[1], 10);
+            const parsedEnd = parseInt(parts[2], 10);
+            if (Number.isInteger(parsedStart)) startIndex = parsedStart;
+            if (Number.isInteger(parsedEnd)) endIndex = parsedEnd;
+        }
+        if (!Number.isInteger(startIndex) || !Number.isInteger(endIndex)) return null;
+
+        const startRect = typeof this.getSelectionCellRect === 'function'
+            ? this.getSelectionCellRect('planned', startIndex)
+            : getSelectionCellRect.call(this, 'planned', startIndex);
+        const endRect = typeof this.getSelectionCellRect === 'function'
+            ? this.getSelectionCellRect('planned', endIndex)
+            : getSelectionCellRect.call(this, 'planned', endIndex);
+        if (!startRect || !endRect) return null;
+
+        let bottom = endRect.bottom;
+        if (typeof document !== 'undefined' && typeof document.querySelector === 'function') {
+            const endField = document.querySelector(`[data-index="${endIndex}"] .planned-input`);
+            const endRow = endField && typeof endField.closest === 'function' ? endField.closest('.time-entry') : null;
+            if (endRow && typeof endRow.getBoundingClientRect === 'function') {
+                const endRowRect = endRow.getBoundingClientRect();
+                if (Number.isFinite(endRowRect.bottom)) bottom = endRowRect.bottom;
+            }
+        }
+
+        const timeSlot = getTimeSlotContainerElement(startIndex);
+        const timeRect = timeSlot && typeof timeSlot.getBoundingClientRect === 'function'
+            ? timeSlot.getBoundingClientRect()
+            : null;
+
+        return {
+            left: startRect.left,
+            right: startRect.right || (startRect.left + startRect.width),
+            top: startRect.top,
+            bottom,
+            width: startRect.width,
+            height: Math.max(0, bottom - startRect.top),
+            timeRight: timeRect ? timeRect.right : null,
+        };
+    }
+
     function positionMergeActionButton(button, type, mergeKey = null) {
         if (!button || !button.style) return false;
         const isUndoButton = Boolean(button.classList && button.classList.contains('undo-button'));
         const buttonWidth = isUndoButton ? 28 : 50;
         const buttonHeight = isUndoButton ? 28 : 30;
-        const selectionContext = getPlannedSelectionContext.call(this, type, mergeKey);
         const rootWindow = typeof window !== 'undefined' ? window : (root && root.window ? root.window : null);
         const doc = typeof document !== 'undefined' ? document : (root && root.document ? root.document : null);
         const scrollX = rootWindow ? (rootWindow.scrollX || (doc && doc.documentElement && doc.documentElement.scrollLeft) || 0) : 0;
         const scrollY = rootWindow ? (rootWindow.scrollY || (doc && doc.documentElement && doc.documentElement.scrollTop) || 0) : 0;
 
-        if (selectionContext.anchor && typeof selectionContext.anchor.getBoundingClientRect === 'function') {
-            const rect = selectionContext.anchor.getBoundingClientRect();
-            const left = rect.left + scrollX - buttonWidth - 8;
-            const top = rect.top + scrollY + Math.max(0, Math.round((rect.height - buttonHeight) / 2));
+        const plannedRect = getPlannedSelectionActionRect.call(this, type, mergeKey);
+        if (plannedRect) {
+            const plannedLeft = plannedRect.left + scrollX;
+            const plannedRight = plannedRect.right + scrollX;
+            const minLeft = Math.max(
+                plannedLeft + 4,
+                Number.isFinite(plannedRect.timeRight) ? plannedRect.timeRight + scrollX + 1 : plannedLeft + 4
+            );
+            const maxLeft = plannedRight - buttonWidth - 4;
+            const preferredLeft = plannedLeft + 8;
+            const left = maxLeft >= minLeft
+                ? Math.min(Math.max(preferredLeft, minLeft), maxLeft)
+                : minLeft;
+            const centerY = plannedRect.top + scrollY + (plannedRect.height / 2);
+            const top = centerY - (buttonHeight / 2);
             button.style.left = `${Math.round(left)}px`;
             button.style.top = `${Math.round(top)}px`;
             return true;
