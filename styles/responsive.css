@@ -169,7 +169,7 @@
         left: 0;
         right: 0;
         top: 0;
-        height: var(--merged-block-height, 100%);
+        height: calc(var(--merged-block-height, 100%) - 2px);
         background: #ecf0f1;
         border: none !important;
         pointer-events: none;
