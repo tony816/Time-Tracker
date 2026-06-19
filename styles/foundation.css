@@ -419,16 +419,21 @@ h1 {
   gap: 4px;
 }
 
+.time-entry.merge-capable .time-slot-container:not(.merged-time-main):not(.merged-time-secondary) {
+  padding: 8px;
+}
+
 .time-entry.merge-capable .time-slot-merge-affordance {
-  position: absolute;
-  left: calc(50% + 5px);
-  top: calc(50% + 14px);
+  position: static;
+  order: 2;
+  flex: 0 0 auto;
   width: 18px;
   height: 5px;
+  margin-top: 4px;
   border-radius: 999px;
   background: var(--merge-rail);
   opacity: 0.42;
-  transform: translateX(-50%);
+  transform: none;
   transition: opacity 0.18s ease, transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
   pointer-events: none;
 }
@@ -465,7 +470,7 @@ h1 {
 .time-entry.merge-hover .time-slot-merge-affordance,
 .time-entry.merge-selecting .time-slot-merge-affordance {
   opacity: 1;
-  transform: translateX(-50%) scaleY(1.18);
+  transform: scaleY(1.18);
   background: var(--merge-accent);
 }
 
@@ -503,6 +508,7 @@ h1 {
 }
 
 .time-entry .time-label {
+  order: 1;
   font-size: 14px;
   font-weight: 700;
   color: #2c3e50;
