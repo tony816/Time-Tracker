@@ -166,14 +166,25 @@
     .time-entry .time-slot-container.merged-time-main::before {
         content: "";
         position: absolute;
-        left: -2px;
-        right: -2px;
+        left: 0;
+        right: 0;
         top: 0;
         height: calc(var(--merged-block-height, 100%) - 2px);
         background: #ecf0f1;
         border: none !important;
+        box-shadow: inset 2px 0 0 #ddd;
         pointer-events: none;
         z-index: 1;
+    }
+
+    .time-entry.merge-hover .time-slot-container.merged-time-main::before,
+    .time-entry.merge-selecting .time-slot-container.merged-time-main::before,
+    .time-entry.merge-selected-range .time-slot-container.merged-time-main::before,
+    .time-entry.existing-merged-range .time-slot-container.merged-time-main::before {
+        box-shadow:
+            inset 2px 0 0 var(--merge-outline),
+            inset 0 2px 0 var(--merge-outline),
+            inset 0 -2px 0 var(--merge-outline);
     }
 
     .time-entry .time-slot-container.merged-time-main::after {
