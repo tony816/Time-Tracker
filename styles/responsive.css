@@ -148,7 +148,7 @@
     }
 
     .time-entry .time-slot-container.merged-time-main::before {
-        background-color: transparent !important;
+        background-color: #ecf0f1 !important;
         border: none !important;
     }
 
