@@ -429,6 +429,9 @@ test('planned segment reorder drop target css highlights hosts and fixes preview
     assert.match(css, /\.plan-segment-reorder-drop-target-overlay\s*\{[\s\S]*position:\s*fixed/);
     assert.match(css, /\.plan-segment-reorder-drop-target-overlay\s*\{[\s\S]*z-index:\s*10001/);
     assert.match(css, /\.plan-segment-reorder-drag-ghost\.split-grid-segment,[\s\S]*\.split-grid-segment\.is-plan-segment-reorder-dragging\s*\{[\s\S]*border-bottom:\s*0 !important/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*border-radius:\s*3px/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\.split-grid-segment,[\s\S]*\.split-grid-segment\.is-plan-segment-reorder-dragging\s*\{[\s\S]*border-radius:\s*3px !important/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost \.plan-segment-graphic,[\s\S]*\.plan-segment-reorder-drag-ghost \.plan-segment-graphic-main\s*\{[\s\S]*border-radius:\s*inherit/);
     assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*overflow:\s*hidden/);
 });
 
@@ -593,6 +596,64 @@ test('time-entry fallback overlay uses planned child rect instead of whole row',
     assert.equal(dropTarget.targetHost, plannedInput);
     assert.equal(overlay.style.left, '210px');
     assert.equal(overlay.style.width, '380px');
+}));
+
+test('cross-slot hover clears previous planned target highlight before marking next target', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const targetA = createNode('input', 'planned-input', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    const targetB = createNode('input', 'planned-input', { index: '2' }, { left: 0, top: 160, right: 300, bottom: 220, width: 300, height: 60 });
+    root.appendChild(targetA);
+    root.appendChild(targetB);
+    const state = {
+        grid: createNode('div', 'split-grid', { index: '0' }),
+        context: { baseIndex: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropA = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
+    controller.updateReorderPreview(ctx, state, dropA);
+    assert.equal(hasClass(targetA, 'is-plan-segment-reorder-drop-target'), true);
+
+    const dropB = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 180 });
+    controller.updateReorderPreview(ctx, state, dropB);
+
+    assert.equal(hasClass(targetA, 'is-plan-segment-reorder-drop-target'), false);
+    assert.equal(hasClass(targetB, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(root.querySelectorAll('.is-plan-segment-reorder-drop-target').length, 1);
+    assert.equal(root.querySelectorAll('.plan-segment-reorder-drop-target-overlay').length, 1);
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay').style.top, '160px');
+}));
+
+test('moving active drag to no target clears drop target highlights and overlay', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const { entry, first } = createEntry();
+    root.appendChild(entry);
+    const targetInput = createNode('input', 'planned-input', { index: '1' }, { left: 0, top: 90, right: 300, bottom: 150, width: 300, height: 60 });
+    root.appendChild(targetInput);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    first.dispatchEvent(createPointerEvent('pointerdown', first, 40));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', targetInput, 20, 110));
+    assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay') !== null, true);
+
+    listeners.pointermove[0](createPointerEvent('pointermove', targetInput, 500, 240));
+
+    assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-drop-target'), false);
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay'), null);
+    assert.equal(root.querySelectorAll('.plan-segment-reorder-insert-marker').length, 0);
 }));
 
 test('cross-slot empty drop removes overlay after committing move', () => withDom(({ listeners, timers, root }) => {

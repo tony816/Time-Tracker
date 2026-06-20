@@ -413,6 +413,11 @@
         });
     }
 
+    function clearReorderDropTargetVisuals() {
+        clearReorderDropTargetHighlights();
+        removeReorderDropTargetOverlay();
+    }
+
     function ensureReorderDropTargetOverlay() {
         if (typeof document === 'undefined' || !document.createElement || !document.body) return null;
         let overlay = document.querySelector
@@ -456,7 +461,7 @@
             document.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
                 if (marker.parentNode) marker.parentNode.removeChild(marker);
             });
-            removeReorderDropTargetOverlay();
+            clearReorderDropTargetVisuals();
         }
         if (typeof document !== 'undefined' && document.querySelectorAll) {
             document.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
@@ -1060,8 +1065,10 @@
         if (dropTarget.crossSlot) {
             const previewKey = `cross:${dropTarget.targetBaseIndex}:${dropTarget.insertIndex}:${dropTarget.valid}`;
             const nextTargetHost = dropTarget.targetHost || dropTarget.targetGrid;
+            clearReorderDropTargetVisuals();
             if (state.previewKey === previewKey && state.targetHost === nextTargetHost) {
                 updateReorderDropTargetOverlay(nextTargetHost, { valid: dropTarget.valid, empty: !dropTarget.targetSegment, crossSlot: true });
+                markReorderDropTarget(nextTargetHost, { valid: dropTarget.valid, empty: !dropTarget.targetSegment, crossSlot: true });
                 return Boolean(dropTarget.valid);
             }
             clearReorderPreviewLayer(state.grid);
@@ -1243,7 +1250,7 @@
                         clearReorderPreviewLayer(state.grid);
                         if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
                         if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
-                        removeReorderDropTargetOverlay();
+                        clearReorderDropTargetVisuals();
                         state.targetGrid = null;
                         state.targetHost = null;
                         if (state.grid.classList) state.grid.classList.add('is-plan-segment-reorder-cancel');

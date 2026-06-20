@@ -2443,11 +2443,13 @@ button.activity-chip,
   will-change: transform;
   overflow: hidden;
   box-sizing: border-box;
+  border-radius: 3px;
 }
 
 .plan-segment-reorder-drag-ghost.split-grid-segment,
 .plan-segment-reorder-drag-ghost .split-grid-segment,
 .split-grid-segment.is-plan-segment-reorder-dragging {
+  border-radius: 3px !important;
   border-bottom: 0 !important;
   background-clip: border-box !important;
 }
@@ -2457,6 +2459,8 @@ button.activity-chip,
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  border-radius: inherit;
+  overflow: hidden;
 }
 
 .plan-segment-reorder-drag-ghost,
