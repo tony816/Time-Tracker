@@ -416,6 +416,18 @@ test('planned segment reorder preview css does not keep obsolete blue preview se
     assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*z-index:\s*10000/);
 });
 
+test('planned segment reorder drop target css highlights hosts and fixes preview bottom border', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    assert.match(css, /\.planned-input\.is-plan-segment-reorder-drop-target/);
+    assert.match(css, /\.split-cell-wrapper\.split-type-planned\.is-plan-segment-reorder-drop-target/);
+    assert.match(css, /\.planned-merged-main-container\.is-plan-segment-reorder-drop-target/);
+    assert.match(css, /\.split-grid\.is-plan-segment-reorder-drop-target/);
+    assert.match(css, /\.planned-input\.is-plan-segment-reorder-invalid-target/);
+    assert.match(css, /\.plan-segment-reorder-insert-marker\[data-placement="empty"\]\s*\{[\s\S]*display:\s*none !important/);
+    assert.match(css, /\.plan-segment-reorder-preview-layer \.plan-segment-reorder-preview-real\s*\{[\s\S]*border-bottom:\s*0 !important/);
+    assert.match(css, /\.plan-segment-reorder-preview-layer \.split-grid-segment\s*\{[\s\S]*height:\s*100%/);
+});
+
 test('mobile planned reorder css scopes native selection and zoom protections to segment surfaces', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
     assert.match(css, /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"\]/);
@@ -512,8 +524,9 @@ test('empty normal planned slot without split grid resolves as cross-slot drop t
     assert.equal(dropTarget.targetSegment, null);
     assert.equal(dropTarget.valid, true);
     assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), true);
+    assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-empty-target'), true);
-    assert.equal(targetInput.querySelectorAll('.plan-segment-reorder-insert-marker').length, 1);
+    assert.equal(targetInput.querySelectorAll('.plan-segment-reorder-insert-marker').length, 0);
     assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex), true);
     assert.deepEqual(ctx.timeSlots[0].planActivities, []);
     assert.equal(ctx.timeSlots[1].planActivities[0].label, 'A');
@@ -533,10 +546,12 @@ test('empty target without split grid gets marker and cleanup removes host class
     const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
 
     controller.updateReorderPreview(ctx, state, dropTarget);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
-    assert.equal(host.querySelector('.plan-segment-reorder-insert-marker') !== null, true);
+    assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
 
     controller.removePlanSegmentReorderPreview();
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), false);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), false);
     assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
 }));
@@ -585,6 +600,10 @@ test('empty merged planned block target resolves to merge base index and merged 
     assert.equal(dropTarget.targetBaseIndex, 1);
     assert.equal(dropTarget.valid, true);
     assert.equal(dropTarget.insertIndex, 0);
+    assert.equal(dropTarget.targetHost, host);
+    controller.updateReorderPreview(ctx, state, dropTarget);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
 }));
 
 test('segment cannot move into a merged slot if duration exceeds merged capacity', () => {
@@ -625,8 +644,10 @@ test('invalid empty planned target shows invalid feedback and does not move on d
 
     assert.equal(dropTarget.valid, false);
     assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), false);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-invalid-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
+    assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
     if (dropTarget.valid) {
         controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex);
     }

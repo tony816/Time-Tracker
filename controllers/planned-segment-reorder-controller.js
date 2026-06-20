@@ -386,10 +386,33 @@
         if (grid.classList) {
             grid.classList.remove(
                 'is-previewing-plan-reorder',
+                'is-plan-segment-reorder-drop-target',
                 'is-plan-segment-reorder-empty-target',
                 'is-plan-segment-reorder-invalid-target'
             );
         }
+    }
+
+    function clearReorderDropTargetHighlights() {
+        if (typeof document === 'undefined' || !document.querySelectorAll) return;
+        document.querySelectorAll('.is-plan-segment-reorder-drop-target, .is-plan-segment-reorder-empty-target, .is-plan-segment-reorder-invalid-target')
+            .forEach((el) => {
+                if (!el || !el.classList) return;
+                el.classList.remove(
+                    'is-plan-segment-reorder-drop-target',
+                    'is-plan-segment-reorder-empty-target',
+                    'is-plan-segment-reorder-invalid-target'
+                );
+            });
+    }
+
+    function markReorderDropTarget(host, options = {}) {
+        if (!host || !host.classList) return;
+        host.classList.add('is-plan-segment-reorder-drop-target');
+        if (options.empty) host.classList.add('is-plan-segment-reorder-empty-target');
+        else host.classList.remove('is-plan-segment-reorder-empty-target');
+        if (options.valid === false) host.classList.add('is-plan-segment-reorder-invalid-target');
+        else host.classList.remove('is-plan-segment-reorder-invalid-target');
     }
 
     function removePlanSegmentReorderPreview() {
@@ -405,7 +428,7 @@
             document.querySelectorAll('.plan-segment-reorder-drag-ghost').forEach((ghost) => {
                 if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
             });
-            document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder, .is-plan-segment-reorder-empty-target, .is-plan-segment-reorder-invalid-target')
+            document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder, .is-plan-segment-reorder-drop-target, .is-plan-segment-reorder-empty-target, .is-plan-segment-reorder-invalid-target')
                 .forEach((el) => {
                     if (el.classList) {
                         el.classList.remove(
@@ -416,6 +439,7 @@
                             'is-plan-segment-reorder-active',
                             'is-plan-segment-reorder-cancel',
                             'is-previewing-plan-reorder',
+                            'is-plan-segment-reorder-drop-target',
                             'is-plan-segment-reorder-empty-target',
                             'is-plan-segment-reorder-invalid-target'
                         );
@@ -801,19 +825,7 @@
     }
 
     function updateEmptyTargetMarker(targetHost, invalid = false) {
-        const marker = ensureInsertionMarker(targetHost);
-        if (!marker || !targetHost) return;
-        marker.style.left = '8px';
-        marker.style.top = '6px';
-        marker.style.height = 'calc(100% - 12px)';
-        marker.dataset.targetSegmentIndex = '';
-        marker.dataset.targetReorderId = '';
-        marker.dataset.placement = 'empty';
-        if (targetHost.classList) {
-            targetHost.classList.add('is-plan-segment-reorder-empty-target');
-            if (invalid) targetHost.classList.add('is-plan-segment-reorder-invalid-target');
-            else targetHost.classList.remove('is-plan-segment-reorder-invalid-target');
-        }
+        markReorderDropTarget(targetHost, { valid: !invalid, empty: true, crossSlot: true });
     }
 
     function clearPlannedSegmentReorderState() {
@@ -890,7 +902,13 @@
             return rect && pointInRect(point, rect);
         }) || null;
         if (targetGrid) {
-            return { targetHost: targetGrid, targetGrid, emptyPlannedTarget: false };
+            const plannedHost = targetGrid.closest && (
+                targetGrid.closest('.planned-merged-main-container')
+                || targetGrid.closest('.split-cell-wrapper.split-type-planned')
+                || targetGrid.closest('.planned-input')
+                || targetGrid.closest('.time-entry')
+            );
+            return { targetHost: plannedHost || targetGrid, targetGrid, emptyPlannedTarget: false };
         }
 
         const hosts = Array.from(document.querySelectorAll('.split-cell-wrapper.split-type-planned, .planned-input, .planned-merged-main-container, .time-entry'));
@@ -980,25 +998,25 @@
         if (!state || !dropTarget) return false;
         if (dropTarget.crossSlot) {
             const previewKey = `cross:${dropTarget.targetBaseIndex}:${dropTarget.insertIndex}:${dropTarget.valid}`;
-            if (state.previewKey === previewKey) return Boolean(dropTarget.valid);
+            const nextTargetHost = dropTarget.targetHost || dropTarget.targetGrid;
+            if (state.previewKey === previewKey && state.targetHost === nextTargetHost) return Boolean(dropTarget.valid);
             clearReorderPreviewLayer(state.grid);
             if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
             if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
             state.previewKey = previewKey;
             state.targetGrid = dropTarget.targetGrid;
-            state.targetHost = dropTarget.targetHost || dropTarget.targetGrid;
+            state.targetHost = nextTargetHost;
+            const targetHost = nextTargetHost;
             if (!dropTarget.valid) {
-                const invalidHost = dropTarget.targetHost || dropTarget.targetGrid;
-                if (invalidHost && invalidHost.classList) {
-                    invalidHost.classList.add('is-plan-segment-reorder-invalid-target');
-                }
-                if (!dropTarget.targetSegment) updateEmptyTargetMarker(invalidHost, true);
+                markReorderDropTarget(targetHost, { valid: false, empty: !dropTarget.targetSegment, crossSlot: true });
+                if (!dropTarget.targetSegment) updateEmptyTargetMarker(targetHost, true);
                 return false;
             }
+            markReorderDropTarget(targetHost, { valid: true, empty: !dropTarget.targetSegment, crossSlot: true });
             if (dropTarget.targetSegment) {
                 updateInsertionMarker(dropTarget.targetGrid, dropTarget.targetSegment, dropTarget.placement);
             } else {
-                updateEmptyTargetMarker(dropTarget.targetHost || dropTarget.targetGrid);
+                updateEmptyTargetMarker(targetHost);
             }
             return true;
         }
