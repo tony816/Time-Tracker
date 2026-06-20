@@ -426,6 +426,10 @@ test('planned segment reorder drop target css highlights hosts and fixes preview
     assert.match(css, /\.plan-segment-reorder-insert-marker\[data-placement="empty"\]\s*\{[\s\S]*display:\s*none !important/);
     assert.match(css, /\.plan-segment-reorder-preview-layer \.plan-segment-reorder-preview-real\s*\{[\s\S]*border-bottom:\s*0 !important/);
     assert.match(css, /\.plan-segment-reorder-preview-layer \.split-grid-segment\s*\{[\s\S]*height:\s*100%/);
+    assert.match(css, /\.plan-segment-reorder-drop-target-overlay\s*\{[\s\S]*position:\s*fixed/);
+    assert.match(css, /\.plan-segment-reorder-drop-target-overlay\s*\{[\s\S]*z-index:\s*10001/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\.split-grid-segment,[\s\S]*\.split-grid-segment\.is-plan-segment-reorder-dragging\s*\{[\s\S]*border-bottom:\s*0 !important/);
+    assert.match(css, /\.plan-segment-reorder-drag-ghost\s*\{[\s\S]*overflow:\s*hidden/);
 });
 
 test('mobile planned reorder css scopes native selection and zoom protections to segment surfaces', () => {
@@ -527,12 +531,19 @@ test('empty normal planned slot without split grid resolves as cross-slot drop t
     assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-empty-target'), true);
     assert.equal(targetInput.querySelectorAll('.plan-segment-reorder-insert-marker').length, 0);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay !== null, true);
+    assert.equal(hasClass(overlay, 'is-plan-segment-reorder-overlay-valid'), true);
+    assert.equal(overlay.style.left, '0px');
+    assert.equal(overlay.style.top, '80px');
+    assert.equal(overlay.style.width, '300px');
+    assert.equal(overlay.style.height, '60px');
     assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex), true);
     assert.deepEqual(ctx.timeSlots[0].planActivities, []);
     assert.equal(ctx.timeSlots[1].planActivities[0].label, 'A');
 }));
 
-test('empty target without split grid gets marker and cleanup removes host classes', () => withDom(({ root }) => {
+test('empty target without split grid gets overlay and cleanup removes host classes', () => withDom(({ root }) => {
     const host = createNode('div', 'split-cell-wrapper split-type-planned', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
     root.appendChild(host);
     const ctx = createCtx({
@@ -549,11 +560,65 @@ test('empty target without split grid gets marker and cleanup removes host class
     assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
     assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay') !== null, true);
 
     controller.removePlanSegmentReorderPreview();
     assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), false);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), false);
     assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay'), null);
+}));
+
+test('time-entry fallback overlay uses planned child rect instead of whole row', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const row = createNode('div', 'time-entry', { index: '1' }, { left: 0, top: 80, right: 600, bottom: 140, width: 600, height: 60 });
+    const plannedInput = createNode('input', 'planned-input', { index: '1' }, { left: 210, top: 82, right: 590, bottom: 138, width: 380, height: 56 });
+    row.appendChild(plannedInput);
+    root.appendChild(row);
+    const state = {
+        grid: createNode('div', 'split-grid', { index: '0' }),
+        context: { baseIndex: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 250, clientY: 100 });
+    controller.updateReorderPreview(ctx, state, dropTarget);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+
+    assert.equal(dropTarget.targetHost, plannedInput);
+    assert.equal(overlay.style.left, '210px');
+    assert.equal(overlay.style.width, '380px');
+}));
+
+test('cross-slot empty drop removes overlay after committing move', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const { entry, first } = createEntry();
+    entry.dataset.index = '0';
+    root.appendChild(entry);
+    const targetInput = createNode('input', 'planned-input', { index: '1' }, { left: 0, top: 90, right: 300, bottom: 150, width: 300, height: 60 });
+    root.appendChild(targetInput);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    first.dispatchEvent(createPointerEvent('pointerdown', first, 40));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', targetInput, 20, 110));
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay') !== null, true);
+
+    listeners.pointerup[0](createPointerEvent('pointerup', targetInput, 20, 110));
+
+    assert.equal(root.querySelector('.plan-segment-reorder-drop-target-overlay'), null);
+    assert.deepEqual(ctx.timeSlots[0].planActivities, []);
+    assert.equal(ctx.timeSlots[1].planActivities[0].label, 'A');
 }));
 
 test('segment moves from one planned slot to an empty merged planned slot when it fits', () => {
@@ -604,6 +669,11 @@ test('empty merged planned block target resolves to merge base index and merged 
     controller.updateReorderPreview(ctx, state, dropTarget);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-drop-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay !== null, true);
+    assert.equal(overlay.style.left, '0px');
+    assert.equal(overlay.style.top, '80px');
+    assert.equal(overlay.style.height, '100px');
 }));
 
 test('segment cannot move into a merged slot if duration exceeds merged capacity', () => {
@@ -648,6 +718,10 @@ test('invalid empty planned target shows invalid feedback and does not move on d
     assert.equal(hasClass(host, 'is-plan-segment-reorder-invalid-target'), true);
     assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
     assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay !== null, true);
+    assert.equal(hasClass(overlay, 'is-plan-segment-reorder-overlay-invalid'), true);
+    assert.equal(overlay.dataset.targetValid, 'false');
     if (dropTarget.valid) {
         controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex);
     }

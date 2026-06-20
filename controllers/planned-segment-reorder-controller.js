@@ -406,6 +406,42 @@
             });
     }
 
+    function removeReorderDropTargetOverlay() {
+        if (typeof document === 'undefined' || !document.querySelectorAll) return;
+        document.querySelectorAll('.plan-segment-reorder-drop-target-overlay').forEach((overlay) => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        });
+    }
+
+    function ensureReorderDropTargetOverlay() {
+        if (typeof document === 'undefined' || !document.createElement || !document.body) return null;
+        let overlay = document.querySelector
+            ? document.querySelector('.plan-segment-reorder-drop-target-overlay')
+            : (document.querySelectorAll ? document.querySelectorAll('.plan-segment-reorder-drop-target-overlay')[0] : null);
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.className = 'plan-segment-reorder-drop-target-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(overlay);
+        return overlay;
+    }
+
+    function updateReorderDropTargetOverlay(host, options = {}) {
+        const rect = host && host.getBoundingClientRect ? host.getBoundingClientRect() : null;
+        const overlay = rect ? ensureReorderDropTargetOverlay() : null;
+        if (!overlay) return;
+        overlay.className = 'plan-segment-reorder-drop-target-overlay';
+        if (options.valid === false) overlay.classList.add('is-plan-segment-reorder-overlay-invalid');
+        else overlay.classList.add('is-plan-segment-reorder-overlay-valid');
+        if (options.empty) overlay.classList.add('is-plan-segment-reorder-overlay-empty');
+        overlay.style.left = `${Math.round(rect.left)}px`;
+        overlay.style.top = `${Math.round(rect.top)}px`;
+        overlay.style.width = `${Math.max(0, Math.round(rect.width))}px`;
+        overlay.style.height = `${Math.max(0, Math.round(rect.height))}px`;
+        overlay.dataset.targetEmpty = options.empty ? 'true' : 'false';
+        overlay.dataset.targetValid = options.valid === false ? 'false' : 'true';
+    }
+
     function markReorderDropTarget(host, options = {}) {
         if (!host || !host.classList) return;
         host.classList.add('is-plan-segment-reorder-drop-target');
@@ -420,6 +456,7 @@
             document.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
                 if (marker.parentNode) marker.parentNode.removeChild(marker);
             });
+            removeReorderDropTargetOverlay();
         }
         if (typeof document !== 'undefined' && document.querySelectorAll) {
             document.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
@@ -894,6 +931,29 @@
         return false;
     }
 
+    function resolveVisiblePlannedDropHost(host, point) {
+        if (!host) return null;
+        const matchesPoint = (el) => {
+            const rect = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+            return rect && (!point || pointInRect(point, rect));
+        };
+        if (host.closest) {
+            const merged = host.closest('.planned-merged-main-container');
+            if (merged) return merged;
+            const wrapper = host.closest('.split-cell-wrapper.split-type-planned');
+            if (wrapper) return wrapper;
+            const input = host.closest('.planned-input');
+            if (input) return input;
+        }
+        if (host.querySelectorAll) {
+            const plannedChildren = Array.from(host.querySelectorAll('.planned-merged-main-container, .split-cell-wrapper.split-type-planned, .planned-input'));
+            const childAtPoint = plannedChildren.find(matchesPoint);
+            if (childAtPoint) return childAtPoint;
+            if (plannedChildren.length) return plannedChildren[0];
+        }
+        return host;
+    }
+
     function getPlannedDropHostAtPoint(point) {
         if (!point || typeof document === 'undefined' || !document.querySelectorAll) return null;
         const grids = Array.from(document.querySelectorAll('.split-visualization-planned .split-grid, .split-grid'));
@@ -908,7 +968,7 @@
                 || targetGrid.closest('.planned-input')
                 || targetGrid.closest('.time-entry')
             );
-            return { targetHost: plannedHost || targetGrid, targetGrid, emptyPlannedTarget: false };
+            return { targetHost: resolveVisiblePlannedDropHost(plannedHost || targetGrid, point), targetGrid, emptyPlannedTarget: false };
         }
 
         const hosts = Array.from(document.querySelectorAll('.split-cell-wrapper.split-type-planned, .planned-input, .planned-merged-main-container, .time-entry'));
@@ -918,9 +978,10 @@
             return rect && pointInRect(point, rect);
         }) || null;
         if (!targetHost) return null;
-        const nestedGrid = targetHost.querySelector && targetHost.querySelector('.split-grid');
+        const visibleHost = resolveVisiblePlannedDropHost(targetHost, point);
+        const nestedGrid = visibleHost && visibleHost.querySelector && visibleHost.querySelector('.split-grid');
         return {
-            targetHost,
+            targetHost: visibleHost || targetHost,
             targetGrid: nestedGrid || null,
             emptyPlannedTarget: !nestedGrid,
         };
@@ -999,7 +1060,10 @@
         if (dropTarget.crossSlot) {
             const previewKey = `cross:${dropTarget.targetBaseIndex}:${dropTarget.insertIndex}:${dropTarget.valid}`;
             const nextTargetHost = dropTarget.targetHost || dropTarget.targetGrid;
-            if (state.previewKey === previewKey && state.targetHost === nextTargetHost) return Boolean(dropTarget.valid);
+            if (state.previewKey === previewKey && state.targetHost === nextTargetHost) {
+                updateReorderDropTargetOverlay(nextTargetHost, { valid: dropTarget.valid, empty: !dropTarget.targetSegment, crossSlot: true });
+                return Boolean(dropTarget.valid);
+            }
             clearReorderPreviewLayer(state.grid);
             if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
             if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
@@ -1009,10 +1073,12 @@
             const targetHost = nextTargetHost;
             if (!dropTarget.valid) {
                 markReorderDropTarget(targetHost, { valid: false, empty: !dropTarget.targetSegment, crossSlot: true });
+                updateReorderDropTargetOverlay(targetHost, { valid: false, empty: !dropTarget.targetSegment, crossSlot: true });
                 if (!dropTarget.targetSegment) updateEmptyTargetMarker(targetHost, true);
                 return false;
             }
             markReorderDropTarget(targetHost, { valid: true, empty: !dropTarget.targetSegment, crossSlot: true });
+            updateReorderDropTargetOverlay(targetHost, { valid: true, empty: !dropTarget.targetSegment, crossSlot: true });
             if (dropTarget.targetSegment) {
                 updateInsertionMarker(dropTarget.targetGrid, dropTarget.targetSegment, dropTarget.placement);
             } else {
@@ -1177,6 +1243,7 @@
                         clearReorderPreviewLayer(state.grid);
                         if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
                         if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
+                        removeReorderDropTargetOverlay();
                         state.targetGrid = null;
                         state.targetHost = null;
                         if (state.grid.classList) state.grid.classList.add('is-plan-segment-reorder-cancel');

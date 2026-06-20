@@ -2353,6 +2353,28 @@ button.activity-chip,
   opacity: 0.5;
 }
 
+.plan-segment-reorder-drop-target-overlay {
+  position: fixed;
+  z-index: 10001;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px solid rgba(14, 165, 153, 0.86);
+  border-radius: 6px;
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 2px rgba(14, 165, 153, 0.2),
+    0 0 0 3px rgba(59, 130, 246, 0.12),
+    0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.plan-segment-reorder-drop-target-overlay.is-plan-segment-reorder-overlay-invalid {
+  border-color: rgba(239, 68, 68, 0.9);
+  box-shadow:
+    inset 0 0 0 2px rgba(239, 68, 68, 0.18),
+    0 0 0 3px rgba(239, 68, 68, 0.12),
+    0 8px 20px rgba(127, 29, 29, 0.08);
+}
+
 .plan-segment-reorder-insert-marker {
   position: absolute;
   z-index: 25;
@@ -2419,6 +2441,22 @@ button.activity-chip,
   -webkit-user-select: none;
   user-select: none;
   will-change: transform;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.plan-segment-reorder-drag-ghost.split-grid-segment,
+.plan-segment-reorder-drag-ghost .split-grid-segment,
+.split-grid-segment.is-plan-segment-reorder-dragging {
+  border-bottom: 0 !important;
+  background-clip: border-box !important;
+}
+
+.plan-segment-reorder-drag-ghost .plan-segment-graphic,
+.plan-segment-reorder-drag-ghost .plan-segment-graphic-main {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .plan-segment-reorder-drag-ghost,
