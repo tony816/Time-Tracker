@@ -3,6 +3,18 @@ const assert = require('node:assert/strict');
 
 const controller = require('../controllers/time-entry-render-controller');
 const { buildSplitVisualization } = controller;
+const { buildMethod } = require('./helpers/script-method-builder');
+require('../core/actual-grid-core');
+require('../core/plan-segment-core');
+
+const computeSplitSegments = buildMethod(
+    'computeSplitSegments(type, index)',
+    '(type, index)'
+);
+const getPlanSegmentVisualIdentityKey = buildMethod(
+    'getPlanSegmentVisualIdentityKey(segment)',
+    '(segment)'
+);
 
 test('buildSplitVisualization renders running outline classes without throwing', () => {
     const ctx = {
@@ -462,6 +474,65 @@ test('buildSplitVisualization uses grouped same-activity timer context while kee
     assert.match(html, /data-segment-id="planned-0-0-seg0"/);
     assert.match(html, /0m \/ 60m/);
     assert.match(html, /plan-segment-resize-handle-right/);
+});
+
+test('buildSplitVisualization real planned merge path renders one resize handle for merged visual span', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        timeSlots: [{
+            planned: 'Exercise',
+            planActivities: [
+                { label: 'Exercise', activityText: 'Exercise', activityId: 'exercise-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                { label: 'Exercise', activityText: 'Exercise', activityId: 'exercise-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+            ],
+        }],
+        mergedFields: new Map(),
+        computeSplitSegments,
+        getPlanSegmentVisualIdentityKey,
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        getSplitBaseIndex() { return 0; },
+        getSplitRange() { return { start: 0, end: 0 }; },
+        findMergeKey() { return null; },
+        getSplitActivities(type, baseIndex) {
+            return this.timeSlots[baseIndex].planActivities.map(item => ({ ...item }));
+        },
+        getBlockLength() { return 1; },
+        normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+        normalizePlanActivitiesForBlockRelative(items) { return items.map(item => ({ ...item })); },
+        toFinitePlanMinute(value, fallback = null) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : fallback;
+        },
+        escapeHtml(value) { return String(value); },
+        escapeAttribute(value) { return String(value); },
+        getSplitColor() { return '#abcdef'; },
+        getPlanSegmentBaseIndex() { return 0; },
+        getPlanSegmentId(baseIndex, segmentIndex) {
+            return `planned-${baseIndex}-0-seg${segmentIndex}`;
+        },
+        buildPlanSegmentViewModel(baseIndex, segmentId, segmentContext) {
+            return {
+                id: segmentId,
+                timer: { status: 'idle', running: false },
+                display: {
+                    icon: 'play',
+                    timeText: `0m / ${segmentContext.durationMinutes}m`,
+                    tone: 'under',
+                },
+            };
+        },
+    };
+
+    const html = buildSplitVisualization.call(ctx, 'planned', 0);
+    const segments = html.match(/<div class="split-grid-segment[^"]*"[^>]*data-segment-kind="real-plan"[\s\S]*?<\/div>/g) || [];
+
+    assert.equal(segments.length, 1);
+    assert.equal((html.match(/data-resize-edge="right"/g) || []).length, 1);
+    assert.match(segments[0], /data-segment-index="1"/);
+    assert.match(segments[0], /data-segment-start-minute="0"/);
+    assert.match(segments[0], /data-segment-end-minute="60"/);
+    assert.match(segments[0], /data-segment-duration-minutes="60"/);
+    assert.match(segments[0], /0m \/ 60m/);
 });
 
 test('buildSplitVisualization renders parent title above child activity inside plan segment', () => {

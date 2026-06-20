@@ -7294,33 +7294,48 @@ class TimeTracker {
         if (!targetKey) return null;
         const getStart = (item) => Number(item && item.startMinute);
         const getEnd = (item) => Number(item && item.endMinute);
-        let firstIndex = segmentIndex;
-        let lastIndex = segmentIndex;
-        while (firstIndex > 0) {
-            const current = activities[firstIndex];
-            const previous = activities[firstIndex - 1];
+        const sortedRealSegments = activities
+            .map((item, originalIndex) => ({ item, originalIndex }))
+            .filter(({ item }) => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+            .filter(({ item }) => Number.isFinite(getStart(item)) && Number.isFinite(getEnd(item)) && getEnd(item) > getStart(item))
+            .sort((left, right) => (getStart(left.item) - getStart(right.item)) || (left.originalIndex - right.originalIndex));
+        const targetSortedIndex = sortedRealSegments.findIndex(entry => entry.originalIndex === segmentIndex);
+        if (targetSortedIndex < 0) return null;
+        let firstSortedIndex = targetSortedIndex;
+        let lastSortedIndex = targetSortedIndex;
+        while (firstSortedIndex > 0) {
+            const current = sortedRealSegments[firstSortedIndex].item;
+            const previous = sortedRealSegments[firstSortedIndex - 1].item;
             if (!previous || previous.kind === 'virtual-rest' || previous.virtual === true) break;
             const sameIdentity = this.getPlanSegmentVisualIdentityKey(previous) === targetKey;
             if (!sameIdentity || getEnd(previous) !== getStart(current)) break;
-            firstIndex -= 1;
+            firstSortedIndex -= 1;
         }
-        while (lastIndex < activities.length - 1) {
-            const current = activities[lastIndex];
-            const next = activities[lastIndex + 1];
+        while (lastSortedIndex < sortedRealSegments.length - 1) {
+            const current = sortedRealSegments[lastSortedIndex].item;
+            const next = sortedRealSegments[lastSortedIndex + 1].item;
             if (!next || next.kind === 'virtual-rest' || next.virtual === true) break;
             const sameIdentity = this.getPlanSegmentVisualIdentityKey(next) === targetKey;
             if (!sameIdentity || getEnd(current) !== getStart(next)) break;
-            lastIndex += 1;
+            lastSortedIndex += 1;
         }
-        if (firstIndex === lastIndex) return null;
-        const first = activities[firstIndex];
-        const last = activities[lastIndex];
+        if (firstSortedIndex === lastSortedIndex) return null;
+        const groupEntries = sortedRealSegments.slice(firstSortedIndex, lastSortedIndex + 1);
+        const first = groupEntries[0].item;
+        const last = groupEntries[groupEntries.length - 1].item;
         const startMinute = getStart(first);
         const endMinute = getEnd(last);
         if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute) || endMinute <= startMinute) return null;
+        const originalIndices = groupEntries.map(entry => entry.originalIndex);
         return {
-            firstIndex,
-            lastIndex,
+            firstIndex: Math.min(...originalIndices),
+            lastIndex: Math.max(...originalIndices),
+            sourceSegmentIndex: firstSortedIndex,
+            originalIndices,
+            sortedSegments: sortedRealSegments.map(entry => ({
+                ...entry.item,
+                originalIndex: entry.originalIndex,
+            })),
             startMinute,
             endMinute,
             durationMinutes: endMinute - startMinute,
@@ -7328,11 +7343,23 @@ class TimeTracker {
         };
     }
     buildMergedPlanSegmentResizeSource(activities, group) {
-        if (!Array.isArray(activities) || !group || !Number.isInteger(group.firstIndex) || !Number.isInteger(group.lastIndex)) {
+        if (!Array.isArray(activities) || !group || !Array.isArray(group.originalIndices)) {
             return { activities: Array.isArray(activities) ? activities.map(item => ({ ...item })) : [], segmentIndex: null };
         }
-        const next = activities.map(item => ({ ...item }));
-        const source = next[group.firstIndex] || {};
+        const groupIndexSet = new Set(group.originalIndices);
+        const sortedSegments = Array.isArray(group.sortedSegments)
+            ? group.sortedSegments.map(item => ({ ...item }))
+            : activities
+                .map((item, originalIndex) => ({ ...item, originalIndex }))
+                .filter(item => item && item.kind !== 'virtual-rest' && item.virtual !== true)
+                .sort((left, right) => (Number(left.startMinute) - Number(right.startMinute)) || (Number(left.originalIndex) - Number(right.originalIndex)));
+        const sourceSegmentIndex = Number.isInteger(group.sourceSegmentIndex)
+            ? group.sourceSegmentIndex
+            : sortedSegments.findIndex(item => groupIndexSet.has(Number(item.originalIndex)));
+        if (sourceSegmentIndex < 0) {
+            return { activities: sortedSegments.map(item => ({ ...item })), segmentIndex: null };
+        }
+        const source = sortedSegments[sourceSegmentIndex] || {};
         const merged = {
             ...source,
             startMinute: group.startMinute,
@@ -7340,8 +7367,19 @@ class TimeTracker {
             durationMinutes: group.durationMinutes,
             seconds: group.durationMinutes * 60,
         };
-        next.splice(group.firstIndex, group.lastIndex - group.firstIndex + 1, merged);
-        return { activities: next, segmentIndex: group.firstIndex };
+        delete merged.originalIndex;
+        const next = [];
+        sortedSegments.forEach((item, sortedIndex) => {
+            if (sortedIndex === sourceSegmentIndex) {
+                next.push(merged);
+                return;
+            }
+            if (groupIndexSet.has(Number(item.originalIndex))) return;
+            const copy = { ...item };
+            delete copy.originalIndex;
+            next.push(copy);
+        });
+        return { activities: next, segmentIndex: sourceSegmentIndex };
     }
     applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
         const options = arguments.length > 4 && arguments[4] && typeof arguments[4] === 'object'
@@ -8168,8 +8206,13 @@ class TimeTracker {
                     if (shouldDelete) {
                         if (mergedResizeGroup && Array.isArray(resizeController.timeSlots && resizeController.timeSlots[baseIndex] && resizeController.timeSlots[baseIndex].planActivities)) {
                             const slot = resizeController.timeSlots[baseIndex];
+                            const deleteIndexSet = new Set(Array.isArray(mergedResizeGroup.originalIndices)
+                                ? mergedResizeGroup.originalIndices
+                                : []);
                             slot.planActivities = slot.planActivities
-                                .filter((_, itemIndex) => itemIndex < mergedResizeGroup.firstIndex || itemIndex > mergedResizeGroup.lastIndex)
+                                .filter((_, itemIndex) => deleteIndexSet.size > 0
+                                    ? !deleteIndexSet.has(itemIndex)
+                                    : (itemIndex < mergedResizeGroup.firstIndex || itemIndex > mergedResizeGroup.lastIndex))
                                 .map(item => ({ ...item }));
                             slot.planned = resizeController.formatActivitiesSummary ? resizeController.formatActivitiesSummary(slot.planActivities) : (slot.planned || '');
                             resizeController.renderTimeEntries(true);

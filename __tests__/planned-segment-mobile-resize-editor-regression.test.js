@@ -553,6 +553,38 @@ test('merged planned resize resolution does not use label-only identity', () => 
     assert.equal(resolveMergedPlanSegmentResizeGroup.call(ctx, activities, 1), null);
 });
 
+test('merged planned resize resolution follows chronological visual grouping for out-of-order activities', () => {
+    const ctx = {
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        getPlanSegmentVisualIdentityKey,
+        resolveMergedPlanSegmentResizeGroup,
+        buildMergedPlanSegmentResizeSource,
+    };
+    const activities = [
+        { label: 'Email', activityText: 'Email', activityId: 'email-id', startMinute: 60, endMinute: 90, durationMinutes: 30 },
+        { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+        { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+    ];
+
+    const group = resolveMergedPlanSegmentResizeGroup.call(ctx, activities, 1);
+    assert.deepEqual(group.originalIndices, [2, 1]);
+    assert.equal(group.sourceSegmentIndex, 0);
+    assert.equal(group.startMinute, 0);
+    assert.equal(group.endMinute, 60);
+
+    const source = buildMergedPlanSegmentResizeSource.call(ctx, activities, group);
+    assert.equal(source.segmentIndex, 0);
+    assert.deepEqual(source.activities.map(item => ({
+        label: item.label,
+        startMinute: item.startMinute,
+        endMinute: item.endMinute,
+        durationMinutes: item.durationMinutes,
+    })), [
+        { label: 'Focus', startMinute: 0, endMinute: 60, durationMinutes: 60 },
+        { label: 'Email', startMinute: 60, endMinute: 90, durationMinutes: 30 },
+    ]);
+});
+
 test('plan segment resize preview guide uses svg class attribute without className assignment', () => {
     withDocument(({ listeners }) => {
         const resizeCalls = [];
