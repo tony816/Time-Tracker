@@ -252,9 +252,10 @@ test('move mode marks planned slot wrapper only on movable base row', () => {
     }
 });
 
-test('whole planned slot wrapper starts move drag and keeps full preview until release', () => {
+function createMoveDomHarness() {
     const originalDocument = global.document;
     const documentListeners = {};
+    const rows = new Map();
     const body = {
         className: '',
         children: [],
@@ -285,8 +286,25 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
         querySelectorAll() {
             return [];
         },
-        querySelector() {
-            return null;
+        querySelector(selector) {
+            const match = String(selector || '').match(/\.time-entry\[data-index="(\d+)"\]/);
+            if (!match) return null;
+            const index = Number(match[1]);
+            if (!rows.has(index)) {
+                const row = {
+                    className: '',
+                    classList: {
+                        add(className) { row.className = `${row.className} ${className}`.trim(); },
+                        remove(...classNames) {
+                            const remove = new Set(classNames);
+                            row.className = row.className.split(/\s+/).filter(item => item && !remove.has(item)).join(' ');
+                        },
+                        contains(className) { return row.className.split(/\s+/).includes(className); },
+                    },
+                };
+                rows.set(index, row);
+            }
+            return rows.get(index);
         },
         createElement() {
             return {
@@ -299,7 +317,7 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
         },
     };
 
-    const createTarget = () => {
+    const createTarget = (rect = { left: 20, top: 30, width: 240, height: 120 }) => {
         const listeners = {};
         const clone = {
             className: 'split-cell-wrapper split-type-planned split-has-data',
@@ -329,13 +347,18 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
             addEventListener(type, handler) { listeners[type] = handler; },
             setPointerCapture(pointerId) { target.capturedPointerId = pointerId; },
             releasePointerCapture(pointerId) { target.releasedPointerId = pointerId; },
-            getBoundingClientRect() { return { left: 20, top: 30, width: 240, height: 120 }; },
+            getBoundingClientRect() { return rect; },
             cloneNode() { return clone; },
             querySelectorAll() { return []; },
         };
         return target;
     };
 
+    return { originalDocument, documentListeners, body, rows, createTarget };
+}
+
+test('whole planned slot wrapper starts move drag and keeps full preview until release', () => {
+    const { originalDocument, documentListeners, body, createTarget } = createMoveDomHarness();
     try {
         const ctx = createCtx();
         ctx.plannedSlotMoveMode = true;
@@ -394,15 +417,160 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
     }
 });
 
-test('move handle css docks the affordance to the planned card edge', () => {
+test('touch pointer starts move drag from the slot body without a handle', () => {
+    const { originalDocument, documentListeners, body, createTarget } = createMoveDomHarness();
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Touch block';
+        ctx.getIndexAtClientPosition = () => 3;
+        const target = createTarget();
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+        target._listeners.pointerdown({
+            type: 'pointerdown',
+            target,
+            button: 0,
+            pointerId: 9,
+            pointerType: 'touch',
+            clientX: 70,
+            clientY: 80,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            target: body,
+            pointerId: 9,
+            pointerType: 'touch',
+            clientX: 90,
+            clientY: 116,
+            preventDefault() {},
+        });
+
+        assert.equal(ctx.plannedSlotMoveDrag.dragging, true);
+        assert.equal(body.children.length, 1);
+        assert.match(body.children[0].className, /planned-slot-move-drag-preview/);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('merged planned slot drag preserves preview height and highlights full target duration', () => {
+    const { originalDocument, documentListeners, body, rows, createTarget } = createMoveDomHarness();
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Merged A';
+        ctx.timeSlots[2].planned = 'Merged B';
+        ctx.mergedFields.set('planned-1-2', 'Merged block');
+        ctx.getIndexAtClientPosition = () => 3;
+        const target = createTarget({ left: 20, top: 30, width: 240, height: 240 });
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+        target._listeners.pointerdown({
+            type: 'pointerdown',
+            target,
+            button: 0,
+            pointerId: 11,
+            clientX: 40,
+            clientY: 50,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            target: body,
+            pointerId: 11,
+            clientX: 120,
+            clientY: 180,
+            preventDefault() {},
+        });
+
+        assert.equal(body.children[0].style.minHeight, '240px');
+        assert.equal(ctx.plannedSlotMoveDrag.sourceContext.blockLength, 2);
+        assert.equal(ctx.plannedSlotMoveDrag.targetStart, 3);
+        assert.equal(rows.get(3).classList.contains('planned-slot-move-drop-valid'), true);
+        assert.equal(rows.get(4).classList.contains('planned-slot-move-drop-valid'), true);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('move mode renders no persistent move handle rail grip or tab css', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
-    const handleBlock = css.match(/\.planned-slot-move-target::before\s*\{([\s\S]*?)\}/);
-    const gripBlock = css.match(/\.planned-slot-move-target::after\s*\{([\s\S]*?)\}/);
-    assert.ok(handleBlock);
-    assert.ok(gripBlock);
-    assert.match(handleBlock[1], /left:\s*-3px;/);
-    assert.doesNotMatch(handleBlock[1], /left:\s*-1[02]px;/);
-    assert.match(handleBlock[1], /border-radius:\s*6px 3px 3px 6px;/);
-    assert.match(gripBlock[1], /border-left:\s*2px dotted/);
-    assert.match(gripBlock[1], /border-right:\s*2px dotted/);
+    assert.doesNotMatch(css, /\.planned-slot-move-target::before/);
+    assert.doesNotMatch(css, /\.planned-slot-move-target::after/);
+    assert.doesNotMatch(css, /planned-slot-move-handle|move-rail|move-grip/);
+    assert.match(css, /\.planned-slot-move-target\s*\{/);
+    assert.match(css, /cursor:\s*grab;/);
+});
+
+test('move mode pulse is armed only on first entry', () => {
+    const originalDocument = global.document;
+    const originalSetTimeout = global.setTimeout;
+    const roots = [];
+    const createRoot = () => {
+        const root = {
+            className: '',
+            classList: {
+                toggle(className, enabled) {
+                    const classes = new Set(root.className.split(/\s+/).filter(Boolean));
+                    if (enabled) classes.add(className);
+                    else classes.delete(className);
+                    root.className = Array.from(classes).join(' ');
+                },
+                contains(className) {
+                    return root.className.split(/\s+/).includes(className);
+                },
+            },
+        };
+        roots.push(root);
+        return root;
+    };
+    const html = createRoot();
+    const body = createRoot();
+    const timesheet = createRoot();
+    const entries = createRoot();
+    global.document = {
+        documentElement: html,
+        body,
+        querySelector(selector) {
+            return selector === '.timesheet' ? timesheet : null;
+        },
+        getElementById(id) {
+            return id === 'timeEntries' ? entries : null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+    global.setTimeout = () => 1;
+    try {
+        const ctx = createCtx();
+        ctx.renderTimeEntries = () => {};
+        assert.equal(controller.setPlannedSlotMoveMode.call(ctx, true), true);
+        assert.equal(ctx.plannedSlotMovePulseActive, true);
+        assert.equal(body.classList.contains('planned-slot-move-pulse'), true);
+        controller.setPlannedSlotMoveMode.call(ctx, false);
+        assert.equal(ctx.plannedSlotMovePulseActive, false);
+        assert.equal(controller.setPlannedSlotMoveMode.call(ctx, true), true);
+        assert.equal(ctx.plannedSlotMovePulseActive, false);
+        assert.equal(body.classList.contains('planned-slot-move-pulse'), false);
+    } finally {
+        global.document = originalDocument;
+        global.setTimeout = originalSetTimeout;
+    }
 });

@@ -2659,40 +2659,11 @@ body.is-plan-segment-reorder-ghost-active {
   position: relative;
   touch-action: none;
   border-radius: 7px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-}
-
-.planned-slot-move-target::before {
-  content: "";
-  position: absolute;
-  left: -3px;
-  top: 8px;
-  bottom: 8px;
-  z-index: 24;
-  width: 12px;
-  min-height: 26px;
-  border: 1px solid rgba(37, 99, 235, 0.62);
-  border-right-color: rgba(37, 99, 235, 0.26);
-  border-radius: 6px 3px 3px 6px;
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98), rgba(191, 219, 254, 0.96));
+  outline: 1px solid rgba(37, 99, 235, 0.28);
+  outline-offset: -1px;
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.12),
-    inset -1px 0 0 rgba(255, 255, 255, 0.68);
-  pointer-events: none;
-}
-
-.planned-slot-move-target::after {
-  content: "";
-  position: absolute;
-  left: 1px;
-  top: 50%;
-  z-index: 25;
-  width: 5px;
-  height: 18px;
-  border-left: 2px dotted rgba(37, 99, 235, 0.78);
-  border-right: 2px dotted rgba(37, 99, 235, 0.78);
-  transform: translateY(-50%);
-  pointer-events: none;
+    0 2px 6px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .planned-slot-move-target:active,
@@ -2707,6 +2678,31 @@ body.is-plan-segment-reorder-ghost-active {
     0 4px 10px rgba(15, 23, 42, 0.12),
     0 0 0 1px rgba(37, 99, 235, 0.16);
   opacity: 0.82;
+}
+
+.planned-slot-move-pulse .planned-slot-move-target {
+  animation: planned-slot-move-card-pulse 920ms ease-out 1;
+}
+
+@keyframes planned-slot-move-card-pulse {
+  0% {
+    outline-color: rgba(37, 99, 235, 0.18);
+    box-shadow:
+      0 2px 6px rgba(15, 23, 42, 0.1),
+      0 0 0 1px rgba(37, 99, 235, 0.12);
+  }
+  45% {
+    outline-color: rgba(37, 99, 235, 0.55);
+    box-shadow:
+      0 6px 16px rgba(15, 23, 42, 0.16),
+      0 0 0 3px rgba(37, 99, 235, 0.18);
+  }
+  100% {
+    outline-color: rgba(37, 99, 235, 0.28);
+    box-shadow:
+      0 2px 6px rgba(15, 23, 42, 0.1),
+      0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
 }
 
 .planned-slot-move-drag-preview {
@@ -2758,19 +2754,6 @@ body.is-planned-slot-move-preview-active {
 }
 
 @media (max-width: 640px) {
-  .planned-slot-move-target::before {
-    left: -4px;
-    top: 7px;
-    bottom: 7px;
-    width: 14px;
-    min-height: 30px;
-  }
-
-  .planned-slot-move-target::after {
-    left: 1px;
-    height: 22px;
-  }
-
   .planned-slot-move-mode-btn {
     min-height: 36px;
     padding: 8px 10px;

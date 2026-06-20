@@ -102,7 +102,7 @@
             status.className = 'planned-slot-move-status';
             status.setAttribute('role', 'status');
             status.hidden = true;
-            status.textContent = '이동할 슬롯의 핸들을 끌어 빈 위치에 놓으세요.';
+            status.textContent = '\uC2AC\uB86F\uC744 \uC7A1\uC544 \uC774\uB3D9';
             if (timesheet) {
                 const header = timesheet.querySelector('.header-row');
                 timesheet.insertBefore(status, header ? header.nextSibling : timesheet.firstChild);
@@ -121,6 +121,8 @@
             document.getElementById('timeEntries'),
         ].filter(Boolean);
         roots.forEach((el) => el.classList.toggle('planned-slot-move-mode', enabled));
+        const pulse = enabled && Boolean(this.plannedSlotMovePulseActive);
+        roots.forEach((el) => el.classList.toggle('planned-slot-move-pulse', pulse));
         if (this.plannedSlotMoveModeButton) {
             this.plannedSlotMoveModeButton.textContent = enabled ? '이동 완료' : '슬롯 이동';
             this.plannedSlotMoveModeButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
@@ -141,12 +143,21 @@
             if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
             if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
             if (typeof this.cancelPlanSegmentResize === 'function') this.cancelPlanSegmentResize();
+            this.plannedSlotMovePulseActive = !this.plannedSlotMovePulseShown;
+            this.plannedSlotMovePulseShown = true;
         } else {
             clearPlannedSlotMoveDragState.call(this);
+            this.plannedSlotMovePulseActive = false;
         }
         this.plannedSlotMoveMode = next;
         setPlannedSlotMoveModeUi.call(this);
         if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(next ? false : true);
+        if (next && this.plannedSlotMovePulseActive && typeof setTimeout === 'function') {
+            setTimeout(() => {
+                this.plannedSlotMovePulseActive = false;
+                setPlannedSlotMoveModeUi.call(this);
+            }, 1100);
+        }
         return this.plannedSlotMoveMode;
     }
 
