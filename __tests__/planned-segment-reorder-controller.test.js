@@ -856,6 +856,149 @@ test('cross-slot move into non-empty split grid keeps insertion targeting', () =
     assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'B', 'C']);
 }));
 
+test('cross-slot hover over virtual rest targets the rest segment and overlays its rect', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Move', planActivities: [{ label: 'Move', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 }], planSegmentTimers: {} },
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const targetGrid = createNode('div', 'split-grid', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    const first = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        reorderItemId: 'real-0',
+    }, { left: 0, top: 80, right: 100, bottom: 140, width: 100, height: 60 });
+    const rest = createNode('div', 'split-grid-segment split-grid-segment-virtual-rest', {
+        segmentKind: 'virtual-rest',
+        reorderItemType: 'virtual-rest',
+        reorderItemId: 'rest-0',
+        gapStartMinute: '20',
+        gapDurationMinutes: '20',
+        restIndex: '0',
+    }, { left: 100, top: 80, right: 200, bottom: 140, width: 100, height: 60 });
+    const second = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '1',
+        reorderItemId: 'real-1',
+    }, { left: 200, top: 80, right: 300, bottom: 140, width: 100, height: 60 });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetGrid);
+    targetGrid.appendChild(first);
+    targetGrid.appendChild(rest);
+    targetGrid.appendChild(second);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 150, clientY: 100 });
+
+    assert.equal(dropTarget.crossSlot, true);
+    assert.equal(dropTarget.targetSegment, rest);
+    assert.equal(dropTarget.targetHost, rest);
+    assert.equal(dropTarget.insertIndex, 1);
+    assert.equal(dropTarget.restDurationMinutes, 20);
+    assert.equal(dropTarget.valid, true);
+    assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), true);
+    assert.equal(hasClass(rest, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(hasClass(targetGrid, 'is-plan-segment-reorder-drop-target'), false);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay !== null, true);
+    assert.equal(overlay.style.left, '100px');
+    assert.equal(overlay.style.top, '80px');
+    assert.equal(overlay.style.width, '100px');
+    assert.equal(overlay.style.height, '60px');
+}));
+
+test('cross-slot drop into virtual rest resizes moved segment to rest duration', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'Move, Keep',
+                planActivities: [
+                    { label: 'Move', activityId: 'move', title: 'Move title', type: 'focus', color: '#f00', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Keep', activityId: 'keep', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+                planSegmentTimers: { 'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 7 } },
+            },
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 1, { restDurationMinutes: 20 }), true);
+
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['Keep']);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'Move', 'B']);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => [item.startMinute, item.endMinute, item.durationMinutes, item.seconds]), [
+        [0, 20, 20, 1200],
+        [20, 40, 20, 1200],
+        [40, 60, 20, 1200],
+    ]);
+    assert.equal(ctx.timeSlots[1].planActivities[1].activityId, 'move');
+    assert.equal(ctx.timeSlots[1].planActivities[1].title, 'Move title');
+    assert.equal(ctx.timeSlots[1].planActivities[1].type, 'focus');
+    assert.equal(ctx.timeSlots[1].planActivities[1].color, '#f00');
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'], undefined);
+    assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1-seg1'].elapsedSeconds, 7);
+    assert.equal(ctx.renderCalls, 1);
+    assert.equal(ctx.totalCalls, 1);
+    assert.equal(ctx.saveCalls, 1);
+});
+
+test('cross-slot virtual rest insert index places moved segment between surrounding real segments', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Move', planActivities: [{ label: 'Move', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 }], planSegmentTimers: {} },
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const { grid: targetGrid, rest } = createEntryWithRest();
+    targetGrid.dataset.index = '1';
+    targetGrid._rect = { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 };
+    targetGrid.children.forEach((child) => {
+        child._rect = { ...child._rect, top: 80, bottom: 140 };
+    });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetGrid);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 150, clientY: 100 });
+
+    assert.equal(dropTarget.insertIndex, 1);
+    assert.equal(dropTarget.targetSegment, rest);
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, dropTarget.insertIndex, { restDurationMinutes: dropTarget.restDurationMinutes }), true);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'Move', 'B']);
+}));
+
 test('segment cannot move into a full destination slot or overwrite existing segments', () => {
     const ctx = createCtx({
         timeSlots: [
