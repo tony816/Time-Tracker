@@ -454,6 +454,128 @@ test('single planned slot reorders different activity segments and remaps timers
     assert.equal(ctx.saveCalls, 1);
 });
 
+test('segment moves from one planned slot to an empty normal planned slot', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200, type: 'focus', color: '#111', rest: { before: 5 } },
+                    { label: 'B', activityId: 'b', startMinute: 20, endMinute: 50, durationMinutes: 30, seconds: 1800 },
+                ],
+                planSegmentTimers: { 'planned-0-0-seg0': { status: 'paused', elapsedSeconds: 12 }, 'planned-0-0-seg1': { status: 'idle' } },
+            },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 0), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => item.label), ['B']);
+    assert.deepEqual(ctx.timeSlots[1].planActivities[0], {
+        label: 'A',
+        activityId: 'a',
+        startMinute: 0,
+        endMinute: 20,
+        durationMinutes: 20,
+        seconds: 1200,
+        type: 'focus',
+        color: '#111',
+        rest: { before: 5 },
+    });
+    assert.equal(ctx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].elapsedSeconds, 12);
+    assert.equal(ctx.timeSlots[0].planSegmentTimers['planned-0-0-seg0'], undefined);
+    assert.equal(ctx.renderCalls, 1);
+});
+
+test('segment moves from one planned slot to an empty merged planned slot when it fits', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 60, durationMinutes: 60, seconds: 3600 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {}, planMergeSnapshot: { version: 2, mergeKey: 'planned-1-2', startIndex: 1, endIndex: 2, slots: [{}, {}], mergedFields: [] } },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+        resolvePlannedSlotContext(index) {
+            if (index === 1 || index === 2) return { baseIndex: 1, rangeStart: 1, rangeEnd: 2, slotCount: 2, blockMinutes: 120, mergeKey: 'planned-1-2', isMerged: true };
+            return { baseIndex: index, rangeStart: index, rangeEnd: index, slotCount: 1, blockMinutes: 60, mergeKey: null, isMerged: false };
+        },
+    });
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 0), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities, []);
+    assert.equal(ctx.timeSlots[1].planActivities[0].label, 'A');
+    assert.equal(ctx.timeSlots[1].planActivities[0].durationMinutes, 60);
+});
+
+test('segment cannot move into a merged slot if duration exceeds merged capacity', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Long', planActivities: [{ label: 'Long', startMinute: 0, endMinute: 120, durationMinutes: 120, seconds: 7200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+        resolvePlannedSlotContext(index) {
+            return { baseIndex: index, rangeStart: index, rangeEnd: index, slotCount: 1, blockMinutes: index === 1 ? 60 : 120, mergeKey: index === 1 ? 'planned-1-1' : null, isMerged: index === 1 };
+        },
+    });
+    const before = JSON.stringify(ctx.timeSlots);
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 0), false);
+    assert.equal(JSON.stringify(ctx.timeSlots), before);
+});
+
+test('segment inserts between segments in another planned slot when capacity allows', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'B', planActivities: [{ label: 'B', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            {
+                planned: 'A, C',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'C', startMinute: 20, endMinute: 40, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 1), true);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'B', 'C']);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => [item.startMinute, item.endMinute]), [[0, 20], [20, 40], [40, 60]]);
+});
+
+test('segment cannot move into a full destination slot or overwrite existing segments', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Move', planActivities: [{ label: 'Move', startMinute: 0, endMinute: 10, durationMinutes: 10, seconds: 600 }], planSegmentTimers: {} },
+            {
+                planned: 'Full',
+                planActivities: [{ label: 'Full', startMinute: 0, endMinute: 60, durationMinutes: 60, seconds: 3600 }],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const before = JSON.stringify(ctx.timeSlots);
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 0), false);
+    assert.equal(JSON.stringify(ctx.timeSlots), before);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['Full']);
+});
+
+test('virtual rest updates after cross-slot insert and remove', () => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A, B', planActivities: [
+                { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                { label: 'B', startMinute: 20, endMinute: 40, durationMinutes: 20, seconds: 1200 },
+            ], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 1, 1, 0), true);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[0].planActivities, { startMinute: 0, endMinute: 60 }).map((gap) => gap.durationMinutes), [40]);
+    assert.deepEqual(planSegmentCore.calculateVirtualRestGaps(ctx.timeSlots[1].planActivities, { startMinute: 0, endMinute: 60 }).map((gap) => gap.durationMinutes), [40]);
+});
+
 test('single planned slot reorders virtual rest after a real segment without persisting rest', () => {
     const ctx = createCtx({
         timeSlots: [
