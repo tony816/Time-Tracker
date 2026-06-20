@@ -213,6 +213,12 @@
         return null;
     }
 
+    function getFallbackRestDropSegment(grid) {
+        if (!grid || typeof grid.querySelectorAll !== 'function') return null;
+        const rests = Array.from(grid.querySelectorAll('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]'));
+        return rests.find((rest) => getRestTargetDurationMinutes(rest) >= 1) || null;
+    }
+
     function getInsertIndexForRestTarget(ctx, targetContext, restStartMinute) {
         const targetSlot = ctx.timeSlots && ctx.timeSlots[targetContext.baseIndex];
         const targetItems = getBlockRelativePlanActivities(ctx, getPlanActivities(ctx, targetSlot), targetContext);
@@ -1100,7 +1106,10 @@
         const targetBaseIndex = getDropHostBaseIndex(targetGrid || targetHost, state.context.baseIndex, ctx);
         if (targetBaseIndex === state.context.baseIndex) return getActiveDropTarget(state, point);
 
-        const targetSegment = getSegmentAtPoint(targetGrid, point);
+        const segmentAtPoint = getSegmentAtPoint(targetGrid, point);
+        const targetSegment = isVirtualRestSegment(segmentAtPoint)
+            ? segmentAtPoint
+            : (getFallbackRestDropSegment(targetGrid) || segmentAtPoint);
         const valid = canCrossSlotFit(ctx, state, targetBaseIndex, targetSegment);
         if (!targetGrid || !targetSegment) {
             return {

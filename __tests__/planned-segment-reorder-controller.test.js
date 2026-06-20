@@ -920,6 +920,109 @@ test('cross-slot hover over virtual rest targets the rest segment and overlays i
     assert.equal(overlay.style.height, '60px');
 }));
 
+test('cross-slot hover anywhere in a slot with rest highlights the rest instead of invalid host', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Move', planActivities: [{ label: 'Move', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 }], planSegmentTimers: {} },
+            {
+                planned: 'A, B',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'B', startMinute: 40, endMinute: 60, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const targetGrid = createNode('div', 'split-grid', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    const first = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        reorderItemId: 'real-0',
+    }, { left: 0, top: 80, right: 100, bottom: 140, width: 100, height: 60 });
+    const rest = createNode('div', 'split-grid-segment split-grid-segment-virtual-rest', {
+        segmentKind: 'virtual-rest',
+        reorderItemType: 'virtual-rest',
+        reorderItemId: 'rest-0',
+        gapStartMinute: '20',
+        gapDurationMinutes: '20',
+        restIndex: '0',
+    }, { left: 100, top: 80, right: 200, bottom: 140, width: 100, height: 60 });
+    const second = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '1',
+        reorderItemId: 'real-1',
+    }, { left: 200, top: 80, right: 300, bottom: 140, width: 100, height: 60 });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetGrid);
+    targetGrid.appendChild(first);
+    targetGrid.appendChild(rest);
+    targetGrid.appendChild(second);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 30, clientY: 100 });
+
+    assert.equal(dropTarget.crossSlot, true);
+    assert.equal(dropTarget.targetSegment, rest);
+    assert.equal(dropTarget.targetHost, rest);
+    assert.equal(dropTarget.valid, true);
+    assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), true);
+    assert.equal(hasClass(rest, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(hasClass(rest, 'is-plan-segment-reorder-invalid-target'), false);
+    assert.equal(hasClass(targetGrid, 'is-plan-segment-reorder-drop-target'), false);
+    assert.equal(hasClass(targetGrid, 'is-plan-segment-reorder-invalid-target'), false);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay.style.left, '100px');
+    assert.equal(overlay.style.width, '100px');
+    assert.equal(overlay.dataset.targetValid, 'true');
+}));
+
+test('cross-slot hover over full slot without rest still shows invalid slot highlight', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Move', planActivities: [{ label: 'Move', startMinute: 0, endMinute: 10, durationMinutes: 10, seconds: 600 }], planSegmentTimers: {} },
+            {
+                planned: 'Full',
+                planActivities: [{ label: 'Full', startMinute: 0, endMinute: 60, durationMinutes: 60, seconds: 3600 }],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const targetGrid = createNode('div', 'split-grid', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    const full = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        reorderItemId: 'real-0',
+    }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetGrid);
+    targetGrid.appendChild(full);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 30, clientY: 100 });
+
+    assert.equal(dropTarget.crossSlot, true);
+    assert.equal(dropTarget.targetSegment, full);
+    assert.equal(dropTarget.valid, false);
+    assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), false);
+    assert.equal(hasClass(targetGrid, 'is-plan-segment-reorder-drop-target'), true);
+    assert.equal(hasClass(targetGrid, 'is-plan-segment-reorder-invalid-target'), true);
+    const overlay = root.querySelector('.plan-segment-reorder-drop-target-overlay');
+    assert.equal(overlay.style.left, '0px');
+    assert.equal(overlay.style.width, '300px');
+    assert.equal(overlay.dataset.targetValid, 'false');
+}));
+
 test('cross-slot drop into virtual rest resizes moved segment to rest duration', () => {
     const ctx = createCtx({
         timeSlots: [
