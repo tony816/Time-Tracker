@@ -487,6 +487,60 @@ test('segment moves from one planned slot to an empty normal planned slot', () =
     assert.equal(ctx.renderCalls, 1);
 });
 
+test('empty normal planned slot without split grid resolves as cross-slot drop target and moves on drop', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', activityId: 'a', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const targetInput = createNode('input', 'planned-input', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetInput);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
+
+    assert.equal(dropTarget.crossSlot, true);
+    assert.equal(dropTarget.targetBaseIndex, 1);
+    assert.equal(dropTarget.insertIndex, 0);
+    assert.equal(dropTarget.targetSegment, null);
+    assert.equal(dropTarget.valid, true);
+    assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), true);
+    assert.equal(hasClass(targetInput, 'is-plan-segment-reorder-empty-target'), true);
+    assert.equal(targetInput.querySelectorAll('.plan-segment-reorder-insert-marker').length, 1);
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex), true);
+    assert.deepEqual(ctx.timeSlots[0].planActivities, []);
+    assert.equal(ctx.timeSlots[1].planActivities[0].label, 'A');
+}));
+
+test('empty target without split grid gets marker and cleanup removes host classes', () => withDom(({ root }) => {
+    const host = createNode('div', 'split-cell-wrapper split-type-planned', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    root.appendChild(host);
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' });
+    const state = { grid: sourceGrid, context: { baseIndex: 0, blockMinutes: 60 }, sourceId: 'real-0' };
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
+
+    controller.updateReorderPreview(ctx, state, dropTarget);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
+    assert.equal(host.querySelector('.plan-segment-reorder-insert-marker') !== null, true);
+
+    controller.removePlanSegmentReorderPreview();
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), false);
+    assert.equal(host.querySelector('.plan-segment-reorder-insert-marker'), null);
+}));
+
 test('segment moves from one planned slot to an empty merged planned slot when it fits', () => {
     const ctx = createCtx({
         timeSlots: [
@@ -506,6 +560,33 @@ test('segment moves from one planned slot to an empty merged planned slot when i
     assert.equal(ctx.timeSlots[1].planActivities[0].durationMinutes, 60);
 });
 
+test('empty merged planned block target resolves to merge base index and merged capacity', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'A', planActivities: [{ label: 'A', startMinute: 0, endMinute: 90, durationMinutes: 90, seconds: 5400 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+        resolvePlannedSlotContext(index) {
+            if (index === 1 || index === 2) return { baseIndex: 1, rangeStart: 1, rangeEnd: 2, slotCount: 2, blockMinutes: 120, mergeKey: 'planned-1-2', isMerged: true };
+            return { baseIndex: index, rangeStart: index, rangeEnd: index, slotCount: 1, blockMinutes: 120, mergeKey: null, isMerged: false };
+        },
+    });
+    const host = createNode('div', 'planned-merged-main-container', { index: '2' }, { left: 0, top: 80, right: 300, bottom: 180, width: 300, height: 100 });
+    root.appendChild(host);
+    const state = {
+        grid: createNode('div', 'split-grid', { index: '0' }),
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 120 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
+
+    assert.equal(dropTarget.targetBaseIndex, 1);
+    assert.equal(dropTarget.valid, true);
+    assert.equal(dropTarget.insertIndex, 0);
+}));
+
 test('segment cannot move into a merged slot if duration exceeds merged capacity', () => {
     const ctx = createCtx({
         timeSlots: [
@@ -521,6 +602,36 @@ test('segment cannot move into a merged slot if duration exceeds merged capacity
     assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, 1, 0), false);
     assert.equal(JSON.stringify(ctx.timeSlots), before);
 });
+
+test('invalid empty planned target shows invalid feedback and does not move on drop', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'Long', planActivities: [{ label: 'Long', startMinute: 0, endMinute: 80, durationMinutes: 80, seconds: 4800 }], planSegmentTimers: {} },
+            { planned: '', planActivities: [], planSegmentTimers: {} },
+        ],
+        resolvePlannedSlotContext(index) {
+            return { baseIndex: index, rangeStart: index, rangeEnd: index, slotCount: 1, blockMinutes: index === 1 ? 60 : 120, mergeKey: null, isMerged: false };
+        },
+    });
+    const host = createNode('input', 'planned-input', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    root.appendChild(host);
+    const state = {
+        grid: createNode('div', 'split-grid', { index: '0' }),
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 120 },
+        sourceId: 'real-0',
+    };
+    const before = JSON.stringify(ctx.timeSlots);
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 20, clientY: 100 });
+
+    assert.equal(dropTarget.valid, false);
+    assert.equal(controller.updateReorderPreview(ctx, state, dropTarget), false);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-invalid-target'), true);
+    assert.equal(hasClass(host, 'is-plan-segment-reorder-empty-target'), true);
+    if (dropTarget.valid) {
+        controller.applyPlanSegmentCrossSlotMove.call(ctx, state.context.baseIndex, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex);
+    }
+    assert.equal(JSON.stringify(ctx.timeSlots), before);
+}));
 
 test('segment inserts between segments in another planned slot when capacity allows', () => {
     const ctx = createCtx({
@@ -541,6 +652,53 @@ test('segment inserts between segments in another planned slot when capacity all
     assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'B', 'C']);
     assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => [item.startMinute, item.endMinute]), [[0, 20], [20, 40], [40, 60]]);
 });
+
+test('cross-slot move into non-empty split grid keeps insertion targeting', () => withDom(({ root }) => {
+    const ctx = createCtx({
+        timeSlots: [
+            { planned: 'B', planActivities: [{ label: 'B', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 }], planSegmentTimers: {} },
+            {
+                planned: 'A, C',
+                planActivities: [
+                    { label: 'A', startMinute: 0, endMinute: 20, durationMinutes: 20, seconds: 1200 },
+                    { label: 'C', startMinute: 20, endMinute: 40, durationMinutes: 20, seconds: 1200 },
+                ],
+                planSegmentTimers: {},
+            },
+        ],
+    });
+    const sourceGrid = createNode('div', 'split-grid', { index: '0' }, { left: 0, top: 0, right: 300, bottom: 60, width: 300, height: 60 });
+    const targetGrid = createNode('div', 'split-grid', { index: '1' }, { left: 0, top: 80, right: 300, bottom: 140, width: 300, height: 60 });
+    const first = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        reorderItemId: 'real-0',
+    }, { left: 0, top: 80, right: 150, bottom: 140, width: 150, height: 60 });
+    const second = createNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '1',
+        reorderItemId: 'real-1',
+    }, { left: 150, top: 80, right: 300, bottom: 140, width: 150, height: 60 });
+    root.appendChild(sourceGrid);
+    root.appendChild(targetGrid);
+    targetGrid.appendChild(first);
+    targetGrid.appendChild(second);
+    const state = {
+        grid: sourceGrid,
+        context: { baseIndex: 0, rangeStart: 0, rangeEnd: 0, blockMinutes: 60 },
+        sourceId: 'real-0',
+    };
+
+    const dropTarget = controller.getAnyActiveDropTarget(ctx, state, { clientX: 160, clientY: 100 });
+
+    assert.equal(dropTarget.crossSlot, true);
+    assert.equal(dropTarget.targetGrid, targetGrid);
+    assert.equal(dropTarget.targetSegment, second);
+    assert.equal(dropTarget.insertIndex, 1);
+    assert.equal(dropTarget.valid, true);
+    assert.equal(controller.applyPlanSegmentCrossSlotMove.call(ctx, 0, 0, dropTarget.targetBaseIndex, dropTarget.insertIndex), true);
+    assert.deepEqual(ctx.timeSlots[1].planActivities.map((item) => item.label), ['A', 'B', 'C']);
+}));
 
 test('segment cannot move into a full destination slot or overwrite existing segments', () => {
     const ctx = createCtx({

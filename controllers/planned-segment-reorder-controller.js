@@ -380,6 +380,9 @@
         grid.querySelectorAll('.plan-segment-reorder-preview-layer').forEach((layer) => {
             if (layer.parentNode) layer.parentNode.removeChild(layer);
         });
+        grid.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
+            if (marker.parentNode) marker.parentNode.removeChild(marker);
+        });
         if (grid.classList) {
             grid.classList.remove(
                 'is-previewing-plan-reorder',
@@ -402,7 +405,7 @@
             document.querySelectorAll('.plan-segment-reorder-drag-ghost').forEach((ghost) => {
                 if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
             });
-            document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder')
+            document.querySelectorAll('.is-plan-segment-reorder-armed, .is-plan-segment-reorder-suppressing-selection, .is-plan-segment-reorder-dragging, .is-plan-segment-reorder-origin, .is-plan-segment-reorder-active, .is-plan-segment-reorder-cancel, .is-previewing-plan-reorder, .is-plan-segment-reorder-empty-target, .is-plan-segment-reorder-invalid-target')
                 .forEach((el) => {
                     if (el.classList) {
                         el.classList.remove(
@@ -797,16 +800,20 @@
         marker.dataset.placement = placement;
     }
 
-    function updateEmptyTargetMarker(grid) {
-        const marker = ensureInsertionMarker(grid);
-        if (!marker || !grid) return;
+    function updateEmptyTargetMarker(targetHost, invalid = false) {
+        const marker = ensureInsertionMarker(targetHost);
+        if (!marker || !targetHost) return;
         marker.style.left = '8px';
         marker.style.top = '6px';
         marker.style.height = 'calc(100% - 12px)';
         marker.dataset.targetSegmentIndex = '';
         marker.dataset.targetReorderId = '';
         marker.dataset.placement = 'empty';
-        if (grid.classList) grid.classList.add('is-plan-segment-reorder-empty-target');
+        if (targetHost.classList) {
+            targetHost.classList.add('is-plan-segment-reorder-empty-target');
+            if (invalid) targetHost.classList.add('is-plan-segment-reorder-invalid-target');
+            else targetHost.classList.remove('is-plan-segment-reorder-invalid-target');
+        }
     }
 
     function clearPlannedSegmentReorderState() {
@@ -840,30 +847,70 @@
         return { targetGrid: grid, targetBaseIndex: state.context.baseIndex, targetSegment, targetId, placement, insertIndex: null };
     }
 
-    function getGridBaseIndex(grid, fallbackIndex) {
-        if (!grid) return fallbackIndex;
-        const candidates = [grid];
-        if (grid.closest) {
+    function getDropHostBaseIndex(host, fallbackIndex, ctx = null) {
+        if (!host) return fallbackIndex;
+        const candidates = [host];
+        if (host.closest) {
             candidates.push(
-                grid.closest('.time-entry'),
-                grid.closest('.split-cell-wrapper')
+                host.closest('.time-entry'),
+                host.closest('.split-cell-wrapper'),
+                host.closest('.planned-input'),
+                host.closest('.planned-merged-main-container')
             );
         }
         for (const el of candidates) {
             const raw = el && el.dataset && (el.dataset.index || el.dataset.baseIndex || el.dataset.plannedBaseIndex);
             const parsed = parseInt(raw, 10);
-            if (Number.isInteger(parsed)) return parsed;
+            if (Number.isInteger(parsed)) {
+                const context = ctx ? getResolvedPlannedContext(ctx, parsed) : null;
+                return context && Number.isInteger(context.baseIndex) ? context.baseIndex : parsed;
+            }
         }
         return fallbackIndex;
     }
 
-    function getPlannedGridAtPoint(point) {
+    function getGridBaseIndex(grid, fallbackIndex, ctx = null) {
+        return getDropHostBaseIndex(grid, fallbackIndex, ctx);
+    }
+
+    function isPlannedDropHost(el) {
+        if (!el || !el.classList || !el.classList.contains) return false;
+        if (el.classList.contains('split-cell-wrapper') && el.classList.contains('split-type-planned')) return true;
+        if (el.classList.contains('planned-input')) return true;
+        if (el.classList.contains('planned-merged-main-container')) return true;
+        if (el.classList.contains('time-entry')) return true;
+        return false;
+    }
+
+    function getPlannedDropHostAtPoint(point) {
         if (!point || typeof document === 'undefined' || !document.querySelectorAll) return null;
         const grids = Array.from(document.querySelectorAll('.split-visualization-planned .split-grid, .split-grid'));
-        return grids.find((grid) => {
+        const targetGrid = grids.find((grid) => {
             const rect = grid && grid.getBoundingClientRect ? grid.getBoundingClientRect() : null;
             return rect && pointInRect(point, rect);
         }) || null;
+        if (targetGrid) {
+            return { targetHost: targetGrid, targetGrid, emptyPlannedTarget: false };
+        }
+
+        const hosts = Array.from(document.querySelectorAll('.split-cell-wrapper.split-type-planned, .planned-input, .planned-merged-main-container, .time-entry'));
+        const targetHost = hosts.find((host) => {
+            if (!isPlannedDropHost(host)) return false;
+            const rect = host && host.getBoundingClientRect ? host.getBoundingClientRect() : null;
+            return rect && pointInRect(point, rect);
+        }) || null;
+        if (!targetHost) return null;
+        const nestedGrid = targetHost.querySelector && targetHost.querySelector('.split-grid');
+        return {
+            targetHost,
+            targetGrid: nestedGrid || null,
+            emptyPlannedTarget: !nestedGrid,
+        };
+    }
+
+    function getPlannedGridAtPoint(point) {
+        const dropHost = getPlannedDropHostAtPoint(point);
+        return dropHost ? dropHost.targetGrid : null;
     }
 
     function getRealSegmentCount(ctx, context) {
@@ -887,16 +934,19 @@
     }
 
     function getAnyActiveDropTarget(ctx, state, point) {
-        const targetGrid = getPlannedGridAtPoint(point);
-        if (!targetGrid) return null;
-        const targetBaseIndex = getGridBaseIndex(targetGrid, state.context.baseIndex);
+        const dropHost = getPlannedDropHostAtPoint(point);
+        if (!dropHost || !dropHost.targetHost) return null;
+        const targetGrid = dropHost.targetGrid;
+        const targetHost = dropHost.targetHost;
+        const targetBaseIndex = getDropHostBaseIndex(targetGrid || targetHost, state.context.baseIndex, ctx);
         if (targetBaseIndex === state.context.baseIndex) return getActiveDropTarget(state, point);
 
         const targetSegment = getSegmentAtPoint(targetGrid, point);
         const valid = canCrossSlotFit(ctx, state, targetBaseIndex);
-        if (!targetSegment) {
+        if (!targetGrid || !targetSegment) {
             return {
                 targetGrid,
+                targetHost,
                 targetBaseIndex,
                 targetSegment: null,
                 targetId: '',
@@ -915,6 +965,7 @@
             : targetRealIndex + (placement === 'after' ? 1 : 0);
         return {
             targetGrid,
+            targetHost,
             targetBaseIndex,
             targetSegment,
             targetId,
@@ -932,18 +983,22 @@
             if (state.previewKey === previewKey) return Boolean(dropTarget.valid);
             clearReorderPreviewLayer(state.grid);
             if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
+            if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
             state.previewKey = previewKey;
             state.targetGrid = dropTarget.targetGrid;
+            state.targetHost = dropTarget.targetHost || dropTarget.targetGrid;
             if (!dropTarget.valid) {
-                if (dropTarget.targetGrid && dropTarget.targetGrid.classList) {
-                    dropTarget.targetGrid.classList.add('is-plan-segment-reorder-invalid-target');
+                const invalidHost = dropTarget.targetHost || dropTarget.targetGrid;
+                if (invalidHost && invalidHost.classList) {
+                    invalidHost.classList.add('is-plan-segment-reorder-invalid-target');
                 }
+                if (!dropTarget.targetSegment) updateEmptyTargetMarker(invalidHost, true);
                 return false;
             }
             if (dropTarget.targetSegment) {
                 updateInsertionMarker(dropTarget.targetGrid, dropTarget.targetSegment, dropTarget.placement);
             } else {
-                updateEmptyTargetMarker(dropTarget.targetGrid);
+                updateEmptyTargetMarker(dropTarget.targetHost || dropTarget.targetGrid);
             }
             return true;
         }
@@ -1059,6 +1114,7 @@
                     targetBaseIndex: null,
                     targetInsertIndex: null,
                     targetGrid: null,
+                    targetHost: null,
                     targetValid: false,
                     crossSlot: false,
                     placement: 'before',
@@ -1102,7 +1158,9 @@
                         state.previewResult = null;
                         clearReorderPreviewLayer(state.grid);
                         if (state.targetGrid && state.targetGrid !== state.grid) clearReorderPreviewLayer(state.targetGrid);
+                        if (state.targetHost && state.targetHost !== state.grid && state.targetHost !== state.targetGrid) clearReorderPreviewLayer(state.targetHost);
                         state.targetGrid = null;
+                        state.targetHost = null;
                         if (state.grid.classList) state.grid.classList.add('is-plan-segment-reorder-cancel');
                         if (typeof document !== 'undefined' && document.querySelectorAll) {
                             document.querySelectorAll('.plan-segment-reorder-insert-marker').forEach((marker) => {
@@ -1117,6 +1175,7 @@
                     state.targetValid = dropTarget.crossSlot ? Boolean(dropTarget.valid) : true;
                     state.crossSlot = Boolean(dropTarget.crossSlot);
                     state.targetGrid = dropTarget.targetGrid || state.grid;
+                    state.targetHost = dropTarget.targetHost || dropTarget.targetGrid || state.grid;
                     state.placement = dropTarget.placement;
                     if (state.grid.classList) {
                         if (dropTarget.crossSlot && !dropTarget.valid) {
@@ -1183,8 +1242,12 @@
         applyPlanSegmentCrossSlotMove,
         attachPlannedSegmentReorderListeners,
         clearPlannedSegmentReorderState,
+        getAnyActiveDropTarget,
+        getDropHostBaseIndex,
+        getPlannedDropHostAtPoint,
         removePlanSegmentReorderPreview,
         remapPlanSegmentTimers,
+        updateReorderPreview,
         LONG_PRESS_MS,
     };
 });
