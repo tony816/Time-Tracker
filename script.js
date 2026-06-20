@@ -3431,6 +3431,14 @@ class TimeTracker {
         const normalizeSegmentLabel = (value) => this.normalizeActivityText
             ? this.normalizeActivityText(value || '')
             : (typeof value === 'string' ? value.trim() : '');
+        const planSegmentVisualIdentityKey = (segment) => this.getPlanSegmentVisualIdentityKey
+            ? this.getPlanSegmentVisualIdentityKey(segment)
+            : JSON.stringify({
+                label: normalizeSegmentLabel(segment && (segment.activityText || segment.label) || ''),
+                activityId: String(segment && segment.activityId || '').trim(),
+                titleText: normalizeSegmentLabel(segment && segment.titleText || ''),
+                titleActivityId: String(segment && segment.titleActivityId || '').trim(),
+            });
 
         const normalizedPlanTitle = this.normalizeActivityText
             ? this.normalizeActivityText(planSlot.planTitle || '')
@@ -3701,7 +3709,7 @@ class TimeTracker {
                     && previous.endMinute === segment.startMinute
                     && previousLabel
                     && currentLabel
-                    && previousLabel === currentLabel;
+                    && planSegmentVisualIdentityKey(previous) === planSegmentVisualIdentityKey(segment);
                 if (!continuesPrevious) {
                     annotateSameActivityGroup(sameActivityGroup);
                     sameActivityGroup = [];
@@ -3743,8 +3751,7 @@ class TimeTracker {
                         && left.startMinute === right.startMinute
                         && left.durationMinutes === right.durationMinutes;
                 }
-                return normalizeSegmentLabel(left.activityText || left.label || '')
-                    === normalizeSegmentLabel(right.activityText || right.label || '');
+                return planSegmentVisualIdentityKey(left) === planSegmentVisualIdentityKey(right);
             };
 
             const gridSegments = [];
@@ -7263,7 +7270,83 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
-        applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+    getPlanSegmentVisualIdentityKey(segment) {
+        if (!segment || typeof segment !== 'object') return '';
+        const normalize = (value) => this.normalizeActivityText
+            ? this.normalizeActivityText(value || '')
+            : String(value || '').trim();
+        const label = normalize(segment.activityText || segment.label || '');
+        if (!label) return '';
+        return JSON.stringify({
+            label,
+            activityId: String(segment.activityId || '').trim(),
+            titleText: normalize(segment.titleText || segment.titleLabel || ''),
+            titleActivityId: String(segment.titleActivityId || '').trim(),
+        });
+    }
+    resolveMergedPlanSegmentResizeGroup(activities, segmentIndex) {
+        if (!Array.isArray(activities) || !Number.isInteger(segmentIndex)) return null;
+        const target = activities[segmentIndex];
+        if (!target || target.kind === 'virtual-rest' || target.virtual === true) return null;
+        const targetKey = this.getPlanSegmentVisualIdentityKey
+            ? this.getPlanSegmentVisualIdentityKey(target)
+            : '';
+        if (!targetKey) return null;
+        const getStart = (item) => Number(item && item.startMinute);
+        const getEnd = (item) => Number(item && item.endMinute);
+        let firstIndex = segmentIndex;
+        let lastIndex = segmentIndex;
+        while (firstIndex > 0) {
+            const current = activities[firstIndex];
+            const previous = activities[firstIndex - 1];
+            if (!previous || previous.kind === 'virtual-rest' || previous.virtual === true) break;
+            const sameIdentity = this.getPlanSegmentVisualIdentityKey(previous) === targetKey;
+            if (!sameIdentity || getEnd(previous) !== getStart(current)) break;
+            firstIndex -= 1;
+        }
+        while (lastIndex < activities.length - 1) {
+            const current = activities[lastIndex];
+            const next = activities[lastIndex + 1];
+            if (!next || next.kind === 'virtual-rest' || next.virtual === true) break;
+            const sameIdentity = this.getPlanSegmentVisualIdentityKey(next) === targetKey;
+            if (!sameIdentity || getEnd(current) !== getStart(next)) break;
+            lastIndex += 1;
+        }
+        if (firstIndex === lastIndex) return null;
+        const first = activities[firstIndex];
+        const last = activities[lastIndex];
+        const startMinute = getStart(first);
+        const endMinute = getEnd(last);
+        if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute) || endMinute <= startMinute) return null;
+        return {
+            firstIndex,
+            lastIndex,
+            startMinute,
+            endMinute,
+            durationMinutes: endMinute - startMinute,
+            identityKey: targetKey,
+        };
+    }
+    buildMergedPlanSegmentResizeSource(activities, group) {
+        if (!Array.isArray(activities) || !group || !Number.isInteger(group.firstIndex) || !Number.isInteger(group.lastIndex)) {
+            return { activities: Array.isArray(activities) ? activities.map(item => ({ ...item })) : [], segmentIndex: null };
+        }
+        const next = activities.map(item => ({ ...item }));
+        const source = next[group.firstIndex] || {};
+        const merged = {
+            ...source,
+            startMinute: group.startMinute,
+            endMinute: group.endMinute,
+            durationMinutes: group.durationMinutes,
+            seconds: group.durationMinutes * 60,
+        };
+        next.splice(group.firstIndex, group.lastIndex - group.firstIndex + 1, merged);
+        return { activities: next, segmentIndex: group.firstIndex };
+    }
+    applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+        const options = arguments.length > 4 && arguments[4] && typeof arguments[4] === 'object'
+            ? arguments[4]
+            : {};
         const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
         if (!planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return false;
         const context = typeof this.resolvePlannedSlotContext === 'function'
@@ -7285,8 +7368,17 @@ class TimeTracker {
                 blockMinutes,
             })
             : current;
+        const mergedResizeGroup = options && options.mergedResizeGroup
+            ? options.mergedResizeGroup
+            : null;
+        const resizeSource = mergedResizeGroup
+            ? this.buildMergedPlanSegmentResizeSource(currentRelative, mergedResizeGroup)
+            : { activities: currentRelative, segmentIndex };
+        const effectiveSegmentIndex = Number.isInteger(resizeSource.segmentIndex)
+            ? resizeSource.segmentIndex
+            : segmentIndex;
         // resizePlanSegmentInList relies on existing start/end/duration fields to preserve gaps.
-        const next = planSegmentCore.resizePlanSegmentInList(currentRelative, segmentIndex, edge, targetMinute, {
+        const next = planSegmentCore.resizePlanSegmentInList(resizeSource.activities, effectiveSegmentIndex, edge, targetMinute, {
             startMinute: 0,
             endMinute: blockMinutes,
         });
@@ -7496,7 +7588,7 @@ class TimeTracker {
                     blockMinutes,
                 })
                 : originalPlanActivities;
-            const originalPreviewActivities = originalRelativeActivities.map((item, itemIndex) => ({
+            let originalPreviewActivities = originalRelativeActivities.map((item, itemIndex) => ({
                 ...item,
                 segmentIndex: item && item.segmentIndex != null && item.segmentIndex !== '' && Number.isInteger(Number(item.segmentIndex))
                     ? Number(item.segmentIndex)
@@ -7530,6 +7622,26 @@ class TimeTracker {
                 const targetSegment = originalRelativeActivities[segmentIndex];
                 startMinute = Number(targetSegment && targetSegment.startMinute);
                 endMinute = Number(targetSegment && targetSegment.endMinute);
+            }
+            let mergedResizeGroup = null;
+            if (segmentEl && typeof this.resolveMergedPlanSegmentResizeGroup === 'function') {
+                mergedResizeGroup = this.resolveMergedPlanSegmentResizeGroup(originalRelativeActivities, segmentIndex);
+                if (mergedResizeGroup) {
+                    segmentIndex = mergedResizeGroup.firstIndex;
+                    startMinute = mergedResizeGroup.startMinute;
+                    endMinute = mergedResizeGroup.endMinute;
+                    if (typeof this.buildMergedPlanSegmentResizeSource === 'function') {
+                        const previewSource = this.buildMergedPlanSegmentResizeSource(originalPreviewActivities, mergedResizeGroup);
+                        if (Array.isArray(previewSource.activities)) {
+                            originalPreviewActivities = previewSource.activities.map((item, itemIndex) => ({
+                                ...item,
+                                segmentIndex: item && item.segmentIndex != null && item.segmentIndex !== '' && Number.isInteger(Number(item.segmentIndex))
+                                    ? Number(item.segmentIndex)
+                                    : itemIndex,
+                            }));
+                        }
+                    }
+                }
             }
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
             let previewLayer = null;
@@ -8054,12 +8166,25 @@ class TimeTracker {
                     const deltaUnits = Math.round((lastClientX - originX) / unitWidth);
                     const deltaMinutes = deltaUnits * 10;
                     if (shouldDelete) {
-                        resizeController.deletePlanSegment(baseIndex, segmentIndex);
+                        if (mergedResizeGroup && Array.isArray(resizeController.timeSlots && resizeController.timeSlots[baseIndex] && resizeController.timeSlots[baseIndex].planActivities)) {
+                            const slot = resizeController.timeSlots[baseIndex];
+                            slot.planActivities = slot.planActivities
+                                .filter((_, itemIndex) => itemIndex < mergedResizeGroup.firstIndex || itemIndex > mergedResizeGroup.lastIndex)
+                                .map(item => ({ ...item }));
+                            slot.planned = resizeController.formatActivitiesSummary ? resizeController.formatActivitiesSummary(slot.planActivities) : (slot.planned || '');
+                            resizeController.renderTimeEntries(true);
+                            resizeController.calculateTotals();
+                            resizeController.autoSave();
+                        } else {
+                            resizeController.deletePlanSegment(baseIndex, segmentIndex);
+                        }
                         return;
                     }
                     if (deltaMinutes === 0) return;
                     const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
-                    resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute);
+                    resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute, {
+                        mergedResizeGroup,
+                    });
                 }
 
                 function cancel() {

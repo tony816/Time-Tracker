@@ -27,6 +27,22 @@ const closePlanSegmentMobileTextEditor = buildMethod(
     'closePlanSegmentMobileTextEditor(options = {})',
     '(options = {})'
 );
+const getPlanSegmentVisualIdentityKey = buildMethod(
+    'getPlanSegmentVisualIdentityKey(segment)',
+    '(segment)'
+);
+const resolveMergedPlanSegmentResizeGroup = buildMethod(
+    'resolveMergedPlanSegmentResizeGroup(activities, segmentIndex)',
+    '(activities, segmentIndex)'
+);
+const buildMergedPlanSegmentResizeSource = buildMethod(
+    'buildMergedPlanSegmentResizeSource(activities, group)',
+    '(activities, group)'
+);
+const applyPlanSegmentResize = buildMethod(
+    'applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute)',
+    '(baseIndex, segmentIndex, edge, targetMinute)'
+);
 
 function classesOf(node) {
     let className = '';
@@ -43,6 +59,15 @@ function classesOf(node) {
 
 function hasClass(node, className) {
     return classesOf(node).includes(className);
+}
+
+function getRealPreviewDurations(root) {
+    return root.querySelectorAll('.plan-segment-resize-preview-segment')
+        .filter(node => !hasClass(node, 'plan-segment-resize-preview-rest') && !hasClass(node, 'plan-segment-resize-preview-empty'))
+        .map(node => {
+            const duration = node.querySelector('.plan-segment-resize-preview-duration');
+            return String(duration && duration.textContent || '');
+        });
 }
 
 function matches(node, selector) {
@@ -233,6 +258,25 @@ function createResizeFixture(options = {}) {
     return { entry, grid, segment, handle };
 }
 
+function createMergedResizeFixture(options = {}) {
+    const entry = createNode('div', 'time-entry');
+    const grid = createNode('div', 'split-grid');
+    const handleEdge = options.handleEdge === 'left' ? 'left' : 'right';
+    const segment = createNode('div', 'split-grid-segment connect-top', {
+        segmentKind: 'real-plan',
+        segmentIndex: String(Number.isInteger(options.segmentIndex) ? options.segmentIndex : 1),
+        segmentStartMinute: String(Number.isFinite(options.startMinute) ? options.startMinute : 0),
+        segmentEndMinute: String(Number.isFinite(options.endMinute) ? options.endMinute : 60),
+    });
+    const handle = createNode('span', `plan-segment-resize-handle plan-segment-resize-handle-${handleEdge}`, {
+        resizeEdge: handleEdge,
+    });
+    entry.appendChild(grid);
+    grid.appendChild(segment);
+    segment.appendChild(handle);
+    return { entry, grid, segment, handle };
+}
+
 function createSvgLikeNode(tagName = 'svg') {
     const node = createNode(tagName);
     Object.defineProperty(node, 'className', {
@@ -397,6 +441,116 @@ test('plan segment resize cleans preview state and lets a newly rendered handle 
             ['resize', 0, 0, 'right', 40],
         ]);
     });
+});
+
+test('merged identical planned segment right handle resizes and persists the full visual span', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-handle').length, 1);
+
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 700));
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 700));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            label: item.label,
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { label: 'Focus', startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        ]);
+
+        const rerenderFixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 70, segmentIndex: 0 });
+        attachPlanSegmentResizeListeners.call(ctx, rerenderFixture.entry, 0);
+        assert.equal(rerenderFixture.grid.querySelectorAll('.plan-segment-resize-handle').length, 1);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('merged identical planned segment left handle resizes and persists the full visual span', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'left', startMinute: 20, endMinute: 80, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 20, endMinute: 50, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 50, endMinute: 80, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-handle').length, 1);
+
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 200));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            label: item.label,
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { label: 'Focus', startMinute: 10, endMinute: 80, durationMinutes: 70 },
+        ]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('merged planned resize resolution does not use label-only identity', () => {
+    const ctx = {
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        getPlanSegmentVisualIdentityKey,
+        resolveMergedPlanSegmentResizeGroup,
+    };
+    const activities = [
+        { label: 'Focus', activityText: 'Focus', activityId: 'focus-a', startMinute: 0, endMinute: 30, durationMinutes: 30 },
+        { label: 'Focus', activityText: 'Focus', activityId: 'focus-b', startMinute: 30, endMinute: 60, durationMinutes: 30 },
+    ];
+
+    assert.equal(resolveMergedPlanSegmentResizeGroup.call(ctx, activities, 1), null);
 });
 
 test('plan segment resize preview guide uses svg class attribute without className assignment', () => {
