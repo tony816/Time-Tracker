@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const controller = require('../controllers/planned-slot-move-controller');
 
@@ -390,4 +392,17 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
     } finally {
         global.document = originalDocument;
     }
+});
+
+test('move handle css docks the affordance to the planned card edge', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    const handleBlock = css.match(/\.planned-slot-move-target::before\s*\{([\s\S]*?)\}/);
+    const gripBlock = css.match(/\.planned-slot-move-target::after\s*\{([\s\S]*?)\}/);
+    assert.ok(handleBlock);
+    assert.ok(gripBlock);
+    assert.match(handleBlock[1], /left:\s*-3px;/);
+    assert.doesNotMatch(handleBlock[1], /left:\s*-1[02]px;/);
+    assert.match(handleBlock[1], /border-radius:\s*6px 3px 3px 6px;/);
+    assert.match(gripBlock[1], /border-left:\s*2px dotted/);
+    assert.match(gripBlock[1], /border-right:\s*2px dotted/);
 });
