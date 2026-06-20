@@ -236,6 +236,20 @@
         return document.body || document.documentElement || null;
     }
 
+    function getPlannedSlotMoveRootFromEventTarget(eventTarget, fallbackTarget) {
+        if (eventTarget && eventTarget.closest) {
+            const rootEl = eventTarget.closest('.planned-slot-move-target');
+            if (rootEl) return rootEl;
+        }
+        return fallbackTarget || null;
+    }
+
+    function preventNativePlannedSlotMoveGesture(event) {
+        if (!event) return;
+        if (event.preventDefault) event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
+    }
+
     function sanitizeMoveDragPreview(node) {
         if (!node) return;
         if (node.removeAttribute) {
@@ -245,6 +259,7 @@
         }
         if (node.classList) {
             node.classList.remove('planned-slot-move-target', 'is-planned-slot-move-drag-origin');
+            node.classList.add('planned-slot-move-preview');
             node.classList.add('planned-slot-move-drag-preview');
         }
         if (node.dataset) {
@@ -289,7 +304,10 @@
             preview.style.left = '0px';
             preview.style.top = '0px';
             if (rect && Number.isFinite(rect.width)) preview.style.width = `${Math.round(rect.width)}px`;
-            if (rect && Number.isFinite(rect.height)) preview.style.minHeight = `${Math.round(rect.height)}px`;
+            if (rect && Number.isFinite(rect.height)) {
+                preview.style.height = `${Math.round(rect.height)}px`;
+                preview.style.minHeight = `${Math.round(rect.height)}px`;
+            }
             preview.style.pointerEvents = 'none';
         }
         drag.previewOffsetX = rect && Number.isFinite(rect.left) ? drag.startX - rect.left : 0;
@@ -322,10 +340,19 @@
             target.setAttribute('aria-label', '계획 슬롯 이동');
         }
 
+        if (target.setAttribute) target.setAttribute('draggable', 'false');
+        ['selectstart', 'contextmenu', 'dragstart'].forEach((type) => {
+            target.addEventListener(type, (event) => {
+                if (!ctx.plannedSlotMoveMode) return;
+                preventNativePlannedSlotMoveGesture(event);
+            }, true);
+        });
+
         target.addEventListener('pointerdown', (event) => {
             if (!ctx.plannedSlotMoveMode || event.button !== undefined && event.button !== 0) return;
             const sourceContext = getPlannedSlotMoveContext.call(ctx, index);
             if (!sourceContext.movable) return;
+            const sourceEl = getPlannedSlotMoveRootFromEventTarget(event.target, target);
             ctx.plannedSlotMoveDrag = {
                 pointerId: event.pointerId,
                 sourceContext,
@@ -334,7 +361,7 @@
                 dragging: false,
                 valid: false,
                 targetStart: null,
-                sourceEl: target,
+                sourceEl,
                 previewEl: null,
                 documentMoveListener: null,
                 documentUpListener: null,

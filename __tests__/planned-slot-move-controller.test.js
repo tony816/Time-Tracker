@@ -457,11 +457,75 @@ test('move mode dragging from segment surface creates full-slot preview without 
         const preview = body.children[0];
         assert.ok(preview);
         assert.match(preview.className, /planned-slot-move-drag-preview/);
+        assert.match(preview.className, /planned-slot-move-preview/);
         assert.doesNotMatch(preview.className, /plan-segment-reorder-drag-ghost/);
         assert.equal(preview.style.width, '260px');
+        assert.equal(preview.style.height, '140px');
         assert.equal(preview.style.minHeight, '140px');
         assert.equal(rows.get(3).classList.contains('planned-slot-move-drop-valid'), true);
         assert.equal(body.querySelectorAll ? body.querySelectorAll('.plan-segment-reorder-insert-marker').length : 0, 0);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('dragging from nested segment in move mode clones planned slot root and uses card rect', () => {
+    const { originalDocument, documentListeners, body, createTarget } = createMoveDomHarness();
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Block';
+        ctx.getIndexAtClientPosition = () => 3;
+        const target = createTarget({ left: 10, top: 20, width: 280, height: 180 });
+        const segment = {
+            className: 'split-grid-segment',
+            dataset: { segmentKind: 'real-plan' },
+            getBoundingClientRect() { return { left: 40, top: 55, width: 92, height: 34 }; },
+            cloneNode() {
+                return { className: 'segment-only-clone', dataset: {}, style: {}, classList: { add() {}, remove() {} }, querySelectorAll() { return []; }, setAttribute() {}, removeAttribute() {} };
+            },
+            closest(selector) {
+                return selector === '.planned-slot-move-target' ? target : null;
+            },
+        };
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+        target._listeners.pointerdown({
+            type: 'pointerdown',
+            target: segment,
+            button: 0,
+            pointerId: 21,
+            clientX: 70,
+            clientY: 80,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            target: segment,
+            pointerId: 21,
+            clientX: 120,
+            clientY: 130,
+            preventDefault() {},
+        });
+
+        const preview = body.children[0];
+        assert.ok(preview);
+        assert.doesNotMatch(preview.className, /segment-only-clone/);
+        assert.match(preview.className, /split-cell-wrapper/);
+        assert.match(preview.className, /planned-slot-move-preview/);
+        assert.match(preview.className, /planned-slot-move-drag-preview/);
+        assert.doesNotMatch(preview.className, /plan-segment-reorder-drag-ghost/);
+        assert.equal(preview.style.width, '280px');
+        assert.equal(preview.style.height, '180px');
+        assert.equal(preview.style.minHeight, '180px');
+        assert.match(preview.style.transform, /translate3d\(60px, 70px, 0\)/);
     } finally {
         global.document = originalDocument;
     }
@@ -550,6 +614,7 @@ test('merged planned slot drag preserves preview height and highlights full targ
         });
 
         assert.equal(body.children[0].style.minHeight, '240px');
+        assert.equal(body.children[0].style.height, '240px');
         assert.equal(ctx.plannedSlotMoveDrag.sourceContext.blockLength, 2);
         assert.equal(ctx.plannedSlotMoveDrag.targetStart, 3);
         assert.equal(rows.get(3).classList.contains('planned-slot-move-drop-valid'), true);
@@ -568,6 +633,53 @@ test('move mode renders no persistent move handle rail grip or tab css', () => {
     assert.match(css, /cursor:\s*grab;/);
     assert.match(css, /\.planned-slot-move-mode \.planned-slot-move-target \.split-grid-segment[\s\S]*pointer-events:\s*none !important/);
     assert.match(css, /\.planned-slot-move-mode \.planned-slot-move-target \.plan-segment-graphic \*[\s\S]*pointer-events:\s*none !important/);
+    assert.match(css, /\.planned-slot-move-preview\s*\{[\s\S]*background:/);
+    assert.match(css, /\.planned-slot-move-preview\s*\{[\s\S]*border:/);
+    assert.match(css, /\.planned-slot-move-preview\s*\{[\s\S]*box-shadow:/);
+    assert.match(css, /\.planned-slot-move-preview\s*\{[\s\S]*border-radius:/);
+    assert.doesNotMatch(css, /\.planned-slot-move-preview[\s\S]*plan-segment-reorder-drag-ghost/);
+});
+
+test('move mode suppresses native selection callout and drag only while active', () => {
+    const { originalDocument, createTarget } = createMoveDomHarness();
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Block';
+        const target = createTarget();
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+        const createGestureEvent = () => ({
+            defaultPrevented: false,
+            propagationStopped: false,
+            preventDefault() { this.defaultPrevented = true; },
+            stopPropagation() { this.propagationStopped = true; },
+        });
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+
+        const selectEvent = createGestureEvent();
+        target._listeners.selectstart(selectEvent);
+        const calloutEvent = createGestureEvent();
+        target._listeners.contextmenu(calloutEvent);
+        const dragEvent = createGestureEvent();
+        target._listeners.dragstart(dragEvent);
+
+        assert.equal(selectEvent.defaultPrevented, true);
+        assert.equal(calloutEvent.defaultPrevented, true);
+        assert.equal(dragEvent.defaultPrevented, true);
+
+        ctx.plannedSlotMoveMode = false;
+        const inactiveSelectEvent = createGestureEvent();
+        target._listeners.selectstart(inactiveSelectEvent);
+        assert.equal(inactiveSelectEvent.defaultPrevented, false);
+    } finally {
+        global.document = originalDocument;
+    }
 });
 
 test('move mode pulse is armed only on first entry', () => {

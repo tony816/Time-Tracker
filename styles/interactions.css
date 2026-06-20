@@ -2658,6 +2658,9 @@ body.is-plan-segment-reorder-ghost-active {
   cursor: grab;
   position: relative;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   border-radius: 7px;
   outline: 1px solid rgba(37, 99, 235, 0.28);
   outline-offset: -1px;
@@ -2705,21 +2708,40 @@ body.is-plan-segment-reorder-ghost-active {
   }
 }
 
-.planned-slot-move-drag-preview {
+.planned-slot-move-preview {
   z-index: 10040;
   cursor: grabbing;
-  opacity: 0.94;
-  filter: drop-shadow(0 12px 22px rgba(15, 23, 42, 0.26));
+  opacity: 0.96;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(37, 99, 235, 0.46);
+  border-radius: 8px;
+  box-shadow:
+    0 14px 28px rgba(15, 23, 42, 0.24),
+    0 0 0 2px rgba(37, 99, 235, 0.14);
+  overflow: hidden;
   transform-origin: top left;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.planned-slot-move-preview .split-grid-segment,
+.planned-slot-move-preview .split-grid-segment-virtual-rest {
+  box-shadow: none;
 }
 
 .planned-slot-move-drag-preview,
 .planned-slot-move-drag-preview * {
   pointer-events: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 body.is-planned-slot-move-preview-active {
   cursor: grabbing;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -2733,6 +2755,19 @@ body.is-planned-slot-move-preview-active {
   background: #fff1f2;
   outline: 2px solid #ef4444;
   outline-offset: -2px;
+}
+
+.planned-slot-move-mode .planned-input,
+.planned-slot-move-mode .time-entry,
+.planned-slot-move-mode .split-cell-wrapper.split-type-planned,
+.planned-slot-move-mode .planned-slot-move-target,
+.planned-slot-move-mode .planned-slot-move-target *,
+.planned-slot-move-mode .split-grid-segment,
+.planned-slot-move-mode .plan-segment-graphic-title,
+.planned-slot-move-mode .plan-segment-label-text {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .planned-slot-move-mode .planned-input,
