@@ -446,9 +446,10 @@
             const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
                 ? this.dragBaseEndIndex
                 : baseStart;
-            if (hoverIndex >= Math.min(baseStart, baseEnd) && hoverIndex <= Math.max(baseStart, baseEnd)) return;
+            const selectionStart = Math.min(baseStart, hoverIndex);
+            const selectionEnd = Math.max(baseEnd, hoverIndex);
             this.clearSelection('planned');
-            this.selectFieldRange('planned', Math.min(baseStart, hoverIndex), Math.max(baseEnd, hoverIndex));
+            this.selectFieldRange('planned', selectionStart, selectionEnd);
         };
         const beginTimeSlotMergeSelection = (event) => {
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {

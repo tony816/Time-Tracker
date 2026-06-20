@@ -1369,7 +1369,7 @@ test('merged time-slot entry retap clears an already selected merged range', () 
     assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
 });
 
-test('desktop time-slot drag selects multiple planned slots and mouseup resets state', () => {
+test('desktop time-slot drag expands, reverses to anchor, and flips before anchor', () => {
     withMockDocument((mockDocument) => {
         const timeSlot = createListenerNode();
         timeSlot.ownerDocument = mockDocument;
@@ -1398,7 +1398,9 @@ test('desktop time-slot drag selects multiple planned slots and mouseup resets s
             },
             getIndexAtClientPosition(type, clientX, clientY) {
                 calls.push(['hit', type, clientX, clientY]);
-                return clientY >= 300 ? 4 : 2;
+                if (clientY >= 300) return 4;
+                if (clientY < 160) return 1;
+                return 2;
             },
         };
 
@@ -1429,6 +1431,22 @@ test('desktop time-slot drag selects multiple planned slots and mouseup resets s
         assert.equal(ctx.isSelectingPlanned, true);
 
         mockDocument.dispatchEvent({
+            type: 'mousemove',
+            buttons: 1,
+            clientX: 12,
+            clientY: 200,
+        });
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 2 && call[3] === 2));
+
+        mockDocument.dispatchEvent({
+            type: 'mousemove',
+            buttons: 1,
+            clientX: 12,
+            clientY: 120,
+        });
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 1 && call[3] === 2));
+
+        mockDocument.dispatchEvent({
             type: 'mouseup',
             preventDefault() {
                 calls.push(['preventUp']);
@@ -1447,7 +1465,7 @@ test('desktop time-slot drag selects multiple planned slots and mouseup resets s
     });
 });
 
-test('existing merged planned range selected from time slot keeps undo path while moving inside range', () => {
+test('existing merged planned range drag expands, restores base range, and flips before anchor', () => {
     withMockDocument((mockDocument) => {
         const timeSlot = createListenerNode();
         timeSlot.ownerDocument = mockDocument;
@@ -1479,7 +1497,10 @@ test('existing merged planned range selected from time slot keeps undo path whil
             selectFieldRange(type, start, end) {
                 calls.push(['select', type, start, end]);
             },
-            getIndexAtClientPosition() {
+            getIndexAtClientPosition(type, clientX, clientY) {
+                calls.push(['hit', type, clientX, clientY]);
+                if (clientY >= 400) return 5;
+                if (clientY < 100) return 0;
                 return 3;
             },
         };
@@ -1496,15 +1517,25 @@ test('existing merged planned range selected from time slot keeps undo path whil
             type: 'mousemove',
             buttons: 1,
             clientX: 10,
-            clientY: 20,
+            clientY: 420,
+        });
+        mockDocument.dispatchEvent({
+            type: 'mousemove',
+            buttons: 1,
+            clientX: 10,
+            clientY: 160,
+        });
+        mockDocument.dispatchEvent({
+            type: 'mousemove',
+            buttons: 1,
+            clientX: 10,
+            clientY: 80,
         });
 
-        assert.deepEqual(calls, [
-            ['close'],
-            ['clearAll'],
-            ['selectMerged', 'planned', 'planned-1-3', { append: false }],
-        ]);
-        assert.equal(calls.some((call) => call[0] === 'select'), false);
+        assert.ok(calls.some((call) => call[0] === 'selectMerged' && call[2] === 'planned-1-3'));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 1 && call[3] === 5));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 1 && call[3] === 3));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 0 && call[3] === 3));
     });
 });
 
@@ -1722,7 +1753,7 @@ test('mobile time-slot touchstart immediately begins selection without long-pres
     }
 });
 
-test('mobile time-slot touchmove expands immediate selection and prevents scroll while active', () => {
+test('mobile time-slot touchmove expands and reverses immediate selection while preventing scroll', () => {
     const timeSlot = createListenerNode();
     const entryDiv = {
         querySelector(selector) {
@@ -1749,7 +1780,9 @@ test('mobile time-slot touchmove expands immediate selection and prevents scroll
         },
         getIndexAtClientPosition(type, clientX, clientY) {
             calls.push(['hit', type, clientX, clientY]);
-            return clientY >= 300 ? 4 : 2;
+            if (clientY >= 300) return 4;
+            if (clientY < 160) return 1;
+            return 2;
         },
     };
 
@@ -1774,6 +1807,22 @@ test('mobile time-slot touchmove expands immediate selection and prevents scroll
         },
     });
     timeSlot.dispatchEvent({
+        type: 'touchmove',
+        target: timeSlot,
+        touches: [{ clientX: 12, clientY: 200 }],
+        preventDefault() {
+            calls.push(['preventMoveBack']);
+        },
+    });
+    timeSlot.dispatchEvent({
+        type: 'touchmove',
+        target: timeSlot,
+        touches: [{ clientX: 12, clientY: 120 }],
+        preventDefault() {
+            calls.push(['preventMoveBefore']);
+        },
+    });
+    timeSlot.dispatchEvent({
         type: 'touchend',
         preventDefault() {
             calls.push(['preventEnd']);
@@ -1784,7 +1833,11 @@ test('mobile time-slot touchmove expands immediate selection and prevents scroll
     });
 
     assert.ok(calls.some((call) => call[0] === 'preventMove'));
+    assert.ok(calls.some((call) => call[0] === 'preventMoveBack'));
+    assert.ok(calls.some((call) => call[0] === 'preventMoveBefore'));
     assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 2 && call[3] === 4));
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 2 && call[3] === 2));
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 1 && call[3] === 2));
     assert.equal(ctx.isSelectingPlanned, false);
     assert.equal(ctx.currentColumnType, null);
     assert.equal(ctx.dragStartIndex, -1);
