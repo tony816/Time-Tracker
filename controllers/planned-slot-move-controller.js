@@ -377,7 +377,7 @@
             if (target.classList) target.classList.add('is-planned-slot-move-drag-origin');
             if (event.preventDefault) event.preventDefault();
             event.stopPropagation();
-        });
+        }, true);
 
         target.addEventListener('pointermove', (event) => {
             const drag = ctx.plannedSlotMoveDrag;

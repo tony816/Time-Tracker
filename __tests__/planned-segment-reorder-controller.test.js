@@ -941,6 +941,9 @@ test('active drag over a valid target renders preview before drop and commit mat
     timers[0]();
     const ghost = root.querySelector('.plan-segment-reorder-drag-ghost');
     assert.ok(ghost);
+    assert.equal(hasClass(ghost, 'planned-slot-move-drag-preview'), false);
+    assert.equal(ghost.style.width, '150px');
+    assert.equal(ghost.style.height, '60px');
     listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
 
     const layer = grid.querySelector('.plan-segment-reorder-preview-layer');
@@ -983,6 +986,22 @@ test('active drag over a valid target renders preview before drop and commit mat
     assert.equal(((second._listeners && second._listeners.selectstart) || []).length, 0);
     assert.equal(((grid._listeners && grid._listeners.contextmenu) || []).length, 0);
     assert.equal(second.releasedPointerId, 1);
+}));
+
+test('planned segment reorder shows insertion feedback without time-row drop target', () => withDom(({ listeners, timers, root }) => {
+    const ctx = createCtx();
+    const { entry, grid, first, second } = createEntry();
+    root.appendChild(entry);
+
+    controller.attachPlannedSegmentReorderListeners.call(ctx, entry, 0);
+    second.dispatchEvent(createPointerEvent('pointerdown', second, 220));
+    timers[0]();
+    listeners.pointermove[0](createPointerEvent('pointermove', first, 40));
+
+    assert.ok(grid.querySelector('.plan-segment-reorder-insert-marker'));
+    assert.equal(root.querySelector('.planned-slot-move-drop-valid'), null);
+    assert.equal(root.querySelector('.planned-slot-move-drop-invalid'), null);
+    assert.equal(root.querySelector('.planned-slot-move-drag-preview'), null);
 }));
 
 test('repeated pointermove over same target does not rebuild preview layer', () => withDom(({ listeners, timers, root }) => {

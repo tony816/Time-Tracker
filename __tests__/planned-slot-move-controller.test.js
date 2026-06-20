@@ -417,6 +417,56 @@ test('whole planned slot wrapper starts move drag and keeps full preview until r
     }
 });
 
+test('move mode dragging from segment surface creates full-slot preview without segment insertion UI', () => {
+    const { originalDocument, documentListeners, body, rows, createTarget } = createMoveDomHarness();
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Block';
+        ctx.timeSlots[1].planActivities = [{ label: 'Focus', startMinute: 0, endMinute: 60 }];
+        ctx.getIndexAtClientPosition = () => 3;
+        const target = createTarget({ left: 20, top: 30, width: 260, height: 140 });
+        const segment = { className: 'split-grid-segment', dataset: { segmentKind: 'real-plan' } };
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+        target._listeners.pointerdown({
+            type: 'pointerdown',
+            target: segment,
+            button: 0,
+            pointerId: 17,
+            clientX: 80,
+            clientY: 75,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            target: segment,
+            pointerId: 17,
+            clientX: 130,
+            clientY: 155,
+            preventDefault() {},
+        });
+
+        const preview = body.children[0];
+        assert.ok(preview);
+        assert.match(preview.className, /planned-slot-move-drag-preview/);
+        assert.doesNotMatch(preview.className, /plan-segment-reorder-drag-ghost/);
+        assert.equal(preview.style.width, '260px');
+        assert.equal(preview.style.minHeight, '140px');
+        assert.equal(rows.get(3).classList.contains('planned-slot-move-drop-valid'), true);
+        assert.equal(body.querySelectorAll ? body.querySelectorAll('.plan-segment-reorder-insert-marker').length : 0, 0);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
 test('touch pointer starts move drag from the slot body without a handle', () => {
     const { originalDocument, documentListeners, body, createTarget } = createMoveDomHarness();
     try {
@@ -516,6 +566,8 @@ test('move mode renders no persistent move handle rail grip or tab css', () => {
     assert.doesNotMatch(css, /planned-slot-move-handle|move-rail|move-grip/);
     assert.match(css, /\.planned-slot-move-target\s*\{/);
     assert.match(css, /cursor:\s*grab;/);
+    assert.match(css, /\.planned-slot-move-mode \.planned-slot-move-target \.split-grid-segment[\s\S]*pointer-events:\s*none !important/);
+    assert.match(css, /\.planned-slot-move-mode \.planned-slot-move-target \.plan-segment-graphic \*[\s\S]*pointer-events:\s*none !important/);
 });
 
 test('move mode pulse is armed only on first entry', () => {

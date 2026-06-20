@@ -2748,6 +2748,15 @@ body.is-planned-slot-move-preview-active {
   cursor: grab !important;
 }
 
+.planned-slot-move-mode .planned-slot-move-target .split-grid,
+.planned-slot-move-mode .planned-slot-move-target .split-grid-segment,
+.planned-slot-move-mode .planned-slot-move-target .split-grid-segment-virtual-rest,
+.planned-slot-move-mode .planned-slot-move-target .plan-segment-graphic,
+.planned-slot-move-mode .planned-slot-move-target .plan-segment-graphic *,
+.planned-slot-move-mode .planned-slot-move-target .split-grid-label {
+  pointer-events: none !important;
+}
+
 .planned-slot-move-mode .plan-segment-resize-handle {
   opacity: 0;
   pointer-events: none;
