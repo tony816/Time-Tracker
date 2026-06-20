@@ -1539,6 +1539,199 @@ test('existing merged planned range drag expands, restores base range, and flips
     });
 });
 
+test('existing selected time-slot range mouse drag from bottom edge shrinks and flips past anchor', () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = {
+            querySelector(selector) {
+                return selector === '.time-slot-container' ? timeSlot : null;
+            },
+        };
+        const calls = [];
+        const ctx = {
+            currentColumnType: null,
+            isSelectingPlanned: false,
+            dragStartIndex: -1,
+            dragBaseEndIndex: -1,
+            selectedPlannedFields: new Set([7, 8, 9, 10]),
+            findMergeKey() {
+                return null;
+            },
+            closeInlinePlanDropdown() {
+                calls.push(['close']);
+            },
+            clearSelection(type) {
+                calls.push(['clear', type]);
+                this.selectedPlannedFields.clear();
+            },
+            selectFieldRange(type, start, end) {
+                calls.push(['select', type, start, end]);
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            },
+            getIndexAtClientPosition(type, clientX, clientY) {
+                calls.push(['hit', type, clientX, clientY]);
+                return clientY;
+            },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 10);
+        timeSlot.dispatchEvent({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            preventDefault() {
+                calls.push(['preventDown']);
+            },
+            stopPropagation() {
+                calls.push(['stopDown']);
+            },
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [7, 8, 9, 10]);
+        assert.equal(calls.some((call) => call[0] === 'select'), false);
+
+        [9, 8, 7, 6].forEach((clientY) => {
+            mockDocument.dispatchEvent({
+                type: 'mousemove',
+                buttons: 1,
+                clientX: 10,
+                clientY,
+            });
+        });
+
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 9));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 8));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 7));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 6 && call[3] === 7));
+    });
+});
+
+test('existing selected time-slot range touch drag from bottom edge shrinks upward', () => {
+    const timeSlot = createListenerNode();
+    const entryDiv = {
+        querySelector(selector) {
+            return selector === '.time-slot-container' ? timeSlot : null;
+        },
+    };
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        selectedPlannedFields: new Set([7, 8, 9, 10]),
+        findMergeKey() {
+            return null;
+        },
+        closeInlinePlanDropdown() {
+            calls.push(['close']);
+        },
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+            for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+        },
+        getIndexAtClientPosition(type, clientX, clientY) {
+            calls.push(['hit', type, clientX, clientY]);
+            return clientY;
+        },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 10);
+    timeSlot.dispatchEvent({
+        type: 'touchstart',
+        target: timeSlot,
+        touches: [{ clientX: 10, clientY: 10 }],
+        preventDefault() {
+            calls.push(['preventStart']);
+        },
+        stopPropagation() {
+            calls.push(['stopStart']);
+        },
+    });
+    [9, 8, 7].forEach((clientY) => {
+        timeSlot.dispatchEvent({
+            type: 'touchmove',
+            target: timeSlot,
+            touches: [{ clientX: 10, clientY }],
+            preventDefault() {
+                calls.push(['preventMove', clientY]);
+            },
+        });
+    });
+
+    assert.ok(calls.some((call) => call[0] === 'preventStart'));
+    assert.ok(calls.some((call) => call[0] === 'preventMove' && call[1] === 9));
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 9));
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 8));
+    assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 7 && call[3] === 7));
+});
+
+test('existing selected time-slot range mouse drag from top edge shrinks downward and flips past anchor', () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = {
+            querySelector(selector) {
+                return selector === '.time-slot-container' ? timeSlot : null;
+            },
+        };
+        const calls = [];
+        const ctx = {
+            currentColumnType: null,
+            isSelectingPlanned: false,
+            dragStartIndex: -1,
+            dragBaseEndIndex: -1,
+            selectedPlannedFields: new Set([7, 8, 9, 10]),
+            findMergeKey() {
+                return null;
+            },
+            closeInlinePlanDropdown() {
+                calls.push(['close']);
+            },
+            clearSelection(type) {
+                calls.push(['clear', type]);
+                this.selectedPlannedFields.clear();
+            },
+            selectFieldRange(type, start, end) {
+                calls.push(['select', type, start, end]);
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            },
+            getIndexAtClientPosition(type, clientX, clientY) {
+                calls.push(['hit', type, clientX, clientY]);
+                return clientY;
+            },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 7);
+        timeSlot.dispatchEvent({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        [8, 9, 10, 11].forEach((clientY) => {
+            mockDocument.dispatchEvent({
+                type: 'mousemove',
+                buttons: 1,
+                clientX: 10,
+                clientY,
+            });
+        });
+
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 8 && call[3] === 10));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 9 && call[3] === 10));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 10 && call[3] === 10));
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 10 && call[3] === 11));
+    });
+});
+
 test('time-slot merge entry does not intercept timer controls', () => {
     const timerButton = {
         closest(selector) {

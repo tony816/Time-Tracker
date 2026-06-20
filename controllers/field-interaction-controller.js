@@ -421,9 +421,23 @@
             const end = bounds ? bounds.end : index;
             return { start, end, mergeKey };
         };
+        let activeMergeSelectionAdjustment = null;
+        const getContiguousSelectedPlannedRange = () => {
+            const selectedSet = this.selectedPlannedFields;
+            if (!selectedSet || selectedSet.size <= 1) return null;
+            const selectedIndexes = Array.from(selectedSet)
+                .filter((selectedIndex) => Number.isInteger(selectedIndex))
+                .sort((a, b) => a - b);
+            if (selectedIndexes.length !== selectedSet.size) return null;
+            const start = selectedIndexes[0];
+            const end = selectedIndexes[selectedIndexes.length - 1];
+            if (end - start + 1 !== selectedIndexes.length) return null;
+            return { start, end };
+        };
         const resetTimeSlotMergeSelectionState = () => {
             resetPlannedSelectionDragState(this);
             this.pendingMergedMouseSelection = null;
+            activeMergeSelectionAdjustment = null;
             if (entryDiv && entryDiv.classList) {
                 entryDiv.classList.remove('merge-hover');
             }
@@ -442,6 +456,25 @@
             if (!point) return;
             const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
             if (!Number.isInteger(hoverIndex)) return;
+            if (activeMergeSelectionAdjustment) {
+                if (!Number.isInteger(activeMergeSelectionAdjustment.anchorIndex)) {
+                    if (activeMergeSelectionAdjustment.startIndex === activeMergeSelectionAdjustment.selectedEnd) {
+                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedStart;
+                    } else if (activeMergeSelectionAdjustment.startIndex === activeMergeSelectionAdjustment.selectedStart) {
+                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedEnd;
+                    } else if (hoverIndex < activeMergeSelectionAdjustment.startIndex) {
+                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedStart;
+                    } else if (hoverIndex > activeMergeSelectionAdjustment.startIndex) {
+                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedEnd;
+                    } else {
+                        return;
+                    }
+                }
+                const anchorIndex = activeMergeSelectionAdjustment.anchorIndex;
+                this.clearSelection('planned');
+                this.selectFieldRange('planned', Math.min(anchorIndex, hoverIndex), Math.max(anchorIndex, hoverIndex));
+                return;
+            }
             const baseStart = Number.isInteger(this.dragStartIndex) ? this.dragStartIndex : hoverIndex;
             const baseEnd = Number.isInteger(this.dragBaseEndIndex) && this.dragBaseEndIndex >= 0
                 ? this.dragBaseEndIndex
@@ -460,6 +493,27 @@
             }
             const range = getRange();
             this.closeInlinePlanDropdown();
+            const selectedRange = getContiguousSelectedPlannedRange();
+            if (selectedRange && range.start === range.end && range.start >= selectedRange.start && range.end <= selectedRange.end) {
+                let anchorIndex = null;
+                if (range.end === selectedRange.end) {
+                    anchorIndex = selectedRange.start;
+                } else if (range.start === selectedRange.start) {
+                    anchorIndex = selectedRange.end;
+                }
+                activeMergeSelectionAdjustment = {
+                    selectedStart: selectedRange.start,
+                    selectedEnd: selectedRange.end,
+                    startIndex: range.start,
+                    anchorIndex,
+                };
+                this.currentColumnType = 'planned';
+                this.dragStartIndex = range.start;
+                this.dragBaseEndIndex = range.end;
+                this.isSelectingPlanned = true;
+                return true;
+            }
+            activeMergeSelectionAdjustment = null;
             if (isPlainPrimaryPointerEvent(event) && isPlannedRangeSelected(this, range.start, range.end)) {
                 clearSelectedPlannedRangeFromEvent(this, event);
                 return 'cleared';
