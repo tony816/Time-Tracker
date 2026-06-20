@@ -530,14 +530,7 @@
             e.stopPropagation();
         });
 
-        let touchLongPressTimer = null;
-        let touchLongPressActive = false;
-        const clearTouchLongPress = () => {
-            if (touchLongPressTimer) {
-                clearTimeout(touchLongPressTimer);
-                touchLongPressTimer = null;
-            }
-        };
+        let touchMergeSelectionActive = false;
 
         timeSlot.addEventListener('touchstart', (e) => {
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
@@ -545,15 +538,23 @@
             if (isNonMergeTimeSlotControl(e.target)) {
                 return;
             }
-            touchLongPressActive = false;
-            clearTouchLongPress();
-            touchLongPressTimer = setTimeout(() => {
-                touchLongPressActive = beginTimeSlotMergeSelection(e);
-            }, 340);
-        }, { passive: true });
+            const result = beginTimeSlotMergeSelection(e);
+            if (!result) {
+                touchMergeSelectionActive = false;
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            if (result === 'cleared') {
+                touchMergeSelectionActive = false;
+                resetTimeSlotMergeSelectionState();
+                return;
+            }
+            touchMergeSelectionActive = true;
+        }, { passive: false });
 
         timeSlot.addEventListener('touchmove', (e) => {
-            if (!touchLongPressActive) return;
+            if (!touchMergeSelectionActive) return;
             const t = e.touches && e.touches[0];
             if (!t) return;
             e.preventDefault();
@@ -561,18 +562,16 @@
         }, { passive: false });
 
         timeSlot.addEventListener('touchend', (e) => {
-            clearTouchLongPress();
-            if (touchLongPressActive) {
+            if (touchMergeSelectionActive) {
                 e.preventDefault();
                 e.stopPropagation();
             }
             resetTimeSlotMergeSelectionState();
-            touchLongPressActive = false;
+            touchMergeSelectionActive = false;
         }, { passive: false });
 
         timeSlot.addEventListener('touchcancel', () => {
-            clearTouchLongPress();
-            touchLongPressActive = false;
+            touchMergeSelectionActive = false;
             resetTimeSlotMergeSelectionState();
         }, { passive: true });
     }
