@@ -198,9 +198,9 @@
 
     function clearMoveClasses() {
         if (typeof document === 'undefined') return;
-        document.querySelectorAll('.planned-slot-moving, .planned-slot-move-drop-valid, .planned-slot-move-drop-invalid')
+        document.querySelectorAll('.planned-slot-moving, .planned-slot-move-drop-valid, .planned-slot-move-drop-invalid, .is-planned-slot-move-drag-origin')
             .forEach((el) => {
-                el.classList.remove('planned-slot-moving', 'planned-slot-move-drop-valid', 'planned-slot-move-drop-invalid');
+                el.classList.remove('planned-slot-moving', 'planned-slot-move-drop-valid', 'planned-slot-move-drop-invalid', 'is-planned-slot-move-drag-origin');
             });
     }
 
@@ -214,27 +214,90 @@
 
     function getPlannedSlotMoveTargets(entryDiv) {
         if (!entryDiv || !entryDiv.querySelectorAll) return [];
-        const realPlanSegments = Array.from(entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]'));
-        if (realPlanSegments.length > 0) return realPlanSegments;
         const mergedMain = entryDiv.querySelector('.planned-merged-main-container');
         if (mergedMain) return [mergedMain];
         const plannedWrapper = entryDiv.querySelector('.split-cell-wrapper.split-type-planned.split-has-data');
         return plannedWrapper ? [plannedWrapper] : [];
     }
 
-    function isEventOnMoveBorder(target, event) {
-        if (!target || typeof target.getBoundingClientRect !== 'function' || !event) return true;
-        const rect = target.getBoundingClientRect();
-        if (!rect || !Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0) {
-            return true;
+    function getDragGhostHost() {
+        if (typeof document === 'undefined') return null;
+        return document.body || document.documentElement || null;
+    }
+
+    function sanitizeMoveDragPreview(node) {
+        if (!node) return;
+        if (node.removeAttribute) {
+            node.removeAttribute('id');
+            node.removeAttribute('aria-describedby');
+            node.removeAttribute('aria-controls');
         }
-        const edgeSize = Math.min(14, Math.max(8, Math.min(rect.width, rect.height) * 0.28));
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        return x <= edgeSize
-            || x >= rect.width - edgeSize
-            || y <= edgeSize
-            || y >= rect.height - edgeSize;
+        if (node.classList) {
+            node.classList.remove('planned-slot-move-target', 'is-planned-slot-move-drag-origin');
+            node.classList.add('planned-slot-move-drag-preview');
+        }
+        if (node.dataset) {
+            Object.keys(node.dataset)
+                .filter((key) => /listener/i.test(key))
+                .forEach((key) => { delete node.dataset[key]; });
+        }
+        if (node.querySelectorAll) {
+            node.querySelectorAll('*').forEach((child) => {
+                if (child.removeAttribute) {
+                    child.removeAttribute('id');
+                    child.removeAttribute('aria-describedby');
+                    child.removeAttribute('aria-controls');
+                }
+                if (child.dataset) {
+                    Object.keys(child.dataset)
+                        .filter((key) => /listener/i.test(key))
+                        .forEach((key) => { delete child.dataset[key]; });
+                }
+            });
+        }
+        if (node.setAttribute) node.setAttribute('aria-hidden', 'true');
+    }
+
+    function updatePlannedSlotMovePreview(drag, clientX, clientY) {
+        if (!drag || !drag.previewEl || !drag.previewEl.style) return;
+        const left = clientX - (Number(drag.previewOffsetX) || 0);
+        const top = clientY - (Number(drag.previewOffsetY) || 0);
+        drag.previewEl.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+    }
+
+    function createPlannedSlotMovePreview(drag, sourceEl) {
+        if (!drag || drag.previewEl || !sourceEl || typeof document === 'undefined') return null;
+        const host = getDragGhostHost();
+        if (!host || !host.appendChild) return null;
+        const rect = sourceEl.getBoundingClientRect ? sourceEl.getBoundingClientRect() : null;
+        const preview = sourceEl.cloneNode ? sourceEl.cloneNode(true) : document.createElement('div');
+        if (!preview) return null;
+        sanitizeMoveDragPreview(preview);
+        if (preview.style) {
+            preview.style.position = 'fixed';
+            preview.style.left = '0px';
+            preview.style.top = '0px';
+            if (rect && Number.isFinite(rect.width)) preview.style.width = `${Math.round(rect.width)}px`;
+            if (rect && Number.isFinite(rect.height)) preview.style.minHeight = `${Math.round(rect.height)}px`;
+            preview.style.pointerEvents = 'none';
+        }
+        drag.previewOffsetX = rect && Number.isFinite(rect.left) ? drag.startX - rect.left : 0;
+        drag.previewOffsetY = rect && Number.isFinite(rect.top) ? drag.startY - rect.top : 0;
+        host.appendChild(preview);
+        drag.previewEl = preview;
+        if (document.body && document.body.classList) document.body.classList.add('is-planned-slot-move-preview-active');
+        updatePlannedSlotMovePreview(drag, drag.startX, drag.startY);
+        return preview;
+    }
+
+    function removePlannedSlotMovePreview(drag) {
+        if (!drag) return;
+        const preview = drag.previewEl;
+        if (preview && preview.parentNode) preview.parentNode.removeChild(preview);
+        drag.previewEl = null;
+        if (typeof document !== 'undefined' && document.body && document.body.classList) {
+            document.body.classList.remove('is-planned-slot-move-preview-active');
+        }
     }
 
     function attachPlannedSlotMoveTargetListeners(ctx, target, index) {
@@ -250,7 +313,6 @@
 
         target.addEventListener('pointerdown', (event) => {
             if (!ctx.plannedSlotMoveMode || event.button !== undefined && event.button !== 0) return;
-            if (!isEventOnMoveBorder(target, event)) return;
             const sourceContext = getPlannedSlotMoveContext.call(ctx, index);
             if (!sourceContext.movable) return;
             ctx.plannedSlotMoveDrag = {
@@ -261,7 +323,45 @@
                 dragging: false,
                 valid: false,
                 targetStart: null,
+                sourceEl: target,
+                previewEl: null,
+                documentMoveListener: null,
+                documentUpListener: null,
+                documentCancelListener: null,
             };
+            if (typeof document !== 'undefined' && document.addEventListener) {
+                ctx.plannedSlotMoveDrag.documentMoveListener = (moveEvent) => {
+                    const drag = ctx.plannedSlotMoveDrag;
+                    if (!drag || drag.pointerId !== moveEvent.pointerId) return;
+                    const dx = moveEvent.clientX - drag.startX;
+                    const dy = moveEvent.clientY - drag.startY;
+                    if (!drag.dragging && Math.hypot(dx, dy) < 4) return;
+                    drag.dragging = true;
+                    createPlannedSlotMovePreview(drag, drag.sourceEl || target);
+                    updatePlannedSlotMovePreview(drag, moveEvent.clientX, moveEvent.clientY);
+                    if (moveEvent.preventDefault) moveEvent.preventDefault();
+                    clearMoveClasses();
+                    markRows(drag.sourceContext.rangeStart, drag.sourceContext.rangeEnd, 'planned-slot-moving');
+                    let targetIndex = typeof ctx.getIndexAtClientPosition === 'function'
+                        ? ctx.getIndexAtClientPosition('planned', moveEvent.clientX, moveEvent.clientY)
+                        : null;
+                    if (!Number.isInteger(targetIndex)) return;
+                    targetIndex = Math.max(0, Math.min(targetIndex, ctx.timeSlots.length - drag.sourceContext.blockLength));
+                    drag.targetStart = targetIndex;
+                    drag.valid = canDropPlannedSlotBlock.call(ctx, drag.sourceContext, targetIndex);
+                    ctx.plannedSlotMoveHoverStart = targetIndex;
+                    markRows(targetIndex, targetIndex + drag.sourceContext.blockLength - 1, drag.valid ? 'planned-slot-move-drop-valid' : 'planned-slot-move-drop-invalid');
+                };
+                ctx.plannedSlotMoveDrag.documentUpListener = (upEvent) => {
+                    if (upEvent && upEvent.target !== target) finish(upEvent, true);
+                };
+                ctx.plannedSlotMoveDrag.documentCancelListener = (cancelEvent) => {
+                    if (cancelEvent && cancelEvent.target !== target) finish(cancelEvent, false);
+                };
+                document.addEventListener('pointermove', ctx.plannedSlotMoveDrag.documentMoveListener, true);
+                document.addEventListener('pointerup', ctx.plannedSlotMoveDrag.documentUpListener, true);
+                document.addEventListener('pointercancel', ctx.plannedSlotMoveDrag.documentCancelListener, true);
+            }
             try { target.setPointerCapture(event.pointerId); } catch (_) {}
             if (target.classList) target.classList.add('is-planned-slot-move-drag-origin');
             if (event.preventDefault) event.preventDefault();
@@ -275,6 +375,8 @@
             const dy = event.clientY - drag.startY;
             if (!drag.dragging && Math.hypot(dx, dy) < 4) return;
             drag.dragging = true;
+            createPlannedSlotMovePreview(drag, drag.sourceEl || target);
+            updatePlannedSlotMovePreview(drag, event.clientX, event.clientY);
             event.preventDefault();
             clearMoveClasses();
             markRows(drag.sourceContext.rangeStart, drag.sourceContext.rangeEnd, 'planned-slot-moving');
@@ -292,9 +394,18 @@
         const finish = (event, shouldMove) => {
             const drag = ctx.plannedSlotMoveDrag;
             if (!drag || drag.pointerId !== event.pointerId) return;
+            if (drag.documentMoveListener && typeof document !== 'undefined') {
+                document.removeEventListener('pointermove', drag.documentMoveListener, true);
+                document.removeEventListener('pointerup', drag.documentUpListener, true);
+                document.removeEventListener('pointercancel', drag.documentCancelListener, true);
+                drag.documentMoveListener = null;
+                drag.documentUpListener = null;
+                drag.documentCancelListener = null;
+            }
             if (shouldMove && drag.dragging && drag.valid && drag.targetStart !== drag.sourceContext.rangeStart) {
                 movePlannedSlotBlock.call(ctx, drag.sourceContext.rangeStart, drag.targetStart);
             }
+            removePlannedSlotMovePreview(drag);
             clearPlannedSlotMoveDragState.call(ctx);
             if (target.classList) target.classList.remove('is-planned-slot-move-drag-origin');
             try { target.releasePointerCapture(event.pointerId); } catch (_) {}
@@ -306,6 +417,13 @@
     }
 
     function clearPlannedSlotMoveDragState() {
+        const drag = this.plannedSlotMoveDrag;
+        if (drag && drag.documentMoveListener && typeof document !== 'undefined') {
+            document.removeEventListener('pointermove', drag.documentMoveListener, true);
+            document.removeEventListener('pointerup', drag.documentUpListener, true);
+            document.removeEventListener('pointercancel', drag.documentCancelListener, true);
+        }
+        removePlannedSlotMovePreview(drag);
         clearMoveClasses();
         this.plannedSlotMoveDrag = null;
         this.plannedSlotMoveHoverStart = null;

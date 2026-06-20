@@ -157,10 +157,10 @@ test('active plan segment timer blocks move', () => {
 
     assert.equal(controller.movePlannedSlotBlock.call(ctx, 0, 3), false);
     assert.equal(ctx.timeSlots[0].planned, 'Source');
-    assert.equal(ctx.notifications[0], '실행 중인 타이머가 있어 이동할 수 없습니다.');
+    assert.equal(ctx.notifications[0], '\uC2E4\uD589 \uC911\uC778 \uD0C0\uC774\uBA38\uAC00 \uC788\uC5B4 \uC774\uB3D9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.');
 });
 
-test('move mode marks planned segment border only on movable base row', () => {
+test('move mode marks planned slot wrapper only on movable base row', () => {
     const originalDocument = global.document;
     const created = [];
     global.document = {
@@ -189,47 +189,204 @@ test('move mode marks planned segment border only on movable base row', () => {
         ctx.mergedFields.set('planned-1-2', 'Block');
         const baseChildren = [];
         const continuationChildren = [];
-        const createEntry = (children) => ({
+        const createEntry = (children) => {
+            const segment = {
+                className: 'split-grid-segment',
+                dataset: { segmentKind: 'real-plan' },
+                attributes: {},
+                setAttribute(name, value) {
+                    this.attributes[name] = value;
+                },
+                addEventListener() {},
+            };
+            segment.classList = {
+                add(className) {
+                    segment.className = `${segment.className} ${className}`.trim();
+                    children.push(segment);
+                },
+                remove() {},
+            };
+            const wrapper = {
+                className: 'split-cell-wrapper split-type-planned split-has-data',
+                dataset: {},
+                attributes: {},
+                setAttribute(name, value) {
+                    this.attributes[name] = value;
+                },
+                addEventListener() {},
+            };
+            wrapper.classList = {
+                add(className) {
+                    wrapper.className = `${wrapper.className} ${className}`.trim();
+                    children.push(wrapper);
+                },
+                remove() {},
+            };
+            return ({
             querySelectorAll(selector) {
                 if (selector !== '.split-grid-segment[data-segment-kind="real-plan"]') return [];
-                const target = {
-                    className: '',
-                    dataset: {},
-                    attributes: {},
-                    setAttribute(name, value) {
-                        this.attributes[name] = value;
-                    },
-                    addEventListener() {},
-                };
-                target.classList = {
-                    add(className) {
-                        target.className = className;
-                        children.push(target);
-                    },
-                    remove() {},
-                };
-                return [target];
+                return [segment];
             },
             querySelector(selector) {
                 if (selector.includes('split-cell-wrapper')) {
-                    return {
-                        appendChild(child) {
-                            children.push(child);
-                        },
-                    };
+                    return wrapper;
                 }
                 return null;
             },
         });
+        };
 
         controller.attachPlannedSlotMoveListeners.call(ctx, createEntry(baseChildren), 1);
         controller.attachPlannedSlotMoveListeners.call(ctx, createEntry(continuationChildren), 2);
 
         assert.equal(baseChildren.length, 1);
-        assert.equal(baseChildren[0].className, 'planned-slot-move-target');
-        assert.equal(baseChildren[0].attributes['aria-label'], '계획 슬롯 이동');
+        assert.match(baseChildren[0].className, /split-cell-wrapper/);
+        assert.match(baseChildren[0].className, /planned-slot-move-target/);
+        assert.equal(baseChildren[0].attributes['aria-label'], '\uACC4\uD68D \uC2AC\uB86F \uC774\uB3D9');
         assert.equal(continuationChildren.length, 0);
         assert.equal(created.length, 0);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('whole planned slot wrapper starts move drag and keeps full preview until release', () => {
+    const originalDocument = global.document;
+    const documentListeners = {};
+    const body = {
+        className: '',
+        children: [],
+        classList: {
+            add(className) { body.className = `${body.className} ${className}`.trim(); },
+            remove(className) { body.className = body.className.split(/\s+/).filter(item => item && item !== className).join(' '); },
+        },
+        appendChild(child) {
+            child.parentNode = body;
+            body.children.push(child);
+            return child;
+        },
+        removeChild(child) {
+            body.children = body.children.filter(item => item !== child);
+            child.parentNode = null;
+            return child;
+        },
+    };
+    global.document = {
+        body,
+        documentElement: body,
+        addEventListener(type, handler) {
+            documentListeners[type] = handler;
+        },
+        removeEventListener(type, handler) {
+            if (documentListeners[type] === handler) delete documentListeners[type];
+        },
+        querySelectorAll() {
+            return [];
+        },
+        querySelector() {
+            return null;
+        },
+        createElement() {
+            return {
+                className: '',
+                dataset: {},
+                style: {},
+                classList: { add() {}, remove() {} },
+                setAttribute() {},
+            };
+        },
+    };
+
+    const createTarget = () => {
+        const listeners = {};
+        const clone = {
+            className: 'split-cell-wrapper split-type-planned split-has-data',
+            dataset: {},
+            style: { setProperty(name, value) { this[name] = value; } },
+            attributes: {},
+            parentNode: null,
+            classList: {
+                add(className) { clone.className = `${clone.className} ${className}`.trim(); },
+                remove(className) { clone.className = clone.className.split(/\s+/).filter(item => item && item !== className).join(' '); },
+            },
+            removeAttribute(name) { delete clone.attributes[name]; },
+            setAttribute(name, value) { clone.attributes[name] = value; },
+            querySelectorAll() { return []; },
+        };
+        const target = {
+            className: 'split-cell-wrapper split-type-planned split-has-data',
+            dataset: {},
+            style: {},
+            attributes: {},
+            _listeners: listeners,
+            classList: {
+                add(className) { target.className = `${target.className} ${className}`.trim(); },
+                remove(className) { target.className = target.className.split(/\s+/).filter(item => item && item !== className).join(' '); },
+            },
+            setAttribute(name, value) { target.attributes[name] = value; },
+            addEventListener(type, handler) { listeners[type] = handler; },
+            setPointerCapture(pointerId) { target.capturedPointerId = pointerId; },
+            releasePointerCapture(pointerId) { target.releasedPointerId = pointerId; },
+            getBoundingClientRect() { return { left: 20, top: 30, width: 240, height: 120 }; },
+            cloneNode() { return clone; },
+            querySelectorAll() { return []; },
+        };
+        return target;
+    };
+
+    try {
+        const ctx = createCtx();
+        ctx.plannedSlotMoveMode = true;
+        ctx.timeSlots[1].planned = 'Block';
+        ctx.getIndexAtClientPosition = () => 3;
+        const target = createTarget();
+        const entry = {
+            querySelectorAll() { return []; },
+            querySelector(selector) {
+                return selector.includes('split-cell-wrapper') ? target : null;
+            },
+        };
+
+        controller.attachPlannedSlotMoveListeners.call(ctx, entry, 1);
+        target._listeners.pointerdown({
+            type: 'pointerdown',
+            target,
+            button: 0,
+            pointerId: 7,
+            clientX: 40,
+            clientY: 50,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.equal(typeof documentListeners.pointermove, 'function');
+        documentListeners.pointermove({
+            type: 'pointermove',
+            target: body,
+            pointerId: 7,
+            clientX: 125,
+            clientY: 145,
+            preventDefault() {},
+        });
+
+        assert.equal(body.children.length, 1);
+        assert.match(body.children[0].className, /planned-slot-move-drag-preview/);
+        assert.equal(body.children[0].style.width, '240px');
+        assert.equal(body.children[0].style.minHeight, '120px');
+        assert.match(body.children[0].style.transform, /translate3d\(105px, 125px, 0\)/);
+        assert.equal(ctx.plannedSlotMoveDrag.dragging, true);
+        assert.equal(ctx.plannedSlotMoveDrag.targetStart, 3);
+
+        documentListeners.pointerup({
+            type: 'pointerup',
+            target: body,
+            pointerId: 7,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(body.children.length, 0);
+        assert.equal(ctx.timeSlots[3].planned, 'Block');
+        assert.equal(ctx.plannedSlotMoveDrag, null);
     } finally {
         global.document = originalDocument;
     }

@@ -6221,6 +6221,7 @@ class TimeTracker {
     }
         attachVirtualRestGapListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return;
         const gaps = entryDiv.querySelectorAll('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
         gaps.forEach((gapEl) => {
             if (!gapEl || gapEl.dataset.virtualRestGapListenerAttached === 'true') return;
@@ -6707,6 +6708,7 @@ class TimeTracker {
     }
     attachPlanSegmentTitleEditListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return;
         const labels = entryDiv.querySelectorAll('[data-title-edit-trigger="true"]');
         labels.forEach((labelEl) => {
             if (!labelEl || labelEl.dataset.titleEditListenerAttached === 'true') return;
@@ -7114,6 +7116,7 @@ class TimeTracker {
     }
     attachPlanSegmentSelectionListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return;
         this.ensurePlanSegmentSelectionGlobalListeners();
         const segments = entryDiv.querySelectorAll('.split-grid-segment[data-segment-kind="real-plan"]');
         segments.forEach((segmentEl) => {
@@ -7372,6 +7375,7 @@ class TimeTracker {
     }
         attachPlanSegmentResizeListeners(entryDiv, index) {
         if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return;
         const interactiveResizeBlockSelector = '.plan-segment-timer-button, .plan-segment-graphic-title, .plan-segment-graphic-label, .plan-segment-label-text, .plan-segment-title-text, .plan-segment-timer-time, .plan-segment-title-edit-input, .activity-chip-board, .inline-plan-dropdown, .inline-plan-subsection, button, input, select, textarea';
         const getPointFromEvent = (event) => {
             if (event && Number.isFinite(event.clientX)) {
