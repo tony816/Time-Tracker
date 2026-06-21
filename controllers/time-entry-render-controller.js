@@ -194,10 +194,13 @@ function wrapWithSplitVisualization(type, index, content) {
         if (!splitMarkup && !clearButtonHtml) return content;
         const typeClass = type === 'planned' ? 'split-type-planned' : 'split-type-actual';
         const clearClass = clearButtonHtml ? ' planned-slot-clear-target' : '';
+        const clearOverlayHtml = clearButtonHtml
+            ? `<div class="planned-slot-clear-overlay">${clearButtonHtml}</div>`
+            : '';
         return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}" data-split-type="${type}" data-index="${index}"${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}>
                     ${content}
                     ${splitMarkup}
-                    ${clearButtonHtml}
+                    ${clearOverlayHtml}
                 </div>`;
     }
 

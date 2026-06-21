@@ -16,6 +16,7 @@ const buildSplitVisualization = buildMethod(
     'buildSplitVisualization(type, index)',
     '(type, index)'
 );
+const PLANNED_SLOT_HOST_SELECTOR = '.split-cell-wrapper.split-type-planned.planned-slot-clear-target';
 
 function createContext(overrides = {}) {
     const slot = {
@@ -118,6 +119,7 @@ test('clear mode renders a host-level button for non-empty planned slots only', 
     const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
     assert.match(html, /planned-slot-clear-target/);
     assert.match(html, /data-planned-slot-clear-target="true"/);
+    assert.match(html, /class="planned-slot-clear-overlay"/);
     assert.match(html, /class="planned-slot-clear-btn"/);
     const segmentHtml = html.match(/<div class="split-grid-segment[^"]*"[\s\S]*?<\/div>/);
     assert.ok(segmentHtml);
@@ -154,14 +156,17 @@ test('clear mode button stays on the planned slot host even with split and virtu
     const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
     assert.match(html, /planned-slot-clear-btn/);
     assert.match(html, /planned-slot-clear-target/);
+    assert.match(html, /planned-slot-clear-overlay/);
     assert.doesNotMatch(html, /split-grid-segment[^>]*planned-slot-clear-btn/);
 });
 
 test('clear button sits above segment content in the stacking order', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
-    assert.match(css, /\.planned-slot-clear-target\s*\{[\s\S]*z-index:\s*6;/);
-    assert.match(css, /\.planned-slot-clear-btn\s*\{[\s\S]*z-index:\s*8;/);
+    assert.match(css, /\.planned-slot-clear-target\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*6;/);
+    assert.match(css, /\.planned-slot-clear-overlay\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*0;[\s\S]*pointer-events:\s*none;[\s\S]*z-index:\s*9;/);
+    assert.match(css, /\.planned-slot-clear-btn\s*\{[\s\S]*position:\s*absolute;[\s\S]*top:\s*4px;[\s\S]*right:\s*4px;[\s\S]*z-index:\s*10;/);
     assert.match(css, /\.split-visualization \.split-grid-segment\s*\{[\s\S]*z-index:\s*var\(--split-segment-layer, 2\);/);
+    assert.match(css, /\.split-cell-wrapper \.split-visualization\s*\{[\s\S]*top:\s*6px;[\s\S]*z-index:\s*2;/);
 });
 
 test('clearing a planned slot removes all planned content while preserving unrelated merge metadata', () => {
@@ -214,12 +219,27 @@ test('clearing an empty slot is a no-op and leaves the clear button hidden', () 
 
 function createFakeClearButton({ buttonIndex = '0', hostIndex = '0' } = {}) {
     const listeners = new Map();
-    const host = { dataset: { index: hostIndex, plannedSlotClearTarget: 'true' } };
+    const host = {
+        dataset: { index: hostIndex, plannedSlotClearTarget: 'true' },
+        className: 'split-cell-wrapper split-type-planned planned-slot-clear-target',
+    };
+    const overlay = {
+        className: 'planned-slot-clear-overlay',
+        parentNode: host,
+        closest(selector) {
+            if (selector === PLANNED_SLOT_HOST_SELECTOR) return host;
+            return null;
+        },
+    };
     const button = {
         dataset: { index: buttonIndex },
         listeners,
         closest(selector) {
             if (selector === '.planned-slot-clear-btn') return button;
+            if (selector === '.planned-slot-clear-overlay') return overlay;
+            if (selector === '.split-grid-segment') return null;
+            if (selector === '[class*="plan-segment"]') return null;
+            if (selector === PLANNED_SLOT_HOST_SELECTOR) return host;
             if (selector === '[data-planned-slot-clear-target="true"]') return host;
             return null;
         },
@@ -251,8 +271,16 @@ function createFakeClearButton({ buttonIndex = '0', hostIndex = '0' } = {}) {
         querySelectorAll() { return [button]; },
         querySelector(selector) { return selector === '.planned-slot-clear-btn' ? button : null; },
     };
-    return { button, entryDiv };
+    return { button, entryDiv, host, overlay };
 }
+
+test('clear button belongs to the planned slot host and not to any segment node', () => {
+    const { button, host } = createFakeClearButton();
+    assert.equal(button.closest('.split-grid-segment'), null);
+    assert.equal(button.closest('[class*="plan-segment"]'), null);
+    assert.equal(button.closest(PLANNED_SLOT_HOST_SELECTOR), host);
+    assert.equal(button.closest('[data-planned-slot-clear-target="true"]'), host);
+});
 
 test('clicking the rendered planned slot clear button clears and persists host slot state', () => {
     const ctx = createContext();
