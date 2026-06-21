@@ -317,6 +317,169 @@ test('sheet touch dismiss does not arm from chip board interactions', () => {
     assert.deepEqual(calls, []);
 });
 
+test('sheet touch dismiss closes after dragging the handle downward past threshold', () => {
+    const listeners = {};
+    const timers = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const handle = {
+        closest(selector) {
+            return selector === '.inline-plan-sheet-drag-handle' ? handle : null;
+        },
+    };
+    const dropdown = {
+        scrollTop: 0,
+        style: {},
+        classList: {
+            contains(className) {
+                return className === 'inline-plan-dropdown-sheet';
+            },
+        },
+        querySelector(selector) {
+            return selector === '.inline-plan-sheet-drag-handle' ? handle : null;
+        },
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        removeEventListener() {},
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanSheetTouchHandlers: null,
+        cleanupInlinePlanSheetTouchDismiss() {
+            controller.cleanupInlinePlanSheetTouchDismiss.call(this);
+        },
+        closeInlinePlanDropdown() {
+            calls.push('close');
+        },
+    };
+
+    globalThis.setTimeout = (fn) => {
+        timers.push(fn);
+        return timers.length;
+    };
+    globalThis.clearTimeout = () => {};
+
+    try {
+        controller.setupInlinePlanSheetTouchDismiss.call(ctx, dropdown);
+        listeners.touchstart({ target: handle, touches: [{ clientY: 24 }], pointerId: 7 });
+        listeners.touchmove({
+            target: handle,
+            touches: [{ clientY: 146 }],
+            pointerId: 7,
+            cancelable: true,
+            preventDefault() {
+                calls.push('prevent');
+            },
+        });
+        listeners.touchend({ target: handle, changedTouches: [{ clientY: 146 }], pointerId: 7 });
+
+        assert.equal(dropdown.style.transform, 'translateY(100%)');
+        assert.deepEqual(calls, ['prevent']);
+        assert.equal(timers.length, 1);
+
+        timers[0]();
+
+        assert.deepEqual(calls, ['prevent', 'close']);
+    } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+    }
+});
+
+test('sheet touch dismiss snaps back open when drag stays below threshold', () => {
+    const listeners = {};
+    const timers = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const handle = {
+        closest(selector) {
+            return selector === '.inline-plan-sheet-drag-handle' ? handle : null;
+        },
+    };
+    const dropdown = {
+        scrollTop: 0,
+        style: {},
+        classList: {
+            contains(className) {
+                return className === 'inline-plan-dropdown-sheet';
+            },
+        },
+        querySelector(selector) {
+            return selector === '.inline-plan-sheet-drag-handle' ? handle : null;
+        },
+        addEventListener(type, handler) {
+            listeners[type] = handler;
+        },
+        removeEventListener() {},
+    };
+    const calls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanSheetTouchHandlers: null,
+        cleanupInlinePlanSheetTouchDismiss() {
+            controller.cleanupInlinePlanSheetTouchDismiss.call(this);
+        },
+        closeInlinePlanDropdown() {
+            calls.push('close');
+        },
+    };
+
+    globalThis.setTimeout = (fn) => {
+        timers.push(fn);
+        return timers.length;
+    };
+    globalThis.clearTimeout = () => {};
+
+    try {
+        controller.setupInlinePlanSheetTouchDismiss.call(ctx, dropdown);
+        listeners.touchstart({ target: handle, touches: [{ clientY: 24 }], pointerId: 9 });
+        listeners.touchmove({
+            target: handle,
+            touches: [{ clientY: 84 }],
+            pointerId: 9,
+            cancelable: true,
+            preventDefault() {
+                calls.push('prevent');
+            },
+        });
+        listeners.touchend({ target: handle, changedTouches: [{ clientY: 84 }], pointerId: 9 });
+
+        assert.equal(dropdown.style.transform, 'translateY(0px)');
+        assert.deepEqual(calls, ['prevent']);
+        assert.equal(timers.length, 0);
+        assert.equal(ctx.inlinePlanSheetTouchState.armed, false);
+        assert.equal(calls.includes('close'), false);
+    } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+    }
+});
+
+test('sheet touch dismiss ignores non-sheet dropdowns', () => {
+    const dropdown = {
+        classList: {
+            contains() {
+                return false;
+            },
+        },
+        addEventListener() {
+            throw new Error('should not attach listeners');
+        },
+    };
+    const ctx = {
+        inlinePlanSheetTouchHandlers: null,
+        cleanupInlinePlanSheetTouchDismiss() {
+            controller.cleanupInlinePlanSheetTouchDismiss.call(this);
+        },
+    };
+
+    controller.setupInlinePlanSheetTouchDismiss.call(ctx, dropdown);
+
+    assert.equal(ctx.inlinePlanSheetTouchHandlers, null);
+});
+
 test('script inline plan wrapper methods delegate to controller helpers', () => {
     const calls = [];
     const original = globalThis.TimeTrackerInlinePlanDropdownController;

@@ -316,6 +316,27 @@
         z-index: 2099;
     }
 
+    .inline-plan-sheet-drag-handle {
+        width: 100%;
+        min-height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: grab;
+    }
+
+    .inline-plan-sheet-drag-handle::before {
+        content: '';
+        width: 46px;
+        height: 5px;
+        border-radius: 999px;
+        background: #cbd5e1;
+    }
+
     body.inline-plan-sheet-open .inline-plan-sheet-context-target {
         position: relative;
         box-shadow:
@@ -328,17 +349,6 @@
     body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-sheet-context-target .planned-input {
         background-image:
             linear-gradient(rgba(52, 152, 219, 0.08), rgba(52, 152, 219, 0.08));
-    }
-
-    .inline-plan-dropdown.inline-plan-dropdown-sheet::before {
-        content: '';
-        width: 46px;
-        height: 5px;
-        border-radius: 999px;
-        background: #cbd5e1;
-        align-self: center;
-        margin-bottom: 2px;
-        flex: 0 0 auto;
     }
 
     .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-options {
@@ -603,6 +613,27 @@ textarea:focus-visible,
         z-index: 2099;
     }
 
+    .inline-plan-sheet-drag-handle {
+        width: 100%;
+        min-height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: grab;
+    }
+
+    .inline-plan-sheet-drag-handle::before {
+        content: '';
+        width: 46px;
+        height: 5px;
+        border-radius: 999px;
+        background: #cbd5e1;
+    }
+
     body.inline-plan-sheet-open .inline-plan-sheet-context-target {
         position: relative;
         box-shadow:
@@ -615,17 +646,6 @@ textarea:focus-visible,
     body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-sheet-context-target .planned-input {
         background-image:
             linear-gradient(rgba(52, 152, 219, 0.08), rgba(52, 152, 219, 0.08));
-    }
-
-    .inline-plan-dropdown.inline-plan-dropdown-sheet::before {
-        content: '';
-        width: 46px;
-        height: 5px;
-        border-radius: 999px;
-        background: #cbd5e1;
-        align-self: center;
-        margin-bottom: 2px;
-        flex: 0 0 auto;
     }
 
     .inline-plan-dropdown.inline-plan-dropdown-sheet .inline-plan-options {

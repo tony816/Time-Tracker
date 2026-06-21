@@ -236,7 +236,8 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             lastY: 0,
             dragging: false,
             armed: false,
-            pointerId: null
+            pointerId: null,
+            closeTimer: null
         };
         const getPointY = (event) => {
             if (!event) return 0;
@@ -248,23 +249,25 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             if (!this.inlinePlanDropdown || this.inlinePlanDropdown !== dropdown) return false;
             const scrollTop = dropdown.scrollTop || 0;
             if (scrollTop > 2) return false;
-            const interactive = event.target && event.target.closest
-                ? event.target.closest('input, textarea, button, select, .inline-plan-options, .activity-chip-board, .inline-plan-subsection, .inline-plan-sub-board, .inline-plan-input-row')
-                : null;
-            return !interactive || (
-                interactive === dropdown.querySelector('.inline-plan-options')
-                && event.target === interactive
-                && scrollTop <= 2
-            );
+            const handle = dropdown.querySelector('.inline-plan-sheet-drag-handle');
+            if (!handle) return false;
+            return Boolean(event.target && typeof event.target.closest === 'function' && event.target.closest('.inline-plan-sheet-drag-handle'));
         };
         const start = (event) => {
             if (!shouldArm(event)) return;
+            if (state.closeTimer) {
+                clearTimeout(state.closeTimer);
+                state.closeTimer = null;
+            }
             state.startY = getPointY(event);
             state.lastY = state.startY;
             state.dragging = false;
             state.armed = true;
             state.pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
             dropdown.style.transition = 'transform 0.18s ease';
+            if (event.target && typeof event.target.setPointerCapture === 'function' && Number.isFinite(event.pointerId)) {
+                try { event.target.setPointerCapture(event.pointerId); } catch (_) {}
+            }
         };
         const move = (event) => {
             if (!state.armed) return;
@@ -288,7 +291,8 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             dropdown.style.transition = 'transform 0.18s ease';
             if (state.dragging && deltaY >= 90) {
                 dropdown.style.transform = 'translateY(100%)';
-                setTimeout(() => {
+                state.closeTimer = setTimeout(() => {
+                    state.closeTimer = null;
                     if (this.inlinePlanDropdown === dropdown) this.closeInlinePlanDropdown();
                 }, 150);
             } else {
@@ -316,6 +320,11 @@ function cleanupInlinePlanSheetTouchDismiss() {
         const handlers = this.inlinePlanSheetTouchHandlers;
         if (!handlers || !handlers.dropdown) return;
         const { dropdown, start, move, end } = handlers;
+        const state = this.inlinePlanSheetTouchState;
+        if (state && state.closeTimer) {
+            clearTimeout(state.closeTimer);
+            state.closeTimer = null;
+        }
         dropdown.removeEventListener('touchstart', start);
         dropdown.removeEventListener('touchmove', move);
         dropdown.removeEventListener('touchend', end);
@@ -2297,6 +2306,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         const dropdown = document.createElement('div');
         dropdown.className = `inline-plan-dropdown${isMobileInputContext ? ' inline-plan-dropdown-sheet' : ''}`;
         dropdown.innerHTML = `
+            <div class="inline-plan-sheet-drag-handle" aria-hidden="true"></div>
             <div class="inline-plan-input-row${isMobileInputContext ? ' inline-plan-input-row-mobile-close' : ''}">
                 ${isMobileInputContext ? '<button type="button" class="inline-plan-close-btn" aria-label="닫기">×</button>' : ''}
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
