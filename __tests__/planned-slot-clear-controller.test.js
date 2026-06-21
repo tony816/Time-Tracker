@@ -104,6 +104,15 @@ test('planned slot clear activation button lives inside the sheet title cell', (
     );
 });
 
+test('planned slot clear activation button remains pointer-clickable in the title cell', () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'planned-slot-move-controller.js'), 'utf8');
+    assert.match(html, /id="plannedSlotClearModeBtn"[^>]*style="[^"]*pointer-events:\s*auto;?[^"]*"/);
+    assert.match(css, /\.planned-slot-clear-mode-btn\s*\{[\s\S]*pointer-events:\s*auto;/);
+    assert.match(controllerSource, /plannedSlotClearModeButton\.style\.pointerEvents\s*=\s*'auto'/);
+});
+
 test('clear mode renders a host-level button for non-empty planned slots only', () => {
     const ctx = createContext();
     const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');

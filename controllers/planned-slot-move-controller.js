@@ -115,6 +115,7 @@
     function initPlannedSlotClearModeControls() {
         this.plannedSlotClearModeButton = document.getElementById('plannedSlotClearModeBtn');
         if (this.plannedSlotClearModeButton && !this.plannedSlotClearModeButton.dataset.clearModeBound) {
+            this.plannedSlotClearModeButton.style.pointerEvents = 'auto';
             this.plannedSlotClearModeButton.dataset.clearModeBound = 'true';
             this.plannedSlotClearModeButton.addEventListener('click', () => this.togglePlannedSlotClearMode());
         }
