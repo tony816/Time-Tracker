@@ -136,6 +136,8 @@ class TimeTracker {
         this.plannedSlotMoveHoverStart = null;
         this.plannedSlotMoveModeButton = null;
         this.plannedSlotMoveStatus = null;
+        this.plannedSlotClearMode = false;
+        this.plannedSlotClearModeButton = null;
         this.plannedSegmentReorderState = null;
         this.planSegmentReorderClickSuppressUntil = 0;
 
@@ -502,32 +504,68 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotMoveModeControls.call(this);
     }
 
+    initPlannedSlotClearModeControls() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotClearModeControls.call(this);
+    }
+
     setPlannedSlotMoveMode(enabled) {
         return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotMoveMode.call(this, enabled);
+    }
+
+    setPlannedSlotClearMode(enabled) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotClearMode.call(this, enabled);
     }
 
     togglePlannedSlotMoveMode() {
         return globalThis.TimeTrackerPlannedSlotMoveController.togglePlannedSlotMoveMode.call(this);
     }
 
+    togglePlannedSlotClearMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.togglePlannedSlotClearMode.call(this);
+    }
+
     isPlannedSlotMoveMode() {
         return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotMoveMode.call(this);
+    }
+
+    isPlannedSlotClearMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotClearMode.call(this);
     }
 
     attachPlannedSlotMoveListeners(entryDiv, index) {
         return globalThis.TimeTrackerPlannedSlotMoveController.attachPlannedSlotMoveListeners.call(this, entryDiv, index);
     }
 
+    attachPlannedSlotClearListeners(entryDiv, index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.attachPlannedSlotClearListeners.call(this, entryDiv, index);
+    }
+
     movePlannedSlotBlock(sourceIndex, targetStartIndex) {
         return globalThis.TimeTrackerPlannedSlotMoveController.movePlannedSlotBlock.call(this, sourceIndex, targetStartIndex);
+    }
+
+    clearPlannedSlotContents(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.clearPlannedSlotContents.call(this, index);
     }
 
     getPlannedSlotMoveContext(index) {
         return globalThis.TimeTrackerPlannedSlotMoveController.getPlannedSlotMoveContext.call(this, index);
     }
 
+    getPlannedSlotClearContext(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.getPlannedSlotClearContext.call(this, index);
+    }
+
     canDropPlannedSlotBlock(sourceContext, targetStartIndex) {
         return globalThis.TimeTrackerPlannedSlotMoveController.canDropPlannedSlotBlock.call(this, sourceContext, targetStartIndex);
+    }
+
+    shouldRenderPlannedSlotClearButton(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.shouldRenderPlannedSlotClearButton.call(this, index);
+    }
+
+    createPlannedSlotClearButtonHtml(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.createPlannedSlotClearButtonHtml.call(this, index);
     }
 
     clearPlannedSlotMoveDragState() {
@@ -548,6 +586,7 @@ class TimeTracker {
 
     attachEventListeners() {
         this.initPlannedSlotMoveModeControls();
+        this.initPlannedSlotClearModeControls();
         if (this.authButton) {
             this.authButton.addEventListener('click', () => {
                 if (!this.supabaseConfigured || !this.supabase) {

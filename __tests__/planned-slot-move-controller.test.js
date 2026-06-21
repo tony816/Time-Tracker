@@ -72,11 +72,17 @@ function createCtx() {
 
 test('planned slot move controller exports and attaches to global', () => {
     assert.equal(typeof controller.initPlannedSlotMoveModeControls, 'function');
+    assert.equal(typeof controller.initPlannedSlotClearModeControls, 'function');
     assert.equal(typeof controller.setPlannedSlotMoveMode, 'function');
+    assert.equal(typeof controller.setPlannedSlotClearMode, 'function');
     assert.equal(typeof controller.togglePlannedSlotMoveMode, 'function');
+    assert.equal(typeof controller.togglePlannedSlotClearMode, 'function');
     assert.equal(typeof controller.isPlannedSlotMoveMode, 'function');
+    assert.equal(typeof controller.isPlannedSlotClearMode, 'function');
     assert.equal(typeof controller.attachPlannedSlotMoveListeners, 'function');
+    assert.equal(typeof controller.attachPlannedSlotClearListeners, 'function');
     assert.equal(typeof controller.movePlannedSlotBlock, 'function');
+    assert.equal(typeof controller.clearPlannedSlotContents, 'function');
     assert.equal(globalThis.TimeTrackerPlannedSlotMoveController.movePlannedSlotBlock, controller.movePlannedSlotBlock);
 });
 

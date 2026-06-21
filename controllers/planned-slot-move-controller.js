@@ -112,6 +112,15 @@
         setPlannedSlotMoveModeUi.call(this);
     }
 
+    function initPlannedSlotClearModeControls() {
+        this.plannedSlotClearModeButton = document.getElementById('plannedSlotClearModeBtn');
+        if (this.plannedSlotClearModeButton && !this.plannedSlotClearModeButton.dataset.clearModeBound) {
+            this.plannedSlotClearModeButton.dataset.clearModeBound = 'true';
+            this.plannedSlotClearModeButton.addEventListener('click', () => this.togglePlannedSlotClearMode());
+        }
+        setPlannedSlotClearModeUi.call(this);
+    }
+
     function setPlannedSlotMoveModeUi() {
         const enabled = Boolean(this.plannedSlotMoveMode);
         const roots = [
@@ -132,6 +141,21 @@
         }
     }
 
+    function setPlannedSlotClearModeUi() {
+        const enabled = Boolean(this.plannedSlotClearMode);
+        const roots = [
+            document.documentElement,
+            document.body,
+            document.querySelector('.timesheet'),
+            document.getElementById('timeEntries'),
+        ].filter(Boolean);
+        roots.forEach((el) => el.classList.toggle('planned-slot-clear-mode', enabled));
+        if (this.plannedSlotClearModeButton) {
+            this.plannedSlotClearModeButton.textContent = enabled ? '삭제 완료' : '슬롯 삭제';
+            this.plannedSlotClearModeButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        }
+    }
+
     function setPlannedSlotMoveMode(enabled) {
         const next = Boolean(enabled);
         if (next === Boolean(this.plannedSlotMoveMode)) {
@@ -139,6 +163,9 @@
             return this.plannedSlotMoveMode;
         }
         if (next) {
+            if (this.plannedSlotClearMode) {
+                setPlannedSlotClearMode.call(this, false);
+            }
             if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
             if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
             if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
@@ -161,12 +188,101 @@
         return this.plannedSlotMoveMode;
     }
 
+    function setPlannedSlotClearMode(enabled) {
+        const next = Boolean(enabled);
+        if (next === Boolean(this.plannedSlotClearMode)) {
+            setPlannedSlotClearModeUi.call(this);
+            return this.plannedSlotClearMode;
+        }
+        if (next) {
+            if (this.plannedSlotMoveMode) {
+                setPlannedSlotMoveMode.call(this, false);
+            }
+            if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
+            if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
+            if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
+            if (typeof this.cancelPlanSegmentResize === 'function') this.cancelPlanSegmentResize();
+        }
+        this.plannedSlotClearMode = next;
+        setPlannedSlotClearModeUi.call(this);
+        if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(next ? false : true);
+        return this.plannedSlotClearMode;
+    }
+
     function togglePlannedSlotMoveMode() {
         return setPlannedSlotMoveMode.call(this, !this.plannedSlotMoveMode);
     }
 
+    function togglePlannedSlotClearMode() {
+        return setPlannedSlotClearMode.call(this, !this.plannedSlotClearMode);
+    }
+
     function isPlannedSlotMoveMode() {
         return Boolean(this && this.plannedSlotMoveMode);
+    }
+
+    function isPlannedSlotClearMode() {
+        return Boolean(this && this.plannedSlotClearMode);
+    }
+
+    function getPlannedSlotClearContext(index) {
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(index)
+            : { baseIndex: index, rangeStart: index, rangeEnd: index, slotCount: 1, mergeKey: null };
+        const rangeStart = Number.isInteger(context.rangeStart) ? context.rangeStart : context.baseIndex;
+        const rangeEnd = Number.isInteger(context.rangeEnd) ? context.rangeEnd : rangeStart;
+        const baseIndex = Number.isInteger(context.baseIndex) ? context.baseIndex : rangeStart;
+        const blockLength = Math.max(1, rangeEnd - rangeStart + 1);
+        const hasContent = Array.from({ length: blockLength }, (_, offset) => this.timeSlots[rangeStart + offset])
+            .some((slot) => isPlannedContentPresent(slot));
+        const mergedValue = context.mergeKey && this.mergedFields && typeof this.mergedFields.get === 'function'
+            ? this.mergedFields.get(context.mergeKey)
+            : '';
+        return {
+            ...context,
+            baseIndex,
+            rangeStart,
+            rangeEnd,
+            blockLength,
+            clearable: Boolean(hasContent || String(mergedValue || '').trim()),
+        };
+    }
+
+    function shouldRenderPlannedSlotClearButton(index) {
+        if (!this || !this.plannedSlotClearMode) return false;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return false;
+        const context = getPlannedSlotClearContext.call(this, index);
+        return Boolean(context.clearable && context.baseIndex === index);
+    }
+
+    function clearPlannedSlotContents(index) {
+        const context = getPlannedSlotClearContext.call(this, index);
+        if (!context.clearable) return false;
+        const { rangeStart, rangeEnd, mergeKey } = context;
+        for (let slotIndex = rangeStart; slotIndex <= rangeEnd; slotIndex += 1) {
+            clearPlannedFields(this.timeSlots[slotIndex]);
+        }
+        if (mergeKey && this.mergedFields && typeof this.mergedFields.delete === 'function') {
+            this.mergedFields.delete(mergeKey);
+        }
+        if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(true);
+        if (typeof this.calculateTotals === 'function') this.calculateTotals();
+        if (typeof this.autoSave === 'function') this.autoSave();
+        if (typeof this.showNotification === 'function') this.showNotification('예정 슬롯을 지웠습니다.');
+        return true;
+    }
+
+    function createPlannedSlotClearButtonHtml(index) {
+        if (!shouldRenderPlannedSlotClearButton.call(this, index)) return '';
+        return `<button type="button"
+                        class="planned-slot-clear-btn"
+                        data-index="${index}"
+                        aria-label="슬롯 삭제"
+                        title="슬롯 삭제">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="planned-slot-clear-icon">
+                        <path d="M9 3.5h6l1 1.5H20v2h-1l-1 12.5A2 2 0 0 1 15 21H9a2 2 0 0 1-2-1.5L6 7H5v-2h4l0-1.5Zm1.6 5.5v8h1.8v-8h-1.8Zm3.8 0v8h1.8v-8h-1.8ZM8.1 7l.8 11.2c.04.52.47.93 1 .93h4.2c.53 0 .96-.41 1-.93L15.9 7H8.1Z"></path>
+                    </svg>
+                </button>`;
     }
 
     function getPlannedSlotMoveContext(index) {
@@ -468,12 +584,28 @@
     }
 
     function attachPlannedSlotMoveListeners(entryDiv, index) {
-        if (!entryDiv || !entryDiv.querySelector || !this.plannedSlotMoveMode) return;
+        if (!entryDiv || !entryDiv.querySelector || !this.plannedSlotMoveMode || this.plannedSlotClearMode) return;
         const context = getPlannedSlotMoveContext.call(this, index);
         if (!context.movable || context.baseIndex !== index) return;
         const moveTargets = getPlannedSlotMoveTargets(entryDiv);
         if (moveTargets.length === 0) return;
         moveTargets.forEach((target) => attachPlannedSlotMoveTargetListeners(this, target, index));
+    }
+
+    function attachPlannedSlotClearListeners(entryDiv, index) {
+        if (!entryDiv || !entryDiv.querySelectorAll || !this.plannedSlotClearMode) return;
+        const button = entryDiv.querySelector('.planned-slot-clear-btn');
+        if (!button || button.dataset.clearListenerAttached === 'true') return;
+        if (!shouldRenderPlannedSlotClearButton.call(this, index)) return;
+        button.dataset.clearListenerAttached = 'true';
+        button.addEventListener('pointerdown', (event) => {
+            if (event && event.stopPropagation) event.stopPropagation();
+        }, true);
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            clearPlannedSlotContents.call(this, index);
+        });
     }
 
     function snapshotSlot(slot, sourceStart, sourceEnd, targetStart, targetEnd) {
@@ -557,13 +689,22 @@
 
     return {
         initPlannedSlotMoveModeControls,
+        initPlannedSlotClearModeControls,
         setPlannedSlotMoveMode,
+        setPlannedSlotClearMode,
         togglePlannedSlotMoveMode,
+        togglePlannedSlotClearMode,
         isPlannedSlotMoveMode,
+        isPlannedSlotClearMode,
         attachPlannedSlotMoveListeners,
+        attachPlannedSlotClearListeners,
         movePlannedSlotBlock,
+        clearPlannedSlotContents,
         getPlannedSlotMoveContext,
+        getPlannedSlotClearContext,
         canDropPlannedSlotBlock,
+        shouldRenderPlannedSlotClearButton,
+        createPlannedSlotClearButtonHtml,
         clearPlannedSlotMoveDragState,
     };
 });

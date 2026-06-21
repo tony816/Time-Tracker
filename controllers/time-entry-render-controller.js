@@ -154,6 +154,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachPlannedSlotMoveListeners === 'function') {
                 this.attachPlannedSlotMoveListeners(entryDiv, index);
             }
+            if (typeof this.attachPlannedSlotClearListeners === 'function') {
+                this.attachPlannedSlotClearListeners(entryDiv, index);
+            }
             if (typeof this.attachPlanSegmentResizeListeners === 'function') {
                 this.attachPlanSegmentResizeListeners(entryDiv, index);
             }
@@ -185,11 +188,16 @@ function renderTimeEntries(preserveInlineDropdown = false) {
 
 function wrapWithSplitVisualization(type, index, content) {
         const splitMarkup = this.buildSplitVisualization(type, index);
-        if (!splitMarkup) return content;
+        const clearButtonHtml = type === 'planned' && typeof this.createPlannedSlotClearButtonHtml === 'function'
+            ? this.createPlannedSlotClearButtonHtml(index)
+            : '';
+        if (!splitMarkup && !clearButtonHtml) return content;
         const typeClass = type === 'planned' ? 'split-type-planned' : 'split-type-actual';
-        return `<div class="split-cell-wrapper ${typeClass} split-has-data" data-split-type="${type}" data-index="${index}">
+        const clearClass = clearButtonHtml ? ' planned-slot-clear-target' : '';
+        return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}" data-split-type="${type}" data-index="${index}"${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}>
                     ${content}
                     ${splitMarkup}
+                    ${clearButtonHtml}
                 </div>`;
     }
 
