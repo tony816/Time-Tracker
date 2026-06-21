@@ -231,13 +231,18 @@ function shouldAutofocusInlinePlanInput() {
 function setupInlinePlanSheetTouchDismiss(dropdown) {
         if (!dropdown || !dropdown.classList.contains('inline-plan-dropdown-sheet')) return;
         this.cleanupInlinePlanSheetTouchDismiss();
+        const supportsPointerEvents = typeof window !== 'undefined' && typeof window.PointerEvent === 'function';
+        const DISMISS_THRESHOLD_PX = 45;
+        const MAX_TRANSLATE_PX = 240;
         const state = {
             startY: 0,
             lastY: 0,
             dragging: false,
             armed: false,
             pointerId: null,
-            closeTimer: null
+            closeTimer: null,
+            activeSource: null,
+            captureTarget: null
         };
         const getPointY = (event) => {
             if (!event) return 0;
@@ -245,15 +250,31 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             if (event.changedTouches && event.changedTouches.length) return event.changedTouches[0].clientY;
             return Number(event.clientY) || 0;
         };
+        const getEventSource = (event) => {
+            const type = String(event && event.type || '');
+            if (type.startsWith('pointer')) return 'pointer';
+            if (type.startsWith('touch')) return 'touch';
+            return 'unknown';
+        };
         const shouldArm = (event) => {
             if (!this.inlinePlanDropdown || this.inlinePlanDropdown !== dropdown) return false;
             const scrollTop = dropdown.scrollTop || 0;
             if (scrollTop > 2) return false;
-            const handle = dropdown.querySelector('.inline-plan-sheet-drag-handle');
-            if (!handle) return false;
-            return Boolean(event.target && typeof event.target.closest === 'function' && event.target.closest('.inline-plan-sheet-drag-handle'));
+            const target = event && event.target ? event.target : null;
+            if (!target || typeof target.closest !== 'function') return false;
+            const interactive = target.closest(
+                'input, textarea, button, select, .inline-plan-options, .activity-chip-board, .inline-plan-subsection, .inline-plan-sub-board, .inline-plan-input-row, .inline-plan-child-actions'
+            );
+            if (interactive) return false;
+            return Boolean(
+                target.closest('.inline-plan-sheet-drag-handle')
+                || target.closest('.inline-plan-dropdown-sheet')
+            );
         };
         const start = (event) => {
+            const source = getEventSource(event);
+            if (supportsPointerEvents && source === 'touch') return;
+            if (!supportsPointerEvents && source === 'pointer') return;
             if (!shouldArm(event)) return;
             if (state.closeTimer) {
                 clearTimeout(state.closeTimer);
@@ -264,13 +285,21 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             state.dragging = false;
             state.armed = true;
             state.pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+            state.activeSource = source;
             dropdown.style.transition = 'transform 0.18s ease';
-            if (event.target && typeof event.target.setPointerCapture === 'function' && Number.isFinite(event.pointerId)) {
-                try { event.target.setPointerCapture(event.pointerId); } catch (_) {}
+            if (source === 'pointer' && event.target && typeof event.target.setPointerCapture === 'function' && Number.isFinite(event.pointerId)) {
+                try {
+                    event.target.setPointerCapture(event.pointerId);
+                    state.captureTarget = event.target;
+                } catch (_) {}
             }
         };
         const move = (event) => {
             if (!state.armed) return;
+            const source = getEventSource(event);
+            if (state.activeSource && source !== 'unknown' && source !== state.activeSource) return;
+            if (supportsPointerEvents && source === 'touch') return;
+            if (!supportsPointerEvents && source === 'pointer') return;
             if (state.pointerId !== null && Number.isFinite(event.pointerId) && event.pointerId !== state.pointerId) return;
             const currentY = getPointY(event);
             const deltaY = currentY - state.startY;
@@ -282,14 +311,18 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
                 return;
             }
             state.dragging = true;
-            dropdown.style.transform = `translateY(${Math.min(deltaY, 240)}px)`;
+            dropdown.style.transform = `translateY(${Math.min(deltaY, MAX_TRANSLATE_PX)}px)`;
             if (event.cancelable) event.preventDefault();
         };
         const end = () => {
             if (!state.armed) return;
+            if (state.captureTarget && state.pointerId !== null && typeof state.captureTarget.releasePointerCapture === 'function') {
+                try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
+            }
+            state.captureTarget = null;
             const deltaY = state.lastY - state.startY;
             dropdown.style.transition = 'transform 0.18s ease';
-            if (state.dragging && deltaY >= 90) {
+            if (state.dragging && deltaY >= DISMISS_THRESHOLD_PX) {
                 dropdown.style.transform = 'translateY(100%)';
                 state.closeTimer = setTimeout(() => {
                     state.closeTimer = null;
@@ -303,6 +336,7 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             state.dragging = false;
             state.armed = false;
             state.pointerId = null;
+            state.activeSource = null;
         };
         dropdown.addEventListener('touchstart', start, { passive: true });
         dropdown.addEventListener('touchmove', move, { passive: false });
@@ -324,6 +358,9 @@ function cleanupInlinePlanSheetTouchDismiss() {
         if (state && state.closeTimer) {
             clearTimeout(state.closeTimer);
             state.closeTimer = null;
+        }
+        if (state && state.captureTarget && state.pointerId !== null && typeof state.captureTarget.releasePointerCapture === 'function') {
+            try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
         }
         dropdown.removeEventListener('touchstart', start);
         dropdown.removeEventListener('touchmove', move);
