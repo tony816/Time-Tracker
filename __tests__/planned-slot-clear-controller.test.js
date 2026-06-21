@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const controller = require('../controllers/planned-slot-move-controller');
+const fieldInteractionController = require('../controllers/field-interaction-controller');
 globalThis.TimeEntryRenderController = require('../controllers/time-entry-render-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 
@@ -200,4 +201,116 @@ test('clearing an empty slot is a no-op and leaves the clear button hidden', () 
     assert.equal(controller.clearPlannedSlotContents.call(ctx, 0), false);
     assert.equal(ctx.renderCalls, 0);
     assert.equal(controller.shouldRenderPlannedSlotClearButton.call(ctx, 0), false);
+});
+
+function createFakeClearButton({ buttonIndex = '0', hostIndex = '0' } = {}) {
+    const listeners = new Map();
+    const host = { dataset: { index: hostIndex, plannedSlotClearTarget: 'true' } };
+    const button = {
+        dataset: { index: buttonIndex },
+        listeners,
+        closest(selector) {
+            if (selector === '.planned-slot-clear-btn') return button;
+            if (selector === '[data-planned-slot-clear-target="true"]') return host;
+            return null;
+        },
+        addEventListener(type, listener) {
+            if (!listeners.has(type)) listeners.set(type, []);
+            listeners.get(type).push(listener);
+        },
+        dispatch(type) {
+            const event = {
+                type,
+                defaultPrevented: false,
+                propagationStopped: false,
+                immediateStopped: false,
+                preventDefault() { this.defaultPrevented = true; },
+                stopPropagation() { this.propagationStopped = true; },
+                stopImmediatePropagation() {
+                    this.immediateStopped = true;
+                    this.propagationStopped = true;
+                },
+            };
+            for (const listener of listeners.get(type) || []) {
+                listener(event);
+                if (event.immediateStopped) break;
+            }
+            return event;
+        },
+    };
+    const entryDiv = {
+        querySelectorAll() { return [button]; },
+        querySelector(selector) { return selector === '.planned-slot-clear-btn' ? button : null; },
+    };
+    return { button, entryDiv };
+}
+
+test('clicking the rendered planned slot clear button clears and persists host slot state', () => {
+    const ctx = createContext();
+    const { button, entryDiv } = createFakeClearButton();
+
+    controller.attachPlannedSlotClearListeners.call(ctx, entryDiv, 0);
+
+    assert.equal(button.dataset.clearListenerAttached, 'true');
+    assert.equal(button.dataset.timeSlotMergeIgnore, 'true');
+    assert.equal((button.listeners.get('mousedown') || []).length, 1);
+    assert.equal((button.listeners.get('click') || []).length, 1);
+
+    const downEvent = button.dispatch('mousedown');
+    assert.equal(downEvent.immediateStopped, true);
+    assert.equal(ctx.timeSlots[0].planned, 'Morning focus');
+
+    const clickEvent = button.dispatch('click');
+    assert.equal(clickEvent.defaultPrevented, true);
+    assert.equal(clickEvent.immediateStopped, true);
+    assert.equal(ctx.timeSlots[0].planned, '');
+    assert.deepEqual(ctx.timeSlots[0].planActivities, []);
+    assert.equal(ctx.timeSlots[0].planTitle, '');
+    assert.equal(ctx.timeSlots[0].planTitleBandOn, false);
+    assert.deepEqual(ctx.timeSlots[0].planSegmentTimers, {});
+    assert.equal(ctx.timeSlots[0].planMergeSnapshot, undefined);
+    assert.equal(ctx.mergedFields.has('planned-0-0'), false);
+    assert.equal(ctx.renderCalls, 1);
+    assert.equal(ctx.totalCalls, 1);
+    assert.equal(ctx.saveCalls, 1);
+});
+
+test('clear button click is not swallowed by merged planned click capture while dropdown is open', () => {
+    const plannedCell = {
+        getBoundingClientRect() { return { left: 0, right: 100 }; },
+    };
+    const currentRow = {
+        getAttribute(name) { return name === 'data-index' ? '0' : ''; },
+        querySelector(selector) { return selector === '.planned-input' ? plannedCell : null; },
+        getBoundingClientRect() { return { top: 0, bottom: 100 }; },
+    };
+    const button = {
+        closest(selector) {
+            if (selector === '.planned-slot-clear-btn') return button;
+            if (selector === '.planned-input') return null;
+            if (selector === '.time-entry[data-index]') return currentRow;
+            return null;
+        },
+    };
+    const event = {
+        type: 'click',
+        target: button,
+        clientX: 10,
+        clientY: 10,
+        defaultPrevented: false,
+        propagationStopped: false,
+        preventDefault() { this.defaultPrevented = true; },
+        stopPropagation() { this.propagationStopped = true; },
+    };
+    const ctx = {
+        inlinePlanDropdown: {},
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        clearSelection() { throw new Error('clear button clicks should bypass inline dropdown capture'); },
+        closeInlinePlanDropdown() { throw new Error('clear button clicks should bypass inline dropdown capture'); },
+    };
+
+    fieldInteractionController.handleMergedClickCapture.call(ctx, event);
+
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(event.propagationStopped, false);
 });

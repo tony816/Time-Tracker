@@ -277,6 +277,7 @@
         return `<button type="button"
                         class="planned-slot-clear-btn"
                         data-index="${index}"
+                        data-time-slot-merge-ignore="true"
                         aria-label="슬롯 삭제"
                         title="슬롯 삭제">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="planned-slot-clear-icon">
@@ -598,14 +599,30 @@
         if (!button || button.dataset.clearListenerAttached === 'true') return;
         if (!shouldRenderPlannedSlotClearButton.call(this, index)) return;
         button.dataset.clearListenerAttached = 'true';
-        button.addEventListener('pointerdown', (event) => {
-            if (event && event.stopPropagation) event.stopPropagation();
-        }, true);
-        button.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            clearPlannedSlotContents.call(this, index);
+        if (button.dataset && button.dataset.timeSlotMergeIgnore == null) {
+            button.dataset.timeSlotMergeIgnore = 'true';
+        }
+        const resolveClearIndex = () => {
+            const host = button.closest && button.closest('[data-planned-slot-clear-target="true"]');
+            const rawIndex = (button.dataset && button.dataset.index != null)
+                ? button.dataset.index
+                : (host && host.dataset ? host.dataset.index : index);
+            const parsedIndex = parseInt(rawIndex, 10);
+            return Number.isInteger(parsedIndex) ? parsedIndex : index;
+        };
+        const stopClearControlEvent = (event) => {
+            if (!event) return;
+            if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+            else if (event.stopPropagation) event.stopPropagation();
+        };
+        ['pointerdown', 'mousedown', 'touchstart'].forEach((type) => {
+            button.addEventListener(type, stopClearControlEvent, true);
         });
+        button.addEventListener('click', (event) => {
+            if (event && event.preventDefault) event.preventDefault();
+            stopClearControlEvent(event);
+            clearPlannedSlotContents.call(this, resolveClearIndex());
+        }, true);
     }
 
     function snapshotSlot(slot, sourceStart, sourceEnd, targetStart, targetEnd) {

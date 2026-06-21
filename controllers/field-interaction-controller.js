@@ -235,6 +235,9 @@
 
     function handleMergedClickCapture(e) {
         const target = e.target;
+        if (target && target.closest && target.closest('.planned-slot-clear-btn')) {
+            return;
+        }
         if (this && typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode()) {
             if (target && target.closest && target.closest('.planned-input, .time-entry, .time-slot-container, .split-cell-wrapper.split-type-planned')) {
                 e.preventDefault();
