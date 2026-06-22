@@ -6556,162 +6556,7 @@ class TimeTracker {
         return true;
     }
     startPlanSegmentInlineTextEdit(labelEl, index, event, options = {}) {
-        if (!labelEl) return false;
-        if (event && event.type === 'click' && event.button != null && event.button !== 0) return false;
-        const segmentEl = labelEl.closest && labelEl.closest('.split-grid-segment[data-segment-kind="real-plan"]');
-        if (!segmentEl || segmentEl.dataset.segmentKind === 'virtual-rest') return false;
-        if (event && event.target && event.target.closest && event.target.closest('.plan-segment-timer-button, .plan-segment-resize-handle, .inline-plan-dropdown, .activity-chip-board, .inline-plan-subsection')) {
-            return false;
-        }
-        if (labelEl.querySelector && labelEl.querySelector('.plan-segment-title-edit-input')) return false;
-        if (event && event.preventDefault) event.preventDefault();
-        if (event && event.stopPropagation) event.stopPropagation();
-
-        const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
-        const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
-        const previousTitle = String(labelEl.textContent || '').trim();
-        const shouldOpenDropdown = Boolean(options.openDropdown);
-        const dropdownAnchor = options.dropdownAnchor || labelEl || segmentEl;
-        const dropdownMode = options.dropdownMode || 'plan-segment-replace';
-        if (this.mobilePlanSegmentEditor && typeof this.closePlanSegmentMobileTextEditor === 'function') {
-            this.closePlanSegmentMobileTextEditor({ restoreFocus: false });
-        }
-        if (!shouldOpenDropdown && this.inlinePlanDropdown && typeof this.closeInlinePlanDropdown === 'function') {
-            this.closeInlinePlanDropdown();
-        }
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'plan-segment-title-edit-input';
-        input.value = previousTitle;
-        input.setAttribute('aria-label', options.ariaLabel || 'Edit planned segment text');
-        const measuredWidth = labelEl.getBoundingClientRect && labelEl.getBoundingClientRect().width;
-        const fallbackCh = Math.max(3, Math.min(previousTitle.length + 1, 18));
-        input.style.minWidth = `${fallbackCh}ch`;
-        if (Number.isFinite(measuredWidth) && measuredWidth > 0) {
-            input.style.width = `${Math.ceil(measuredWidth)}px`;
-        }
-        const setLabelEditing = (editing) => {
-            const classes = String(labelEl.className || '').split(/\s+/).filter(Boolean);
-            const hasEditingClass = classes.includes('is-editing');
-            if (labelEl.classList && typeof labelEl.classList.add === 'function' && typeof labelEl.classList.remove === 'function') {
-                if (editing) {
-                    labelEl.classList.add('is-editing');
-                } else {
-                    labelEl.classList.remove('is-editing');
-                }
-                return;
-            }
-            if (editing && !hasEditingClass) {
-                classes.push('is-editing');
-            } else if (!editing && hasEditingClass) {
-                const filtered = classes.filter((className) => className !== 'is-editing');
-                labelEl.className = filtered.join(' ');
-                return;
-            }
-            labelEl.className = classes.join(' ');
-        };
-        setLabelEditing(true);
-        labelEl.textContent = '';
-        labelEl.appendChild(input);
-        input.focus();
-        if (typeof input.select === 'function') input.select();
-
-        let finished = false;
-        const titleEditSessionToken = shouldOpenDropdown
-            ? `${Date.now()}-${Math.random().toString(16).slice(2)}`
-            : null;
-        if (shouldOpenDropdown) {
-            this.inlinePlanSegmentTitleEditSession = {
-                token: titleEditSessionToken,
-                labelEl,
-                segmentEl,
-                inputEl: input,
-            };
-        }
-        let blurRetryTimer = null;
-        const cleanup = () => {
-            if (blurRetryTimer) {
-                clearTimeout(blurRetryTimer);
-                blurRetryTimer = null;
-            }
-            if (input.parentNode && typeof input.parentNode.removeChild === 'function') {
-                input.parentNode.removeChild(input);
-            }
-            setLabelEditing(false);
-            labelEl.textContent = previousTitle;
-        };
-        const clearActiveSession = () => {
-            if (!shouldOpenDropdown) return;
-            if (this.inlinePlanSegmentTitleEditSession && this.inlinePlanSegmentTitleEditSession.token === titleEditSessionToken) {
-                this.inlinePlanSegmentTitleEditSession = null;
-            }
-        };
-        const finish = (save) => {
-            if (finished) return;
-            finished = true;
-            clearActiveSession();
-            const rawValue = input.value;
-            cleanup();
-            if (!save) return;
-            const normalized = this.normalizeActivityText
-                ? this.normalizeActivityText(rawValue || '')
-                : String(rawValue || '').trim();
-            if (!normalized) return;
-            const applyMethod = options.applyMethod || 'applyPlanSegmentTitleEdit';
-            if (typeof this[applyMethod] === 'function') {
-                this[applyMethod](baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, normalized);
-            }
-        };
-        const scheduleBlurFinish = () => {
-            if (!shouldOpenDropdown || finished) return;
-            if (blurRetryTimer) clearTimeout(blurRetryTimer);
-            blurRetryTimer = setTimeout(() => {
-                blurRetryTimer = null;
-                if (finished) return;
-                if (!this.inlinePlanSegmentTitleEditSession || this.inlinePlanSegmentTitleEditSession.token !== titleEditSessionToken) {
-                    return;
-                }
-                const doc = typeof document !== 'undefined' ? document : null;
-                const activeEl = doc && doc.activeElement ? doc.activeElement : null;
-                const dropdown = this.inlinePlanDropdown;
-                if (dropdown && activeEl && dropdown.contains && dropdown.contains(activeEl)) {
-                    scheduleBlurFinish();
-                    return;
-                }
-                finish(true);
-            }, 16);
-        };
-
-        input.addEventListener('keydown', (keyEvent) => {
-            if (keyEvent.key === 'Enter') {
-                keyEvent.preventDefault();
-                keyEvent.stopPropagation();
-                finish(true);
-            } else if (keyEvent.key === 'Escape') {
-                keyEvent.preventDefault();
-                keyEvent.stopPropagation();
-                finish(false);
-            }
-        });
-        input.addEventListener('blur', () => {
-            if (shouldOpenDropdown) {
-                scheduleBlurFinish();
-                return;
-            }
-            finish(true);
-        });
-        input.addEventListener('click', (clickEvent) => {
-            clickEvent.stopPropagation();
-        });
-        if (shouldOpenDropdown && typeof this.openPlanSegmentReplacementDropdown === 'function') {
-            this.openPlanSegmentReplacementDropdown(baseIndex, Number.isInteger(segmentIndex) ? segmentIndex : null, segmentEl, {
-                forceAnchored: true,
-                keepInlineEditor: true,
-                anchorEl: dropdownAnchor,
-                dropdownMode,
-            });
-        }
-        return true;
+        return false;
     }
     closePlanSegmentMobileTextEditor(options = {}) {
         const editor = this.mobilePlanSegmentEditor || null;
@@ -6737,12 +6582,7 @@ class TimeTracker {
         return true;
     }
     startPlanSegmentActivityEdit(labelEl, index, event, options = {}) {
-        return this.startPlanSegmentInlineTextEdit(labelEl, index, event, {
-            ariaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
-            mobileAriaLabel: '\uD65C\uB3D9\uBA85 \uC218\uC815',
-            applyMethod: 'applyPlanSegmentTitleEdit',
-            ...options,
-        });
+        return false;
     }
     startPlanSegmentInlineActivityEdit(segmentEl, index, event, options = {}) {
         if (!segmentEl) return false;
@@ -6756,29 +6596,10 @@ class TimeTracker {
         });
     }
     startPlanSegmentParentTitleEdit(titleEl, index, event) {
-        return this.startPlanSegmentInlineTextEdit(titleEl, index, event, {
-            ariaLabel: '\uC81C\uBAA9 \uC218\uC815',
-            mobileAriaLabel: '\uC81C\uBAA9 \uC218\uC815',
-            applyMethod: 'applyPlanSegmentTitleTextEdit',
-        });
+        return false;
     }
     attachPlanSegmentTitleEditListeners(entryDiv, index) {
-        if (!entryDiv || typeof entryDiv.querySelectorAll !== 'function') return;
-        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return;
-        const labels = entryDiv.querySelectorAll('[data-title-edit-trigger="true"]');
-        labels.forEach((labelEl) => {
-            if (!labelEl || labelEl.dataset.titleEditListenerAttached === 'true') return;
-            labelEl.dataset.titleEditListenerAttached = 'true';
-            const startEdit = (event) => {
-                this.startPlanSegmentActivityEdit(labelEl, index, event);
-            };
-
-            labelEl.addEventListener('click', startEdit);
-            labelEl.addEventListener('keydown', (event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                startEdit(event);
-            });
-        });
+        return;
     }
     getSelectedPlanSegment() {
         const selected = this.selectedPlanSegment || null;
@@ -7220,27 +7041,28 @@ class TimeTracker {
                     return;
                 }
                 const titleTarget = target && target.closest
-                    ? target.closest('[data-segment-title-edit-trigger="true"], .plan-segment-graphic-title')
+                    ? target.closest('.plan-segment-graphic-title')
                     : null;
                 if (titleTarget) {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (typeof this.startPlanSegmentParentTitleEdit === 'function') {
-                        this.startPlanSegmentParentTitleEdit(titleTarget, index, event);
+                    if (typeof this.setSelectedPlanSegment === 'function') {
+                        const baseIndex = this.getPlanSegmentBaseIndex ? this.getPlanSegmentBaseIndex(index) : index;
+                        const segmentIndex = parseInt(segmentEl.dataset.segmentIndex || '', 10);
+                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
                     }
                     return;
                 }
                 const activityTarget = target && target.closest
-                    ? target.closest('[data-activity-edit-trigger="true"], [data-title-edit-trigger="true"], .plan-segment-label-text')
+                    ? target.closest('[data-activity-edit-trigger="true"], .plan-segment-label-text')
                     : null;
                 if (activityTarget) {
                     event.preventDefault();
                     event.stopPropagation();
-                    if (typeof this.startPlanSegmentActivityEdit === 'function') {
-                        this.startPlanSegmentActivityEdit(activityTarget, index, event, {
-                            openDropdown: true,
-                            dropdownAnchor: activityTarget,
-                        });
+                    if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                        this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
+                    } else if (typeof this.setSelectedPlanSegment === 'function') {
+                        this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
                     }
                     return;
                 }
@@ -7259,11 +7081,8 @@ class TimeTracker {
                 }
                 event.preventDefault();
                 event.stopPropagation();
-                if (typeof this.startPlanSegmentInlineActivityEdit === 'function') {
-                    this.startPlanSegmentInlineActivityEdit(segmentEl, index, event, {
-                        openDropdown: true,
-                        dropdownAnchor: segmentEl,
-                    });
+                if (typeof this.openPlanSegmentReplacementDropdown === 'function') {
+                    this.openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl);
                 } else {
                     this.setSelectedPlanSegment(baseIndex, segmentIndex, { render: true });
                 }

@@ -717,40 +717,33 @@ test('mobile plan segment tap intent keeps existing interactive exceptions ignor
     assert.deepEqual(harness.calls, []);
 });
 
-test('desktop title click starts parent title edit without opening replacement dropdown', () => {
+test('desktop title click selects the segment without opening replacement dropdown', () => {
     const titleHarness = createHarness({ coarse: false });
     const event = createClickEvent(titleHarness.title, 112, 14);
 
     titleHarness.segment.dispatchEvent(event);
 
     assert.deepEqual(titleHarness.calls, [
-        ['title-edit', titleHarness.title, 0, true, true],
+        ['selected', 0, 0],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
 });
 
-test('desktop activity label click starts activity edit and opens replacement dropdown', () => {
+test('desktop activity label click opens replacement dropdown without inline text edit', () => {
     const labelHarness = createHarness({ coarse: false });
     const event = createClickEvent(labelHarness.label, 118, 42);
 
     labelHarness.segment.dispatchEvent(event);
 
     assert.deepEqual(labelHarness.calls, [
-        ['activity-edit', labelHarness.label, 0, true, true, {
-            openDropdown: true,
-            dropdownAnchor: labelHarness.label,
-        }],
-        ['dropdown', 0, 0, labelHarness.segment, {
-            openDropdown: true,
-            dropdownAnchor: labelHarness.label,
-        }],
+        ['dropdown', 0, 0, labelHarness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);
 });
 
-test('desktop segment background click starts activity inline edit and opens replacement dropdown', () => {
+test('desktop segment background click opens replacement dropdown without inline text edit', () => {
     const prepareCalls = [];
     const backgroundHarness = createHarness({
         coarse: false,
@@ -765,14 +758,7 @@ test('desktop segment background click starts activity inline edit and opens rep
 
     assert.deepEqual(prepareCalls, []);
     assert.deepEqual(backgroundHarness.calls, [
-        ['activity-edit', backgroundHarness.label, 0, true, true, {
-            openDropdown: true,
-            dropdownAnchor: backgroundHarness.segment,
-        }],
-        ['dropdown', 0, 0, backgroundHarness.segment, {
-            openDropdown: true,
-            dropdownAnchor: backgroundHarness.segment,
-        }],
+        ['dropdown', 0, 0, backgroundHarness.segment, {}],
     ]);
     assert.equal(event.defaultPrevented, true);
     assert.equal(event.propagationStopped, true);

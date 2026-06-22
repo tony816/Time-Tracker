@@ -314,23 +314,14 @@ function startTitleEdit(harness) {
     return harness.label.querySelector('.plan-segment-title-edit-input');
 }
 
-test('clicking plan segment title text opens inline editing UI', () => {
+test('clicking plan segment title text does not open inline editing UI', () => {
     withDocument(() => {
         const harness = createTitleEditHarness();
         const input = startTitleEdit(harness);
 
-        assert.ok(input);
-        assert.equal(input.className, 'plan-segment-title-edit-input');
-        assert.equal(input.value, 'Focus');
-        assert.equal(input.focused, true);
-        assert.equal(input.selected, true);
-        assert.equal(harness.label.hidden, false);
-        assert.equal(input.parentNode, harness.label);
-        assert.equal(harness.label.textContent, '');
-        assert.equal(hasNodeClass(harness.label, 'is-editing'), true);
-        assert.equal(hasNodeClass(harness.outerLabel, 'is-editing'), false);
-        assert.equal(input.style.width, '40px');
-        assert.equal(input.style.minWidth, '6ch');
+        assert.equal(input, null);
+        assert.equal(harness.label.textContent, 'Focus');
+        assert.equal(hasNodeClass(harness.label, 'is-editing'), false);
     });
 });
 
@@ -364,7 +355,7 @@ function withMobileEditorDocument(run) {
     }
 }
 
-test('mobile segment title tap opens in-segment editor and replacement dropdown without a sheet', () => {
+test('mobile segment title tap does not open an inline text editor', () => {
     withMobileEditorDocument((body) => {
         const dropdownCalls = [];
         const harness = createTitleEditHarness({
@@ -399,23 +390,14 @@ test('mobile segment title tap opens in-segment editor and replacement dropdown 
             dropdownAnchor: harness.label,
         });
 
-        assert.equal(opened, true);
-        const input = harness.label.querySelector('.plan-segment-title-edit-input');
-        assert.ok(input);
-        assert.equal(input.parentNode, harness.label);
-        assert.equal(input.value, 'Focus');
-        assert.equal(input.focused, true);
-        assert.equal(input.selected, true);
-        assert.equal(dropdownCalls.length, 1);
-        assert.equal(dropdownCalls[0].options.forceAnchored, true);
-        assert.equal(dropdownCalls[0].options.keepInlineEditor, true);
+        assert.equal(opened, false);
+        assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
+        assert.equal(dropdownCalls.length, 0);
         assert.equal(body.querySelector('.inline-plan-dropdown-sheet'), null);
-        assert.equal(body.querySelector('.inline-plan-dropdown') != null, true);
-        assert.equal(hasNodeClass(body, 'inline-plan-sheet-open'), false);
     });
 });
 
-test('mobile segment inline editor does not close the dropdown at entry before opening replacement dropdown', () => {
+test('mobile segment title tap does not close the dropdown at entry', () => {
     withMobileEditorDocument((body) => {
         const calls = [];
         const harness = createTitleEditHarness({
@@ -455,19 +437,16 @@ test('mobile segment inline editor does not close the dropdown at entry before o
             dropdownAnchor: harness.label,
         });
 
-        assert.equal(opened, true);
+        assert.equal(opened, false);
         assert.notEqual(calls[0], 'close-inline-dropdown');
         assert.equal(calls.some(call => call === 'close-inline-dropdown'), false);
-        const input = harness.label.querySelector('.plan-segment-title-edit-input');
-        assert.ok(input);
-        assert.equal(input.parentNode, harness.label);
+        assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
         assert.equal(body.querySelector('.inline-plan-dropdown-sheet'), null);
-        assert.equal(body.querySelector('.inline-plan-dropdown') != null, true);
-        assert.equal(calls[0][0], 'open-inline-dropdown');
+        assert.equal(body.querySelector('.inline-plan-dropdown') != null, false);
     });
 });
 
-test('mobile segment inline editor saves and cancels without a sheet', () => {
+test('mobile segment title tap does not create save or cancel paths', () => {
     withMobileEditorDocument(() => {
         const saveHarness = createTitleEditHarness({
             ctx: {
@@ -476,27 +455,16 @@ test('mobile segment inline editor saves and cancels without a sheet', () => {
                 },
             },
         });
-        startPlanSegmentActivityEdit.call(saveHarness.ctx, saveHarness.label, 0, {
+        const opened = startPlanSegmentActivityEdit.call(saveHarness.ctx, saveHarness.label, 0, {
             type: 'click',
             button: 0,
             target: saveHarness.label,
             preventDefault() {},
             stopPropagation() {},
         });
-        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, undefined);
-        const saveInput = saveHarness.label.querySelector('.plan-segment-title-edit-input');
-        assert.ok(saveInput);
-        saveInput.value = 'Deep Work';
-        saveInput.dispatchEvent({
-            type: 'keydown',
-            key: 'Enter',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-
-        assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].label, 'Deep Work');
-        assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].activityText, 'Deep Work');
-        assert.equal(saveHarness.ctx.mobilePlanSegmentEditor, undefined);
+        assert.equal(opened, false);
+        assert.equal(saveHarness.label.querySelector('.plan-segment-title-edit-input'), null);
+        assert.equal(saveHarness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
 
         const cancelHarness = createTitleEditHarness({
             ctx: {
@@ -505,26 +473,16 @@ test('mobile segment inline editor saves and cancels without a sheet', () => {
                 },
             },
         });
-        startPlanSegmentActivityEdit.call(cancelHarness.ctx, cancelHarness.label, 0, {
+        const cancelOpened = startPlanSegmentActivityEdit.call(cancelHarness.ctx, cancelHarness.label, 0, {
             type: 'click',
             button: 0,
             target: cancelHarness.label,
             preventDefault() {},
             stopPropagation() {},
         });
-        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, undefined);
-        const cancelInput = cancelHarness.label.querySelector('.plan-segment-title-edit-input');
-        assert.ok(cancelInput);
-        cancelInput.value = 'Canceled';
-        cancelInput.dispatchEvent({
-            type: 'keydown',
-            key: 'Escape',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-
+        assert.equal(cancelOpened, false);
+        assert.equal(cancelHarness.label.querySelector('.plan-segment-title-edit-input'), null);
         assert.equal(cancelHarness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
-        assert.equal(cancelHarness.ctx.mobilePlanSegmentEditor, undefined);
     });
 });
 
@@ -542,6 +500,7 @@ test('clicking outer plan label space does not open inline editing UI', () => {
         });
 
         assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
+        assert.equal(harness.label.textContent, 'Focus');
     });
 });
 
@@ -550,76 +509,44 @@ test('clicking segment background does not open inline editing UI', () => {
     attachPlanSegmentTitleEditListeners.call(harness.ctx, harness.entryDiv, 0);
 
     assert.equal(harness.label.insertedElement, undefined);
+    assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
 });
 
-test('pressing Enter saves the new segment title', () => {
+test('pressing Enter does not create a segment title editor', () => {
     withDocument(() => {
         const harness = createTitleEditHarness();
         const input = startTitleEdit(harness);
-        input.value = 'Deep Work';
-
-        input.dispatchEvent({
-            type: 'keydown',
-            key: 'Enter',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Deep Work');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Deep Work');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityId, undefined);
-        assert.equal(harness.ctx.timeSlots[0].planned, 'Deep Work');
-        assert.deepEqual(harness.calls.slice(-3), ['render', 'totals', 'save']);
+        assert.equal(input, null);
+        assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
+        assert.equal(harness.ctx.timeSlots[0].planned, 'Focus');
     });
 });
 
-test('pressing Escape cancels and keeps the previous title', () => {
+test('pressing Escape does not create a segment title editor', () => {
     withDocument(() => {
         const harness = createTitleEditHarness();
         const input = startTitleEdit(harness);
-        input.value = 'Canceled';
-
-        input.dispatchEvent({
-            type: 'keydown',
-            key: 'Escape',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Focus');
-        assert.equal(harness.calls.some(call => call === 'save'), false);
-        assert.equal(harness.label.hidden, false);
+        assert.equal(input, null);
         assert.equal(harness.label.textContent, 'Focus');
         assert.equal(hasNodeClass(harness.label, 'is-editing'), false);
     });
 });
 
-test('blurring the editor saves the new title', () => {
+test('blurring the title does not create an inline editor', () => {
     withDocument(() => {
         const harness = createTitleEditHarness();
         const input = startTitleEdit(harness);
-        input.value = 'Review';
-
-        input.dispatchEvent({ type: 'blur' });
-
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Review');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Review');
-        assert.equal(harness.ctx.timeSlots[0].planned, 'Review');
+        assert.equal(input, null);
+        assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
     });
 });
 
-test('empty inline title input keeps the previous title', () => {
+test('empty inline title edit no longer mutates the title', () => {
     withDocument(() => {
         const harness = createTitleEditHarness();
         const input = startTitleEdit(harness);
-        input.value = '   ';
-
-        input.dispatchEvent({ type: 'blur' });
-
+        assert.equal(input, null);
         assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'Focus');
-        assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityText, 'Focus');
-        assert.equal(harness.calls.some(call => call === 'save'), false);
     });
 });
 
@@ -810,7 +737,7 @@ function createRealisticPlanSegmentDom() {
     return { ctx, entryDiv, segment, timerButton, resizeHandle, title, labelContainer, label, timerTime, calls };
 }
 
-test('real planned segment DOM only opens title editing from the label trigger', () => {
+test('real planned segment DOM does not open title editing from any direct trigger', () => {
     withDocument(() => {
         const { ctx, entryDiv, segment, timerButton, resizeHandle, labelContainer, label, timerTime } = createRealisticPlanSegmentDom();
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
@@ -874,16 +801,13 @@ test('real planned segment DOM only opens title editing from the label trigger',
             stopPropagation() {},
         });
 
-        const input = entryDiv.querySelector('.plan-segment-title-edit-input');
-        assert.ok(input);
-        assert.equal(input.value, 'Focus');
-        assert.equal(input.parentNode, label);
-        assert.equal(label.textContent, '');
-        assert.equal(hasNodeClass(label, 'is-editing'), true);
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+        assert.equal(label.textContent, 'Focus');
+        assert.equal(hasNodeClass(label, 'is-editing'), false);
     });
 });
 
-test('clicking label container space opens segment dropdown instead of title editing', () => {
+test('clicking label container space opens segment dropdown without title editing', () => {
     withDocument(() => {
         const { ctx, entryDiv, segment, labelContainer, label } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
@@ -1033,7 +957,7 @@ test('repositionOpenInlinePlanDropdown refreshes segment width when the rendered
     assert.equal(ctx.inlinePlanTarget.anchorMinWidth, 720);
 });
 
-test('clicking parent title band opens parent title inline editing UI', () => {
+test('clicking parent title band does not open parent title inline editing UI', () => {
     withDocument(() => {
         const { ctx, entryDiv, title } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
@@ -1063,10 +987,8 @@ test('clicking parent title band opens parent title inline editing UI', () => {
             stopPropagation() {},
         });
 
-        const input = entryDiv.querySelector('.plan-segment-title-edit-input');
-        assert.ok(input);
-        assert.equal(input.parentNode, title);
-        assert.equal(input.value, 'Parent');
+        assert.equal(entryDiv.querySelector('.plan-segment-title-edit-input'), null);
+        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
         assert.equal(dropdownCalls.length, 0);
     });
 });
@@ -1081,4 +1003,5 @@ test('resize handle and timer button clicks do not start title editing', () => {
     timerButton.dispatchEvent({ type: 'click', target: timerButton });
 
     assert.equal(harness.label.insertedElement, undefined);
+    assert.equal(harness.label.querySelector('.plan-segment-title-edit-input'), null);
 });

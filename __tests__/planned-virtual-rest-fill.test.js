@@ -1310,22 +1310,24 @@ test('clicking real planned segment background opens segment-scoped inline dropd
         assert.equal(dropdownCalls.length, 0);
 
         Date.now = () => originalDateNow() + 1000;
-        firstSegment.dispatchEvent({
+        const currentSegment = container.querySelector('.split-grid-segment[data-segment-kind="real-plan"]');
+        assert.ok(currentSegment);
+        currentSegment.dispatchEvent({
             type: 'click',
             button: 0,
-            target: firstSegment,
+            target: currentSegment,
             preventDefault() {},
             stopPropagation() {},
         });
 
-        assert.equal(activityEditCalls.length, 1);
+        assert.equal(activityEditCalls.length, 0);
         assert.equal(dropdownCalls.length, 1);
         assert.equal(dropdownCalls[0].startIndex, 0);
         assert.equal(dropdownCalls[0].endIndex, 0);
-        assert.equal(dropdownCalls[0].anchor, firstSegment);
+        assert.equal(dropdownCalls[0].anchor, currentSegment);
         assert.equal(dropdownCalls[0].options.mode, 'plan-segment-replace');
         assert.equal(dropdownCalls[0].options.segmentIndex, 0);
-        assert.equal(dropdownCalls[0].options.segmentId, firstSegment.dataset.segmentId);
+        assert.equal(dropdownCalls[0].options.segmentId, currentSegment.dataset.segmentId);
         assert.equal(ctx.selectedPlanSegment, undefined);
         assert.equal(container.querySelector('.plan-segment-title-edit-input'), null);
     } finally {
