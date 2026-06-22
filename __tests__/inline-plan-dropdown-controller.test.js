@@ -2377,6 +2377,145 @@ test('activity chipboard edit-mode button toggles chip drag handles on and off',
     }
 });
 
+test('chipboard edit mode shows guidance and keeps duplicate sections non-draggable', () => {
+    const originalDocument = globalThis.document;
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board';
+    Object.defineProperty(board, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    board.classList.toggle = function toggle(className, force) {
+        const has = this.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) this.add(className);
+        if (!next && has) this.remove(className);
+        return next;
+    };
+    const actions = createInlineSelectionNode('div');
+    actions.className = 'activity-chip-board-actions';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const shell = createInlineSelectionNode('div');
+    shell.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-actions') return actions;
+        if (selector === '.activity-chip-board') return board;
+        return null;
+    };
+    const searchInput = { value: 'e' };
+    const dropdown = createInlineSelectionNode('div');
+    dropdown.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-shell') return shell;
+        if (selector === '.activity-chip-board') return board;
+        if (selector === '.inline-plan-input') return searchInput;
+        return null;
+    };
+    dropdown.classList.toggle = function toggle(className, force) {
+        const has = this.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) this.add(className);
+        if (!next && has) this.remove(className);
+        return next;
+    };
+    const plannedActivities = [
+        { id: 'parent', label: 'Parent', name: 'Parent', normalizedName: 'Parent', parentId: null, archived: false, pinned: false, source: 'local' },
+        { id: 'parent-child', label: 'Child', name: 'Child', normalizedName: 'Child', parentId: 'parent', archived: false, pinned: false, source: 'local' },
+        { id: 'pinned', label: 'Pinned', name: 'Pinned', normalizedName: 'Pinned', parentId: null, archived: false, pinned: true, source: 'local' },
+        { id: 'recent', label: 'Recent', name: 'Recent', normalizedName: 'Recent', parentId: null, archived: false, pinned: false, usageCount: 4, lastUsedAt: '2026-06-01T00:00:00.000Z', source: 'local' },
+        { id: 'solo', label: 'Solo', name: 'Solo', normalizedName: 'Solo', parentId: null, archived: false, pinned: false, source: 'local' },
+    ];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        inlinePlanChipEditMode: true,
+        plannedActivities,
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            const byId = new Map(entries.map((item) => [item.id, item]));
+            const byParentId = new Map();
+            entries.forEach((item) => {
+                const parentId = String(item.parentId || '');
+                if (!byParentId.has(parentId)) byParentId.set(parentId, []);
+                byParentId.get(parentId).push(item);
+            });
+            const topLevel = entries.filter((item) => !item.parentId);
+            return {
+                items: entries,
+                byId,
+                byParentId,
+                topLevel,
+                children: entries.filter((item) => item.parentId),
+                parents: entries.filter((item) => item.id === 'parent'),
+            };
+        },
+        repairPlannedActivityCatalogIdentity() {},
+        positionInlinePlanDropdown() {},
+    };
+
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+
+        const hint = findNode(board, (node) => node.className === 'activity-chip-edit-hint');
+        assert.ok(hint);
+        assert.equal(hint.textContent, ':: 핸들을 드래그해 순서 변경 또는 하위활동으로 이동');
+
+        const primaryParentChip = findNode(board, (node) => node.dataset && node.dataset.boardSection === 'parents' && node.dataset.activityId === 'parent');
+        const primaryAllChip = findNode(board, (node) => node.dataset && node.dataset.boardSection === 'all' && node.dataset.activityId === 'recent');
+        const searchChip = findNode(board, (node) => node.dataset && node.dataset.boardSection === 'search');
+        const pinnedChip = findNode(board, (node) => node.dataset && node.dataset.boardSection === 'pinned');
+        const recentChip = findNode(board, (node) => node.dataset && node.dataset.boardSection === 'recent');
+
+        assert.ok(findNode(primaryParentChip, (node) => node.className === 'activity-chip-drag-handle'));
+        assert.ok(findNode(primaryAllChip, (node) => node.className === 'activity-chip-drag-handle'));
+        assert.equal(findNode(searchChip, (node) => node.className === 'activity-chip-drag-handle'), null);
+        assert.equal(findNode(pinnedChip, (node) => node.className === 'activity-chip-drag-handle'), null);
+        assert.equal(findNode(recentChip, (node) => node.className === 'activity-chip-drag-handle'), null);
+
+        const notes = [];
+        const collectNotes = (node) => {
+            if (!node) return;
+            if (node.className === 'activity-chip-board-note') notes.push(node);
+            (node.children || []).forEach(collectNotes);
+        };
+        collectNotes(board);
+        assert.ok(notes.length >= 3);
+        assert.ok(notes.every((node) => node.textContent === '정렬은 전체 목록에서 가능'));
+
+        ctx.inlinePlanChipEditMode = false;
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-edit-hint'), null);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-board-note'), null);
+
+        ctx.inlinePlanChipDeleteMode = true;
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-edit-hint'), null);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-board-note'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('chipboard edit-mode drag creates preview and applies reorder on pointerup', () => {
     const originalDocument = globalThis.document;
     const board = createInlineSelectionNode('div');
@@ -2431,6 +2570,8 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         },
     };
     const documentListeners = {};
+    let rafCallback = null;
+    let canceledFrame = null;
     const dropdown = createInlineSelectionNode('div');
     dropdown.querySelector = (selector) => {
         if (selector === '.activity-chip-board-shell') return shell;
@@ -2483,7 +2624,18 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         },
     };
     globalThis.document = documentStub;
-    globalThis.window = { addEventListener() {}, removeEventListener() {}, visualViewport: null };
+    globalThis.window = {
+        addEventListener() {},
+        removeEventListener() {},
+        visualViewport: null,
+        requestAnimationFrame(callback) {
+            rafCallback = callback;
+            return 42;
+        },
+        cancelAnimationFrame(frame) {
+            canceledFrame = frame;
+        },
+    };
 
     try {
         controller.setInlinePlanChipEditMode.call(ctx, true, { rerender: false });
@@ -2494,8 +2646,20 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         const dragHandle = findNode(sourceChip, (node) => node.className === 'activity-chip-drag-handle');
         assert.ok(dragHandle);
         sourceChip.ownerDocument = documentStub;
+        targetChip.ownerDocument = documentStub;
         dragHandle.ownerDocument = documentStub;
         board.ownerDocument = documentStub;
+        board.scrollTop = 80;
+        board.scrollHeight = 600;
+        board.clientHeight = 200;
+        board.getBoundingClientRect = () => ({
+            left: 0,
+            top: 100,
+            right: 360,
+            bottom: 300,
+            width: 360,
+            height: 200,
+        });
         documentStub._dropTarget = targetChip;
         dragHandle.closest = (selector) => {
             if (selector === '[data-chip-drag-handle="true"]') return dragHandle;
@@ -2542,6 +2706,38 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             target: dragHandle,
         });
 
+        assert.equal(ctx.inlinePlanChipDragPreview || null, null);
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+        assert.equal(ctx.inlinePlanChipDragState.active, false);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+        assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
+
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 102,
+            clientY: 122,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
+
+        assert.equal(ctx.inlinePlanChipDragPreview || null, null);
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+        assert.equal(ctx.inlinePlanChipDragState.active, false);
+
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 220,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
+
         assert.ok(ctx.inlinePlanChipDragPreview);
         assert.equal(body.querySelector('.activity-chip-drag-preview'), ctx.inlinePlanChipDragPreview);
         assert.equal(ctx.inlinePlanChipDragPreview.className, 'activity-chip-drag-preview');
@@ -2551,16 +2747,22 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.match(ctx.inlinePlanChipDragPreview.style.transform, /translate3d\(/);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), true);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), true);
+        assert.equal(targetChip.classList.contains('activity-chip-drop-nest'), true);
+        assert.equal(targetChip.dataset.chipDropIntent, 'nest');
+        assert.equal(targetChip.dataset.chipDropLabel, '하위로 넣기');
+        assert.equal(findNode(targetChip, (node) => node.className === 'activity-chip-drop-label activity-chip-drop-label-nest').textContent, '하위로 넣기');
         assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*position:\s*fixed;/);
         assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*pointer-events:\s*none;/);
         assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*z-index:\s*2147483647;/);
+        assert.match(interactionsCss, /\.activity-chip-drop-label\s*\{[\s\S]*pointer-events:\s*none;/);
+        assert.match(interactionsCss, /\.activity-chip-dragging\s*\{[\s\S]*opacity:\s*0\.72;/);
 
         const firstTransform = ctx.inlinePlanChipDragPreview.style.transform;
         documentListeners.pointermove({
             type: 'pointermove',
             pointerId: 11,
-            clientX: 220,
-            clientY: 130,
+            clientX: 230,
+            clientY: 160,
             cancelable: true,
             preventDefault() {},
             stopPropagation() {},
@@ -2571,16 +2773,80 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.match(preview.style.transform, /translate3d\(\d+px, \d+px, 0\)/);
         assert.notEqual(preview.style.transform, firstTransform);
 
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 205,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
+        assert.equal(targetChip.classList.contains('activity-chip-drop-before'), true);
+        assert.equal(targetChip.dataset.chipDropIntent, 'before');
+        assert.equal(targetChip.dataset.chipDropLabel, '앞에 배치');
+
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 244,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
+        assert.equal(targetChip.classList.contains('activity-chip-drop-after'), true);
+        assert.equal(targetChip.dataset.chipDropIntent, 'after');
+        assert.equal(targetChip.dataset.chipDropLabel, '뒤에 배치');
+
+        rafCallback = null;
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 220,
+            clientY: 292,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board,
+        });
+        assert.equal(typeof rafCallback, 'function');
+        const beforeScrollTop = board.scrollTop;
+        rafCallback();
+        assert.ok(board.scrollTop > beforeScrollTop);
+
+        documentStub._dropTarget = sourceChip;
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 11,
+            clientX: 120,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: sourceChip,
+        });
+        assert.equal(sourceChip.classList.contains('activity-chip-drop-invalid'), true);
+        assert.equal(sourceChip.dataset.chipDropIntent, 'invalid');
+        assert.equal(sourceChip.dataset.chipDropLabel, '불가');
+
         documentListeners.pointercancel({
             type: 'pointercancel',
             pointerId: 11,
             stopPropagation() {},
         });
+        assert.equal(canceledFrame, 42);
         assert.equal(ctx.inlinePlanChipDragState, null);
         assert.equal(ctx.inlinePlanChipDragPreview, null);
         assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+        assert.equal(sourceChip.classList.contains('activity-chip-drop-invalid'), false);
+        assert.equal(targetChip.dataset.chipDropLabel, undefined);
+        assert.equal(sourceChip.dataset.chipDropLabel, undefined);
 
+        documentStub._dropTarget = targetChip;
         dragHandle.dispatchEvent({
             type: 'pointerdown',
             button: 0,
@@ -2591,6 +2857,17 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             preventDefault() {},
             stopPropagation() {},
             target: dragHandle,
+        });
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 12,
+            clientX: 220,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
         });
         assert.ok(body.querySelector('.activity-chip-drag-preview'));
         documentListeners.keydown({
@@ -2616,7 +2893,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             type: 'pointermove',
             pointerId: 13,
             clientX: 220,
-            clientY: 130,
+            clientY: 160,
             cancelable: true,
             preventDefault() {},
             stopPropagation() {},
@@ -2626,7 +2903,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             type: 'pointerup',
             pointerId: 13,
             clientX: 220,
-            clientY: 130,
+            clientY: 160,
             cancelable: true,
             preventDefault() {},
             stopPropagation() {},
@@ -2710,6 +2987,103 @@ test('dragging a chip onto another chip creates a parent-child relationship', ()
     assert.equal(child.parentId, 'a');
     assert.equal(child.boardOrder, 0);
     assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['a', 'c']);
+});
+
+test('chipboard drop undo restores the previous plannedActivities and disappears after use', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, saves } = createChipboardDropHarness();
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board';
+    Object.defineProperty(board, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const actions = createInlineSelectionNode('div');
+    actions.className = 'activity-chip-board-actions';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const shell = createInlineSelectionNode('div');
+    shell.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-actions') return actions;
+        if (selector === '.activity-chip-board') return board;
+        return null;
+    };
+    const searchInput = { value: '' };
+    const dropdown = createInlineSelectionNode('div');
+    dropdown.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-shell') return shell;
+        if (selector === '.activity-chip-board') return board;
+        if (selector === '.inline-plan-input') return searchInput;
+        return null;
+    };
+    ctx.inlinePlanDropdown = dropdown;
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0 };
+    ctx.groupActivityBoard = function groupActivityBoard(entries) {
+        return controller.groupActivityBoard.call(this, entries);
+    };
+    ctx.positionInlinePlanDropdown = function positionInlinePlanDropdown() {};
+
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+
+    try {
+        controller.applyActivityChipboardDrop.call(ctx, 'c', { type: 'reorder', placement: 'before', targetId: 'a' });
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+
+        assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['c', 'a', 'b']);
+        const undo = findNode(actions, (node) => node.className === 'activity-chip-undo-toast');
+        assert.ok(undo);
+        assert.equal(undo.textContent, '이동됨 · 되돌리기');
+
+        undo.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['a', 'b', 'c']);
+        assert.equal(saves.length, 2);
+        assert.equal(ctx.inlinePlanDropdown, dropdown);
+        assert.equal(ctx.inlinePlanChipUndoState, null);
+        assert.equal(findNode(actions, (node) => node.className === 'activity-chip-undo-toast'), null);
+    } finally {
+        controller.restoreInlinePlanChipUndoState.call(ctx);
+        globalThis.document = originalDocument;
+    }
+});
+
+test('chipboard undo snapshot is replaced by a subsequent mutation', () => {
+    const { ctx } = createChipboardDropHarness();
+
+    controller.applyActivityChipboardDrop.call(ctx, 'c', { type: 'reorder', placement: 'before', targetId: 'a' });
+    const firstUndoState = ctx.inlinePlanChipUndoState;
+    controller.applyActivityChipboardDrop.call(ctx, 'b', { type: 'nest', targetId: 'a' });
+
+    assert.ok(firstUndoState);
+    assert.notEqual(ctx.inlinePlanChipUndoState, firstUndoState);
+    assert.equal(ctx.plannedActivities.find((item) => item.id === 'b').parentId, 'a');
+
+    controller.restoreInlinePlanChipUndoState.call(ctx);
+
+    assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['c', 'a', 'b']);
+    assert.equal(ctx.plannedActivities.find((item) => item.id === 'b').parentId, null);
+    assert.equal(ctx.inlinePlanChipUndoState, null);
 });
 
 test('invalid chipboard nesting rejects self, circular, and parent-into-descendant drops', () => {

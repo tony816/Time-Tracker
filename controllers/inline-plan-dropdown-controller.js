@@ -1303,6 +1303,7 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         const normalizedIntent = normalizeActivityChipboardDropIntent(intent);
         const validation = validateActivityChipboardDrop.call(this, normalizedSourceId, normalizedIntent);
         if (!validation.valid) return { changed: false, status: validation.status };
+        const undoSnapshot = cloneInlinePlanPlannedActivitiesSnapshot(activities);
 
         const source = getActivityBoardItemById(activities, normalizedSourceId);
         const target = getActivityBoardItemById(activities, normalizedIntent.targetId);
@@ -1341,6 +1342,7 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         if (typeof this.refreshSubActivityOptions === 'function') {
             this.refreshSubActivityOptions();
         }
+        setInlinePlanChipUndoState.call(this, undoSnapshot);
         if (this.inlinePlanDropdown && typeof this.renderInlinePlanDropdownOptions === 'function') {
             this.renderInlinePlanDropdownOptions();
         }
@@ -1355,6 +1357,17 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         const key = String(sectionKey || '').trim();
         return key === 'parents' || key === 'all';
     }
+
+    const INLINE_PLAN_CHIP_DRAG_THRESHOLD_PX = 5;
+    const INLINE_PLAN_CHIP_AUTOSCROLL_EDGE_PX = 44;
+    const INLINE_PLAN_CHIP_AUTOSCROLL_MAX_STEP = 18;
+    const INLINE_PLAN_CHIP_UNDO_TIMEOUT_MS = 8000;
+    const INLINE_PLAN_CHIP_DROP_LABELS = Object.freeze({
+        before: '앞에 배치',
+        after: '뒤에 배치',
+        nest: '하위로 넣기',
+        invalid: '불가',
+    });
 
 function isVirtualRestGapTarget(target) {
         return Boolean(
@@ -1494,11 +1507,95 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         return nextValue;
     }
 
+    function cloneInlinePlanPlannedActivitiesSnapshot(items) {
+        return (Array.isArray(items) ? items : []).map((item) =>
+            item && typeof item === 'object' ? { ...item } : item
+        );
+    }
+
+    function renderInlinePlanDropdownOptionsAfterChipStateChange(ctx) {
+        if (!ctx || !ctx.inlinePlanDropdown) return;
+        if (typeof ctx.renderInlinePlanDropdownOptions === 'function') {
+            ctx.renderInlinePlanDropdownOptions();
+        } else {
+            renderInlinePlanDropdownOptions.call(ctx);
+        }
+    }
+
+    function clearInlinePlanChipUndoState(options = {}) {
+        if (this.inlinePlanChipUndoTimer && typeof clearTimeout === 'function') {
+            clearTimeout(this.inlinePlanChipUndoTimer);
+        }
+        this.inlinePlanChipUndoTimer = null;
+        this.inlinePlanChipUndoState = null;
+        if (options && options.rerender) {
+            renderInlinePlanDropdownOptionsAfterChipStateChange(this);
+        }
+    }
+
+    function setInlinePlanChipUndoState(snapshot) {
+        const previous = cloneInlinePlanPlannedActivitiesSnapshot(snapshot);
+        if (!previous.length) {
+            clearInlinePlanChipUndoState.call(this);
+            return null;
+        }
+        clearInlinePlanChipUndoState.call(this);
+        const undoState = { plannedActivities: previous };
+        this.inlinePlanChipUndoState = undoState;
+        if (typeof setTimeout === 'function') {
+            const timer = setTimeout(() => {
+                if (this.inlinePlanChipUndoState !== undoState) return;
+                clearInlinePlanChipUndoState.call(this, { rerender: true });
+            }, INLINE_PLAN_CHIP_UNDO_TIMEOUT_MS);
+            if (timer && typeof timer.unref === 'function') timer.unref();
+            this.inlinePlanChipUndoTimer = timer;
+        }
+        return undoState;
+    }
+
+    function restoreInlinePlanChipUndoState() {
+        const undoState = this.inlinePlanChipUndoState || null;
+        if (!undoState || !Array.isArray(undoState.plannedActivities)) return false;
+        const restored = cloneInlinePlanPlannedActivitiesSnapshot(undoState.plannedActivities);
+        clearInlinePlanChipUndoState.call(this);
+        this.plannedActivities = restored;
+        if (typeof this.savePlannedActivities === 'function') {
+            this.savePlannedActivities();
+        }
+        if (typeof this.renderPlannedActivityDropdown === 'function') {
+            this.renderPlannedActivityDropdown();
+        }
+        if (typeof this.refreshSubActivityOptions === 'function') {
+            this.refreshSubActivityOptions();
+        }
+        renderInlinePlanDropdownOptionsAfterChipStateChange(this);
+        return true;
+    }
+
+    function renderInlinePlanChipUndoControl(actions) {
+        if (!actions || !this.inlinePlanChipUndoState || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'activity-chip-undo-toast';
+        button.textContent = '이동됨 · 되돌리기';
+        button.addEventListener('click', (event) => {
+            if (event && typeof event.preventDefault === 'function') event.preventDefault();
+            if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+            restoreInlinePlanChipUndoState.call(this);
+        });
+        actions.appendChild(button);
+    }
+
     function clearInlinePlanChipDropFeedback(board) {
         const rootEl = board || (this.inlinePlanDropdown && typeof this.inlinePlanDropdown.querySelector === 'function'
             ? this.inlinePlanDropdown.querySelector('.activity-chip-board')
             : null);
         if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return;
+        rootEl.querySelectorAll('.activity-chip-drop-label').forEach((node) => {
+            if (node && node.parentNode && typeof node.parentNode.removeChild === 'function') {
+                node.parentNode.removeChild(node);
+            }
+        });
         rootEl.querySelectorAll('.activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid, .activity-chip-dragging').forEach((node) => {
             removeInlinePlanClass(
                 node,
@@ -1508,6 +1605,10 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                 'activity-chip-drop-invalid',
                 'activity-chip-dragging'
             );
+            if (node && node.dataset) {
+                delete node.dataset.chipDropLabel;
+                delete node.dataset.chipDropIntent;
+            }
         });
     }
 
@@ -1567,6 +1668,11 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                 if (typeof node.setAttribute === 'function') node.setAttribute('tabindex', '-1');
                 if (typeof node.removeAttribute === 'function') node.removeAttribute('id');
             });
+            chipPreview.querySelectorAll('.activity-chip-caret, .activity-chip-delete').forEach((node) => {
+                if (node && node.parentNode && typeof node.parentNode.removeChild === 'function') {
+                    node.parentNode.removeChild(node);
+                }
+            });
         }
         if (chipPreview) preview.appendChild(chipPreview);
         if (doc.body && typeof doc.body.appendChild === 'function') {
@@ -1593,6 +1699,151 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         preview.style.transform = `translate3d(${Math.round(x - offsetX)}px, ${Math.round(y - offsetY)}px, 0)`;
     }
 
+    function getInlinePlanChipDragDistance(state, event) {
+        const startX = Number(state && state.startX);
+        const startY = Number(state && state.startY);
+        const clientX = Number(event && event.clientX);
+        const clientY = Number(event && event.clientY);
+        if (!Number.isFinite(startX) || !Number.isFinite(startY) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return 0;
+        }
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        return Math.sqrt((dx * dx) + (dy * dy));
+    }
+
+    function activateInlinePlanChipDragState(state, event) {
+        if (!state || state.active) return false;
+        state.active = true;
+        this.inlinePlanChipDragPreview = createInlinePlanChipDragPreview.call(this, state.sourceChip);
+        updateInlinePlanChipDragPreview.call(this, state, event);
+        if (state.sourceChip) addInlinePlanClass(state.sourceChip, 'activity-chip-dragging');
+        if (state.board) addInlinePlanClass(state.board, 'activity-chip-board-drag-active');
+        return Boolean(this.inlinePlanChipDragPreview);
+    }
+
+    function getInlinePlanChipDropFeedbackName(intent, validation) {
+        if (!intent) return '';
+        if (!validation || !validation.valid) return 'invalid';
+        if (intent.type === 'nest') return 'nest';
+        return intent.placement === 'after' ? 'after' : 'before';
+    }
+
+    function applyInlinePlanChipDropLabel(chip, feedbackName) {
+        if (!chip || !feedbackName) return;
+        const label = INLINE_PLAN_CHIP_DROP_LABELS[feedbackName] || '';
+        if (!label) return;
+        if (chip.dataset) {
+            chip.dataset.chipDropLabel = label;
+            chip.dataset.chipDropIntent = feedbackName;
+        }
+        const doc = chip.ownerDocument || (typeof document !== 'undefined' ? document : null);
+        if (!doc || typeof doc.createElement !== 'function' || typeof chip.appendChild !== 'function') return;
+        let badge = null;
+        if (typeof chip.querySelectorAll === 'function') {
+            badge = chip.querySelectorAll('.activity-chip-drop-label')[0] || null;
+        }
+        if (!badge) {
+            badge = doc.createElement('span');
+            badge.setAttribute('aria-hidden', 'true');
+            chip.appendChild(badge);
+        }
+        badge.className = `activity-chip-drop-label activity-chip-drop-label-${feedbackName}`;
+        badge.textContent = label;
+    }
+
+    function getInlinePlanChipAutoScrollStep(board, clientY) {
+        if (!board || typeof board.getBoundingClientRect !== 'function') {
+            return { delta: 0, before: 0, after: 0, maxScroll: 0 };
+        }
+        const rect = board.getBoundingClientRect();
+        const top = Number(rect && rect.top);
+        const bottom = Number(rect && rect.bottom);
+        const y = Number(clientY);
+        const before = Math.max(0, Number(board.scrollTop) || 0);
+        const scrollHeight = Number(board.scrollHeight) || 0;
+        const clientHeight = Number(board.clientHeight) || 0;
+        const maxScroll = Math.max(0, scrollHeight - clientHeight);
+        if (!Number.isFinite(top) || !Number.isFinite(bottom) || !Number.isFinite(y) || bottom <= top || maxScroll <= 0) {
+            return { delta: 0, before, after: before, maxScroll };
+        }
+        const edge = Math.min(INLINE_PLAN_CHIP_AUTOSCROLL_EDGE_PX, Math.max(24, (bottom - top) * 0.35));
+        let strength = 0;
+        if (y < top + edge) {
+            strength = -Math.min(1, Math.max(0, ((top + edge) - y) / edge));
+        } else if (y > bottom - edge) {
+            strength = Math.min(1, Math.max(0, (y - (bottom - edge)) / edge));
+        }
+        if (strength === 0) return { delta: 0, before, after: before, maxScroll };
+        const direction = strength > 0 ? 1 : -1;
+        const delta = direction * Math.max(2, Math.ceil(Math.abs(strength) * INLINE_PLAN_CHIP_AUTOSCROLL_MAX_STEP));
+        const after = Math.max(0, Math.min(maxScroll, before + delta));
+        return { delta, before, after, maxScroll };
+    }
+
+    function cancelInlinePlanChipAutoScrollFrame(state) {
+        if (!state || state.autoScrollFrame == null) return;
+        const frame = state.autoScrollFrame;
+        const frameType = state.autoScrollFrameType;
+        const win = state.window || (typeof window !== 'undefined' ? window : null);
+        if (frameType === 'raf') {
+            if (win && typeof win.cancelAnimationFrame === 'function') {
+                win.cancelAnimationFrame(frame);
+            } else if (typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(frame);
+            }
+        } else if (typeof clearTimeout === 'function') {
+            clearTimeout(frame);
+        }
+        state.autoScrollFrame = null;
+        state.autoScrollFrameType = null;
+    }
+
+    function scheduleInlinePlanChipAutoScrollFrame(state) {
+        if (!state || state.autoScrollFrame != null) return;
+        const win = state.window || (typeof window !== 'undefined' ? window : null);
+        const callback = () => {
+            state.autoScrollFrame = null;
+            state.autoScrollFrameType = null;
+            if (!state.active) return;
+            const step = getInlinePlanChipAutoScrollStep(state.board, state.autoScrollClientY);
+            if (step.after !== step.before && state.board) {
+                state.board.scrollTop = step.after;
+            }
+            if (state.active && step.delta !== 0 && step.after !== step.before) {
+                scheduleInlinePlanChipAutoScrollFrame(state);
+            }
+        };
+        if (win && typeof win.requestAnimationFrame === 'function') {
+            state.autoScrollFrameType = 'raf';
+            state.autoScrollFrame = win.requestAnimationFrame(callback);
+            return;
+        }
+        if (typeof requestAnimationFrame === 'function') {
+            state.autoScrollFrameType = 'raf';
+            state.autoScrollFrame = requestAnimationFrame(callback);
+            return;
+        }
+        if (typeof setTimeout === 'function') {
+            state.autoScrollFrameType = 'timeout';
+            state.autoScrollFrame = setTimeout(callback, 16);
+            if (state.autoScrollFrame && typeof state.autoScrollFrame.unref === 'function') {
+                state.autoScrollFrame.unref();
+            }
+        }
+    }
+
+    function updateInlinePlanChipAutoScroll(state, event) {
+        if (!state || !state.active || !state.board) return;
+        state.autoScrollClientY = Number(event && event.clientY);
+        const step = getInlinePlanChipAutoScrollStep(state.board, state.autoScrollClientY);
+        if (step.delta === 0 || step.after === step.before) {
+            cancelInlinePlanChipAutoScrollFrame(state);
+            return;
+        }
+        scheduleInlinePlanChipAutoScrollFrame(state);
+    }
+
     function cleanupInlinePlanChipDragState() {
         const state = this.inlinePlanChipDragState || null;
         if (!state) return;
@@ -1607,6 +1858,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         if (win && typeof win.removeEventListener === 'function') {
             win.removeEventListener('blur', state.cancelHandler, true);
         }
+        cancelInlinePlanChipAutoScrollFrame(state);
         if (state.captureTarget && Number.isFinite(state.pointerId) && typeof state.captureTarget.releasePointerCapture === 'function') {
             try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
         }
@@ -1630,7 +1882,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         const chip = pointerTarget && typeof pointerTarget.closest === 'function'
             ? pointerTarget.closest('.activity-chip[data-activity-id]')
             : null;
-        if (!chip || !state || chip === state.sourceChip) return null;
+        if (!chip || !state) return null;
         const targetId = normalizeActivityBoardId(chip.dataset && chip.dataset.activityId);
         if (!targetId) return null;
         const rect = typeof chip.getBoundingClientRect === 'function' ? chip.getBoundingClientRect() : null;
@@ -1647,15 +1899,19 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         clearInlinePlanChipDropFeedback.call(this, state.board);
         if (state.sourceChip) addInlinePlanClass(state.sourceChip, 'activity-chip-dragging');
         if (!intent || !intent.targetChip) return;
+        const feedbackName = getInlinePlanChipDropFeedbackName(intent, validation);
         if (!validation || !validation.valid) {
             addInlinePlanClass(intent.targetChip, 'activity-chip-drop-invalid');
+            applyInlinePlanChipDropLabel(intent.targetChip, feedbackName);
             return;
         }
         if (intent.type === 'nest') {
             addInlinePlanClass(intent.targetChip, 'activity-chip-drop-nest');
+            applyInlinePlanChipDropLabel(intent.targetChip, feedbackName);
             return;
         }
         addInlinePlanClass(intent.targetChip, intent.placement === 'after' ? 'activity-chip-drop-after' : 'activity-chip-drop-before');
+        applyInlinePlanChipDropLabel(intent.targetChip, feedbackName);
     }
 
     function beginInlinePlanChipDrag(event) {
@@ -1690,12 +1946,18 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             sourceId,
             dragOffsetX,
             dragOffsetY,
+            startX: Number.isFinite(eventClientX) ? eventClientX : 0,
+            startY: Number.isFinite(eventClientY) ? eventClientY : 0,
+            active: false,
             pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
             captureTarget: target,
             document: doc,
             window: win,
             intent: null,
             validation: null,
+            autoScrollClientY: Number.isFinite(eventClientY) ? eventClientY : 0,
+            autoScrollFrame: null,
+            autoScrollFrameType: null,
             moveHandler: null,
             endHandler: null,
             cancelHandler: null,
@@ -1703,6 +1965,14 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         };
         state.moveHandler = (moveEvent) => {
             if (state.pointerId !== null && Number.isFinite(moveEvent.pointerId) && moveEvent.pointerId !== state.pointerId) return;
+            if (!state.active) {
+                if (getInlinePlanChipDragDistance(state, moveEvent) < INLINE_PLAN_CHIP_DRAG_THRESHOLD_PX) {
+                    if (moveEvent.cancelable) moveEvent.preventDefault();
+                    if (typeof moveEvent.stopPropagation === 'function') moveEvent.stopPropagation();
+                    return;
+                }
+                activateInlinePlanChipDragState.call(this, state, moveEvent);
+            }
             updateInlinePlanChipDragPreview.call(this, state, moveEvent);
             const intent = resolveInlinePlanChipDropIntent.call(this, moveEvent, state);
             const validation = intent
@@ -1711,6 +1981,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             state.intent = intent;
             state.validation = validation;
             applyInlinePlanChipDropFeedback.call(this, intent, validation, state);
+            updateInlinePlanChipAutoScroll(state, moveEvent);
             if (moveEvent.cancelable) moveEvent.preventDefault();
             if (typeof moveEvent.stopPropagation === 'function') moveEvent.stopPropagation();
         };
@@ -1718,8 +1989,9 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             if (state.pointerId !== null && Number.isFinite(endEvent.pointerId) && endEvent.pointerId !== state.pointerId) return;
             const finalIntent = state.intent;
             const finalValidation = state.validation;
+            const wasActive = state.active;
             cleanupInlinePlanChipDragState.call(this);
-            if (finalIntent && finalValidation && finalValidation.valid) {
+            if (wasActive && finalIntent && finalValidation && finalValidation.valid) {
                 applyActivityChipboardDrop.call(this, state.sourceId, finalIntent);
             }
             if (endEvent && endEvent.cancelable) endEvent.preventDefault();
@@ -1748,10 +2020,6 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { target.setPointerCapture(event.pointerId); } catch (_) {}
         }
         this.inlinePlanChipDragState = state;
-        this.inlinePlanChipDragPreview = createInlinePlanChipDragPreview.call(this, sourceChip);
-        updateInlinePlanChipDragPreview.call(this, state, event);
-        addInlinePlanClass(sourceChip, 'activity-chip-dragging');
-        if (board) addInlinePlanClass(board, 'activity-chip-board-drag-active');
         if (event.cancelable) event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
@@ -1792,6 +2060,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             nextActivities.push(item);
         });
         if (!changed) return false;
+        clearInlinePlanChipUndoState.call(this);
         this.plannedActivities = nextActivities;
         if (Array.isArray(this.modalSelectedActivities) && targetLabel) {
             const selectedIndex = this.modalSelectedActivities.indexOf(targetLabel);
@@ -2296,6 +2565,12 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         };
 
         board.innerHTML = '';
+        if (editModeEnabled && !deleteModeEnabled) {
+            const hint = document.createElement('div');
+            hint.className = 'activity-chip-edit-hint';
+            hint.textContent = ':: 핸들을 드래그해 순서 변경 또는 하위활동으로 이동';
+            board.appendChild(hint);
+        }
         const sections = [
             { title: '검색 결과', key: 'search' },
             { title: '고정', key: 'pinned' },
@@ -2331,6 +2606,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             actions.innerHTML = '';
             actions.appendChild(editModeToggle);
             actions.appendChild(deleteModeToggle);
+            renderInlinePlanChipUndoControl.call(this, actions);
         }
         sections.forEach((section) => {
             const items = sectionMap[section.key] || [];
@@ -2343,6 +2619,12 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             heading.className = 'activity-chip-board-title';
             heading.textContent = section.title;
             wrap.appendChild(heading);
+            if (editModeEnabled && !deleteModeEnabled && !isPrimaryActivityChipboardSection(section.key)) {
+                const note = document.createElement('div');
+                note.className = 'activity-chip-board-note';
+                note.textContent = '정렬은 전체 목록에서 가능';
+                wrap.appendChild(note);
+            }
             const row = document.createElement('div');
             row.className = 'activity-chip-row';
             items.forEach((item) => {
@@ -2425,6 +2707,7 @@ function createChildActivityForParent(parentItem, rawName) {
             source: 'local',
         };
         this.plannedActivities.push(child);
+        clearInlinePlanChipUndoState.call(this);
         this.dedupeAndSortPlannedActivities();
         this.savePlannedActivities();
         this.inlineChildComposerError = '';
@@ -3355,6 +3638,7 @@ function closeInlinePlanDropdown() {
         const closingTarget = this.inlinePlanTarget || null;
         blurInlinePlanActiveInput(this);
         cleanupInlinePlanChipDragState.call(this);
+        clearInlinePlanChipUndoState.call(this);
         this.closeInlinePriorityMenu();
         this.closeRoutineMenu();
         this.closePlanActivityMenu();
@@ -3569,6 +3853,10 @@ function applyInlinePlanSelection(label, options = {}) {
         isInlinePlanChipEditModeEnabled,
         setInlinePlanChipEditMode,
         cleanupInlinePlanChipDragState,
+        resolveInlinePlanChipDropIntent,
+        applyInlinePlanChipDropFeedback,
+        getInlinePlanChipAutoScrollStep,
+        restoreInlinePlanChipUndoState,
         validateActivityChipboardDrop,
         applyActivityChipboardDrop,
         removePlannedActivityCatalogEntry,

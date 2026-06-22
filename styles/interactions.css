@@ -933,6 +933,8 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 .activity-chip-board-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
   min-height: 28px;
@@ -976,6 +978,26 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.12);
 }
 
+.activity-chip-undo-toast {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.activity-chip-undo-toast:hover,
+.activity-chip-undo-toast:focus-visible {
+  border-color: #60a5fa;
+  background: #dbeafe;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
 .inline-plan-chip-delete-mode .activity-chip-board {
   border-color: #f2c2c2;
 }
@@ -1002,6 +1024,32 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   font-size: 12px;
   font-weight: 700;
   color: #637083;
+}
+
+.activity-chip-edit-hint,
+.activity-chip-board-note {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.activity-chip-edit-hint {
+  padding: 7px 9px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.activity-chip-board-note {
+  margin-top: -3px;
+}
+
+.inline-plan-dropdown-sheet .activity-chip-edit-hint {
+  padding: 6px 8px;
+  font-size: 11px;
 }
 
 .activity-chip-row {
@@ -1094,8 +1142,12 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   cursor: grabbing;
 }
 
+.activity-chip-drag-preview .activity-chip-main {
+  flex: 1 1 auto;
+}
+
 .activity-chip-dragging {
-  opacity: 0.58;
+  opacity: 0.72;
   box-shadow:
     0 0 0 2px rgba(59, 130, 246, 0.22),
     0 6px 14px rgba(15, 23, 42, 0.08);
@@ -1106,6 +1158,7 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 .activity-chip-drop-nest,
 .activity-chip-drop-invalid {
   position: relative;
+  overflow: visible;
 }
 
 .activity-chip-drop-before::before,
@@ -1144,6 +1197,39 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
     inset 0 0 0 1px rgba(239, 68, 68, 0.2);
 }
 
+.activity-chip-drop-label {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.14);
+}
+
+.activity-chip-drop-before .activity-chip-drop-label {
+  left: 0;
+  transform: translateX(-8px);
+}
+
+.activity-chip-drop-after .activity-chip-drop-label {
+  right: 0;
+  left: auto;
+  transform: translateX(8px);
+}
+
+.activity-chip-drop-label-invalid {
+  background: #dc2626;
+}
+
 .activity-chip-parent {
   padding: 0;
 }
@@ -1151,6 +1237,13 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 .activity-chip-split {
   overflow: hidden;
   isolation: isolate;
+}
+
+.activity-chip-split.activity-chip-drop-before,
+.activity-chip-split.activity-chip-drop-after,
+.activity-chip-split.activity-chip-drop-nest,
+.activity-chip-split.activity-chip-drop-invalid {
+  overflow: visible;
 }
 
 button.activity-chip,
@@ -1324,6 +1417,11 @@ button.activity-chip,
   border-color: #fb7185;
   color: #9f1239;
   outline: none;
+}
+
+.activity-chip-drag-preview .activity-chip-caret,
+.activity-chip-drag-preview .activity-chip-delete {
+  display: none;
 }
 
 .activity-chip {
