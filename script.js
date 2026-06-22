@@ -56,6 +56,7 @@ class TimeTracker {
         this.inlinePlanViewportSyncTimer = null;
         this.inlinePlanInputIntentUntil = 0;
         this.inlinePlanContext = null;
+        this.inlinePlanChipDeleteMode = false;
         this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePlanChildPopoverAnchorSectionKey = null;
         this.inlinePlanChildPopoverAnchorInstanceKey = null;
@@ -6099,6 +6100,15 @@ class TimeTracker {
     }
     renderInlinePlanDropdownOptions() {
         return globalThis.TimeTrackerInlinePlanDropdownController.renderInlinePlanDropdownOptions.call(this);
+    }
+    isInlinePlanChipDeleteModeEnabled() {
+        return globalThis.TimeTrackerInlinePlanDropdownController.isInlinePlanChipDeleteModeEnabled.call(this);
+    }
+    setInlinePlanChipDeleteMode(enabled) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.setInlinePlanChipDeleteMode.call(this, enabled);
+    }
+    removePlannedActivityCatalogEntry(activityItem) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.removePlannedActivityCatalogEntry.call(this, activityItem);
     }
         touchPlannedActivityUsage(activityItem, parentItem = null) {
         return globalThis.TimeTrackerInlinePlanDropdownController.touchPlannedActivityUsage.call(this, activityItem, parentItem);

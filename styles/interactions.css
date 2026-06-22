@@ -926,6 +926,43 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   padding: 10px;
 }
 
+.activity-chip-board-shell {
+  position: relative;
+}
+
+.activity-chip-board-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  min-height: 28px;
+}
+
+.activity-chip-delete-mode-toggle {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d4dce6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.activity-chip-delete-mode-toggle:hover,
+.activity-chip-delete-mode-toggle:focus-visible {
+  border-color: #ef9a9a;
+  background: #fff5f5;
+  color: #b42318;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.12);
+}
+
+.inline-plan-chip-delete-mode .activity-chip-board {
+  border-color: #f2c2c2;
+}
+
 .activity-chip-board-section + .activity-chip-board-section {
   margin-top: 12px;
 }
@@ -1115,6 +1152,36 @@ button.activity-chip,
   stroke-width: 2.25;
   transform: translateX(1px);
   pointer-events: none;
+}
+
+.activity-chip-delete {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 800;
+  cursor: pointer;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.12);
+}
+
+.activity-chip-delete:hover,
+.activity-chip-delete:focus-visible {
+  background: #ffe4e6;
+  border-color: #fb7185;
+  color: #9f1239;
+  outline: none;
+}
+
+.activity-chip {
+  position: relative;
 }
 
 .activity-chip-add,

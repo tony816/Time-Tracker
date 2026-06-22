@@ -1224,7 +1224,7 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
         return nextActivities;
     }
 
-    function touchPlannedActivityUsage(activityItem, parentItem = null) {
+function touchPlannedActivityUsage(activityItem, parentItem = null) {
         if (!activityItem || !Array.isArray(this.plannedActivities)) return null;
         const activityId = String(activityItem.id || '').trim();
         const parentId = parentItem ? String(parentItem.id || '').trim() || null : null;
@@ -1248,6 +1248,80 @@ function buildPlanActivitiesWithVirtualGapFill(existingActivities, planItem, tar
             lastUsedAt,
         };
         return this.plannedActivities[idx];
+    }
+
+    function isInlinePlanChipDeleteModeEnabled() {
+        return Boolean(this.inlinePlanChipDeleteMode);
+    }
+
+    function setInlinePlanChipDeleteMode(enabled) {
+        const nextValue = Boolean(enabled);
+        this.inlinePlanChipDeleteMode = nextValue;
+        if (this.inlinePlanDropdown && this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.toggle === 'function') {
+            this.inlinePlanDropdown.classList.toggle('inline-plan-chip-delete-mode', nextValue);
+        }
+        const board = this.inlinePlanDropdown && typeof this.inlinePlanDropdown.querySelector === 'function'
+            ? this.inlinePlanDropdown.querySelector('.activity-chip-board')
+            : null;
+        if (board && board.classList && typeof board.classList.toggle === 'function') {
+            board.classList.toggle('activity-chip-board-delete-mode', nextValue);
+        }
+        return nextValue;
+    }
+
+    function removePlannedActivityCatalogEntry(activityItem) {
+        if (!activityItem || !Array.isArray(this.plannedActivities)) return false;
+        const targetId = String(activityItem.id || '').trim();
+        const targetLabel = getCatalogItemLabel.call(this, activityItem);
+        if (!targetId && !targetLabel) return false;
+        const removeIds = new Set([targetId].filter(Boolean));
+        let changed = false;
+        if (targetId) {
+            const childIds = [];
+            const queue = [targetId];
+            while (queue.length > 0) {
+                const currentId = queue.shift();
+                this.plannedActivities.forEach((item) => {
+                    if (!item) return;
+                    const itemId = String(item.id || '').trim();
+                    const parentId = String(item.parentId || '').trim();
+                    if (parentId !== currentId || !itemId || removeIds.has(itemId)) return;
+                    removeIds.add(itemId);
+                    childIds.push(itemId);
+                    queue.push(itemId);
+                });
+            }
+        }
+        const nextActivities = [];
+        this.plannedActivities.forEach((item) => {
+            if (!item) return;
+            const itemId = String(item.id || '').trim();
+            const itemLabel = getCatalogItemLabel.call(this, item);
+            const shouldRemove = (itemId && removeIds.has(itemId)) || (!targetId && targetLabel && itemLabel === targetLabel);
+            if (shouldRemove) {
+                changed = true;
+                return;
+            }
+            nextActivities.push(item);
+        });
+        if (!changed) return false;
+        this.plannedActivities = nextActivities;
+        if (Array.isArray(this.modalSelectedActivities) && targetLabel) {
+            const selectedIndex = this.modalSelectedActivities.indexOf(targetLabel);
+            if (selectedIndex >= 0) this.modalSelectedActivities.splice(selectedIndex, 1);
+        }
+        this.dedupeAndSortPlannedActivities();
+        this.savePlannedActivities();
+        if (typeof this.renderPlannedActivityDropdown === 'function') {
+            this.renderPlannedActivityDropdown();
+        }
+        if (typeof this.refreshSubActivityOptions === 'function') {
+            this.refreshSubActivityOptions();
+        }
+        if (typeof this.renderInlinePlanDropdownOptions === 'function' && this.inlinePlanDropdown) {
+            this.renderInlinePlanDropdownOptions();
+        }
+        return true;
     }
 
     function addInlinePlanClass(el, ...classNames) {
@@ -1476,13 +1550,25 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         this.closeInlinePlanDropdown();
     }
 
-function renderInlinePlanDropdownOptions() {
+    function renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
         if (this.inlinePriorityMenu) {
             this.closeInlinePriorityMenu();
         }
+        const boardShell = this.inlinePlanDropdown.querySelector('.activity-chip-board-shell');
         const board = this.inlinePlanDropdown.querySelector('.activity-chip-board');
         if (!board) return;
+        const actions = boardShell && typeof boardShell.querySelector === 'function'
+            ? boardShell.querySelector('.activity-chip-board-actions')
+            : null;
+        const deleteModeEnabled = isInlinePlanChipDeleteModeEnabled.call(this);
+        if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.toggle === 'function') {
+            this.inlinePlanDropdown.classList.toggle('inline-plan-chip-delete-mode', deleteModeEnabled);
+        }
+        if (board.classList && typeof board.classList.toggle === 'function') {
+            board.classList.toggle('activity-chip-board-delete-mode', deleteModeEnabled);
+        }
+        if (actions) actions.innerHTML = '';
 
         if (typeof this.repairPlannedActivityCatalogIdentity === 'function') {
             this.repairPlannedActivityCatalogIdentity({ save: true });
@@ -1575,6 +1661,28 @@ function renderInlinePlanDropdownOptions() {
             });
             chip.appendChild(labelButton);
 
+            if (deleteModeEnabled) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'activity-chip-delete';
+                deleteBtn.dataset.activityId = itemId;
+                deleteBtn.dataset.boardSection = normalizedSectionKey;
+                deleteBtn.dataset.chipInstanceKey = chipInstanceKey;
+                deleteBtn.setAttribute('aria-label', `${label} 삭제`);
+                deleteBtn.title = `${label} 삭제`;
+                deleteBtn.textContent = '×';
+                deleteBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const removed = removePlannedActivityCatalogEntry.call(this, item);
+                    if (!removed) return;
+                    if (this.modalPlanSectionOpen && currentOpenParentId === itemId) {
+                        this.closePlanActivityChildMenu({ rerender: false });
+                    }
+                });
+                chip.appendChild(deleteBtn);
+            }
+
             if (canOpenChildBoard) {
                 const caret = document.createElement('button');
                 caret.type = 'button';
@@ -1655,9 +1763,27 @@ function renderInlinePlanDropdownOptions() {
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                if (deleteModeEnabled) return;
                 applyActivityCatalogSelection.call(this, item, parent, { keepOpen: true });
             });
             chip.appendChild(btn);
+            if (deleteModeEnabled) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'activity-chip-delete';
+                deleteBtn.dataset.activityId = itemId;
+                deleteBtn.dataset.boardSection = normalizedSectionKey;
+                deleteBtn.dataset.chipInstanceKey = `${normalizedSectionKey}::${itemId}`;
+                deleteBtn.setAttribute('aria-label', `${label} 삭제`);
+                deleteBtn.title = `${label} 삭제`;
+                deleteBtn.textContent = '×';
+                deleteBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    removePlannedActivityCatalogEntry.call(this, item);
+                });
+                chip.appendChild(deleteBtn);
+            }
             return chip;
         };
 
@@ -1670,6 +1796,22 @@ function renderInlinePlanDropdownOptions() {
             { title: '전체 활동', key: 'all' },
         ];
         let renderedSectionCount = 0;
+        const deleteModeToggleWrap = document.createElement('div');
+        deleteModeToggleWrap.className = 'activity-chip-board-actions';
+        const deleteModeToggle = document.createElement('button');
+        deleteModeToggle.type = 'button';
+        deleteModeToggle.className = 'activity-chip-delete-mode-toggle';
+        deleteModeToggle.setAttribute('aria-pressed', deleteModeEnabled ? 'true' : 'false');
+        deleteModeToggle.textContent = deleteModeEnabled ? '삭제 모드 ON' : '삭제 모드';
+        deleteModeToggle.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const nextValue = !isInlinePlanChipDeleteModeEnabled.call(this);
+            setInlinePlanChipDeleteMode.call(this, nextValue);
+            renderInlinePlanDropdownOptions.call(this);
+        });
+        deleteModeToggleWrap.appendChild(deleteModeToggle);
+        if (actions) actions.appendChild(deleteModeToggleWrap);
         sections.forEach((section) => {
             const items = sectionMap[section.key] || [];
             if (items.length === 0) return;
@@ -2349,7 +2491,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 <input type="text" class="inline-plan-input" placeholder="활동 추가 또는 검색" />
                 <button type="button" class="inline-plan-add-btn" aria-label="활동 추가" title="활동 추가">＋</button>
             </div>
-            <div class="activity-chip-board"></div>
+            <div class="activity-chip-board-shell">
+                <div class="activity-chip-board-actions"></div>
+                <div class="activity-chip-board"></div>
+            </div>
             <div class="inline-plan-subsection" hidden>
                 <div class="inline-plan-subsection-head">
                     <div class="inline-plan-subsection-title"></div>
@@ -2501,6 +2646,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.modalPlanActiveRow = this.modalPlanActivities.length > 0 ? 0 : -1;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        setInlinePlanChipDeleteMode.call(this, false);
         this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePlanChildPopoverAnchorSectionKey = null;
         this.inlinePlanChildPopoverAnchorInstanceKey = null;
@@ -2747,6 +2893,7 @@ function closeInlinePlanDropdown() {
         this.inlinePlanHighlightRange = null;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
+        setInlinePlanChipDeleteMode.call(this, false);
         this.inlineChildComposerOpenParentId = null;
         this.inlineChildComposerError = '';
         this.inlineChildComposerHighlightId = null;
@@ -2867,6 +3014,9 @@ function applyInlinePlanSelection(label, options = {}) {
         isInlinePlanInputFocused,
         markInlinePlanInputIntent,
         hasRecentInlinePlanInputIntent,
+        isInlinePlanChipDeleteModeEnabled,
+        setInlinePlanChipDeleteMode,
+        removePlannedActivityCatalogEntry,
         getInlinePlanAnchorRect,
         getInlinePlanRangeAnchorRect,
         getOpenParentCaretAnchor,

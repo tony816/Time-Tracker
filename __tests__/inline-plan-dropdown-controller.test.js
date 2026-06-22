@@ -1784,6 +1784,222 @@ function dispatchInlineSelectionClick(chipButton) {
     }
 }
 
+test('activity chipboard delete mode renders and toggles independently', () => {
+    const originalDocument = globalThis.document;
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board';
+    board.classList.toggle = function toggle(className, force) {
+        const has = this.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) this.add(className);
+        if (!next && has) this.remove(className);
+        return next;
+    };
+    const actions = {
+        children: [],
+        _innerHTML: '',
+        className: 'activity-chip-board-actions',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+        querySelector() {
+            return null;
+        },
+    };
+    const shell = createInlineSelectionNode('div');
+    shell.className = 'activity-chip-board-shell';
+    shell.querySelector = function querySelector(selector) {
+        if (selector === '.activity-chip-board-actions') return actions;
+        if (selector === '.activity-chip-board') return board;
+        return null;
+    };
+    shell.appendChild(actions);
+    shell.appendChild(board);
+    const searchInput = { value: '' };
+    const dropdown = {
+        classList: {
+            toggle() {},
+            contains() { return false; },
+        },
+        querySelector(selector) {
+            if (selector === '.activity-chip-board-shell') return shell;
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        plannedActivities: [
+            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, pinned: true, archived: false, source: 'local' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        repairPlannedActivityCatalogIdentity() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        positionInlinePlanDropdown() {},
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() {},
+        renderPlannedActivityDropdown() {},
+        refreshSubActivityOptions() {},
+    };
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        const toggle = actions.children[0].children[0];
+        assert.equal(toggle.className, 'activity-chip-delete-mode-toggle');
+        assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+        assert.equal(toggle.textContent, '삭제 모드');
+
+        toggle.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(ctx.inlinePlanChipDeleteMode, true);
+        const nextToggle = actions.children[0].children[0];
+        assert.equal(nextToggle.getAttribute('aria-pressed'), 'true');
+        assert.equal(nextToggle.textContent, '삭제 모드 ON');
+        assert.equal(board.classList.contains('activity-chip-board-delete-mode'), true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('delete mode chip delete button removes activity catalog entries without touching planned segments', () => {
+    const originalDocument = globalThis.document;
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const actions = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const shell = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board-actions') return actions;
+            return null;
+        },
+    };
+    const searchInput = { value: '' };
+    const dropdown = {
+        classList: {
+            toggle() {},
+            contains() { return false; },
+        },
+        querySelector(selector) {
+            if (selector === '.activity-chip-board-shell') return shell;
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+    };
+    const removedSegments = [];
+    const saveCalls = [];
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        inlinePlanChipDeleteMode: true,
+        timeSlots: [{ planned: '운동', planActivities: [{ label: '운동', activityId: 'exercise' }] }],
+        plannedActivities: [
+            { id: 'exercise', name: '운동', label: '운동', normalizedName: '운동', parentId: null, pinned: true, archived: false, source: 'local' },
+            { id: 'exercise-child', name: '보조', label: '보조', normalizedName: '보조', parentId: 'exercise', pinned: false, archived: false, source: 'local' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        repairPlannedActivityCatalogIdentity() {},
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+        positionInlinePlanDropdown() {},
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() {
+            saveCalls.push('save');
+        },
+        renderPlannedActivityDropdown() {},
+        refreshSubActivityOptions() {},
+        removePlanActivitiesByLabel() {
+            removedSegments.push('segment');
+            return true;
+        },
+    };
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        const chip = board.children.find((node) => String(node.className || '').includes('activity-chip'));
+        const deleteBtn = findNode(chip, (node) => node.className === 'activity-chip-delete');
+        assert.ok(deleteBtn);
+
+        deleteBtn.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(ctx.plannedActivities.some((item) => item.id === 'exercise'), false);
+        assert.equal(ctx.plannedActivities.some((item) => item.id === 'exercise-child'), false);
+        assert.equal(removedSegments.length, 0);
+        assert.equal(saveCalls.length > 0, true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('activity chip selection uses virtual rest inline target before selected segment replacement', () => {
     const harness = createInlineSelectionHarness({
         selectedPlanSegment: { baseIndex: 0, segmentIndex: 0 },
