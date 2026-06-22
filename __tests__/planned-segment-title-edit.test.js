@@ -838,7 +838,7 @@ test('clicking label container space opens segment dropdown without title editin
     withDocument(() => {
         const { ctx, entryDiv, segment, labelContainer, label } = createRealisticPlanSegmentDom();
         const dropdownCalls = [];
-        segment.getBoundingClientRect = () => ({ width: 640 });
+        segment.getBoundingClientRect = () => ({ left: 100, top: 40, right: 740, bottom: 92, width: 640, height: 52 });
         ctx.timeSlots = [
             {
                 planned: 'Focus',
@@ -878,6 +878,14 @@ test('clicking label container space opens segment dropdown without title editin
         assert.equal(dropdownCalls[0].options.segmentId, 'planned-0-0');
         assert.equal(dropdownCalls[0].options.anchorAlign, 'center');
         assert.equal(dropdownCalls[0].options.anchorMinWidth, 640);
+        assert.deepEqual(dropdownCalls[0].options.sourceRect, {
+            left: 100,
+            top: 40,
+            right: 740,
+            bottom: 92,
+            width: 640,
+            height: 52,
+        });
         assert.equal(hasNodeClass(segment, 'inline-plan-sheet-context-target'), true);
         assert.equal(hasNodeClass(segment, 'inline-plan-segment-context-target'), true);
     });

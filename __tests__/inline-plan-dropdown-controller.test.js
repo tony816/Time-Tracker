@@ -260,10 +260,55 @@ test('positionInlinePlanDropdown applies anchored collision layout to segment re
 
         assert.equal(dropdown.style.visibility, 'visible');
         assert.equal(dropdown.style.left, '12px');
-        assert.ok(Number.parseInt(dropdown.style.top, 10) < 250);
+        assert.ok(Number.parseInt(dropdown.style.top, 10) >= 284);
+        assert.equal(dropdown.style.maxHeight, '4px');
         assert.equal(dropdown.style.width, '336px');
     } finally {
         restore();
+    }
+});
+
+test('positionInlinePlanDropdown uses segment source rect for replacement placement', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 },
+    });
+    const sourceRect = { left: 100, top: 100, right: 600, bottom: 150, width: 500, height: 50 };
+    ctx.inlinePlanTarget = {
+        mode: 'plan-segment-replace',
+        anchorAlign: 'center',
+        anchorMinWidth: 500,
+        sourceRect,
+    };
+    const labelAnchor = createInlinePlanAnchor({ left: 140, top: 112, width: 24, height: 18 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, labelAnchor);
+
+        assert.equal(dropdown.style.width, '500px');
+        assert.equal(dropdown.style.left, '100px');
+        assert.equal(dropdown.style.top, '156px');
+    } finally {
+        restoreGlobals();
+    }
+});
+
+test('positionInlinePlanDropdown keeps normal planned dropdown collision behavior', () => {
+    const restoreGlobals = installInlinePlanPositionGlobals();
+    const { ctx, dropdown } = createInlinePlanPositionHarness({
+        viewport: { left: 0, top: 0, right: 360, bottom: 300, width: 360, height: 300 },
+    });
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0, anchorMinWidth: 500 };
+    const anchor = createInlinePlanAnchor({ left: 80, top: 250, width: 120, height: 28 });
+
+    try {
+        controller.positionInlinePlanDropdown.call(ctx, anchor);
+
+        assert.equal(dropdown.style.width, '336px');
+        assert.ok(Number.parseInt(dropdown.style.top, 10) < 250);
+        assert.notEqual(dropdown.style.maxHeight, '4px');
+    } finally {
+        restoreGlobals();
     }
 });
 
@@ -1189,11 +1234,12 @@ test('openInlinePlanDropdown switches from normal row target to virtual rest gap
     globalThis.requestAnimationFrame = () => {};
 
     try {
-        controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
+        const opened = controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
             mode: 'virtual-rest-gap',
             gapStartMinute: 20,
             gapDurationMinutes: 30,
         });
+        assert.equal(opened, true);
     } finally {
         globalThis.document = originalDocument;
         globalThis.window = originalWindow;
@@ -1325,14 +1371,63 @@ test('openInlinePlanDropdown keeps exact same virtual rest gap as toggle-close b
         },
     };
 
-    controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
+    const opened = controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1, {
         mode: 'virtual-rest-gap',
         gapStartMinute: 20,
         gapDurationMinutes: 20,
     });
 
+    assert.equal(opened, false);
     assert.equal(cleared, true);
     assert.equal(closed, true);
+});
+
+test('openInlinePlanDropdown returns false when suppressed or anchor resolution fails', () => {
+    const ctx = {
+        suppressInlinePlanOpenUntil: Date.now() + 1000,
+    };
+
+    assert.equal(controller.openInlinePlanDropdown.call(ctx, 0, null, 0), false);
+
+    ctx.suppressInlinePlanOpenUntil = 0;
+    ctx.getPlannedRangeInfo = (index) => ({ startIndex: index, endIndex: index });
+    ctx.resolveInlinePlanAnchor = () => null;
+
+    assert.equal(controller.openInlinePlanDropdown.call(ctx, 0, null, 0), false);
+});
+
+test('openInlinePlanDropdown returns true when same mobile sheet target remains open', () => {
+    const anchor = { isConnected: true };
+    let corrected = false;
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains(className) {
+                    return className === 'inline-plan-dropdown-sheet';
+                },
+            },
+        },
+        inlinePlanTarget: { startIndex: 1, endIndex: 1, anchor },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        isInlinePlanMobileInputContext() {
+            return true;
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            assert.equal(targetEl, anchor);
+            corrected = true;
+        },
+    };
+
+    assert.equal(controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1), true);
+    assert.equal(corrected, true);
 });
 
 test('openInlinePlanDropdown marks mobile empty planned slot as sheet context target', () => {

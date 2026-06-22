@@ -103,11 +103,11 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
-        /const spaceBelow = Math\.max\(0, Math\.floor\(layoutViewport\.bottom - anchorBottom - gap - margin\)\);/
+        /const belowTop = Math\.max\(anchorBottom, avoidBottom\) \+ gap;[\s\S]*?const spaceBelow = Math\.max\(0, Math\.floor\(layoutViewport\.bottom - belowTop - margin\)\);/
     );
     assert.match(
         controllerSource,
-        /const spaceAbove = Math\.max\(0, Math\.floor\(anchorTop - layoutViewport\.top - gap - margin\)\);[\s\S]*?spaceBelow < requiredHeight[\s\S]*?spaceAbove > spaceBelow/
+        /const aboveBottom = Math\.min\(anchorTop, avoidTop\) - gap;[\s\S]*?const spaceAbove = Math\.max\(0, Math\.floor\(aboveBottom - layoutViewport\.top - margin\)\);[\s\S]*?spaceBelow < requiredHeight[\s\S]*?spaceAbove > spaceBelow/
     );
     assert.match(
         controllerSource,

@@ -6713,12 +6713,24 @@ class TimeTracker {
         const anchorMinWidth = segmentRect && Number.isFinite(segmentRect.width)
             ? Math.floor(segmentRect.width)
             : 0;
+        const sourceRect = segmentRect
+            && [segmentRect.left, segmentRect.top, segmentRect.right, segmentRect.bottom].every(Number.isFinite)
+            ? {
+                left: segmentRect.left,
+                top: segmentRect.top,
+                right: segmentRect.right,
+                bottom: segmentRect.bottom,
+                width: Math.max(0, segmentRect.right - segmentRect.left),
+                height: Math.max(0, segmentRect.bottom - segmentRect.top),
+            }
+            : null;
         this.openInlinePlanDropdown(effectiveBaseIndex, anchor, effectiveBaseIndex, {
             mode: options.dropdownMode || 'plan-segment-replace',
             segmentIndex,
             segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId ?? '') : '',
             anchorAlign: 'center',
             anchorMinWidth,
+            sourceRect,
             forceAnchored: Boolean(options.forceAnchored),
             keepInlineEditor: Boolean(options.keepInlineEditor),
         });
@@ -7002,6 +7014,11 @@ class TimeTracker {
         const anchorMinWidth = anchorInfo && Number.isFinite(anchorInfo.anchorMinWidth) && anchorInfo.anchorMinWidth > 0
             ? anchorInfo.anchorMinWidth
             : 0;
+        const sourceRect = anchorInfo
+            && anchorInfo.segmentEl
+            && typeof anchorInfo.segmentEl.getBoundingClientRect === 'function'
+            ? anchorInfo.segmentEl.getBoundingClientRect()
+            : null;
         this.inlinePlanAnchor = anchor;
         this.inlinePlanTarget.anchor = anchor;
         this.inlinePlanTarget.anchorAlign = 'center';
@@ -7009,6 +7026,18 @@ class TimeTracker {
             this.inlinePlanTarget.anchorMinWidth = anchorMinWidth;
         } else {
             delete this.inlinePlanTarget.anchorMinWidth;
+        }
+        if (sourceRect && [sourceRect.left, sourceRect.top, sourceRect.right, sourceRect.bottom].every(Number.isFinite)) {
+            this.inlinePlanTarget.sourceRect = {
+                left: sourceRect.left,
+                top: sourceRect.top,
+                right: sourceRect.right,
+                bottom: sourceRect.bottom,
+                width: Math.max(0, sourceRect.right - sourceRect.left),
+                height: Math.max(0, sourceRect.bottom - sourceRect.top),
+            };
+        } else {
+            delete this.inlinePlanTarget.sourceRect;
         }
         this.positionInlinePlanDropdown(anchor);
         return true;

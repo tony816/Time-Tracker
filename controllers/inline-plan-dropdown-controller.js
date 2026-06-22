@@ -514,14 +514,26 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
                 Math.max(Number(options.minWidth) || 1, preferredWidth)
             )
         );
-        const rectLeft = Number.isFinite(anchorRect.left) ? Number(anchorRect.left) : 0;
-        const rectTop = Number.isFinite(anchorRect.top) ? Number(anchorRect.top) : 0;
-        const rectRight = Number.isFinite(anchorRect.right)
-            ? Number(anchorRect.right)
-            : rectLeft + (Number(anchorRect.width) || 0);
-        const rectBottom = Number.isFinite(anchorRect.bottom)
-            ? Number(anchorRect.bottom)
-            : rectTop + (Number(anchorRect.height) || 0);
+        const normalizeRect = (rect) => {
+            if (!rect) return null;
+            const left = Number.isFinite(rect.left) ? Number(rect.left) : 0;
+            const top = Number.isFinite(rect.top) ? Number(rect.top) : 0;
+            const right = Number.isFinite(rect.right)
+                ? Number(rect.right)
+                : left + (Number(rect.width) || 0);
+            const bottom = Number.isFinite(rect.bottom)
+                ? Number(rect.bottom)
+                : top + (Number(rect.height) || 0);
+            const width = Math.max(0, right - left);
+            const height = Math.max(0, bottom - top);
+            return { left, top, right, bottom, width, height };
+        };
+        const sourceRect = normalizeRect(anchorRect);
+        if (!sourceRect) return null;
+        const rectLeft = sourceRect.left;
+        const rectTop = sourceRect.top;
+        const rectRight = sourceRect.right;
+        const rectBottom = sourceRect.bottom;
         const anchorWidth = Math.max(0, rectRight - rectLeft);
         const root = typeof window !== 'undefined' ? window : globalThis;
         const docEl = typeof document !== 'undefined' && document.documentElement ? document.documentElement : {};
@@ -544,8 +556,17 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
 
         const measured = measureInlinePlanPanel(panel, width);
         const naturalHeight = Math.max(1, measured.height || Number(options.fallbackHeight) || minHeight);
-        const spaceBelow = Math.max(0, Math.floor(layoutViewport.bottom - anchorBottom - gap - margin));
-        const spaceAbove = Math.max(0, Math.floor(anchorTop - layoutViewport.top - gap - margin));
+        const avoidRect = normalizeRect(options.avoidOverlapRect);
+        const avoidTop = avoidRect
+            ? (positionMode === 'fixed' ? avoidRect.top : layoutScrollY + avoidRect.top)
+            : anchorTop;
+        const avoidBottom = avoidRect
+            ? (positionMode === 'fixed' ? avoidRect.bottom : layoutScrollY + avoidRect.bottom)
+            : anchorBottom;
+        const belowTop = Math.max(anchorBottom, avoidBottom) + gap;
+        const aboveBottom = Math.min(anchorTop, avoidTop) - gap;
+        const spaceBelow = Math.max(0, Math.floor(layoutViewport.bottom - belowTop - margin));
+        const spaceAbove = Math.max(0, Math.floor(aboveBottom - layoutViewport.top - margin));
         const requiredHeight = Math.min(naturalHeight, minHeight);
         const preferAbove = options.prefer === 'above';
         const forceBelow = options.forceBelow === true;
@@ -559,15 +580,22 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         }
         let available = placeAbove ? spaceAbove : spaceBelow;
         if (available < 1) {
-            available = Math.max(1, layoutViewport.height - (margin * 2));
+            available = forceBelow
+                ? 1
+                : Math.max(1, layoutViewport.height - (margin * 2));
         }
         if (Number.isFinite(options.maxHeight) && options.maxHeight > 0) {
             available = Math.min(available, options.maxHeight);
         }
         const maxHeight = Math.max(1, Math.floor(available));
         const height = Math.min(naturalHeight, maxHeight);
-        let top = placeAbove ? anchorTop - height - gap : anchorBottom + gap;
-        top = Math.max(layoutViewport.top + margin, Math.min(top, layoutViewport.bottom - height - margin));
+        let top = placeAbove ? aboveBottom - height : belowTop;
+        if (forceBelow) {
+            const bottomLimit = layoutViewport.bottom - height - margin;
+            top = bottomLimit >= belowTop ? Math.min(top, bottomLimit) : belowTop;
+        } else {
+            top = Math.max(layoutViewport.top + margin, Math.min(top, layoutViewport.bottom - height - margin));
+        }
 
         panel.style.left = `${Math.round(left)}px`;
         panel.style.top = `${Math.round(top)}px`;
@@ -645,6 +673,9 @@ function getInlinePlanAnchorRect(anchor) {
     }
 
 function getInlinePlanRangeAnchorRect(anchor, target = null) {
+        if (target && target.mode === 'plan-segment-replace' && target.sourceRect) {
+            return target.sourceRect;
+        }
         const baseRect = getInlinePlanAnchorRect(anchor);
         const resolvedTarget = target || getInlinePlanTargetState.call(this);
         const rangeStart = Number.isInteger(resolvedTarget && resolvedTarget.rangeStart)
@@ -731,7 +762,8 @@ function positionInlinePlanDropdown(anchorEl) {
         }
         const rect = getInlinePlanRangeAnchorRect.call(this, anchor, target);
         if (!rect || (!rect.width && !rect.height)) return;
-        const alignToCenter = target?.mode === 'plan-segment-replace'
+        const isSegmentReplacement = target?.mode === 'plan-segment-replace';
+        const alignToCenter = isSegmentReplacement
             && target?.anchorAlign === 'center';
         const layoutAnchoredPanel = this.layoutInlinePlanAnchoredPanel || layoutInlinePlanAnchoredPanel;
         layoutAnchoredPanel.call(this, dropdown, rect, {
@@ -742,6 +774,8 @@ function positionInlinePlanDropdown(anchorEl) {
             minWidth: Math.min(240, expandedWidth),
             minHeight: this.getInlinePlanMinimumInteractiveHeight(dropdown),
             align: alignToCenter ? 'center' : 'left',
+            forceBelow: isSegmentReplacement,
+            avoidOverlapRect: isSegmentReplacement ? rect : null,
         });
         if (this.positionInlinePlanChildPopover) {
             this.positionInlinePlanChildPopover(this.inlinePlanChildPopoverAnchorEl || anchorEl || null);
@@ -2361,6 +2395,7 @@ function isEventWithinCurrentInlinePlanRange(targetEl) {
     }
 
 function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) {
+        // Returns true when a dropdown is open or intentionally remains open, false when opening is suppressed, fails, or same-target toggle closes it.
         if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
             return false;
         }
@@ -2427,6 +2462,25 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             range.segmentIndex = Number(options.segmentIndex);
             range.segmentId = String(options.segmentId || '');
             range.anchorAlign = options.anchorAlign === 'center' ? 'center' : '';
+            if (options.sourceRect) {
+                const rect = options.sourceRect;
+                const left = Number(rect.left);
+                const top = Number(rect.top);
+                const width = Number(rect.width);
+                const height = Number(rect.height);
+                const right = Number.isFinite(Number(rect.right)) ? Number(rect.right) : left + width;
+                const bottom = Number.isFinite(Number(rect.bottom)) ? Number(rect.bottom) : top + height;
+                if ([left, top, right, bottom].every(Number.isFinite)) {
+                    range.sourceRect = {
+                        left,
+                        top,
+                        right,
+                        bottom,
+                        width: Math.max(0, right - left),
+                        height: Math.max(0, bottom - top),
+                    };
+                }
+            }
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return false;
@@ -2476,6 +2530,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                     segmentIndex: range.segmentIndex,
                     segmentId: range.segmentId,
                     anchorAlign: range.anchorAlign,
+                    sourceRect: range.sourceRect || null,
                     keepInlineEditor: Boolean(options.keepInlineEditor),
                 }
             : { ...range, anchor, keepInlineEditor: Boolean(options.keepInlineEditor) };
