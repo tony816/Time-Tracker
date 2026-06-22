@@ -2362,7 +2362,7 @@ function isEventWithinCurrentInlinePlanRange(targetEl) {
 
 function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) {
         if (this.suppressInlinePlanOpenUntil && Date.now() < this.suppressInlinePlanOpenUntil) {
-            return;
+            return false;
         }
         const hasExplicitEndIndex = Number.isInteger(endIndex);
         const plannedContext = typeof this.resolvePlannedSlotContext === 'function'
@@ -2429,7 +2429,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             range.anchorAlign = options.anchorAlign === 'center' ? 'center' : '';
         }
         const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
-        if (!anchor) return;
+        if (!anchor) return false;
         const sheetTargetEl = options && options.sheetTargetEl && typeof options.sheetTargetEl.getBoundingClientRect === 'function'
             ? options.sheetTargetEl
             : anchor;
@@ -2445,11 +2445,11 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 } else if (typeof this.scheduleInlinePlanViewportSync === 'function') {
                     this.scheduleInlinePlanViewportSync();
                 }
-                return;
+                return true;
             }
             this.clearSelection('planned');
             this.closeInlinePlanDropdown();
-            return;
+            return false;
         }
         const preserveSheetScrollSpacer = typeof document !== 'undefined'
             && document.getElementById
@@ -2602,8 +2602,11 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             closeBtn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                const closingTarget = this.inlinePlanTarget || null;
                 if (this.isInlinePlanMobileInputContext()) {
-                    this.suppressInlinePlanOpenUntil = Date.now() + 800;
+                    if (!closingTarget || closingTarget.mode !== 'plan-segment-replace') {
+                        this.suppressInlinePlanOpenUntil = Date.now() + 800;
+                    }
                     this.clearSelection('planned');
                     const activeEl = document.activeElement;
                     if (activeEl && typeof activeEl.blur === 'function') {
@@ -2783,6 +2786,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 .catch(() => {});
         }
         this.applyInlinePlanBackgroundContext();
+        return true;
     }
 
 function applyInlinePlanBackgroundContext() {
@@ -2889,6 +2893,7 @@ function closeInlinePlanDropdown() {
         this.inlinePlanDropdown = null;
         if (closingTarget && closingTarget.mode === 'plan-segment-replace') {
             this.selectedPlanSegment = null;
+            this.suppressInlinePlanOpenUntil = 0;
         }
         this.inlinePlanTarget = null;
         this.inlinePlanHighlightRange = null;

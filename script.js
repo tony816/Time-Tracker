@@ -6620,6 +6620,42 @@ class TimeTracker {
         }
         return true;
     }
+    updateSelectedPlanSegmentDomClasses() {
+        if (typeof document === 'undefined') return false;
+        const timeEntries = document.getElementById ? document.getElementById('timeEntries') : null;
+        const root = timeEntries || document;
+        if (!root || typeof root.querySelectorAll !== 'function') return false;
+        root.querySelectorAll('.is-selected-plan-segment').forEach((el) => {
+            if (el.classList && typeof el.classList.remove === 'function') {
+                el.classList.remove('is-selected-plan-segment');
+                return;
+            }
+            el.className = String(el.className || '')
+                .split(/\s+/)
+                .filter((className) => className && className !== 'is-selected-plan-segment')
+                .join(' ');
+        });
+        const selected = this.selectedPlanSegment || null;
+        if (!selected) return true;
+        const baseIndex = Number(selected.baseIndex);
+        const segmentIndex = Number(selected.segmentIndex);
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return true;
+        const row = root.querySelector
+            ? root.querySelector(`.time-entry[data-index="${baseIndex}"], [data-index="${baseIndex}"]`)
+            : null;
+        const segment = row && typeof row.querySelector === 'function'
+            ? row.querySelector(`.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${segmentIndex}"]`)
+            : null;
+        if (!segment) return true;
+        if (segment.classList && typeof segment.classList.add === 'function') {
+            segment.classList.add('is-selected-plan-segment');
+        } else {
+            const classes = String(segment.className || '').split(/\s+/).filter(Boolean);
+            if (!classes.includes('is-selected-plan-segment')) classes.push('is-selected-plan-segment');
+            segment.className = classes.join(' ');
+        }
+        return true;
+    }
     setSelectedPlanSegment(baseIndex, segmentIndex, options = {}) {
         const context = typeof this.resolvePlannedSlotContext === 'function'
             ? this.resolvePlannedSlotContext(baseIndex)
@@ -6630,7 +6666,10 @@ class TimeTracker {
         const segment = slot && Array.isArray(slot.planActivities) ? slot.planActivities[segmentIndex] : null;
         if (!segment || segment.kind === 'virtual-rest' || segment.virtual === true) return false;
         this.selectedPlanSegment = { baseIndex: effectiveBaseIndex, segmentIndex };
-        if (options.render !== false && typeof this.renderTimeEntries === 'function') {
+        const updatedDom = typeof this.updateSelectedPlanSegmentDomClasses === 'function'
+            ? this.updateSelectedPlanSegmentDomClasses()
+            : false;
+        if (!updatedDom && options.render === true && typeof this.renderTimeEntries === 'function') {
             this.renderTimeEntries(true);
         }
         return true;
@@ -6638,7 +6677,10 @@ class TimeTracker {
     clearSelectedPlanSegment(options = {}) {
         if (!this.selectedPlanSegment) return false;
         this.selectedPlanSegment = null;
-        if (options.render !== false && typeof this.renderTimeEntries === 'function') {
+        const updatedDom = typeof this.updateSelectedPlanSegmentDomClasses === 'function'
+            ? this.updateSelectedPlanSegmentDomClasses()
+            : false;
+        if (!updatedDom && options.render === true && typeof this.renderTimeEntries === 'function') {
             this.renderTimeEntries(true);
         }
         return true;
@@ -6680,6 +6722,13 @@ class TimeTracker {
             forceAnchored: Boolean(options.forceAnchored),
             keepInlineEditor: Boolean(options.keepInlineEditor),
         });
+        const opened = Boolean(
+            this.inlinePlanDropdown
+            && this.inlinePlanTarget
+            && this.inlinePlanTarget.mode === 'plan-segment-replace'
+            && Number(this.inlinePlanTarget.segmentIndex) === Number(segmentIndex)
+        );
+        if (!opened) return false;
         if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
             this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
         }

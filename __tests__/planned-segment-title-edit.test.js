@@ -38,6 +38,10 @@ const attachPlanSegmentSelectionListeners = buildMethod(
     'attachPlanSegmentSelectionListeners(entryDiv, index)',
     '(entryDiv, index)'
 );
+const ensurePlanSegmentSelectionGlobalListeners = buildMethod(
+    'ensurePlanSegmentSelectionGlobalListeners()',
+    '()'
+);
 const openPlanSegmentReplacementDropdown = buildMethod(
     'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {})',
     '(baseIndex, segmentIndex, segmentEl, options = {})'
@@ -49,6 +53,18 @@ const addInlinePlanSheetTargetClasses = buildMethod(
 const repositionOpenInlinePlanDropdown = buildMethod(
     'repositionOpenInlinePlanDropdown()',
     '()'
+);
+const updateSelectedPlanSegmentDomClasses = buildMethod(
+    'updateSelectedPlanSegmentDomClasses()',
+    '()'
+);
+const setSelectedPlanSegment = buildMethod(
+    'setSelectedPlanSegment(baseIndex, segmentIndex, options = {})',
+    '(baseIndex, segmentIndex, options = {})'
+);
+const clearSelectedPlanSegment = buildMethod(
+    'clearSelectedPlanSegment(options = {})',
+    '(options = {})'
 );
 
 function createElementNode(tagName = 'span') {
@@ -152,6 +168,15 @@ function matchesSelector(node, selector) {
     if (String(selector).includes(',')) {
         return String(selector).split(',').some(part => matchesSelector(node, part.trim()));
     }
+    const classMatch = /^\.([a-z0-9_-]+)/i.exec(selector);
+    if (classMatch && !hasNodeClass(node, classMatch[1])) return false;
+    const dataPattern = /\[data-([a-z0-9-]+)="([^"]*)"\]/gi;
+    let dataMatch;
+    while ((dataMatch = dataPattern.exec(selector))) {
+        const key = dataMatch[1].replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
+        if (!node.dataset || String(node.dataset[key]) !== dataMatch[2]) return false;
+    }
+    if (classMatch || selector.startsWith('[data-')) return true;
     if (selector === '.split-grid-segment[data-segment-kind="real-plan"]') {
         return hasNodeClass(node, 'split-grid-segment')
             && node.dataset
@@ -370,8 +395,9 @@ test('mobile segment title tap does not open an inline text editor', () => {
                         ? 'inline-plan-dropdown'
                         : 'inline-plan-dropdown inline-plan-dropdown-sheet';
                     this.inlinePlanDropdown = dropdown;
+                    this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
                     body.appendChild(dropdown);
-                    return dropdown;
+                    return true;
                 },
                 scheduleInlinePlanInputVisibilitySync(inputEl) {
                     harness.calls.push(['visibility', inputEl]);
@@ -417,8 +443,9 @@ test('mobile segment title tap does not close the dropdown at entry', () => {
                         ? 'inline-plan-dropdown'
                         : 'inline-plan-dropdown inline-plan-dropdown-sheet';
                     this.inlinePlanDropdown = dropdown;
+                    this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
                     body.appendChild(dropdown);
-                    return dropdown;
+                    return true;
                 },
                 scheduleInlinePlanInputVisibilitySync(inputEl) {
                     calls.push(['visibility', inputEl]);
@@ -826,6 +853,9 @@ test('clicking label container space opens segment dropdown without title editin
         ctx.addInlinePlanSheetTargetClasses = addInlinePlanSheetTargetClasses;
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
             dropdownCalls.push({ startIndex, anchor, endIndex, options });
+            this.inlinePlanDropdown = createElementNode('div');
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+            return true;
         };
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
         attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
@@ -867,6 +897,9 @@ test('segment replacement dropdown falls back from label text to graphic label a
         ];
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
             calls.push({ startIndex, anchor, endIndex, options });
+            this.inlinePlanDropdown = createElementNode('div');
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+            return true;
         };
 
         labelContainer.children = labelContainer.children.filter(child => child !== label);
@@ -880,6 +913,211 @@ test('segment replacement dropdown falls back from label text to graphic label a
         assert.equal(calls[1].anchor, segment);
         assert.equal(calls[1].options.anchorAlign, 'center');
     });
+});
+
+test('segment replacement dropdown reports false unless the inline dropdown actually opens', () => {
+    withDocument(() => {
+        const { ctx, segment } = createRealisticPlanSegmentDom();
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.addInlinePlanSheetTargetClasses = addInlinePlanSheetTargetClasses;
+        ctx.openInlinePlanDropdown = function() {
+            return false;
+        };
+
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), false);
+        assert.equal(hasNodeClass(segment, 'inline-plan-segment-context-target'), false);
+
+        ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
+            this.inlinePlanDropdown = createElementNode('div');
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+            return true;
+        };
+
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), true);
+        assert.equal(hasNodeClass(segment, 'inline-plan-segment-context-target'), true);
+    });
+});
+
+test('same segment dropdown can toggle closed and reopen repeatedly', () => {
+    withDocument(() => {
+        const { ctx, segment, label } = createRealisticPlanSegmentDom();
+        let openCount = 0;
+        let closeCount = 0;
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
+            if (
+                this.inlinePlanDropdown
+                && this.inlinePlanTarget
+                && this.inlinePlanTarget.mode === options.mode
+                && Number(this.inlinePlanTarget.segmentIndex) === Number(options.segmentIndex)
+            ) {
+                this.closeInlinePlanDropdown();
+                return false;
+            }
+            openCount += 1;
+            this.inlinePlanDropdown = createElementNode('div');
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+            return true;
+        };
+        ctx.closeInlinePlanDropdown = function() {
+            closeCount += 1;
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+            this.inlinePlanSheetTargetEl = null;
+            this.suppressInlinePlanOpenUntil = 0;
+        };
+
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), true);
+        assert.equal(ctx.inlinePlanTarget.anchor, label);
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), false);
+        assert.equal(ctx.inlinePlanDropdown, null);
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), true);
+        ctx.closeInlinePlanDropdown();
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), true);
+        ctx.closeInlinePlanDropdown();
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 0, 0, segment), true);
+        assert.equal(openCount, 4);
+        assert.equal(closeCount, 3);
+    });
+});
+
+test('segment title selection updates classes without full render', () => {
+    const originalDocument = globalThis.document;
+    try {
+        const { ctx, entryDiv, segment, title } = createRealisticPlanSegmentDom();
+        const otherSegment = createElementNode('div');
+        otherSegment.className = 'split-grid-segment is-selected-plan-segment';
+        otherSegment.dataset.segmentKind = 'real-plan';
+        otherSegment.dataset.segmentIndex = '1';
+        attachDomParent(otherSegment, entryDiv);
+        entryDiv.className = 'time-entry';
+        entryDiv.dataset.index = '0';
+        entryDiv.querySelectorAll = (selector) => findAllDescendants(entryDiv, selector);
+        entryDiv.querySelector = (selector) => findDescendant(entryDiv, selector);
+        const timeEntries = createElementNode('div');
+        timeEntries.appendChild(entryDiv);
+        timeEntries.querySelectorAll = (selector) => findAllDescendants(timeEntries, selector);
+        timeEntries.querySelector = (selector) => {
+            if (selector === '.time-entry[data-index="0"], [data-index="0"]') return entryDiv;
+            return findDescendant(timeEntries, selector);
+        };
+        const renderCalls = [];
+        globalThis.document = {
+            getElementById(id) {
+                return id === 'timeEntries' ? timeEntries : null;
+            },
+            addEventListener() {},
+        };
+        ctx.timeSlots = [
+            {
+                planned: 'Focus',
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+                    { label: 'Break', activityText: 'Break', activityId: 'break', seconds: 3600 },
+                ],
+            },
+        ];
+        ctx.updateSelectedPlanSegmentDomClasses = function() {
+            return updateSelectedPlanSegmentDomClasses.call(this);
+        };
+        ctx.setSelectedPlanSegment = function(baseIndex, segmentIndex, options = {}) {
+            return setSelectedPlanSegment.call(this, baseIndex, segmentIndex, options);
+        };
+        ctx.renderTimeEntries = function(preserveInlineDropdown) {
+            renderCalls.push(preserveInlineDropdown);
+        };
+
+        attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
+        title.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: title,
+            bubbles: true,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(ctx.selectedPlanSegment, { baseIndex: 0, segmentIndex: 0 });
+        assert.equal(hasNodeClass(segment, 'is-selected-plan-segment'), true);
+        assert.equal(hasNodeClass(otherSegment, 'is-selected-plan-segment'), false);
+        assert.deepEqual(renderCalls, []);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('clearing selected segment outside or Escape updates classes without full render', () => {
+    const originalDocument = globalThis.document;
+    try {
+        const { ctx, entryDiv, segment } = createRealisticPlanSegmentDom();
+        segment.className = `${segment.className} is-selected-plan-segment`;
+        entryDiv.className = 'time-entry';
+        entryDiv.dataset.index = '0';
+        entryDiv.querySelectorAll = (selector) => findAllDescendants(entryDiv, selector);
+        entryDiv.querySelector = (selector) => findDescendant(entryDiv, selector);
+        const timeEntries = createElementNode('div');
+        timeEntries.appendChild(entryDiv);
+        timeEntries.querySelectorAll = (selector) => findAllDescendants(timeEntries, selector);
+        timeEntries.querySelector = (selector) => findDescendant(timeEntries, selector);
+        const listeners = {};
+        const renderCalls = [];
+        globalThis.document = {
+            getElementById(id) {
+                return id === 'timeEntries' ? timeEntries : null;
+            },
+            querySelector() {
+                return null;
+            },
+            addEventListener(type, handler) {
+                listeners[type] = handler;
+            },
+        };
+        ctx.selectedPlanSegment = { baseIndex: 0, segmentIndex: 0 };
+        ctx.updateSelectedPlanSegmentDomClasses = function() {
+            return updateSelectedPlanSegmentDomClasses.call(this);
+        };
+        ctx.clearSelectedPlanSegment = function(options = {}) {
+            return clearSelectedPlanSegment.call(this, options);
+        };
+        ctx.renderTimeEntries = function(preserveInlineDropdown) {
+            renderCalls.push(preserveInlineDropdown);
+        };
+
+        ctx.ensurePlanSegmentSelectionGlobalListeners = ensurePlanSegmentSelectionGlobalListeners;
+        ensurePlanSegmentSelectionGlobalListeners.call(ctx);
+        listeners.click({
+            target: {
+                closest() {
+                    return null;
+                },
+            },
+        });
+        assert.equal(ctx.selectedPlanSegment, null);
+        assert.equal(hasNodeClass(segment, 'is-selected-plan-segment'), false);
+
+        ctx.selectedPlanSegment = { baseIndex: 0, segmentIndex: 0 };
+        segment.className = `${segment.className} is-selected-plan-segment`;
+        listeners.keydown({ key: 'Escape' });
+        assert.equal(ctx.selectedPlanSegment, null);
+        assert.equal(hasNodeClass(segment, 'is-selected-plan-segment'), false);
+        assert.deepEqual(renderCalls, []);
+    } finally {
+        globalThis.document = originalDocument;
+    }
 });
 
 test('repositionOpenInlinePlanDropdown refreshes segment label anchor after render', () => {
@@ -974,6 +1212,9 @@ test('clicking parent title band does not open parent title inline editing UI', 
         };
         ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, options) {
             dropdownCalls.push({ startIndex, anchor, endIndex, options });
+            this.inlinePlanDropdown = createElementNode('div');
+            this.inlinePlanTarget = { startIndex, endIndex, anchor, ...options };
+            return true;
         };
         attachPlanSegmentTitleEditListeners.call(ctx, entryDiv, 0);
         attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
