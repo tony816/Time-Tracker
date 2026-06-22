@@ -833,10 +833,10 @@ test('planned field retap clears an already selected single planned slot', () =>
     });
 
     assert.deepEqual(calls, [
-        ['prevent'],
-        ['stop'],
         ['clear', 'planned'],
         ['blur'],
+        ['prevent'],
+        ['stop'],
     ]);
     assert.deepEqual(Array.from(ctx.selectedPlannedFields), []);
     assert.equal(ctx.suppressInlinePlanClickOnce, 4);
@@ -910,6 +910,7 @@ test('merged planned field retap clears an already selected merged planned range
 
 test('mobile planned click retap clears an already selected single planned slot', () => {
     const plannedField = createListenerNode();
+    const calls = [];
     plannedField.dataset.index = '4';
     plannedField.matches = (selector) => selector === '.planned-input';
     plannedField.classList = {

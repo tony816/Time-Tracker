@@ -260,7 +260,11 @@
                     if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(plannedRange)) {
                         e.preventDefault();
                         e.stopPropagation();
-                        closeSameInlinePlanTarget(this);
+                        if (isMobileInlinePlanSheetContext(this)) {
+                            syncOpenInlinePlanSheetTarget(this, plannedInput);
+                        } else {
+                            closeSameInlinePlanTarget(this);
+                        }
                         return;
                     }
                 }
@@ -329,7 +333,7 @@
                 this.suppressInlinePlanClickOnce = index;
                 if (e.preventDefault) e.preventDefault();
                 if (e.stopPropagation) e.stopPropagation();
-                closeSameInlinePlanTarget(this);
+                syncOpenInlinePlanSheetTarget(this, plannedField);
                 return;
             }
             if (sameInlineTarget) {
@@ -659,7 +663,11 @@
                 e.preventDefault();
                 e.stopPropagation();
                 this.suppressInlinePlanClickOnce = index;
-                closeSameInlinePlanTarget(this);
+                if (isMobileInlinePlanSheetContext(this)) {
+                    syncOpenInlinePlanSheetTarget(this, plannedField);
+                } else {
+                    closeSameInlinePlanTarget(this);
+                }
             });
             plannedField.addEventListener('click', (e) => {
                 if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
@@ -673,9 +681,6 @@
                     e.stopPropagation();
                     return;
                 }
-                e.preventDefault();
-                e.stopPropagation();
-
                 const range = this.getPlannedRangeInfo(index);
                 const rangeStart = Number.isInteger(range && range.startIndex) ? range.startIndex : index;
                 const rangeEnd = Number.isInteger(range && range.endIndex) ? range.endIndex : rangeStart;
@@ -687,10 +692,18 @@
                     return;
                 }
                 if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range)) {
-                    closeSameInlinePlanTarget(this);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (isMobileInlinePlanSheetContext(this)) {
+                        syncOpenInlinePlanSheetTarget(this, plannedField);
+                    } else {
+                        closeSameInlinePlanTarget(this);
+                    }
                     return;
                 }
 
+                e.preventDefault();
+                e.stopPropagation();
                 openPlannedFieldDropdownWithViewportPreparation(this, range.startIndex, plannedField, range.endIndex);
             });
         }
