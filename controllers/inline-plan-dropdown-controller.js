@@ -1201,6 +1201,161 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         return true;
     }
 
+    function normalizeActivityBoardId(value) {
+        return String(value || '').trim();
+    }
+
+    function getActivityBoardParentId(item) {
+        return String(item && item.parentId || '').trim() || null;
+    }
+
+    function getActivityBoardItemById(items, id) {
+        const targetId = normalizeActivityBoardId(id);
+        if (!targetId || !Array.isArray(items)) return null;
+        return items.find((item) => item && normalizeActivityBoardId(item.id) === targetId) || null;
+    }
+
+    function isActivityBoardDescendant(items, ancestorId, candidateId) {
+        const normalizedAncestorId = normalizeActivityBoardId(ancestorId);
+        let currentId = normalizeActivityBoardId(candidateId);
+        if (!normalizedAncestorId || !currentId) return false;
+        const seen = new Set();
+        while (currentId && !seen.has(currentId)) {
+            seen.add(currentId);
+            const current = getActivityBoardItemById(items, currentId);
+            if (!current) return false;
+            const parentId = getActivityBoardParentId(current);
+            if (!parentId) return false;
+            if (parentId === normalizedAncestorId) return true;
+            currentId = parentId;
+        }
+        return false;
+    }
+
+    function sortActivityBoardSiblings(items, parentId, sourceIndexById, excludedId = '') {
+        const normalizedParentId = normalizeActivityBoardId(parentId);
+        const normalizedExcludedId = normalizeActivityBoardId(excludedId);
+        return (Array.isArray(items) ? items : [])
+            .filter((item) => {
+                if (!item) return false;
+                const itemId = normalizeActivityBoardId(item.id);
+                if (!itemId || (normalizedExcludedId && itemId === normalizedExcludedId)) return false;
+                return (getActivityBoardParentId(item) || '') === normalizedParentId;
+            })
+            .sort((a, b) => {
+                const ao = Number.isFinite(a.boardOrder) ? Math.max(0, Math.floor(Number(a.boardOrder))) : Infinity;
+                const bo = Number.isFinite(b.boardOrder) ? Math.max(0, Math.floor(Number(b.boardOrder))) : Infinity;
+                if (ao !== bo) return ao - bo;
+                const ar = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
+                const br = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
+                if (ar !== br) return ar - br;
+                const al = String(a.lastUsedAt || '');
+                const bl = String(b.lastUsedAt || '');
+                if (al !== bl) return bl.localeCompare(al);
+                const ai = sourceIndexById && sourceIndexById.has(normalizeActivityBoardId(a.id)) ? sourceIndexById.get(normalizeActivityBoardId(a.id)) : Infinity;
+                const bi = sourceIndexById && sourceIndexById.has(normalizeActivityBoardId(b.id)) ? sourceIndexById.get(normalizeActivityBoardId(b.id)) : Infinity;
+                if (ai !== bi) return ai - bi;
+                return getCatalogItemLabel.call(this, a).localeCompare(getCatalogItemLabel.call(this, b));
+            });
+    }
+
+    function assignActivityBoardSiblingOrder(siblings) {
+        (Array.isArray(siblings) ? siblings : []).forEach((item, index) => {
+            if (item) item.boardOrder = index;
+        });
+    }
+
+    function normalizeActivityChipboardDropIntent(intent = {}) {
+        const rawType = String(intent.type || intent.intent || '').trim();
+        const type = rawType === 'nest' ? 'nest' : 'reorder';
+        const rawPlacement = String(intent.placement || '').trim();
+        const placement = rawPlacement === 'after' ? 'after' : 'before';
+        return {
+            type,
+            placement,
+            targetId: normalizeActivityBoardId(intent.targetId),
+        };
+    }
+
+    function validateActivityChipboardDrop(sourceId, intent = {}) {
+        const activities = Array.isArray(this.plannedActivities) ? this.plannedActivities : [];
+        const normalizedSourceId = normalizeActivityBoardId(sourceId);
+        const normalizedIntent = normalizeActivityChipboardDropIntent(intent);
+        const targetId = normalizedIntent.targetId;
+        const source = getActivityBoardItemById(activities, normalizedSourceId);
+        const target = getActivityBoardItemById(activities, targetId);
+        if (!source || !target || !normalizedSourceId || !targetId) return { valid: false, status: 'missing-target' };
+        if (normalizedSourceId === targetId) return { valid: false, status: 'self' };
+        const nextParentId = normalizedIntent.type === 'nest' ? targetId : getActivityBoardParentId(target);
+        if (nextParentId === normalizedSourceId) return { valid: false, status: 'self' };
+        if (nextParentId && isActivityBoardDescendant(activities, normalizedSourceId, nextParentId)) {
+            return { valid: false, status: 'circular' };
+        }
+        if (normalizedIntent.type === 'nest' && isActivityBoardDescendant(activities, normalizedSourceId, targetId)) {
+            return { valid: false, status: 'descendant' };
+        }
+        return { valid: true, status: 'valid', intent: normalizedIntent };
+    }
+
+    function applyActivityChipboardDrop(sourceId, intent = {}) {
+        const activities = Array.isArray(this.plannedActivities) ? this.plannedActivities : [];
+        const normalizedSourceId = normalizeActivityBoardId(sourceId);
+        const normalizedIntent = normalizeActivityChipboardDropIntent(intent);
+        const validation = validateActivityChipboardDrop.call(this, normalizedSourceId, normalizedIntent);
+        if (!validation.valid) return { changed: false, status: validation.status };
+
+        const source = getActivityBoardItemById(activities, normalizedSourceId);
+        const target = getActivityBoardItemById(activities, normalizedIntent.targetId);
+        const oldParentId = getActivityBoardParentId(source);
+        const nextParentId = normalizedIntent.type === 'nest' ? normalizeActivityBoardId(target.id) : getActivityBoardParentId(target);
+        const sourceIndexById = new Map();
+        activities.forEach((item, index) => {
+            const itemId = normalizeActivityBoardId(item && item.id);
+            if (itemId && !sourceIndexById.has(itemId)) sourceIndexById.set(itemId, index);
+        });
+
+        if ((oldParentId || '') !== (nextParentId || '')) {
+            const oldSiblings = sortActivityBoardSiblings.call(this, activities, oldParentId, sourceIndexById, normalizedSourceId);
+            assignActivityBoardSiblingOrder(oldSiblings);
+        }
+
+        source.parentId = nextParentId || null;
+        const nextSiblings = sortActivityBoardSiblings.call(this, activities, nextParentId, sourceIndexById, normalizedSourceId);
+        let insertIndex = nextSiblings.length;
+        if (normalizedIntent.type !== 'nest') {
+            const targetIndex = nextSiblings.findIndex((item) => normalizeActivityBoardId(item && item.id) === normalizeActivityBoardId(target.id));
+            insertIndex = targetIndex < 0 ? nextSiblings.length : targetIndex + (normalizedIntent.placement === 'after' ? 1 : 0);
+        }
+        nextSiblings.splice(insertIndex, 0, source);
+        assignActivityBoardSiblingOrder(nextSiblings);
+
+        if (typeof this.dedupeAndSortPlannedActivities === 'function') {
+            this.dedupeAndSortPlannedActivities();
+        }
+        if (typeof this.savePlannedActivities === 'function') {
+            this.savePlannedActivities();
+        }
+        if (typeof this.renderPlannedActivityDropdown === 'function') {
+            this.renderPlannedActivityDropdown();
+        }
+        if (typeof this.refreshSubActivityOptions === 'function') {
+            this.refreshSubActivityOptions();
+        }
+        if (this.inlinePlanDropdown && typeof this.renderInlinePlanDropdownOptions === 'function') {
+            this.renderInlinePlanDropdownOptions();
+        }
+        return {
+            changed: true,
+            status: normalizedIntent.type === 'nest' ? 'nested' : 'reordered',
+            parentId: nextParentId || null,
+        };
+    }
+
+    function isPrimaryActivityChipboardSection(sectionKey) {
+        const key = String(sectionKey || '').trim();
+        return key === 'parents' || key === 'all';
+    }
+
 function isVirtualRestGapTarget(target) {
         return Boolean(
             target
@@ -1291,6 +1446,9 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
     function setInlinePlanChipDeleteMode(enabled) {
         const nextValue = Boolean(enabled);
         this.inlinePlanChipDeleteMode = nextValue;
+        if (nextValue) {
+            setInlinePlanChipEditMode.call(this, false, { rerender: false });
+        }
         if (this.inlinePlanDropdown && this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.toggle === 'function') {
             this.inlinePlanDropdown.classList.toggle('inline-plan-chip-delete-mode', nextValue);
         }
@@ -1301,6 +1459,202 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             board.classList.toggle('activity-chip-board-delete-mode', nextValue);
         }
         return nextValue;
+    }
+
+    function isInlinePlanChipEditModeEnabled() {
+        return Boolean(this.inlinePlanChipEditMode);
+    }
+
+    function setInlinePlanChipEditMode(enabled, options = {}) {
+        const nextValue = Boolean(enabled);
+        this.inlinePlanChipEditMode = nextValue;
+        if (nextValue) {
+            this.inlinePlanChipDeleteMode = false;
+        } else {
+            cleanupInlinePlanChipDragState.call(this);
+        }
+        if (this.inlinePlanDropdown && this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.toggle === 'function') {
+            this.inlinePlanDropdown.classList.toggle('inline-plan-chip-edit-mode', nextValue);
+            this.inlinePlanDropdown.classList.toggle('inline-plan-chip-delete-mode', Boolean(this.inlinePlanChipDeleteMode));
+        }
+        const board = this.inlinePlanDropdown && typeof this.inlinePlanDropdown.querySelector === 'function'
+            ? this.inlinePlanDropdown.querySelector('.activity-chip-board')
+            : null;
+        if (board && board.classList && typeof board.classList.toggle === 'function') {
+            board.classList.toggle('activity-chip-board-edit-mode', nextValue);
+            board.classList.toggle('activity-chip-board-delete-mode', Boolean(this.inlinePlanChipDeleteMode));
+        }
+        if (options && options.rerender !== false && this.inlinePlanDropdown) {
+            if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+                this.renderInlinePlanDropdownOptions();
+            } else {
+                renderInlinePlanDropdownOptions.call(this);
+            }
+        }
+        return nextValue;
+    }
+
+    function clearInlinePlanChipDropFeedback(board) {
+        const rootEl = board || (this.inlinePlanDropdown && typeof this.inlinePlanDropdown.querySelector === 'function'
+            ? this.inlinePlanDropdown.querySelector('.activity-chip-board')
+            : null);
+        if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return;
+        rootEl.querySelectorAll('.activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid, .activity-chip-dragging').forEach((node) => {
+            removeInlinePlanClass(
+                node,
+                'activity-chip-drop-before',
+                'activity-chip-drop-after',
+                'activity-chip-drop-nest',
+                'activity-chip-drop-invalid',
+                'activity-chip-dragging'
+            );
+        });
+    }
+
+    function cleanupInlinePlanChipDragState() {
+        const state = this.inlinePlanChipDragState || null;
+        if (!state) return;
+        const doc = state.document || (typeof document !== 'undefined' ? document : null);
+        const win = state.window || (typeof window !== 'undefined' ? window : null);
+        if (doc && typeof doc.removeEventListener === 'function') {
+            doc.removeEventListener('pointermove', state.moveHandler, true);
+            doc.removeEventListener('pointerup', state.endHandler, true);
+            doc.removeEventListener('pointercancel', state.cancelHandler, true);
+            doc.removeEventListener('keydown', state.keyHandler, true);
+        }
+        if (win && typeof win.removeEventListener === 'function') {
+            win.removeEventListener('blur', state.cancelHandler, true);
+        }
+        if (state.captureTarget && Number.isFinite(state.pointerId) && typeof state.captureTarget.releasePointerCapture === 'function') {
+            try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
+        }
+        clearInlinePlanChipDropFeedback.call(this, state.board);
+        if (state.board) removeInlinePlanClass(state.board, 'activity-chip-board-drag-active');
+        this.inlinePlanChipDragState = null;
+    }
+
+    function getInlinePlanChipFromEvent(event) {
+        const target = event && event.target ? event.target : null;
+        if (!target || typeof target.closest !== 'function') return null;
+        return target.closest('.activity-chip[data-activity-id]');
+    }
+
+    function resolveInlinePlanChipDropIntent(event, state) {
+        const doc = state && state.document ? state.document : (typeof document !== 'undefined' ? document : null);
+        const pointerTarget = doc && typeof doc.elementFromPoint === 'function'
+            ? doc.elementFromPoint(Number(event.clientX) || 0, Number(event.clientY) || 0)
+            : (event && event.target ? event.target : null);
+        const chip = pointerTarget && typeof pointerTarget.closest === 'function'
+            ? pointerTarget.closest('.activity-chip[data-activity-id]')
+            : null;
+        if (!chip || !state || chip === state.sourceChip) return null;
+        const targetId = normalizeActivityBoardId(chip.dataset && chip.dataset.activityId);
+        if (!targetId) return null;
+        const rect = typeof chip.getBoundingClientRect === 'function' ? chip.getBoundingClientRect() : null;
+        const width = rect && Number.isFinite(rect.width) && rect.width > 0 ? rect.width : 1;
+        const x = rect && Number.isFinite(rect.left) ? (Number(event.clientX) - rect.left) : width / 2;
+        const ratioX = Math.max(0, Math.min(1, x / width));
+        if (ratioX <= 0.25) return { type: 'reorder', placement: 'before', targetId, targetChip: chip };
+        if (ratioX >= 0.75) return { type: 'reorder', placement: 'after', targetId, targetChip: chip };
+        return { type: 'nest', placement: 'after', targetId, targetChip: chip };
+    }
+
+    function applyInlinePlanChipDropFeedback(intent, validation, state) {
+        if (!state) return;
+        clearInlinePlanChipDropFeedback.call(this, state.board);
+        if (state.sourceChip) addInlinePlanClass(state.sourceChip, 'activity-chip-dragging');
+        if (!intent || !intent.targetChip) return;
+        if (!validation || !validation.valid) {
+            addInlinePlanClass(intent.targetChip, 'activity-chip-drop-invalid');
+            return;
+        }
+        if (intent.type === 'nest') {
+            addInlinePlanClass(intent.targetChip, 'activity-chip-drop-nest');
+            return;
+        }
+        addInlinePlanClass(intent.targetChip, intent.placement === 'after' ? 'activity-chip-drop-after' : 'activity-chip-drop-before');
+    }
+
+    function beginInlinePlanChipDrag(event) {
+        if (!isInlinePlanChipEditModeEnabled.call(this)) return;
+        if (!event || (Number.isFinite(event.button) && event.button !== 0)) return;
+        const target = event.target || null;
+        if (!target || typeof target.closest !== 'function') return;
+        if (!target.closest('[data-chip-drag-handle="true"]')) return;
+        if (target.closest('button, input, select, textarea, .activity-chip-delete, .activity-chip-caret')) return;
+        const sourceChip = getInlinePlanChipFromEvent(event);
+        const sourceId = normalizeActivityBoardId(sourceChip && sourceChip.dataset && sourceChip.dataset.activityId);
+        if (!sourceChip || !sourceId) return;
+        const board = sourceChip.closest && sourceChip.closest('.activity-chip-board');
+        const doc = (sourceChip.ownerDocument || (typeof document !== 'undefined' ? document : null));
+        const win = doc && doc.defaultView ? doc.defaultView : (typeof window !== 'undefined' ? window : null);
+        cleanupInlinePlanChipDragState.call(this);
+
+        const state = {
+            board,
+            sourceChip,
+            sourceId,
+            pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
+            captureTarget: target,
+            document: doc,
+            window: win,
+            intent: null,
+            validation: null,
+            moveHandler: null,
+            endHandler: null,
+            cancelHandler: null,
+            keyHandler: null,
+        };
+        state.moveHandler = (moveEvent) => {
+            if (state.pointerId !== null && Number.isFinite(moveEvent.pointerId) && moveEvent.pointerId !== state.pointerId) return;
+            const intent = resolveInlinePlanChipDropIntent.call(this, moveEvent, state);
+            const validation = intent
+                ? validateActivityChipboardDrop.call(this, state.sourceId, intent)
+                : { valid: false, status: 'missing-target' };
+            state.intent = intent;
+            state.validation = validation;
+            applyInlinePlanChipDropFeedback.call(this, intent, validation, state);
+            if (moveEvent.cancelable) moveEvent.preventDefault();
+            if (typeof moveEvent.stopPropagation === 'function') moveEvent.stopPropagation();
+        };
+        state.endHandler = (endEvent) => {
+            if (state.pointerId !== null && Number.isFinite(endEvent.pointerId) && endEvent.pointerId !== state.pointerId) return;
+            const finalIntent = state.intent;
+            const finalValidation = state.validation;
+            cleanupInlinePlanChipDragState.call(this);
+            if (finalIntent && finalValidation && finalValidation.valid) {
+                applyActivityChipboardDrop.call(this, state.sourceId, finalIntent);
+            }
+            if (endEvent && endEvent.cancelable) endEvent.preventDefault();
+            if (endEvent && typeof endEvent.stopPropagation === 'function') endEvent.stopPropagation();
+        };
+        state.cancelHandler = (cancelEvent) => {
+            cleanupInlinePlanChipDragState.call(this);
+            if (cancelEvent && typeof cancelEvent.stopPropagation === 'function') cancelEvent.stopPropagation();
+        };
+        state.keyHandler = (keyEvent) => {
+            if (keyEvent && keyEvent.key === 'Escape') {
+                cleanupInlinePlanChipDragState.call(this);
+                if (typeof keyEvent.stopPropagation === 'function') keyEvent.stopPropagation();
+            }
+        };
+        if (doc && typeof doc.addEventListener === 'function') {
+            doc.addEventListener('pointermove', state.moveHandler, true);
+            doc.addEventListener('pointerup', state.endHandler, true);
+            doc.addEventListener('pointercancel', state.cancelHandler, true);
+            doc.addEventListener('keydown', state.keyHandler, true);
+        }
+        if (win && typeof win.addEventListener === 'function') {
+            win.addEventListener('blur', state.cancelHandler, true);
+        }
+        if (target && Number.isFinite(event.pointerId) && typeof target.setPointerCapture === 'function') {
+            try { target.setPointerCapture(event.pointerId); } catch (_) {}
+        }
+        this.inlinePlanChipDragState = state;
+        addInlinePlanClass(sourceChip, 'activity-chip-dragging');
+        if (board) addInlinePlanClass(board, 'activity-chip-board-drag-active');
+        if (event.cancelable) event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
 
     function removePlannedActivityCatalogEntry(activityItem) {
@@ -1596,11 +1950,14 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             ? boardShell.querySelector('.activity-chip-board-actions')
             : null;
         const deleteModeEnabled = isInlinePlanChipDeleteModeEnabled.call(this);
+        const editModeEnabled = isInlinePlanChipEditModeEnabled.call(this);
         if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.toggle === 'function') {
             this.inlinePlanDropdown.classList.toggle('inline-plan-chip-delete-mode', deleteModeEnabled);
+            this.inlinePlanDropdown.classList.toggle('inline-plan-chip-edit-mode', editModeEnabled);
         }
         if (board.classList && typeof board.classList.toggle === 'function') {
             board.classList.toggle('activity-chip-board-delete-mode', deleteModeEnabled);
+            board.classList.toggle('activity-chip-board-edit-mode', editModeEnabled);
         }
         if (actions) actions.innerHTML = '';
 
@@ -1660,10 +2017,12 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         const renderChip = (item, sectionKey = '') => {
             const label = getCatalogItemLabel.call(this, item);
             if (!label) return null;
-            const canOpenChildBoard = !item.parentId;
-            const childItemsForParent = canOpenChildBoard
+            const canHaveChildBoard = !item.parentId;
+            const childItemsForParent = canHaveChildBoard
                 ? (catalogGrouped.byParentId.get(String(item.id || '')) || []).filter((child) => child && child.id !== item.id)
                 : [];
+            const hasChildren = childItemsForParent.length > 0;
+            const canOpenChildBoard = canHaveChildBoard && hasChildren;
             const chip = document.createElement('span');
             chip.className = `activity-chip${canOpenChildBoard ? ' activity-chip-parent activity-chip-split' : ''}`;
             chip.dataset.label = label;
@@ -1678,6 +2037,20 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             const isOpenParent = canOpenChildBoard && this.modalPlanSectionOpen && currentOpenParentId === itemId;
             if (isOpenParent) chip.classList.add('activity-chip-open');
 
+            if (editModeEnabled && isPrimaryActivityChipboardSection(normalizedSectionKey)) {
+                chip.dataset.draggableActivity = 'true';
+                const handle = document.createElement('span');
+                handle.className = 'activity-chip-drag-handle';
+                handle.dataset.chipDragHandle = 'true';
+                handle.setAttribute('aria-hidden', 'true');
+                handle.title = 'Drag to reorder or nest';
+                handle.textContent = '::';
+                handle.addEventListener('pointerdown', (event) => {
+                    beginInlinePlanChipDrag.call(this, event);
+                });
+                chip.appendChild(handle);
+            }
+
             const labelButton = document.createElement('button');
             labelButton.type = 'button';
             labelButton.className = 'activity-chip-main';
@@ -1690,7 +2063,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             labelButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (deleteModeEnabled) return;
+                if (deleteModeEnabled || editModeEnabled) return;
                 const parent = item && item.parentId ? catalogGrouped.byId.get(item.parentId) : null;
                 applyActivityCatalogSelection.call(this, item, parent || null, { keepOpen: true });
             });
@@ -1798,7 +2171,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             btn.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (deleteModeEnabled) return;
+                if (deleteModeEnabled || editModeEnabled) return;
                 applyActivityCatalogSelection.call(this, item, parent, { keepOpen: true });
             });
             chip.appendChild(btn);
@@ -1843,8 +2216,20 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             setInlinePlanChipDeleteMode.call(this, nextValue);
             renderInlinePlanDropdownOptions.call(this);
         });
+        const editModeToggle = document.createElement('button');
+        editModeToggle.type = 'button';
+        editModeToggle.className = 'activity-chip-edit-mode-toggle';
+        editModeToggle.setAttribute('aria-pressed', editModeEnabled ? 'true' : 'false');
+        editModeToggle.textContent = editModeEnabled ? '편집 모드 ON' : '편집 모드';
+        editModeToggle.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const nextValue = !isInlinePlanChipEditModeEnabled.call(this);
+            setInlinePlanChipEditMode.call(this, nextValue);
+        });
         if (actions) {
             actions.innerHTML = '';
+            actions.appendChild(editModeToggle);
             actions.appendChild(deleteModeToggle);
         }
         sections.forEach((section) => {
@@ -2867,6 +3252,7 @@ function applyInlinePlanBackgroundContext() {
 function closeInlinePlanDropdown() {
         const closingTarget = this.inlinePlanTarget || null;
         blurInlinePlanActiveInput(this);
+        cleanupInlinePlanChipDragState.call(this);
         this.closeInlinePriorityMenu();
         this.closeRoutineMenu();
         this.closePlanActivityMenu();
@@ -2955,6 +3341,7 @@ function closeInlinePlanDropdown() {
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
         setInlinePlanChipDeleteMode.call(this, false);
+        setInlinePlanChipEditMode.call(this, false, { rerender: false });
         this.inlineChildComposerOpenParentId = null;
         this.inlineChildComposerError = '';
         this.inlineChildComposerHighlightId = null;
@@ -3077,6 +3464,11 @@ function applyInlinePlanSelection(label, options = {}) {
         hasRecentInlinePlanInputIntent,
         isInlinePlanChipDeleteModeEnabled,
         setInlinePlanChipDeleteMode,
+        isInlinePlanChipEditModeEnabled,
+        setInlinePlanChipEditMode,
+        cleanupInlinePlanChipDragState,
+        validateActivityChipboardDrop,
+        applyActivityChipboardDrop,
         removePlannedActivityCatalogEntry,
         getInlinePlanAnchorRect,
         getInlinePlanRangeAnchorRect,

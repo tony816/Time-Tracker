@@ -83,6 +83,7 @@ function createCanonicalActivity(id, name, parentId = null, overrides = {}) {
         usageCount: Number.isFinite(overrides.usageCount) ? overrides.usageCount : 0,
         lastUsedAt: typeof overrides.lastUsedAt === 'string' ? overrides.lastUsedAt : null,
         source: overrides.source || 'local',
+        ...(Number.isFinite(overrides.boardOrder) ? { boardOrder: overrides.boardOrder } : {}),
     };
 }
 
@@ -97,6 +98,7 @@ test('save/load planned activities preserves canonical metadata and parent-child
         archived: false,
         usageCount: 4,
         lastUsedAt: '2026-05-15T01:00:00.000Z',
+        boardOrder: 2,
     });
     const child = createCanonicalActivity('activity-child', '스쿼트', parent.id, {
         colorKey: 'blue',
@@ -106,6 +108,7 @@ test('save/load planned activities preserves canonical metadata and parent-child
         archived: false,
         usageCount: 2,
         lastUsedAt: '2026-05-15T02:00:00.000Z',
+        boardOrder: 0,
     });
 
     const ctx = {
@@ -188,6 +191,8 @@ test('save/load planned activities preserves canonical metadata and parent-child
         assert.equal(loadedParent.source, 'local');
         assert.equal(loadedChild.colorKey, 'blue');
         assert.equal(loadedChild.defaultDurationMinutes, 30);
+        assert.equal(loadedParent.boardOrder, 2);
+        assert.equal(loadedChild.boardOrder, 0);
     } finally {
         delete globalThis.localStorage;
     }

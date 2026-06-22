@@ -1884,6 +1884,15 @@ test('activity chipboard delete mode renders and toggles independently', () => {
     const originalDocument = globalThis.document;
     const board = createInlineSelectionNode('div');
     board.className = 'activity-chip-board';
+    Object.defineProperty(board, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
     board.classList.toggle = function toggle(className, force) {
         const has = this.contains(className);
         const next = typeof force === 'boolean' ? force : !has;
@@ -1963,8 +1972,11 @@ test('activity chipboard delete mode renders and toggles independently', () => {
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
-        assert.equal(actions.children.length, 1);
-        const toggle = actions.children[0];
+        assert.equal(actions.children.length, 2);
+        const editToggle = actions.children[0];
+        const toggle = actions.children[1];
+        assert.equal(editToggle.className, 'activity-chip-edit-mode-toggle');
+        assert.equal(editToggle.getAttribute('aria-pressed'), 'false');
         assert.equal(toggle.className, 'activity-chip-delete-mode-toggle');
         assert.equal(toggle.getAttribute('aria-pressed'), 'false');
         assert.equal(toggle.textContent, '삭제 모드');
@@ -1976,8 +1988,9 @@ test('activity chipboard delete mode renders and toggles independently', () => {
         });
 
         assert.equal(ctx.inlinePlanChipDeleteMode, true);
-        assert.equal(actions.children.length, 1);
-        const nextToggle = actions.children[0];
+        assert.equal(ctx.inlinePlanChipEditMode, false);
+        assert.equal(actions.children.length, 2);
+        const nextToggle = actions.children[1];
         assert.equal(nextToggle.getAttribute('aria-pressed'), 'true');
         assert.equal(nextToggle.textContent, '삭제 모드 ON');
         assert.equal(board.classList.contains('activity-chip-board-delete-mode'), true);
@@ -1996,6 +2009,233 @@ test('delete mode chipboard css keeps delete affordance inside chip bounds', () 
     assert.match(block[0], /margin:\s*0 4px 0 2px;/);
     assert.doesNotMatch(block[0], /top:\s*-\d+px/);
     assert.doesNotMatch(block[0], /right:\s*-\d+px/);
+});
+
+test('activity chipboard edit-mode button toggles chip drag handles on and off', () => {
+    const originalDocument = globalThis.document;
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board';
+    Object.defineProperty(board, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    board.classList.toggle = function toggle(className, force) {
+        const has = this.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) this.add(className);
+        if (!next && has) this.remove(className);
+        return next;
+    };
+    const actions = createInlineSelectionNode('div');
+    actions.className = 'activity-chip-board-actions';
+    Object.defineProperty(actions, 'innerHTML', {
+        get() {
+            return this._innerHTML || '';
+        },
+        set(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+    });
+    const shell = createInlineSelectionNode('div');
+    shell.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-actions') return actions;
+        if (selector === '.activity-chip-board') return board;
+        return null;
+    };
+    const searchInput = { value: '' };
+    const dropdown = createInlineSelectionNode('div');
+    dropdown.querySelector = (selector) => {
+        if (selector === '.activity-chip-board-shell') return shell;
+        if (selector === '.activity-chip-board') return board;
+        if (selector === '.inline-plan-input') return searchInput;
+        return null;
+    };
+    dropdown.classList.toggle = function toggle(className, force) {
+        const has = this.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) this.add(className);
+        if (!next && has) this.remove(className);
+        return next;
+    };
+    const ctx = {
+        inlinePlanDropdown: dropdown,
+        inlinePlanTarget: { startIndex: 0, endIndex: 0 },
+        plannedActivities: [
+            { id: 'work', label: 'Work', name: 'Work', normalizedName: 'Work', parentId: null, archived: false, source: 'local' },
+            { id: 'study', label: 'Study', name: 'Study', normalizedName: 'Study', parentId: null, archived: false, source: 'local' },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        groupActivityBoard(entries) {
+            return controller.groupActivityBoard.call(this, entries);
+        },
+        repairPlannedActivityCatalogIdentity() {},
+        positionInlinePlanDropdown() {},
+    };
+
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() {
+            return null;
+        },
+    };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-drag-handle'), null);
+        actions.children[0].dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
+
+        assert.equal(ctx.inlinePlanChipEditMode, true);
+        assert.equal(actions.children[0].getAttribute('aria-pressed'), 'true');
+        assert.ok(findNode(board, (node) => node.className === 'activity-chip-drag-handle'));
+        assert.equal(board.classList.contains('activity-chip-board-edit-mode'), true);
+
+        actions.children[0].dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
+
+        assert.equal(ctx.inlinePlanChipEditMode, false);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-drag-handle'), null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('normal activity chip click still selects when edit mode is off', () => {
+    const harness = createInlineSelectionHarness({
+        plannedActivities: [
+            { id: 'work', label: 'Work', name: 'Work', normalizedName: 'Work', parentId: null, archived: false, source: 'local' },
+        ],
+    });
+    const chipButton = renderInlineSelectionChip(harness, 'Work');
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(harness.ctx.timeSlots[0].planned, 'Work');
+    assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityId, 'work');
+});
+
+function createChipboardDropHarness() {
+    const saves = [];
+    const ctx = {
+        plannedActivities: [
+            { id: 'a', label: 'A', name: 'A', normalizedName: 'A', parentId: null, archived: false, source: 'local', boardOrder: 0 },
+            { id: 'b', label: 'B', name: 'B', normalizedName: 'B', parentId: null, archived: false, source: 'local', boardOrder: 1 },
+            { id: 'c', label: 'C', name: 'C', normalizedName: 'C', parentId: null, archived: false, source: 'local', boardOrder: 2 },
+        ],
+        normalizeActivityText(value) {
+            return String(value || '').trim();
+        },
+        dedupeAndSortPlannedActivities() {
+            this.plannedActivities = this.plannedActivities.slice().sort((left, right) => {
+                const lp = String(left.parentId || '');
+                const rp = String(right.parentId || '');
+                if (lp !== rp) return lp.localeCompare(rp);
+                const lo = Number.isFinite(left.boardOrder) ? left.boardOrder : Infinity;
+                const ro = Number.isFinite(right.boardOrder) ? right.boardOrder : Infinity;
+                if (lo !== ro) return lo - ro;
+                return String(left.label || '').localeCompare(String(right.label || ''));
+            });
+        },
+        savePlannedActivities() {
+            saves.push(this.plannedActivities.map((item) => ({ id: item.id, parentId: item.parentId || null, boardOrder: item.boardOrder })));
+        },
+        renderPlannedActivityDropdown() {},
+        refreshSubActivityOptions() {},
+    };
+    return { ctx, saves };
+}
+
+test('dragging a chip between chips reorders persisted board order', () => {
+    const { ctx, saves } = createChipboardDropHarness();
+
+    const result = controller.applyActivityChipboardDrop.call(ctx, 'c', { type: 'reorder', placement: 'before', targetId: 'a' });
+
+    assert.equal(result.status, 'reordered');
+    assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['c', 'a', 'b']);
+    assert.deepEqual(ctx.plannedActivities.map((item) => [item.id, item.boardOrder]), [['c', 0], ['a', 1], ['b', 2]]);
+    assert.equal(saves.length, 1);
+});
+
+test('dragging a chip onto another chip creates a parent-child relationship', () => {
+    const { ctx } = createChipboardDropHarness();
+
+    const result = controller.applyActivityChipboardDrop.call(ctx, 'b', { type: 'nest', targetId: 'a' });
+
+    assert.equal(result.status, 'nested');
+    const child = ctx.plannedActivities.find((item) => item.id === 'b');
+    assert.equal(child.parentId, 'a');
+    assert.equal(child.boardOrder, 0);
+    assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['a', 'c']);
+});
+
+test('invalid chipboard nesting rejects self, circular, and parent-into-descendant drops', () => {
+    const { ctx } = createChipboardDropHarness();
+    controller.applyActivityChipboardDrop.call(ctx, 'b', { type: 'nest', targetId: 'a' });
+
+    assert.equal(controller.validateActivityChipboardDrop.call(ctx, 'a', { type: 'nest', targetId: 'a' }).status, 'self');
+    assert.equal(controller.validateActivityChipboardDrop.call(ctx, 'a', { type: 'nest', targetId: 'b' }).valid, false);
+    assert.equal(controller.applyActivityChipboardDrop.call(ctx, 'a', { type: 'nest', targetId: 'b' }).changed, false);
+    assert.equal(ctx.plannedActivities.find((item) => item.id === 'a').parentId, null);
+});
+
+test('dropdown rerender preserves nested and reordered chipboard state and only child parents show carets', () => {
+    const originalDocument = globalThis.document;
+    const { ctx } = createChipboardDropHarness();
+    controller.applyActivityChipboardDrop.call(ctx, 'c', { type: 'reorder', placement: 'before', targetId: 'a' });
+    controller.applyActivityChipboardDrop.call(ctx, 'b', { type: 'nest', targetId: 'a' });
+
+    const board = {
+        children: [],
+        _innerHTML: '',
+        set innerHTML(value) {
+            this._innerHTML = value;
+            this.children = [];
+        },
+        get innerHTML() {
+            return this._innerHTML;
+        },
+        appendChild(node) {
+            this.children.push(node);
+            return node;
+        },
+    };
+    const searchInput = { value: '' };
+    ctx.inlinePlanDropdown = {
+        querySelector(selector) {
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-input') return searchInput;
+            return null;
+        },
+    };
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0 };
+    ctx.groupActivityBoard = function groupActivityBoard(entries) {
+        return controller.groupActivityBoard.call(this, entries);
+    };
+    ctx.positionInlinePlanDropdown = function positionInlinePlanDropdown() {};
+
+    globalThis.document = { createElement: createInlineSelectionNode };
+
+    try {
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+        controller.renderInlinePlanDropdownOptions.call(ctx);
+
+        const chipC = findNode(board, (node) => node.dataset && node.dataset.activityId === 'c');
+        const chipA = findNode(board, (node) => node.dataset && node.dataset.activityId === 'a');
+        assert.ok(chipC);
+        assert.ok(chipA);
+        assert.equal(chipA.className, 'activity-chip activity-chip-parent activity-chip-split');
+        assert.ok(chipA.children.some((node) => node.className === 'activity-chip-caret'));
+        assert.equal(chipC.className, 'activity-chip');
+        assert.equal(chipC.children.some((node) => node.className === 'activity-chip-caret'), false);
+    } finally {
+        globalThis.document = originalDocument;
+    }
 });
 
 test('delete mode chip delete button removes activity catalog entries without touching planned segments', () => {
@@ -2937,7 +3177,7 @@ test('openPlanActivityChildMenu renders parent self selection and child selectio
     }
 });
 
-test('renderInlinePlanDropdownOptions keeps the child-board affordance for childless top-level activities', () => {
+test('renderInlinePlanDropdownOptions hides the child-board caret for childless top-level activities', () => {
     const originalDocument = globalThis.document;
     const createNode = (tagName) => {
         const listeners = {};
@@ -2991,7 +3231,6 @@ test('renderInlinePlanDropdownOptions keeps the child-board affordance for child
             return null;
         },
     };
-    let openedParent = null;
     const ctx = {
         inlinePlanDropdown: dropdown,
         inlinePlanTarget: { startIndex: 0, endIndex: 0 },
@@ -3004,9 +3243,7 @@ test('renderInlinePlanDropdownOptions keeps the child-board affordance for child
         groupActivityBoard(entries) {
             return controller.groupActivityBoard.call(this, entries);
         },
-        openPlanActivityChildMenu(parentItem) {
-            openedParent = parentItem;
-        },
+        openPlanActivityChildMenu() {},
     };
 
     globalThis.document = { createElement: createNode };
@@ -3018,19 +3255,10 @@ test('renderInlinePlanDropdownOptions keeps the child-board affordance for child
         assert.ok(pinnedSection);
         const row = pinnedSection.children[1];
         const chip = row.children[0];
-        assert.equal(chip.className, 'activity-chip activity-chip-parent activity-chip-split');
+        assert.equal(chip.className, 'activity-chip');
         const labelButton = chip.children[0];
-        const caret = chip.children[1];
+        assert.equal(chip.children[1], undefined);
         assert.equal(labelButton.getAttribute('aria-label'), 'Work 선택');
-        assert.equal(caret.getAttribute('aria-label'), 'Work 세부활동 추가 또는 보기');
-
-        caret.dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-
-        assert.equal(openedParent.id, 'work');
     } finally {
         globalThis.document = originalDocument;
     }
@@ -4040,7 +4268,9 @@ test('caret toggles child board open, close, and switch parent', () => {
         inlinePlanTarget: { startIndex: 0, endIndex: 0, anchor },
         plannedActivities: [
             { id: 'work', name: 'Work', label: 'Work', normalizedName: 'Work', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'work-focus', name: 'Focus', label: 'Focus', normalizedName: 'Focus', parentId: 'work', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
             { id: 'study', name: 'Study', label: 'Study', normalizedName: 'Study', parentId: null, pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
+            { id: 'study-notes', name: 'Notes', label: 'Notes', normalizedName: 'Notes', parentId: 'study', pinned: false, archived: false, usageCount: 0, lastUsedAt: null, source: 'local' },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -4230,6 +4460,13 @@ test('caret anchor follows the exact rendered parent instance across sections', 
                 parentId: null,
                 usageCount: 3,
                 lastUsedAt: '2026-05-16T00:00:00.000Z',
+            },
+            {
+                id: 'reading-notes',
+                name: 'Notes',
+                label: 'Notes',
+                normalizedName: 'Notes',
+                parentId: 'reading',
             },
             {
                 id: 'exercise',

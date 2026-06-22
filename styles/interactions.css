@@ -933,11 +933,13 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 .activity-chip-board-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
   margin-bottom: 8px;
   min-height: 28px;
 }
 
-.activity-chip-delete-mode-toggle {
+.activity-chip-delete-mode-toggle,
+.activity-chip-edit-mode-toggle {
   height: 28px;
   padding: 0 10px;
   border: 1px solid #d4dce6;
@@ -948,6 +950,21 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   font-weight: 700;
   cursor: pointer;
   transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.activity-chip-edit-mode-toggle[aria-pressed="true"] {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.activity-chip-edit-mode-toggle:hover,
+.activity-chip-edit-mode-toggle:focus-visible {
+  border-color: #93c5fd;
+  background: #f0f7ff;
+  color: #1d4ed8;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .activity-chip-delete-mode-toggle:hover,
@@ -961,6 +978,11 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 
 .inline-plan-chip-delete-mode .activity-chip-board {
   border-color: #f2c2c2;
+}
+
+.inline-plan-chip-edit-mode .activity-chip-board {
+  border-color: #b6dbff;
+  background: #f7fbff;
 }
 
 .inline-plan-chip-delete-mode .activity-chip-main {
@@ -1006,6 +1028,83 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
     border-color 0.14s ease,
     background 0.14s ease,
     box-shadow 0.14s ease;
+}
+
+.activity-chip-drag-handle {
+  width: 24px;
+  min-height: 38px;
+  flex: 0 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  background: #f1f5f9;
+  border-right: 1px solid #dbe3ec;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.activity-chip-drag-handle:active {
+  cursor: grabbing;
+}
+
+.activity-chip-board-drag-active {
+  cursor: grabbing;
+  overscroll-behavior: contain;
+}
+
+.activity-chip-dragging {
+  opacity: 0.58;
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.22),
+    0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.activity-chip-drop-before,
+.activity-chip-drop-after,
+.activity-chip-drop-nest,
+.activity-chip-drop-invalid {
+  position: relative;
+}
+
+.activity-chip-drop-before::before,
+.activity-chip-drop-after::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.activity-chip-drop-before::before {
+  left: -6px;
+}
+
+.activity-chip-drop-after::after {
+  right: -6px;
+}
+
+.activity-chip-drop-nest {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.14),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.22);
+}
+
+.activity-chip-drop-invalid {
+  border-color: #ef4444;
+  background: #fff5f5;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.12),
+    inset 0 0 0 1px rgba(239, 68, 68, 0.2);
 }
 
 .activity-chip-parent {

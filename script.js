@@ -60,6 +60,8 @@ class TimeTracker {
         this.inlinePlanChildPopoverAnchorEl = null;
         this.inlinePlanChildPopoverAnchorSectionKey = null;
         this.inlinePlanChildPopoverAnchorInstanceKey = null;
+        this.inlinePlanChipEditMode = false;
+        this.inlinePlanChipDragState = null;
         this.inlinePriorityMenu = null;
         this.inlinePriorityMenuContext = null;
         this.inlinePriorityMenuOutsideHandler = null;
@@ -1229,6 +1231,7 @@ class TimeTracker {
             usageCount: Number.isFinite(item.usageCount) ? Math.max(0, Math.floor(Number(item.usageCount))) : 0,
             lastUsedAt: typeof item.lastUsedAt === 'string' && item.lastUsedAt.trim() ? item.lastUsedAt : null,
             source: typeof item.source === 'string' ? item.source : 'local',
+            ...(Number.isFinite(item.boardOrder) ? { boardOrder: Math.max(0, Math.floor(Number(item.boardOrder))) } : {}),
         };
     }
     normalizeActivityCatalogArray(raw) {
@@ -1331,6 +1334,7 @@ class TimeTracker {
                     usageCount: Number.isFinite(raw.usageCount) ? Math.max(0, Math.floor(Number(raw.usageCount))) : 0,
                     lastUsedAt: typeof raw.lastUsedAt === 'string' && raw.lastUsedAt.trim() ? raw.lastUsedAt : null,
                     source: typeof raw.source === 'string' ? raw.source : 'local',
+                    ...(Number.isFinite(raw.boardOrder) ? { boardOrder: Math.max(0, Math.floor(Number(raw.boardOrder))) } : {}),
                 };
             };
         const normalized = [];
@@ -1358,6 +1362,7 @@ class TimeTracker {
                 usageCount: entry.usageCount,
                 lastUsedAt: entry.lastUsedAt,
                 source: entry.source,
+                boardOrder: entry.boardOrder,
                 priorityRank: this.normalizePriorityRankValue(entry.priorityRank),
             }));
         });
@@ -1472,8 +1477,15 @@ class TimeTracker {
                 usageCount: Number.isFinite(entry.usageCount) ? Math.max(0, Math.floor(Number(entry.usageCount))) : 0,
                 lastUsedAt: entry.lastUsedAt || null,
                 source: entry.source || 'local',
+                boardOrder: Number.isFinite(entry.boardOrder) ? Math.max(0, Math.floor(Number(entry.boardOrder))) : null,
             }))
             .sort((a, b) => {
+                const aParent = String(a.parentId || '');
+                const bParent = String(b.parentId || '');
+                if (aParent !== bParent) return aParent.localeCompare(bParent);
+                const aOrder = Number.isFinite(a.boardOrder) ? a.boardOrder : Infinity;
+                const bOrder = Number.isFinite(b.boardOrder) ? b.boardOrder : Infinity;
+                if (aOrder !== bOrder) return aOrder - bOrder;
                 if (a.normalizedName !== b.normalizedName) return a.normalizedName.localeCompare(b.normalizedName);
                 return (a.id || '').localeCompare(b.id || '');
             });
@@ -5662,6 +5674,7 @@ class TimeTracker {
             const source = item.source === 'notion' ? 'notion' : 'local';
             const priorityRank = Number.isFinite(item.priorityRank) ? Number(item.priorityRank) : null;
             const recommendedSeconds = Number.isFinite(item.recommendedSeconds) ? Math.max(0, Number(item.recommendedSeconds)) : null;
+            const boardOrder = Number.isFinite(item.boardOrder) ? Math.max(0, Math.floor(Number(item.boardOrder))) : null;
             const entry = {
                 ...(item && typeof item === 'object' ? item : {}),
                 ...(normalized || {}),
@@ -5675,6 +5688,11 @@ class TimeTracker {
                 priorityRank,
                 recommendedSeconds,
             };
+            if (boardOrder != null) {
+                entry.boardOrder = boardOrder;
+            } else {
+                delete entry.boardOrder;
+            }
             const key = `${parentId || ''}::${normalizedName}`;
             const existing = byKey.get(key);
             if (!existing) {
@@ -5703,6 +5721,9 @@ class TimeTracker {
             const aParent = String(a.parentId || '');
             const bParent = String(b.parentId || '');
             if (aParent !== bParent) return aParent.localeCompare(bParent);
+            const aBoardOrder = Number.isFinite(a.boardOrder) ? a.boardOrder : Infinity;
+            const bBoardOrder = Number.isFinite(b.boardOrder) ? b.boardOrder : Infinity;
+            if (aBoardOrder !== bBoardOrder) return aBoardOrder - bBoardOrder;
             const ra = Number.isFinite(a.priorityRank) ? a.priorityRank : Infinity;
             const rb = Number.isFinite(b.priorityRank) ? b.priorityRank : Infinity;
             if (ra !== rb) return ra - rb;

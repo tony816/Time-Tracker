@@ -195,6 +195,7 @@
         const usageCount = Number.isFinite(item.usageCount) ? Math.max(0, Math.floor(Number(item.usageCount))) : 0;
         const lastUsedAt = typeof item.lastUsedAt === 'string' && item.lastUsedAt.trim() ? item.lastUsedAt : null;
         const source = typeof item.source === 'string' ? item.source : 'local';
+        const boardOrder = Number.isFinite(item.boardOrder) ? Math.max(0, Math.floor(Number(item.boardOrder))) : null;
         const entry = {
             id,
             name,
@@ -211,6 +212,9 @@
             lastUsedAt,
             source,
         };
+        if (boardOrder != null) {
+            entry.boardOrder = boardOrder;
+        }
         return entry;
     }
 
