@@ -1527,9 +1527,48 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         preview.className = 'activity-chip-drag-preview';
         if (!preview.style) preview.style = {};
         preview.setAttribute('aria-hidden', 'true');
-        preview.textContent = sourceChip && typeof sourceChip.textContent === 'string'
-            ? sourceChip.textContent.trim()
-            : '';
+        const sourceRect = sourceChip && typeof sourceChip.getBoundingClientRect === 'function'
+            ? sourceChip.getBoundingClientRect()
+            : null;
+        const sourceWidth = sourceRect && Number.isFinite(sourceRect.width) && sourceRect.width > 0
+            ? Math.ceil(sourceRect.width)
+            : null;
+        const sourceHeight = sourceRect && Number.isFinite(sourceRect.height) && sourceRect.height > 0
+            ? Math.ceil(sourceRect.height)
+            : null;
+        if (sourceWidth !== null) preview.style.width = `${sourceWidth}px`;
+        if (sourceHeight !== null) {
+            preview.style.height = `${sourceHeight}px`;
+            preview.style.minHeight = `${sourceHeight}px`;
+        }
+        let chipPreview = null;
+        if (sourceChip && typeof sourceChip.cloneNode === 'function') {
+            chipPreview = sourceChip.cloneNode(true);
+            removeInlinePlanClass(
+                chipPreview,
+                'activity-chip-dragging',
+                'activity-chip-drop-before',
+                'activity-chip-drop-after',
+                'activity-chip-drop-nest',
+                'activity-chip-drop-invalid'
+            );
+            addInlinePlanClass(chipPreview, 'activity-chip-drag-preview-chip');
+            if (typeof chipPreview.removeAttribute === 'function') chipPreview.removeAttribute('id');
+        } else {
+            chipPreview = doc.createElement('span');
+            chipPreview.className = 'activity-chip activity-chip-drag-preview-chip';
+            const label = sourceChip && sourceChip.dataset && sourceChip.dataset.label
+                ? String(sourceChip.dataset.label)
+                : (sourceChip && typeof sourceChip.textContent === 'string' ? sourceChip.textContent.trim() : '');
+            chipPreview.textContent = label;
+        }
+        if (chipPreview && typeof chipPreview.querySelectorAll === 'function') {
+            chipPreview.querySelectorAll('button, input, select, textarea, a, [tabindex]').forEach((node) => {
+                if (typeof node.setAttribute === 'function') node.setAttribute('tabindex', '-1');
+                if (typeof node.removeAttribute === 'function') node.removeAttribute('id');
+            });
+        }
+        if (chipPreview) preview.appendChild(chipPreview);
         if (doc.body && typeof doc.body.appendChild === 'function') {
             doc.body.appendChild(preview);
             return preview;
@@ -1547,8 +1586,10 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         const rect = state && state.sourceChip && typeof state.sourceChip.getBoundingClientRect === 'function'
             ? state.sourceChip.getBoundingClientRect()
             : null;
-        const offsetX = rect && Number.isFinite(rect.width) ? Math.min(24, Math.max(8, rect.width * 0.15)) : 12;
-        const offsetY = rect && Number.isFinite(rect.height) ? Math.min(24, Math.max(8, rect.height * 0.5)) : 12;
+        const fallbackOffsetX = rect && Number.isFinite(rect.width) ? Math.min(24, Math.max(8, rect.width * 0.15)) : 12;
+        const fallbackOffsetY = rect && Number.isFinite(rect.height) ? Math.min(24, Math.max(8, rect.height * 0.5)) : 12;
+        const offsetX = state && Number.isFinite(state.dragOffsetX) ? state.dragOffsetX : fallbackOffsetX;
+        const offsetY = state && Number.isFinite(state.dragOffsetY) ? state.dragOffsetY : fallbackOffsetY;
         preview.style.transform = `translate3d(${Math.round(x - offsetX)}px, ${Math.round(y - offsetY)}px, 0)`;
     }
 
@@ -1630,12 +1671,25 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         const board = sourceChip.closest && sourceChip.closest('.activity-chip-board');
         const doc = (sourceChip.ownerDocument || (typeof document !== 'undefined' ? document : null));
         const win = doc && doc.defaultView ? doc.defaultView : (typeof window !== 'undefined' ? window : null);
+        const sourceRect = typeof sourceChip.getBoundingClientRect === 'function' ? sourceChip.getBoundingClientRect() : null;
+        const sourceWidth = sourceRect && Number.isFinite(sourceRect.width) && sourceRect.width > 0 ? sourceRect.width : null;
+        const sourceHeight = sourceRect && Number.isFinite(sourceRect.height) && sourceRect.height > 0 ? sourceRect.height : null;
+        const eventClientX = Number(event.clientX);
+        const eventClientY = Number(event.clientY);
+        const dragOffsetX = sourceRect && sourceWidth !== null && Number.isFinite(sourceRect.left) && Number.isFinite(eventClientX)
+            ? Math.max(0, Math.min(sourceWidth, eventClientX - sourceRect.left))
+            : null;
+        const dragOffsetY = sourceRect && sourceHeight !== null && Number.isFinite(sourceRect.top) && Number.isFinite(eventClientY)
+            ? Math.max(0, Math.min(sourceHeight, eventClientY - sourceRect.top))
+            : null;
         cleanupInlinePlanChipDragState.call(this);
 
         const state = {
             board,
             sourceChip,
             sourceId,
+            dragOffsetX,
+            dragOffsetY,
             pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
             captureTarget: target,
             document: doc,
@@ -1985,6 +2039,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
 
     function renderInlinePlanDropdownOptions() {
         if (!this.inlinePlanDropdown || !this.inlinePlanTarget) return;
+        if (this.inlinePlanChipDragState) cleanupInlinePlanChipDragState.call(this);
         if (this.inlinePriorityMenu) {
             this.closeInlinePriorityMenu();
         }

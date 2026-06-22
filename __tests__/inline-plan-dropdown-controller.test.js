@@ -1958,6 +1958,24 @@ function createInlineSelectionNode(tagName) {
             this.children.push(child);
             return child;
         },
+        cloneNode(deep = false) {
+            const clone = createInlineSelectionNode(tagName);
+            clone.className = this.className;
+            clone.dataset = { ...this.dataset };
+            clone.textContent = this.textContent;
+            clone.title = this.title;
+            clone.type = this.type;
+            clone.ownerDocument = this.ownerDocument;
+            Object.keys(attributes).forEach((name) => {
+                clone.setAttribute(name, attributes[name]);
+            });
+            if (deep) {
+                this.children.forEach((child) => {
+                    clone.appendChild(typeof child.cloneNode === 'function' ? child.cloneNode(true) : child);
+                });
+            }
+            return clone;
+        },
         addEventListener(type, handler) {
             listeners[type] = handler;
         },
@@ -1970,6 +1988,26 @@ function createInlineSelectionNode(tagName) {
         },
         getAttribute(name) {
             return attributes[name];
+        },
+        removeAttribute(name) {
+            delete attributes[name];
+        },
+        querySelectorAll(selector) {
+            const classNames = String(selector || '')
+                .split(',')
+                .map((part) => part.trim())
+                .filter((part) => part.startsWith('.'))
+                .map((part) => part.slice(1));
+            const matches = [];
+            const walk = (current) => {
+                if (!current) return;
+                if (classNames.some((className) => current.classList && current.classList.contains(className))) {
+                    matches.push(current);
+                }
+                (current.children || []).forEach(walk);
+            };
+            (this.children || []).forEach(walk);
+            return matches;
         },
     };
     return node;
@@ -2385,6 +2423,11 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         },
         removeChild(node) {
             this.children = this.children.filter((child) => child !== node);
+            node.parentNode = null;
+        },
+        querySelector(selector) {
+            if (selector !== '.activity-chip-drag-preview') return null;
+            return this.children.find((child) => String(child.className || '').split(/\s+/).includes('activity-chip-drag-preview')) || null;
         },
     };
     const documentListeners = {};
@@ -2465,11 +2508,27 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             if (selector === '.activity-chip[data-activity-id]') return sourceChip;
             return null;
         };
+        sourceChip.getBoundingClientRect = () => ({
+            left: 80,
+            top: 100,
+            right: 172,
+            bottom: 138,
+            width: 92,
+            height: 38,
+        });
         targetChip.closest = (selector) => {
             if (selector === '.activity-chip[data-activity-id]') return targetChip;
             if (selector === '.activity-chip-board') return board;
             return null;
         };
+        targetChip.getBoundingClientRect = () => ({
+            left: 200,
+            top: 112,
+            right: 248,
+            bottom: 150,
+            width: 48,
+            height: 38,
+        });
 
         dragHandle.dispatchEvent({
             type: 'pointerdown',
@@ -2484,10 +2543,19 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         });
 
         assert.ok(ctx.inlinePlanChipDragPreview);
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), ctx.inlinePlanChipDragPreview);
         assert.equal(ctx.inlinePlanChipDragPreview.className, 'activity-chip-drag-preview');
+        assert.equal(ctx.inlinePlanChipDragPreview.style.width, '92px');
+        assert.equal(ctx.inlinePlanChipDragPreview.style.height, '38px');
+        assert.equal(collectNodeText(ctx.inlinePlanChipDragPreview).includes('Work'), true);
         assert.match(ctx.inlinePlanChipDragPreview.style.transform, /translate3d\(/);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), true);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), true);
+        assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*position:\s*fixed;/);
+        assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*pointer-events:\s*none;/);
+        assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*z-index:\s*2147483647;/);
 
+        const firstTransform = ctx.inlinePlanChipDragPreview.style.transform;
         documentListeners.pointermove({
             type: 'pointermove',
             pointerId: 11,
@@ -2501,10 +2569,62 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
 
         const preview = ctx.inlinePlanChipDragPreview;
         assert.match(preview.style.transform, /translate3d\(\d+px, \d+px, 0\)/);
+        assert.notEqual(preview.style.transform, firstTransform);
 
+        documentListeners.pointercancel({
+            type: 'pointercancel',
+            pointerId: 11,
+            stopPropagation() {},
+        });
+        assert.equal(ctx.inlinePlanChipDragState, null);
+        assert.equal(ctx.inlinePlanChipDragPreview, null);
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+
+        dragHandle.dispatchEvent({
+            type: 'pointerdown',
+            button: 0,
+            pointerId: 12,
+            clientX: 104,
+            clientY: 119,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: dragHandle,
+        });
+        assert.ok(body.querySelector('.activity-chip-drag-preview'));
+        documentListeners.keydown({
+            type: 'keydown',
+            key: 'Escape',
+            stopPropagation() {},
+        });
+        assert.equal(ctx.inlinePlanChipDragState, null);
+        assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+
+        dragHandle.dispatchEvent({
+            type: 'pointerdown',
+            button: 0,
+            pointerId: 13,
+            clientX: 104,
+            clientY: 119,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: dragHandle,
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 13,
+            clientX: 220,
+            clientY: 130,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
         documentListeners.pointerup({
             type: 'pointerup',
-            pointerId: 11,
+            pointerId: 13,
             clientX: 220,
             clientY: 130,
             cancelable: true,
@@ -2515,8 +2635,10 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
 
         assert.equal(ctx.inlinePlanChipDragState, null);
         assert.equal(ctx.inlinePlanChipDragPreview, null);
+        assert.equal(ctx.plannedActivities.find((item) => item.id === 'work').parentId, 'study');
         assert.equal(body.children.length, 0);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
     } finally {
         globalThis.document = originalDocument;
     }
