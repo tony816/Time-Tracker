@@ -1511,6 +1511,47 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         });
     }
 
+    function removeInlinePlanChipDragPreview() {
+        const preview = this.inlinePlanChipDragPreview || null;
+        if (!preview) return;
+        if (preview.parentNode && typeof preview.parentNode.removeChild === 'function') {
+            preview.parentNode.removeChild(preview);
+        }
+        this.inlinePlanChipDragPreview = null;
+    }
+
+    function createInlinePlanChipDragPreview(sourceChip) {
+        const doc = sourceChip && sourceChip.ownerDocument ? sourceChip.ownerDocument : (typeof document !== 'undefined' ? document : null);
+        if (!doc || typeof doc.createElement !== 'function') return null;
+        const preview = doc.createElement('div');
+        preview.className = 'activity-chip-drag-preview';
+        if (!preview.style) preview.style = {};
+        preview.setAttribute('aria-hidden', 'true');
+        preview.textContent = sourceChip && typeof sourceChip.textContent === 'string'
+            ? sourceChip.textContent.trim()
+            : '';
+        if (doc.body && typeof doc.body.appendChild === 'function') {
+            doc.body.appendChild(preview);
+            return preview;
+        }
+        return null;
+    }
+
+    function updateInlinePlanChipDragPreview(state, event) {
+        const preview = this.inlinePlanChipDragPreview || null;
+        if (!preview) return;
+        const clientX = Number(event && event.clientX);
+        const clientY = Number(event && event.clientY);
+        const x = Number.isFinite(clientX) ? clientX : 0;
+        const y = Number.isFinite(clientY) ? clientY : 0;
+        const rect = state && state.sourceChip && typeof state.sourceChip.getBoundingClientRect === 'function'
+            ? state.sourceChip.getBoundingClientRect()
+            : null;
+        const offsetX = rect && Number.isFinite(rect.width) ? Math.min(24, Math.max(8, rect.width * 0.15)) : 12;
+        const offsetY = rect && Number.isFinite(rect.height) ? Math.min(24, Math.max(8, rect.height * 0.5)) : 12;
+        preview.style.transform = `translate3d(${Math.round(x - offsetX)}px, ${Math.round(y - offsetY)}px, 0)`;
+    }
+
     function cleanupInlinePlanChipDragState() {
         const state = this.inlinePlanChipDragState || null;
         if (!state) return;
@@ -1529,6 +1570,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
         }
         clearInlinePlanChipDropFeedback.call(this, state.board);
+        removeInlinePlanChipDragPreview.call(this);
         if (state.board) removeInlinePlanClass(state.board, 'activity-chip-board-drag-active');
         this.inlinePlanChipDragState = null;
     }
@@ -1607,6 +1649,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         };
         state.moveHandler = (moveEvent) => {
             if (state.pointerId !== null && Number.isFinite(moveEvent.pointerId) && moveEvent.pointerId !== state.pointerId) return;
+            updateInlinePlanChipDragPreview.call(this, state, moveEvent);
             const intent = resolveInlinePlanChipDropIntent.call(this, moveEvent, state);
             const validation = intent
                 ? validateActivityChipboardDrop.call(this, state.sourceId, intent)
@@ -1651,6 +1694,8 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { target.setPointerCapture(event.pointerId); } catch (_) {}
         }
         this.inlinePlanChipDragState = state;
+        this.inlinePlanChipDragPreview = createInlinePlanChipDragPreview.call(this, sourceChip);
+        updateInlinePlanChipDragPreview.call(this, state, event);
         addInlinePlanClass(sourceChip, 'activity-chip-dragging');
         if (board) addInlinePlanClass(board, 'activity-chip-board-drag-active');
         if (event.cancelable) event.preventDefault();
@@ -3036,7 +3081,9 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             input.addEventListener('focus', this.inlinePlanInputFocusHandler);
         }
         if (addBtn) {
-            addBtn.addEventListener('click', addHandler);
+            addBtn.addEventListener('click', () => {
+                addHandler({ keepOpen: true });
+            });
         }
         if (closeBtn) {
             closeBtn.addEventListener('click', (event) => {
