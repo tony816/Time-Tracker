@@ -43,6 +43,14 @@ const applyPlanSegmentResize = buildMethod(
     'applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute)',
     '(baseIndex, segmentIndex, edge, targetMinute)'
 );
+const deletePlanSegment = buildMethod(
+    'deletePlanSegment(baseIndex, segmentIndex)',
+    '(baseIndex, segmentIndex)'
+);
+const replacePlanSegmentWithRest = buildMethod(
+    'replacePlanSegmentWithRest(baseIndex, segmentIndex)',
+    '(baseIndex, segmentIndex)'
+);
 
 function classesOf(node) {
     let className = '';
@@ -782,6 +790,93 @@ test('ten minute plan segment right-shrink enters delete-pending preview and del
         assert.equal(fixture.grid.querySelector('.plan-segment-resize-preview-layer'), null);
         assert.equal(fixture.grid.classList.contains('is-delete-pending-plan-resize'), false);
     }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('deletePlanSegment preserves neighboring positions by replacing the deleted item with rest', () => {
+    const slot = {
+        planned: '',
+        planActivities: [
+            {
+                label: 'A',
+                startMinute: 0,
+                endMinute: 20,
+                durationMinutes: 20,
+                seconds: 1200,
+            },
+            {
+                label: 'B',
+                startMinute: 20,
+                endMinute: 40,
+                durationMinutes: 20,
+                seconds: 1200,
+            },
+            {
+                label: 'C',
+                startMinute: 40,
+                endMinute: 60,
+                durationMinutes: 20,
+                seconds: 1200,
+            },
+        ],
+    };
+    const calls = [];
+    const ctx = {
+        timeSlots: [slot],
+        replacePlanSegmentWithRest,
+        formatActivitiesSummary(items) {
+            return items
+                .filter((item) => !(item && (item.virtual || item.kind === 'virtual-rest')))
+                .map((item) => item.label)
+                .join(', ');
+        },
+        renderTimeEntries(force) {
+            calls.push(['renderTimeEntries', force]);
+        },
+        repositionOpenInlinePlanDropdown() {
+            calls.push(['repositionOpenInlinePlanDropdown']);
+        },
+        calculateTotals() {
+            calls.push(['calculateTotals']);
+        },
+        autoSave() {
+            calls.push(['autoSave']);
+        },
+    };
+
+    const result = deletePlanSegment.call(ctx, 0, 1);
+
+    assert.equal(result, true);
+    assert.deepEqual(slot.planActivities, [
+        {
+            label: 'A',
+            startMinute: 0,
+            endMinute: 20,
+            durationMinutes: 20,
+            seconds: 1200,
+        },
+        {
+            kind: 'virtual-rest',
+            virtual: true,
+            label: '휴식',
+            startMinute: 20,
+            durationMinutes: 20,
+            endMinute: 40,
+        },
+        {
+            label: 'C',
+            startMinute: 40,
+            endMinute: 60,
+            durationMinutes: 20,
+            seconds: 1200,
+        },
+    ]);
+    assert.equal(slot.planned, 'A, C');
+    assert.deepEqual(calls, [
+        ['renderTimeEntries', true],
+        ['repositionOpenInlinePlanDropdown'],
+        ['calculateTotals'],
+        ['autoSave'],
+    ]);
 });
 
 test('longer segment preview responds to sub-unit shrink before commit snap changes', () => {

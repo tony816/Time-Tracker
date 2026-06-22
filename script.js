@@ -7474,7 +7474,7 @@ class TimeTracker {
         this.autoSave();
         return true;
     }
-        deletePlanSegment(baseIndex, segmentIndex) {
+        replacePlanSegmentWithRest(baseIndex, segmentIndex) {
         const context = typeof this.resolvePlannedSlotContext === 'function'
             ? this.resolvePlannedSlotContext(baseIndex)
             : null;
@@ -7483,11 +7483,65 @@ class TimeTracker {
         if (!slot || !Array.isArray(slot.planActivities)) return false;
         if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= slot.planActivities.length) return false;
 
-        slot.planActivities = slot.planActivities
-            .filter((item, index) => index !== segmentIndex)
-            .map(item => ({ ...item }));
+        const target = slot.planActivities[segmentIndex];
+        const startMinute = Number(target && target.startMinute);
+        const endMinute = Number(target && target.endMinute);
+        const durationMinutes = Number.isFinite(startMinute) && Number.isFinite(endMinute) && endMinute > startMinute
+            ? Math.floor(endMinute - startMinute)
+            : Math.max(
+                0,
+                Math.floor(Number(target && target.durationMinutes) || 0),
+                Math.floor((Number(target && target.seconds) || 0) / 60)
+            );
+        if (durationMinutes <= 0) {
+            slot.planActivities = slot.planActivities
+                .filter((item, index) => index !== segmentIndex)
+                .map(item => ({ ...item }));
+            return true;
+        }
+
+        const restSegment = {
+            kind: 'virtual-rest',
+            virtual: true,
+            label: '휴식',
+            startMinute: Number.isFinite(startMinute) ? Math.floor(startMinute) : 0,
+            durationMinutes,
+            endMinute: Number.isFinite(endMinute) && endMinute > startMinute
+                ? Math.floor(endMinute)
+                : (Number.isFinite(startMinute) ? Math.floor(startMinute) + durationMinutes : durationMinutes),
+        };
+
+        const nextActivities = slot.planActivities.map((item) => ({ ...item }));
+        nextActivities.splice(segmentIndex, 1, restSegment);
+
+        const mergedActivities = [];
+        nextActivities.forEach((item) => {
+            const last = mergedActivities[mergedActivities.length - 1];
+            const itemIsRest = Boolean(item && (item.virtual || item.kind === 'virtual-rest'));
+            const lastIsRest = Boolean(last && (last.virtual || last.kind === 'virtual-rest'));
+            if (itemIsRest && lastIsRest) {
+                const lastStart = Number(last.startMinute);
+                const lastEnd = Number(last.endMinute);
+                const itemStart = Number(item.startMinute);
+                const itemEnd = Number(item.endMinute);
+                const mergedStart = Number.isFinite(lastStart) && Number.isFinite(itemStart)
+                    ? Math.min(lastStart, itemStart)
+                    : (Number.isFinite(lastStart) ? lastStart : itemStart);
+                const mergedEnd = Number.isFinite(lastEnd) && Number.isFinite(itemEnd)
+                    ? Math.max(lastEnd, itemEnd)
+                    : (Number.isFinite(lastEnd) ? lastEnd : itemEnd);
+                last.startMinute = mergedStart;
+                last.endMinute = mergedEnd;
+                last.durationMinutes = Math.max(0, Math.floor(mergedEnd - mergedStart));
+                last.seconds = last.durationMinutes * 60;
+                return;
+            }
+            mergedActivities.push(item);
+        });
+
+        slot.planActivities = mergedActivities.map((item) => ({ ...item }));
         slot.planned = this.formatActivitiesSummary
-            ? this.formatActivitiesSummary(slot.planActivities)
+            ? this.formatActivitiesSummary(slot.planActivities.filter((item) => !(item && (item.virtual || item.kind === 'virtual-rest'))))
             : '';
         this.renderTimeEntries(true);
         if (typeof this.repositionOpenInlinePlanDropdown === 'function') {
@@ -7496,6 +7550,32 @@ class TimeTracker {
         this.calculateTotals();
         this.autoSave();
         return true;
+    }
+        deletePlanSegment(baseIndex, segmentIndex) {
+        const context = typeof this.resolvePlannedSlotContext === 'function'
+            ? this.resolvePlannedSlotContext(baseIndex)
+            : null;
+        const effectiveBaseIndex = context ? context.baseIndex : baseIndex;
+        const slot = this.timeSlots && this.timeSlots[effectiveBaseIndex];
+        if (!slot || !Array.isArray(slot.planActivities)) return false;
+        if (!Number.isInteger(segmentIndex) || segmentIndex < 0 || segmentIndex >= slot.planActivities.length) return false;
+        const totalSegments = slot.planActivities.length;
+        if (totalSegments <= 1) {
+            slot.planActivities = slot.planActivities
+                .filter((item, index) => index !== segmentIndex)
+                .map(item => ({ ...item }));
+            slot.planned = this.formatActivitiesSummary
+                ? this.formatActivitiesSummary(slot.planActivities)
+                : '';
+            this.renderTimeEntries(true);
+            if (typeof this.repositionOpenInlinePlanDropdown === 'function') {
+                this.repositionOpenInlinePlanDropdown();
+            }
+            this.calculateTotals();
+            this.autoSave();
+            return true;
+        }
+        return this.replacePlanSegmentWithRest(effectiveBaseIndex, segmentIndex);
     }
         removePlanSegmentResizePreviewLayer(grid) {
         if (!grid) return false;
