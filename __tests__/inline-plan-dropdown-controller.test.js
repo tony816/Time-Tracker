@@ -7,6 +7,7 @@ require('../controllers/controller-state-access');
 const controller = require('../controllers/inline-plan-dropdown-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
+const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
 const buildPlannedActivityOptionsWrapper = buildMethod(
     'buildPlannedActivityOptions(extraLabels = [])',
@@ -1867,7 +1868,8 @@ test('activity chipboard delete mode renders and toggles independently', () => {
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
-        const toggle = actions.children[0].children[0];
+        assert.equal(actions.children.length, 1);
+        const toggle = actions.children[0];
         assert.equal(toggle.className, 'activity-chip-delete-mode-toggle');
         assert.equal(toggle.getAttribute('aria-pressed'), 'false');
         assert.equal(toggle.textContent, '삭제 모드');
@@ -1879,13 +1881,26 @@ test('activity chipboard delete mode renders and toggles independently', () => {
         });
 
         assert.equal(ctx.inlinePlanChipDeleteMode, true);
-        const nextToggle = actions.children[0].children[0];
+        assert.equal(actions.children.length, 1);
+        const nextToggle = actions.children[0];
         assert.equal(nextToggle.getAttribute('aria-pressed'), 'true');
         assert.equal(nextToggle.textContent, '삭제 모드 ON');
         assert.equal(board.classList.contains('activity-chip-board-delete-mode'), true);
     } finally {
         globalThis.document = originalDocument;
     }
+});
+
+test('delete mode chipboard css keeps delete affordance inside chip bounds', () => {
+    const block = interactionsCss.match(/\.activity-chip-delete\s*\{[\s\S]*?\n\}/);
+    assert.ok(block);
+    assert.match(block[0], /position:\s*relative/);
+    assert.match(block[0], /flex:\s*0 0 24px/);
+    assert.match(block[0], /width:\s*24px/);
+    assert.match(block[0], /height:\s*24px/);
+    assert.match(block[0], /margin:\s*0 4px 0 2px;/);
+    assert.doesNotMatch(block[0], /top:\s*-\d+px/);
+    assert.doesNotMatch(block[0], /right:\s*-\d+px/);
 });
 
 test('delete mode chip delete button removes activity catalog entries without touching planned segments', () => {
@@ -1998,6 +2013,30 @@ test('delete mode chip delete button removes activity catalog entries without to
     } finally {
         globalThis.document = originalDocument;
     }
+});
+
+test('delete mode chip main click does not insert or select activity', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, mode: 'plan-segment-replace', segmentIndex: 0 },
+        plannedActivities: [
+            { id: 'fill', name: 'Fill', label: 'Fill', normalizedName: 'Fill', parentId: null, pinned: true, archived: false },
+        ],
+        ctx: {
+            inlinePlanChipDeleteMode: true,
+        },
+    });
+    let replaceCalls = 0;
+    harness.ctx.replacePlanSegmentActivity = () => {
+        replaceCalls += 1;
+        return true;
+    };
+    const chipButton = renderInlineSelectionChip(harness);
+
+    dispatchInlineSelectionClick(chipButton);
+
+    assert.equal(replaceCalls, 0);
+    assert.equal(harness.ctx.timeSlots[0].planActivities[0].label, 'A');
+    assert.equal(harness.ctx.inlinePlanTarget.mode, 'plan-segment-replace');
 });
 
 test('activity chip selection uses virtual rest inline target before selected segment replacement', () => {

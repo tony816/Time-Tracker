@@ -1656,6 +1656,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             labelButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                if (deleteModeEnabled) return;
                 const parent = item && item.parentId ? catalogGrouped.byId.get(item.parentId) : null;
                 applyActivityCatalogSelection.call(this, item, parent || null, { keepOpen: true });
             });
@@ -1796,8 +1797,6 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             { title: '전체 활동', key: 'all' },
         ];
         let renderedSectionCount = 0;
-        const deleteModeToggleWrap = document.createElement('div');
-        deleteModeToggleWrap.className = 'activity-chip-board-actions';
         const deleteModeToggle = document.createElement('button');
         deleteModeToggle.type = 'button';
         deleteModeToggle.className = 'activity-chip-delete-mode-toggle';
@@ -1810,8 +1809,10 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             setInlinePlanChipDeleteMode.call(this, nextValue);
             renderInlinePlanDropdownOptions.call(this);
         });
-        deleteModeToggleWrap.appendChild(deleteModeToggle);
-        if (actions) actions.appendChild(deleteModeToggleWrap);
+        if (actions) {
+            actions.innerHTML = '';
+            actions.appendChild(deleteModeToggle);
+        }
         sections.forEach((section) => {
             const items = sectionMap[section.key] || [];
             if (items.length === 0) return;
