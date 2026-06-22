@@ -7,6 +7,7 @@ require('../controllers/controller-state-access');
 const controller = require('../controllers/inline-plan-dropdown-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'inline-plan-dropdown-controller.js'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const interactionsCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
 
 const buildPlannedActivityOptionsWrapper = buildMethod(
@@ -147,6 +148,10 @@ test('inline-plan-dropdown-controller exports and global attach are available', 
             globalThis.TimeTrackerInlinePlanDropdownController.openInlinePlanDropdown,
             controller.openInlinePlanDropdown
         );
+});
+
+test('index html does not load the temporary inline plan chipboard patch module', () => {
+    assert.doesNotMatch(indexHtml, /inline-plan-chipboard-patch\.js/);
 });
 
 test('layoutInlinePlanAnchoredPanel keeps absolute panels on page coordinates', () => {
