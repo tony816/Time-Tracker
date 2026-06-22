@@ -1614,10 +1614,12 @@ test('desktop add button keeps inline dropdown open after typing a new activity'
     };
     const saves = [];
     const renderCalls = [];
+    let closed = false;
     const ctx = {
         inlinePlanDropdown: null,
         timeSlots: [{ planned: '', planActivities: [] }],
         plannedActivities: [],
+        inlinePlanChipUndoState: { plannedActivities: [{ id: 'old', label: 'Old' }] },
         normalizeActivityText(value) { return String(value || '').trim(); },
         addPlannedActivityOption(label) {
             this.plannedActivities.push({ id: label.toLowerCase(), label, name: label, normalizedName: label, parentId: null, archived: false, source: 'local' });
@@ -1626,6 +1628,7 @@ test('desktop add button keeps inline dropdown open after typing a new activity'
         isPlanSlotEmptyForInline() { return true; },
         applyInlinePlanSelection(label, options = {}) {
             this.lastApply = { label, options };
+            if (!options.keepOpen) this.closeInlinePlanDropdown();
         },
         renderInlinePlanDropdownOptions() {
             renderCalls.push('render');
@@ -1643,7 +1646,10 @@ test('desktop add button keeps inline dropdown open after typing a new activity'
         getPlannedRangeInfo() { return { startIndex: 0, endIndex: 0 }; },
         resolveInlinePlanAnchor(anchorEl) { return anchorEl; },
         isSameInlinePlanTarget() { return false; },
-        closeInlinePlanDropdown() {},
+        closeInlinePlanDropdown() {
+            closed = true;
+            this.inlinePlanDropdown = null;
+        },
         getPlanActivitiesForIndex() { return []; },
         isEventWithinCurrentInlinePlanRange() { return false; },
         scheduleInlinePlanViewportSync() {},
@@ -1681,10 +1687,17 @@ test('desktop add button keeps inline dropdown open after typing a new activity'
 
     try {
         controller.openInlinePlanDropdown.call(ctx, 0, { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }; } }, 0);
+        closed = false;
         addBtn.listeners.click({ preventDefault() {}, stopPropagation() {} });
 
+        assert.equal(closed, false);
         assert.equal(ctx.inlinePlanDropdown !== null, true);
         assert.equal(ctx.plannedActivities.some((item) => item.label === 'Focus'), true);
+        assert.equal(ctx.inlinePlanChipUndoState, null);
+        assert.deepEqual(ctx.lastApply, {
+            label: 'Focus',
+            options: { keepOpen: true, keepOpenOnMobile: true },
+        });
         assert.ok(renderCalls.length >= 1);
     } finally {
         globalThis.document = originalDocument;
@@ -1732,10 +1745,12 @@ test('mobile add button keeps sheet open after typing a new activity', () => {
         addEventListener() {},
         classList: { add() {}, remove() {}, contains() { return false; } },
     };
+    let closed = false;
     const ctx = {
         inlinePlanDropdown: null,
         timeSlots: [{ planned: '', planActivities: [] }],
         plannedActivities: [],
+        inlinePlanChipUndoState: { plannedActivities: [{ id: 'old', label: 'Old' }] },
         normalizeActivityText(value) { return String(value || '').trim(); },
         addPlannedActivityOption(label) {
             this.plannedActivities.push({ id: label.toLowerCase(), label, name: label, normalizedName: label, parentId: null, archived: false, source: 'local' });
@@ -1743,6 +1758,7 @@ test('mobile add button keeps sheet open after typing a new activity', () => {
         isPlanSlotEmptyForInline() { return true; },
         applyInlinePlanSelection(label, options = {}) {
             this.lastApply = { label, options };
+            if (!options.keepOpen || !options.keepOpenOnMobile) this.closeInlinePlanDropdown();
         },
         renderInlinePlanDropdownOptions() {},
         getActivePlanSource() { return 'local'; },
@@ -1758,7 +1774,10 @@ test('mobile add button keeps sheet open after typing a new activity', () => {
         getPlannedRangeInfo() { return { startIndex: 0, endIndex: 0 }; },
         resolveInlinePlanAnchor(anchorEl) { return anchorEl; },
         isSameInlinePlanTarget() { return false; },
-        closeInlinePlanDropdown() {},
+        closeInlinePlanDropdown() {
+            closed = true;
+            this.inlinePlanDropdown = null;
+        },
         getPlanActivitiesForIndex() { return []; },
         isEventWithinCurrentInlinePlanRange() { return false; },
         scheduleInlinePlanViewportSync() {},
@@ -1796,10 +1815,140 @@ test('mobile add button keeps sheet open after typing a new activity', () => {
 
     try {
         controller.openInlinePlanDropdown.call(ctx, 0, { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }; } }, 0);
+        closed = false;
         addBtn.listeners.click({ preventDefault() {}, stopPropagation() {} });
 
+        assert.equal(closed, false);
         assert.equal(ctx.inlinePlanDropdown !== null, true);
         assert.equal(ctx.plannedActivities.some((item) => item.label === 'Focus'), true);
+        assert.equal(ctx.inlinePlanChipUndoState, null);
+        assert.deepEqual(ctx.lastApply, {
+            label: 'Focus',
+            options: { keepOpen: true, keepOpenOnMobile: true },
+        });
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('segment add button keeps inline dropdown open after typing a new activity', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const input = {
+        value: 'Segment Focus',
+        addEventListener() {},
+        focus() {},
+        select() {},
+    };
+    const addBtn = {
+        listeners: {},
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
+        },
+    };
+    const board = { innerHTML: '', appendChild() {}, querySelector() { return null; }, querySelectorAll() { return []; } };
+    const dropdown = {
+        className: '',
+        style: {},
+        parentNode: { removeChild() {} },
+        addEventListener() {},
+        contains() { return false; },
+        querySelector(selector) {
+            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-add-btn') return addBtn;
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+        querySelectorAll() { return []; },
+    };
+    const childLayer = { parentNode: { removeChild() {} }, style: {} };
+    const replaceCalls = [];
+    const renderTimeEntryArgs = [];
+    let closed = false;
+    const ctx = {
+        inlinePlanDropdown: null,
+        timeSlots: [{ planned: '', planActivities: [] }],
+        plannedActivities: [],
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        addPlannedActivityOption(label) {
+            this.plannedActivities.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label, name: label, normalizedName: label, parentId: null, archived: false, source: 'local' });
+        },
+        replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem) {
+            replaceCalls.push({ baseIndex, segmentIndex, label: activityItem.label, id: activityItem.id });
+            return true;
+        },
+        renderTimeEntries(keepOpen) {
+            renderTimeEntryArgs.push(keepOpen);
+        },
+        renderInlinePlanDropdownOptions() {},
+        calculateTotals() {},
+        autoSave() {},
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return false; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlannedRangeInfo() { return { startIndex: 0, endIndex: 0, baseIndex: 0 }; },
+        resolveInlinePlanAnchor(anchorEl) { return anchorEl; },
+        isSameInlinePlanTarget() { return false; },
+        closeInlinePlanDropdown() {
+            closed = true;
+            this.inlinePlanDropdown = null;
+        },
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+        clearSelection() {},
+        inlinePlanChildPopoverLayer: null,
+    };
+    let createdDivs = 0;
+    globalThis.document = {
+        createElement(tagName) {
+            if (tagName === 'div') {
+                createdDivs += 1;
+                if (createdDivs === 1) return dropdown;
+                if (createdDivs === 2) return childLayer;
+            }
+            return createInlineSelectionNode(tagName);
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {}, visualViewport: null };
+    globalThis.requestAnimationFrame = (cb) => cb();
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 0, { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }; } }, 0, {
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            baseIndex: 0,
+        });
+        closed = false;
+        addBtn.listeners.click({ preventDefault() {}, stopPropagation() {} });
+
+        assert.equal(closed, false);
+        assert.equal(ctx.inlinePlanDropdown !== null, true);
+        assert.deepEqual(replaceCalls, [{ baseIndex: 0, segmentIndex: 1, label: 'Segment Focus', id: 'segment-focus' }]);
+        assert.deepEqual(renderTimeEntryArgs, [true]);
     } finally {
         globalThis.document = originalDocument;
         globalThis.window = originalWindow;
@@ -2499,8 +2648,8 @@ test('chipboard edit mode shows guidance and keeps duplicate sections non-dragga
             (node.children || []).forEach(collectNotes);
         };
         collectNotes(board);
-        assert.ok(notes.length >= 3);
-        assert.ok(notes.every((node) => node.textContent === '정렬은 전체 목록에서 가능'));
+        assert.equal(notes.length, 1);
+        assert.equal(notes[0].textContent, '검색/고정/최근 섹션은 선택용입니다. 정렬은 전체 활동군에서 가능합니다.');
 
         ctx.inlinePlanChipEditMode = false;
         controller.renderInlinePlanDropdownOptions.call(ctx);
@@ -2592,6 +2741,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         plannedActivities: [
             { id: 'work', label: 'Work', name: 'Work', normalizedName: 'Work', parentId: null, archived: false, source: 'local' },
             { id: 'study', label: 'Study', name: 'Study', normalizedName: 'Study', parentId: null, archived: false, source: 'local' },
+            { id: 'review', label: 'Review', name: 'Review', normalizedName: 'Review', parentId: null, archived: false, source: 'local' },
         ],
         normalizeActivityText(value) {
             return String(value || '').trim();
@@ -2643,10 +2793,12 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
 
         const sourceChip = findNode(board, (node) => node.dataset && node.dataset.activityId === 'work');
         const targetChip = findNode(board, (node) => node.dataset && node.dataset.activityId === 'study');
+        const autoTargetChip = findNode(board, (node) => node.dataset && node.dataset.activityId === 'review');
         const dragHandle = findNode(sourceChip, (node) => node.className === 'activity-chip-drag-handle');
         assert.ok(dragHandle);
         sourceChip.ownerDocument = documentStub;
         targetChip.ownerDocument = documentStub;
+        autoTargetChip.ownerDocument = documentStub;
         dragHandle.ownerDocument = documentStub;
         board.ownerDocument = documentStub;
         board.scrollTop = 80;
@@ -2693,6 +2845,19 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
             width: 48,
             height: 38,
         });
+        autoTargetChip.closest = (selector) => {
+            if (selector === '.activity-chip[data-activity-id]') return autoTargetChip;
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        };
+        autoTargetChip.getBoundingClientRect = () => ({
+            left: 196,
+            top: 180,
+            right: 260,
+            bottom: 218,
+            width: 64,
+            height: 38,
+        });
 
         dragHandle.dispatchEvent({
             type: 'pointerdown',
@@ -2709,6 +2874,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.equal(ctx.inlinePlanChipDragPreview || null, null);
         assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
         assert.equal(ctx.inlinePlanChipDragState.active, false);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), true);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
 
@@ -2726,6 +2892,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.equal(ctx.inlinePlanChipDragPreview || null, null);
         assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
         assert.equal(ctx.inlinePlanChipDragState.active, false);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), true);
 
         documentListeners.pointermove({
             type: 'pointermove',
@@ -2745,6 +2912,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.equal(ctx.inlinePlanChipDragPreview.style.height, '38px');
         assert.equal(collectNodeText(ctx.inlinePlanChipDragPreview).includes('Work'), true);
         assert.match(ctx.inlinePlanChipDragPreview.style.transform, /translate3d\(/);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), true);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), true);
         assert.equal(targetChip.classList.contains('activity-chip-drop-nest'), true);
@@ -2755,6 +2923,8 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*pointer-events:\s*none;/);
         assert.match(interactionsCss, /\.activity-chip-drag-preview\s*\{[\s\S]*z-index:\s*2147483647;/);
         assert.match(interactionsCss, /\.activity-chip-drop-label\s*\{[\s\S]*pointer-events:\s*none;/);
+        assert.match(interactionsCss, /\.activity-chip-drop-label\s*\{[\s\S]*top:\s*3px;/);
+        assert.match(interactionsCss, /\.activity-chip-drag-pending\s*\{[\s\S]*border-color:\s*#93c5fd;/);
         assert.match(interactionsCss, /\.activity-chip-dragging\s*\{[\s\S]*opacity:\s*0\.72;/);
 
         const firstTransform = ctx.inlinePlanChipDragPreview.style.transform;
@@ -2814,8 +2984,12 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         });
         assert.equal(typeof rafCallback, 'function');
         const beforeScrollTop = board.scrollTop;
+        documentStub._dropTarget = autoTargetChip;
         rafCallback();
         assert.ok(board.scrollTop > beforeScrollTop);
+        assert.equal(ctx.inlinePlanChipDragState.intent.targetId, 'review');
+        assert.equal(autoTargetChip.classList.contains('activity-chip-drop-nest'), true);
+        assert.equal(autoTargetChip.dataset.chipDropIntent, 'nest');
 
         documentStub._dropTarget = sourceChip;
         documentListeners.pointermove({
@@ -2841,6 +3015,7 @@ test('chipboard edit-mode drag creates preview and applies reorder on pointerup'
         assert.equal(ctx.inlinePlanChipDragState, null);
         assert.equal(ctx.inlinePlanChipDragPreview, null);
         assert.equal(body.querySelector('.activity-chip-drag-preview'), null);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
         assert.equal(sourceChip.classList.contains('activity-chip-drop-invalid'), false);
         assert.equal(targetChip.dataset.chipDropLabel, undefined);
@@ -2977,6 +3152,22 @@ test('dragging a chip between chips reorders persisted board order', () => {
     assert.equal(saves.length, 1);
 });
 
+test('dropping a chip where it already is does not save or create undo', () => {
+    const { ctx, saves } = createChipboardDropHarness();
+
+    const result = controller.applyActivityChipboardDrop.call(ctx, 'a', { type: 'reorder', placement: 'before', targetId: 'b' });
+
+    assert.equal(result.changed, false);
+    assert.equal(result.status, 'no-op');
+    assert.equal(saves.length, 0);
+    assert.equal(ctx.inlinePlanChipUndoState || null, null);
+    assert.deepEqual(ctx.plannedActivities.map((item) => [item.id, item.parentId || null, item.boardOrder]), [
+        ['a', null, 0],
+        ['b', null, 1],
+        ['c', null, 2],
+    ]);
+});
+
 test('dragging a chip onto another chip creates a parent-child relationship', () => {
     const { ctx } = createChipboardDropHarness();
 
@@ -3047,7 +3238,7 @@ test('chipboard drop undo restores the previous plannedActivities and disappears
         controller.renderInlinePlanDropdownOptions.call(ctx);
 
         assert.deepEqual(ctx.plannedActivities.filter((item) => !item.parentId).map((item) => item.id), ['c', 'a', 'b']);
-        const undo = findNode(actions, (node) => node.className === 'activity-chip-undo-toast');
+        const undo = findNode(board, (node) => node.className === 'activity-chip-undo-toast');
         assert.ok(undo);
         assert.equal(undo.textContent, '이동됨 · 되돌리기');
 
@@ -3061,7 +3252,7 @@ test('chipboard drop undo restores the previous plannedActivities and disappears
         assert.equal(saves.length, 2);
         assert.equal(ctx.inlinePlanDropdown, dropdown);
         assert.equal(ctx.inlinePlanChipUndoState, null);
-        assert.equal(findNode(actions, (node) => node.className === 'activity-chip-undo-toast'), null);
+        assert.equal(findNode(board, (node) => node.className === 'activity-chip-undo-toast'), null);
     } finally {
         controller.restoreInlinePlanChipUndoState.call(ctx);
         globalThis.document = originalDocument;

@@ -1265,6 +1265,17 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         });
     }
 
+    function getActivityChipboardStateSignature(items) {
+        return JSON.stringify((Array.isArray(items) ? items : [])
+            .filter((item) => item && normalizeActivityBoardId(item.id))
+            .map((item) => ({
+                id: normalizeActivityBoardId(item.id),
+                parentId: getActivityBoardParentId(item) || '',
+                boardOrder: Number.isFinite(item.boardOrder) ? Math.max(0, Math.floor(Number(item.boardOrder))) : null,
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)));
+    }
+
     function normalizeActivityChipboardDropIntent(intent = {}) {
         const rawType = String(intent.type || intent.intent || '').trim();
         const type = rawType === 'nest' ? 'nest' : 'reorder';
@@ -1304,6 +1315,7 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         const validation = validateActivityChipboardDrop.call(this, normalizedSourceId, normalizedIntent);
         if (!validation.valid) return { changed: false, status: validation.status };
         const undoSnapshot = cloneInlinePlanPlannedActivitiesSnapshot(activities);
+        const beforeSignature = getActivityChipboardStateSignature(undoSnapshot);
 
         const source = getActivityBoardItemById(activities, normalizedSourceId);
         const target = getActivityBoardItemById(activities, normalizedIntent.targetId);
@@ -1329,6 +1341,15 @@ function areActivityListsEquivalent(leftItems = [], rightItems = []) {
         }
         nextSiblings.splice(insertIndex, 0, source);
         assignActivityBoardSiblingOrder(nextSiblings);
+
+        const afterSignature = getActivityChipboardStateSignature(activities);
+        if (afterSignature === beforeSignature) {
+            return {
+                changed: false,
+                status: 'no-op',
+                parentId: nextParentId || null,
+            };
+        }
 
         if (typeof this.dedupeAndSortPlannedActivities === 'function') {
             this.dedupeAndSortPlannedActivities();
@@ -1508,7 +1529,13 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
     }
 
     function cloneInlinePlanPlannedActivitiesSnapshot(items) {
-        return (Array.isArray(items) ? items : []).map((item) =>
+        const source = Array.isArray(items) ? items : [];
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(source);
+            } catch (_) {}
+        }
+        return source.map((item) =>
             item && typeof item === 'object' ? { ...item } : item
         );
     }
@@ -1577,6 +1604,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'activity-chip-undo-toast';
+        button.dataset.inlineChipUndo = 'true';
         button.textContent = '이동됨 · 되돌리기';
         button.addEventListener('click', (event) => {
             if (event && typeof event.preventDefault === 'function') event.preventDefault();
@@ -1596,13 +1624,14 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                 node.parentNode.removeChild(node);
             }
         });
-        rootEl.querySelectorAll('.activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid, .activity-chip-dragging').forEach((node) => {
+        rootEl.querySelectorAll('.activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid, .activity-chip-drag-pending, .activity-chip-dragging').forEach((node) => {
             removeInlinePlanClass(
                 node,
                 'activity-chip-drop-before',
                 'activity-chip-drop-after',
                 'activity-chip-drop-nest',
                 'activity-chip-drop-invalid',
+                'activity-chip-drag-pending',
                 'activity-chip-dragging'
             );
             if (node && node.dataset) {
@@ -1651,7 +1680,8 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                 'activity-chip-drop-before',
                 'activity-chip-drop-after',
                 'activity-chip-drop-nest',
-                'activity-chip-drop-invalid'
+                'activity-chip-drop-invalid',
+                'activity-chip-drag-pending'
             );
             addInlinePlanClass(chipPreview, 'activity-chip-drag-preview-chip');
             if (typeof chipPreview.removeAttribute === 'function') chipPreview.removeAttribute('id');
@@ -1717,6 +1747,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         state.active = true;
         this.inlinePlanChipDragPreview = createInlinePlanChipDragPreview.call(this, state.sourceChip);
         updateInlinePlanChipDragPreview.call(this, state, event);
+        if (state.sourceChip) removeInlinePlanClass(state.sourceChip, 'activity-chip-drag-pending');
         if (state.sourceChip) addInlinePlanClass(state.sourceChip, 'activity-chip-dragging');
         if (state.board) addInlinePlanClass(state.board, 'activity-chip-board-drag-active');
         return Boolean(this.inlinePlanChipDragPreview);
@@ -1750,6 +1781,22 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         }
         badge.className = `activity-chip-drop-label activity-chip-drop-label-${feedbackName}`;
         badge.textContent = label;
+    }
+
+    function refreshInlinePlanChipDropIntent(state) {
+        if (!state || !state.active) return null;
+        const clientX = Number(state.lastClientX);
+        const clientY = Number(state.lastClientY);
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+        const eventLike = { clientX, clientY };
+        const intent = resolveInlinePlanChipDropIntent.call(this, eventLike, state);
+        const validation = intent
+            ? validateActivityChipboardDrop.call(this, state.sourceId, intent)
+            : { valid: false, status: 'missing-target' };
+        state.intent = intent;
+        state.validation = validation;
+        applyInlinePlanChipDropFeedback.call(this, intent, validation, state);
+        return { intent, validation };
     }
 
     function getInlinePlanChipAutoScrollStep(board, clientY) {
@@ -1809,6 +1856,9 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             const step = getInlinePlanChipAutoScrollStep(state.board, state.autoScrollClientY);
             if (step.after !== step.before && state.board) {
                 state.board.scrollTop = step.after;
+                if (state.context) {
+                    refreshInlinePlanChipDropIntent.call(state.context, state);
+                }
             }
             if (state.active && step.delta !== 0 && step.after !== step.before) {
                 scheduleInlinePlanChipAutoScrollFrame(state);
@@ -1836,6 +1886,8 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
     function updateInlinePlanChipAutoScroll(state, event) {
         if (!state || !state.active || !state.board) return;
         state.autoScrollClientY = Number(event && event.clientY);
+        state.lastClientX = Number(event && event.clientX);
+        state.lastClientY = Number(event && event.clientY);
         const step = getInlinePlanChipAutoScrollStep(state.board, state.autoScrollClientY);
         if (step.delta === 0 || step.after === step.before) {
             cancelInlinePlanChipAutoScrollFrame(state);
@@ -1948,11 +2000,14 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             dragOffsetY,
             startX: Number.isFinite(eventClientX) ? eventClientX : 0,
             startY: Number.isFinite(eventClientY) ? eventClientY : 0,
+            lastClientX: Number.isFinite(eventClientX) ? eventClientX : 0,
+            lastClientY: Number.isFinite(eventClientY) ? eventClientY : 0,
             active: false,
             pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
             captureTarget: target,
             document: doc,
             window: win,
+            context: this,
             intent: null,
             validation: null,
             autoScrollClientY: Number.isFinite(eventClientY) ? eventClientY : 0,
@@ -1965,6 +2020,8 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         };
         state.moveHandler = (moveEvent) => {
             if (state.pointerId !== null && Number.isFinite(moveEvent.pointerId) && moveEvent.pointerId !== state.pointerId) return;
+            state.lastClientX = Number(moveEvent.clientX);
+            state.lastClientY = Number(moveEvent.clientY);
             if (!state.active) {
                 if (getInlinePlanChipDragDistance(state, moveEvent) < INLINE_PLAN_CHIP_DRAG_THRESHOLD_PX) {
                     if (moveEvent.cancelable) moveEvent.preventDefault();
@@ -1974,19 +2031,18 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                 activateInlinePlanChipDragState.call(this, state, moveEvent);
             }
             updateInlinePlanChipDragPreview.call(this, state, moveEvent);
-            const intent = resolveInlinePlanChipDropIntent.call(this, moveEvent, state);
-            const validation = intent
-                ? validateActivityChipboardDrop.call(this, state.sourceId, intent)
-                : { valid: false, status: 'missing-target' };
-            state.intent = intent;
-            state.validation = validation;
-            applyInlinePlanChipDropFeedback.call(this, intent, validation, state);
+            refreshInlinePlanChipDropIntent.call(this, state);
             updateInlinePlanChipAutoScroll(state, moveEvent);
             if (moveEvent.cancelable) moveEvent.preventDefault();
             if (typeof moveEvent.stopPropagation === 'function') moveEvent.stopPropagation();
         };
         state.endHandler = (endEvent) => {
             if (state.pointerId !== null && Number.isFinite(endEvent.pointerId) && endEvent.pointerId !== state.pointerId) return;
+            const endClientX = Number(endEvent && endEvent.clientX);
+            const endClientY = Number(endEvent && endEvent.clientY);
+            if (Number.isFinite(endClientX)) state.lastClientX = endClientX;
+            if (Number.isFinite(endClientY)) state.lastClientY = endClientY;
+            if (state.active) refreshInlinePlanChipDropIntent.call(this, state);
             const finalIntent = state.intent;
             const finalValidation = state.validation;
             const wasActive = state.active;
@@ -2020,6 +2076,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { target.setPointerCapture(event.pointerId); } catch (_) {}
         }
         this.inlinePlanChipDragState = state;
+        if (sourceChip) addInlinePlanClass(sourceChip, 'activity-chip-drag-pending');
         if (event.cancelable) event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
     }
@@ -2192,7 +2249,16 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             this.renderTimeEntries(keepOpenAfterSelection);
             this.calculateTotals();
             this.autoSave();
-            this.closeInlinePlanDropdown();
+            if (keepOpenAfterSelection && options && options.keepOpenSegmentReplace) {
+                if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+                    this.renderInlinePlanDropdownOptions();
+                }
+                if (typeof this.positionInlinePlanDropdown === 'function') {
+                    this.positionInlinePlanDropdown();
+                }
+            } else {
+                this.closeInlinePlanDropdown();
+            }
             return;
         }
 
@@ -2565,11 +2631,16 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         };
 
         board.innerHTML = '';
+        renderInlinePlanChipUndoControl.call(this, board);
         if (editModeEnabled && !deleteModeEnabled) {
             const hint = document.createElement('div');
             hint.className = 'activity-chip-edit-hint';
             hint.textContent = ':: 핸들을 드래그해 순서 변경 또는 하위활동으로 이동';
             board.appendChild(hint);
+            const note = document.createElement('div');
+            note.className = 'activity-chip-board-note';
+            note.textContent = '검색/고정/최근 섹션은 선택용입니다. 정렬은 전체 활동군에서 가능합니다.';
+            board.appendChild(note);
         }
         const sections = [
             { title: '검색 결과', key: 'search' },
@@ -2606,7 +2677,6 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             actions.innerHTML = '';
             actions.appendChild(editModeToggle);
             actions.appendChild(deleteModeToggle);
-            renderInlinePlanChipUndoControl.call(this, actions);
         }
         sections.forEach((section) => {
             const items = sectionMap[section.key] || [];
@@ -2619,12 +2689,6 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             heading.className = 'activity-chip-board-title';
             heading.textContent = section.title;
             wrap.appendChild(heading);
-            if (editModeEnabled && !deleteModeEnabled && !isPrimaryActivityChipboardSection(section.key)) {
-                const note = document.createElement('div');
-                note.className = 'activity-chip-board-note';
-                note.textContent = '정렬은 전체 목록에서 가능';
-                wrap.appendChild(note);
-            }
             const row = document.createElement('div');
             row.className = 'activity-chip-row';
             items.forEach((item) => {
@@ -3369,6 +3433,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         const addHandler = (options = {}) => {
             const val = this.normalizeActivityText ? this.normalizeActivityText(input.value) : String(input.value || '').trim();
             if (!val) return;
+            clearInlinePlanChipUndoState.call(this);
             this.addPlannedActivityOption(val, false);
             input.value = '';
             this.currentPlanSource = 'local';
@@ -3377,7 +3442,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             if (target && target.mode === 'plan-segment-replace') {
                 const activityItem = (this.plannedActivities || []).find((item) => getCatalogItemLabel.call(this, item) === val)
                     || { label: val, name: val, activityText: val };
-                applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: false });
+                applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: true, keepOpenOnMobile: true, keepOpenSegmentReplace: true });
                 return;
             }
             const startIndex = target && Number.isInteger(target.startIndex) ? target.startIndex : 0;
@@ -3392,7 +3457,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 }
             }
             if (canAutoApply) {
-                const applyOptions = { ...options, keepOpen: false };
+                const applyOptions = { ...options, keepOpen: true, keepOpenOnMobile: true };
                 this.applyInlinePlanSelection(val, applyOptions);
             }
         };

@@ -96,8 +96,8 @@ test('merged click capture closes dropdown when clicking planned column inside c
     assert.match(fieldInteractionControllerSource, /if \(inPlannedColumn\) \{\s+e\.preventDefault\(\);\s+e\.stopPropagation\(\);\s+closeSameInlinePlanTarget\(this\);\s+return;\s+\}/);
 });
 
-test('inline add auto-apply on empty slots forces dropdown close', () => {
-    assert.match(controllerSource, /if \(canAutoApply\) \{\s+const applyOptions = \{ \.\.\.options, keepOpen: false \};\s+this\.applyInlinePlanSelection\(val, applyOptions\);\s+\}/);
+test('inline add auto-apply on empty slots keeps the dropdown open', () => {
+    assert.match(controllerSource, /if \(canAutoApply\) \{\s+const applyOptions = \{ \.\.\.options, keepOpen: true, keepOpenOnMobile: true \};\s+this\.applyInlinePlanSelection\(val, applyOptions\);\s+\}/);
 });
 
 test('planned selection overlay click closes same-range inline dropdown on mouseup', () => {

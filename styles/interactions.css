@@ -979,14 +979,19 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 }
 
 .activity-chip-undo-toast {
-  height: 28px;
-  padding: 0 10px;
+  width: 100%;
+  display: block;
+  box-sizing: border-box;
+  min-height: 30px;
+  margin: 0 0 8px;
+  padding: 5px 10px;
   border: 1px solid #bfdbfe;
-  border-radius: 999px;
+  border-radius: 8px;
   background: #eff6ff;
   color: #1d4ed8;
   font-size: 12px;
   font-weight: 800;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -1100,6 +1105,16 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   cursor: grabbing;
 }
 
+.activity-chip-drag-pending {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.activity-chip-drag-pending .activity-chip-drag-handle {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
 .activity-chip-board-drag-active {
   cursor: grabbing;
   overscroll-behavior: contain;
@@ -1199,11 +1214,12 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 
 .activity-chip-drop-label {
   position: absolute;
-  top: -20px;
+  top: 3px;
   left: 50%;
   z-index: 5;
   transform: translateX(-50%);
   padding: 2px 7px;
+  max-width: calc(100% - 8px);
   border-radius: 999px;
   background: #1d4ed8;
   color: #ffffff;
@@ -1211,19 +1227,21 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   font-weight: 900;
   line-height: 1.25;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   box-shadow: 0 8px 16px rgba(15, 23, 42, 0.14);
 }
 
 .activity-chip-drop-before .activity-chip-drop-label {
-  left: 0;
-  transform: translateX(-8px);
+  left: 4px;
+  transform: none;
 }
 
 .activity-chip-drop-after .activity-chip-drop-label {
-  right: 0;
+  right: 4px;
   left: auto;
-  transform: translateX(8px);
+  transform: none;
 }
 
 .activity-chip-drop-label-invalid {
