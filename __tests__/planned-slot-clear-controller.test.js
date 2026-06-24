@@ -12,11 +12,15 @@ const wrapWithSplitVisualization = buildMethod(
     'wrapWithSplitVisualization(type, index, content)',
     '(type, index, content)'
 );
+const createMergedField = buildMethod(
+    'createMergedField(mergeKey, type, index, value)',
+    '(mergeKey, type, index, value)'
+);
 const buildSplitVisualization = buildMethod(
     'buildSplitVisualization(type, index)',
     '(type, index)'
 );
-const PLANNED_SLOT_HOST_SELECTOR = '.split-cell-wrapper.split-type-planned.planned-slot-clear-target';
+const PLANNED_SLOT_HOST_SELECTOR = '[data-planned-slot-host="true"][data-planned-slot-clear-target="true"]';
 
 function createContext(overrides = {}) {
     const slot = {
@@ -47,6 +51,7 @@ function createContext(overrides = {}) {
         autoSave() { this.saveCalls += 1; },
         showNotification(message) { this.notifications.push(message); },
         normalizeActivityText(value) { return String(value || '').trim(); },
+        normalizeMergeKey(value) { return value; },
         resolvePlannedSlotContext(index) {
             const mergeKey = this.findMergeKey ? this.findMergeKey('planned', index) : null;
             return {
@@ -97,6 +102,22 @@ function createContext(overrides = {}) {
     };
 }
 
+function getOpenDivClassStackAt(html, offset) {
+    const stack = [];
+    const pattern = /<\/?div\b[^>]*>/g;
+    let match;
+    while ((match = pattern.exec(html)) && match.index < offset) {
+        const tag = match[0];
+        if (tag.startsWith('</')) {
+            stack.pop();
+            continue;
+        }
+        const classMatch = tag.match(/\bclass="([^"]*)"/);
+        stack.push(classMatch ? classMatch[1] : '');
+    }
+    return stack;
+}
+
 test('planned slot clear activation button lives inside the sheet title cell', () => {
     const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     assert.match(
@@ -118,6 +139,7 @@ test('clear mode renders a host-level button for non-empty planned slots only', 
     const ctx = createContext();
     const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
     assert.match(html, /planned-slot-clear-target/);
+    assert.match(html, /data-planned-slot-host="true"/);
     assert.match(html, /data-planned-slot-clear-target="true"/);
     assert.match(html, /class="planned-slot-clear-overlay"/);
     assert.match(html, /class="planned-slot-clear-btn"/);
@@ -156,8 +178,61 @@ test('clear mode button stays on the planned slot host even with split and virtu
     const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
     assert.match(html, /planned-slot-clear-btn/);
     assert.match(html, /planned-slot-clear-target/);
+    assert.match(html, /data-planned-slot-host="true"/);
     assert.match(html, /planned-slot-clear-overlay/);
     assert.doesNotMatch(html, /split-grid-segment[^>]*planned-slot-clear-btn/);
+});
+
+test('slot clear overlay is a child of the planned slot host, not a split segment', () => {
+    const ctx = createContext();
+    const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
+    const overlayIndex = html.indexOf('class="planned-slot-clear-overlay"');
+    const splitGridIndex = html.indexOf('class="split-grid"');
+    const firstSegmentIndex = html.indexOf('class="split-grid-segment');
+    assert.ok(overlayIndex > splitGridIndex);
+    assert.ok(firstSegmentIndex > splitGridIndex);
+    assert.ok(overlayIndex > firstSegmentIndex);
+    const hostOpen = html.match(/<div class="split-cell-wrapper[^>]*data-planned-slot-host="true"[^>]*>/);
+    assert.ok(hostOpen);
+    const stack = getOpenDivClassStackAt(html, overlayIndex);
+    assert.ok(stack.some((className) => className.includes('split-cell-wrapper')));
+    assert.equal(stack.some((className) => className.includes('split-grid-segment')), false);
+});
+
+test('merged planned slot renders one clear overlay at the merged slot host', () => {
+    const ctx = createContext({
+        mergedFields: [['planned-0-1', 'Merged focus']],
+    });
+    ctx.timeSlots.push({
+        time: '10',
+        planned: '',
+        planActivities: [],
+        planTitle: '',
+        planTitleBandOn: false,
+        planSegmentTimers: {},
+    });
+    ctx.resolvePlannedSlotContext = function resolvePlannedSlotContext(index) {
+        return {
+            clickedIndex: index,
+            baseIndex: 0,
+            rangeStart: 0,
+            rangeEnd: 1,
+            mergeKey: 'planned-0-1',
+            isMerged: true,
+            slotCount: 2,
+            blockMinutes: 120,
+        };
+    };
+
+    const mainHtml = createMergedField.call(ctx, 'planned-0-1', 'planned', 0, 'Merged focus');
+    const secondaryHtml = createMergedField.call(ctx, 'planned-0-1', 'planned', 1, '');
+
+    assert.match(mainHtml, /planned-merged-main-container planned-slot-clear-target/);
+    assert.match(mainHtml, /data-planned-slot-host="true"/);
+    assert.match(mainHtml, /data-planned-slot-clear-target="true"/);
+    assert.equal((mainHtml.match(/planned-slot-clear-overlay/g) || []).length, 1);
+    assert.equal((mainHtml.match(/planned-slot-clear-btn/g) || []).length, 1);
+    assert.doesNotMatch(secondaryHtml, /planned-slot-clear-btn/);
 });
 
 test('clear button sits above segment content in the stacking order', () => {
@@ -220,7 +295,7 @@ test('clearing an empty slot is a no-op and leaves the clear button hidden', () 
 function createFakeClearButton({ buttonIndex = '0', hostIndex = '0' } = {}) {
     const listeners = new Map();
     const host = {
-        dataset: { index: hostIndex, plannedSlotClearTarget: 'true' },
+        dataset: { index: hostIndex, plannedSlotHost: 'true', plannedSlotClearTarget: 'true' },
         className: 'split-cell-wrapper split-type-planned planned-slot-clear-target',
     };
     const overlay = {

@@ -503,6 +503,10 @@ class TimeTracker {
         return globalThis.TimeEntryRenderController.renderTimeEntries.call(this, preserveInlineDropdown);
     }
 
+        renderTimeEntriesSafely(reason = 'unspecified', options = {}) {
+        return globalThis.TimeEntryRenderController.renderTimeEntriesSafely.call(this, reason, options);
+    }
+
     initPlannedSlotMoveModeControls() {
         return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotMoveModeControls.call(this);
     }
@@ -9538,10 +9542,19 @@ class TimeTracker {
         }
 
         if (index === start) {
-            return `<div class="planned-merged-main-container"
+            const clearButtonHtml = typeof this.createPlannedSlotClearButtonHtml === 'function'
+                ? this.createPlannedSlotClearButtonHtml(start)
+                : '';
+            const clearTargetClass = clearButtonHtml ? ' planned-slot-clear-target' : '';
+            const clearTargetAttr = clearButtonHtml ? ' data-planned-slot-clear-target="true"' : '';
+            const clearOverlayHtml = clearButtonHtml
+                ? `<div class="planned-slot-clear-overlay">${clearButtonHtml}</div>`
+                : '';
+            return `<div class="planned-merged-main-container${clearTargetClass}"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
-                           data-merge-end="${end}">
+                           data-merge-end="${end}"
+                           data-planned-slot-host="true"${clearTargetAttr}>
                         <div class="planned-merged-overlay">
                             <input type="text" class="input-field ${type}-input merged-field merged-main"
                                    data-index="${index}"
@@ -9552,6 +9565,7 @@ class TimeTracker {
                                value="${safeMergeValue}"
                                placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
                         </div>
+                        ${clearOverlayHtml}
                     </div>`;
         }
 

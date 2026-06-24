@@ -13,6 +13,119 @@
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function buildTimeEntryRenderController(root) {
 
+function getControllerStateAccess() {
+        return (root && root.TimeTrackerControllerStateAccess && typeof root.TimeTrackerControllerStateAccess === 'object')
+            ? root.TimeTrackerControllerStateAccess
+            : null;
+    }
+
+function getInlinePlanTargetState(ctx) {
+        const access = getControllerStateAccess();
+        if (access && typeof access.getInlinePlanTarget === 'function') {
+            return access.getInlinePlanTarget.call(ctx);
+        }
+        return ctx && ctx.inlinePlanTarget ? ctx.inlinePlanTarget : null;
+    }
+
+function setInlinePlanAnchorState(ctx, anchor) {
+        const access = getControllerStateAccess();
+        if (access && typeof access.setInlinePlanAnchor === 'function') {
+            return access.setInlinePlanAnchor.call(ctx, anchor);
+        }
+        const target = getInlinePlanTargetState(ctx);
+        if (!target) return null;
+        target.anchor = anchor || null;
+        ctx.inlinePlanAnchor = target.anchor;
+        return target.anchor;
+    }
+
+function resolveRenderInlinePlanAnchor(ctx, target) {
+        if (!ctx || !target) return null;
+        const fallbackIndex = Number.isInteger(target.startIndex) ? target.startIndex : null;
+        const access = getControllerStateAccess();
+        if (access && typeof access.validateInlinePlanAnchor === 'function') {
+            return access.validateInlinePlanAnchor.call(ctx, target.anchor || null, fallbackIndex);
+        }
+        if (typeof ctx.resolveInlinePlanAnchor === 'function') {
+            const resolved = ctx.resolveInlinePlanAnchor(target.anchor || null, fallbackIndex);
+            if (resolved && resolved.isConnected !== false) {
+                setInlinePlanAnchorState(ctx, resolved);
+                return resolved;
+            }
+        }
+        if (target.anchor && target.anchor.isConnected) {
+            setInlinePlanAnchorState(ctx, target.anchor);
+            return target.anchor;
+        }
+        return null;
+    }
+
+function cleanupActiveRenderInteractions() {
+        if (typeof this.cleanupInlinePlanChipDragState === 'function') {
+            this.cleanupInlinePlanChipDragState();
+        }
+        if (typeof this.clearPlannedSegmentReorderState === 'function') {
+            this.clearPlannedSegmentReorderState();
+        } else if (typeof this.removePlanSegmentReorderPreview === 'function') {
+            this.removePlanSegmentReorderPreview();
+        }
+        if (typeof this.cleanupPlanSegmentResizeState === 'function') {
+            const rootEl = typeof document !== 'undefined' ? document : null;
+            this.cleanupPlanSegmentResizeState(rootEl);
+        }
+        if (typeof this.clearPlannedSlotMoveDragState === 'function') {
+            this.clearPlannedSlotMoveDragState();
+        }
+    }
+
+function prepareTimeEntriesRender(preserveInlineDropdown = false) {
+        cleanupActiveRenderInteractions.call(this);
+        if (!preserveInlineDropdown && typeof this.closeInlinePlanDropdown === 'function') {
+            this.closeInlinePlanDropdown();
+            return { preserveInlineDropdown: false, target: null };
+        }
+        const target = getInlinePlanTargetState(this);
+        const dropdown = this.inlinePlanDropdown || null;
+        if (preserveInlineDropdown && dropdown && !target && typeof this.closeInlinePlanDropdown === 'function') {
+            this.closeInlinePlanDropdown();
+            return { preserveInlineDropdown: false, target: null };
+        }
+        if (!preserveInlineDropdown || !target || !dropdown) {
+            return { preserveInlineDropdown: false, target: null };
+        }
+        return { preserveInlineDropdown: true, target: { ...target } };
+    }
+
+function finalizeTimeEntriesRender(context = {}) {
+        if (!context || !context.preserveInlineDropdown) return false;
+        const target = getInlinePlanTargetState(this);
+        if (!target || !this.inlinePlanDropdown) return false;
+        if (target.mode === 'plan-segment-replace') {
+            const repositioned = typeof this.repositionOpenInlinePlanDropdown === 'function'
+                ? this.repositionOpenInlinePlanDropdown()
+                : false;
+            if (!repositioned || !this.inlinePlanDropdown || !this.inlinePlanTarget) {
+                if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
+                return false;
+            }
+            return true;
+        }
+        const anchor = resolveRenderInlinePlanAnchor(this, target);
+        if (!anchor) {
+            if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
+            return false;
+        }
+        if (typeof this.positionInlinePlanDropdown === 'function') {
+            this.positionInlinePlanDropdown(anchor);
+        }
+        return true;
+    }
+
+function renderTimeEntriesSafely(reason = 'unspecified', options = {}) {
+        const preserveInlineDropdown = Boolean(options && options.preserveInlineDropdown);
+        return renderTimeEntries.call(this, preserveInlineDropdown);
+    }
+
 function buildTimeEntryRowModel(slot, index) {
         const renderer = (typeof globalThis !== 'undefined' && globalThis.TimeEntryRenderer)
             ? globalThis.TimeEntryRenderer
@@ -87,9 +200,7 @@ function buildTimeEntryRowModel(slot, index) {
     }
 
 function renderTimeEntries(preserveInlineDropdown = false) {
-        if (!preserveInlineDropdown) {
-            this.closeInlinePlanDropdown();
-        }
+        const renderContext = prepareTimeEntriesRender.call(this, preserveInlineDropdown);
         if (typeof this.validateSelectedPlanSegment === 'function') {
             this.validateSelectedPlanSegment();
         }
@@ -184,6 +295,7 @@ function renderTimeEntries(preserveInlineDropdown = false) {
         this.centerMergedTimeContent(container);
         // 병합된 계획 입력의 시각적 높이를 병합 범위에 맞게 설정
         this.resizeMergedPlannedContent(container);
+        finalizeTimeEntriesRender.call(this, renderContext);
     }
 
 function wrapWithSplitVisualization(type, index, content) {
@@ -197,7 +309,8 @@ function wrapWithSplitVisualization(type, index, content) {
         const clearOverlayHtml = clearButtonHtml
             ? `<div class="planned-slot-clear-overlay">${clearButtonHtml}</div>`
             : '';
-        return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}" data-split-type="${type}" data-index="${index}"${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}>
+        const slotHostAttr = type === 'planned' ? ' data-planned-slot-host="true"' : '';
+        return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}" data-split-type="${type}" data-index="${index}"${slotHostAttr}${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}>
                     ${content}
                     ${splitMarkup}
                     ${clearOverlayHtml}
@@ -406,6 +519,10 @@ function buildSplitVisualization(type, index) {
                 </div>`;
     }
     return Object.freeze({
+        cleanupActiveRenderInteractions,
+        prepareTimeEntriesRender,
+        finalizeTimeEntriesRender,
+        renderTimeEntriesSafely,
         buildTimeEntryRowModel,
         renderTimeEntries,
         wrapWithSplitVisualization,

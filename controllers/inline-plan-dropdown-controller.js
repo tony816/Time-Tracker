@@ -46,6 +46,25 @@ function setInlinePlanAnchorState(anchor) {
         return target.anchor;
     }
 
+function setInlinePlanTargetState(target) {
+        const access = getControllerStateAccess();
+        if (access && typeof access.setInlinePlanTarget === 'function') {
+            return access.setInlinePlanTarget.call(this, target);
+        }
+        this.inlinePlanTarget = target && typeof target === 'object' ? target : null;
+        return this.inlinePlanTarget;
+    }
+
+function clearInlinePlanTargetState() {
+        const access = getControllerStateAccess();
+        if (access && typeof access.clearInlinePlanTarget === 'function') {
+            return access.clearInlinePlanTarget.call(this);
+        }
+        this.inlinePlanTarget = null;
+        this.inlinePlanAnchor = null;
+        return null;
+    }
+
 function clearPlannedSelectionForMobileSheetDismiss() {
         const dropdown = this.inlinePlanDropdown;
         const isMobileSheet = Boolean(
@@ -3230,7 +3249,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.currentPlanSource = this.getActivePlanSource();
 
         const isMobileInputContext = options.forceAnchored ? false : this.isInlinePlanMobileInputContext();
-        this.inlinePlanTarget = virtualGapTarget
+        const nextInlinePlanTarget = virtualGapTarget
             ? {
                 ...range,
                 anchor,
@@ -3250,6 +3269,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                     keepInlineEditor: Boolean(options.keepInlineEditor),
                 }
             : { ...range, anchor, keepInlineEditor: Boolean(options.keepInlineEditor) };
+        setInlinePlanTargetState.call(this, nextInlinePlanTarget);
         this.inlinePlanSheetTargetEl = sheetTargetEl;
         this.inlinePlanHighlightRange = isMobileInputContext
             ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
@@ -3671,7 +3691,7 @@ function closeInlinePlanDropdown() {
             this.selectedPlanSegment = null;
             this.suppressInlinePlanOpenUntil = 0;
         }
-        this.inlinePlanTarget = null;
+        clearInlinePlanTargetState.call(this);
         this.inlinePlanHighlightRange = null;
         this.modalPlanSectionOpen = false;
         this.modalPlanSectionOpenParentId = null;
@@ -3802,6 +3822,8 @@ function applyInlinePlanSelection(label, options = {}) {
         isInlinePlanChipEditModeEnabled,
         setInlinePlanChipEditMode,
         cleanupInlinePlanChipDragState,
+        setInlinePlanTargetState,
+        clearInlinePlanTargetState,
         resolveInlinePlanChipDropIntent,
         applyInlinePlanChipDropFeedback,
         getInlinePlanChipAutoScrollStep,

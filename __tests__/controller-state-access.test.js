@@ -47,3 +47,48 @@ test('inline plan anchor helpers expose and update the current inline target', (
     access.setInlinePlanAnchor.call(ctx, nextAnchor);
     assert.equal(ctx.inlinePlanTarget.anchor, nextAnchor);
 });
+
+test('inline plan target helpers set, clear, and revalidate rerendered anchors', () => {
+    const originalDocument = globalThis.document;
+    const resolvedAnchor = { id: 'resolved', isConnected: true };
+    const ctx = {};
+
+    globalThis.document = {
+        querySelector(selector) {
+            return selector === '[data-index="2"] .planned-input' ? resolvedAnchor : null;
+        },
+    };
+
+    try {
+        const target = access.setInlinePlanTarget.call(ctx, {
+            startIndex: 2,
+            endIndex: 2,
+            anchor: { id: 'stale', isConnected: false },
+        });
+
+        assert.equal(ctx.inlinePlanTarget, target);
+        assert.equal(access.resolveInlinePlanAnchor.call(ctx, target.anchor, 2), resolvedAnchor);
+        assert.equal(access.validateInlinePlanAnchor.call(ctx, target.anchor, 2), resolvedAnchor);
+        assert.equal(ctx.inlinePlanTarget.anchor, resolvedAnchor);
+        assert.equal(ctx.inlinePlanAnchor, resolvedAnchor);
+
+        access.clearInlinePlanTarget.call(ctx);
+        assert.equal(ctx.inlinePlanTarget, null);
+        assert.equal(ctx.inlinePlanAnchor, null);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
+test('same inline plan target helper rejects different segment replacement targets', () => {
+    const current = {
+        startIndex: 1,
+        endIndex: 1,
+        mode: 'plan-segment-replace',
+        segmentIndex: 0,
+        segmentId: 'a',
+    };
+
+    assert.equal(access.isSameInlinePlanTarget.call({}, { ...current }, current), true);
+    assert.equal(access.isSameInlinePlanTarget.call({}, { ...current, segmentId: 'b' }, current), false);
+});

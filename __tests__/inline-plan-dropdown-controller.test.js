@@ -1436,6 +1436,49 @@ test('openInlinePlanDropdown returns true when same mobile sheet target remains 
     assert.equal(corrected, true);
 });
 
+test('openInlinePlanDropdown returns false when same desktop target toggles closed', () => {
+    const anchor = { isConnected: true };
+    let cleared = false;
+    let closed = false;
+    const ctx = {
+        inlinePlanDropdown: {
+            classList: {
+                contains() {
+                    return false;
+                },
+            },
+        },
+        inlinePlanTarget: { startIndex: 1, endIndex: 1, anchor },
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        isInlinePlanMobileInputContext() {
+            return false;
+        },
+        clearSelection(type) {
+            assert.equal(type, 'planned');
+            cleared = true;
+        },
+        closeInlinePlanDropdown() {
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+            closed = true;
+        },
+    };
+
+    assert.equal(controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1), false);
+    assert.equal(cleared, true);
+    assert.equal(closed, true);
+    assert.equal(ctx.inlinePlanDropdown, null);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
 test('openInlinePlanDropdown marks mobile empty planned slot as sheet context target', () => {
     const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;

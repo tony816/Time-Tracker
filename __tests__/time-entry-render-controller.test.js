@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+require('../controllers/controller-state-access');
+const inlinePlanController = require('../controllers/inline-plan-dropdown-controller');
 const controller = require('../controllers/time-entry-render-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 
@@ -353,4 +355,189 @@ test('createMergedTimeField keeps mobile merged range compact and omits time-col
     assert.doesNotMatch(markup, /06\s*<\/div>\s*<div[^>]*>\s*08/);
     assert.doesNotMatch(markup, /timer-btn/);
     assert.doesNotMatch(markup, /timer-controls-container/);
+});
+
+test('renderTimeEntries(true) preserves inline dropdown when anchor resolves after rerender', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    const resolvedAnchor = { isConnected: true, id: 'resolved-anchor' };
+    const positioned = [];
+    let closed = false;
+
+    ctx.inlinePlanDropdown = { id: 'dropdown' };
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0, anchor: { isConnected: false } };
+    ctx.positionInlinePlanDropdown = (anchor) => positioned.push(anchor);
+    ctx.closeInlinePlanDropdown = () => {
+        closed = true;
+        ctx.inlinePlanDropdown = null;
+        ctx.inlinePlanTarget = null;
+    };
+    documentStub.querySelector = (selector) => (
+        selector === '[data-index="0"] .planned-input' ? resolvedAnchor : null
+    );
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx, true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(closed, false);
+    assert.equal(ctx.inlinePlanTarget.anchor, resolvedAnchor);
+    assert.deepEqual(positioned, [resolvedAnchor]);
+});
+
+test('renderTimeEntries(true) closes inline dropdown when preserved anchor is stale', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    let closeCalls = 0;
+
+    ctx.inlinePlanDropdown = { id: 'dropdown' };
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0, anchor: { isConnected: false } };
+    ctx.closeInlinePlanDropdown = () => {
+        closeCalls += 1;
+        ctx.inlinePlanDropdown = null;
+        ctx.inlinePlanTarget = null;
+    };
+    ctx.positionInlinePlanDropdown = () => assert.fail('stale anchor should not be positioned');
+    documentStub.querySelector = () => null;
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx, true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.equal(closeCalls, 1);
+    assert.equal(ctx.inlinePlanDropdown, null);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
+test('renderTimeEntries(false) closes dropdown before rows are recreated', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    const calls = [];
+
+    ctx.inlinePlanDropdown = { id: 'dropdown' };
+    ctx.inlinePlanTarget = { startIndex: 0, endIndex: 0 };
+    ctx.closeInlinePlanDropdown = () => {
+        calls.push(['close', container.children.length]);
+        ctx.inlinePlanDropdown = null;
+        ctx.inlinePlanTarget = null;
+    };
+    ctx.attachFieldSelectionListeners = () => calls.push(['attach', container.children.length]);
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx, false);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.deepEqual(calls[0], ['close', 0]);
+    assert.equal(ctx.inlinePlanDropdown, null);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
+test('render cleanup cancels active chipboard drag before row DOM replacement', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const { ctx, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    const removedListeners = [];
+    const clearedFrames = [];
+    const preview = {
+        parentNode: {
+            removeChild(node) {
+                assert.equal(node, preview);
+                preview.removed = true;
+            },
+        },
+    };
+    const sourceChip = createRenderNode('button');
+    sourceChip.classList.add('activity-chip-dragging', 'activity-chip-drag-pending');
+    const board = createRenderNode('div');
+    board.classList.add('activity-chip-board-drag-active');
+    board.querySelectorAll = (selector) => {
+        if (selector.includes('activity-chip-dragging')) return [sourceChip];
+        if (selector === '.activity-chip-drop-label') return [];
+        return [];
+    };
+    const doc = {
+        removeEventListener(type, handler, options) {
+            removedListeners.push([type, handler, options]);
+        },
+    };
+    const win = {
+        removeEventListener(type, handler, options) {
+            removedListeners.push([type, handler, options]);
+        },
+        cancelAnimationFrame(frame) {
+            clearedFrames.push(frame);
+        },
+    };
+    const captureTarget = {
+        releasePointerCapture(pointerId) {
+            assert.equal(pointerId, 9);
+            captureTarget.released = true;
+        },
+    };
+    const noop = () => {};
+
+    ctx.cleanupInlinePlanChipDragState = inlinePlanController.cleanupInlinePlanChipDragState;
+    ctx.inlinePlanChipDragPreview = preview;
+    ctx.inlinePlanChipDragState = {
+        document: doc,
+        window: win,
+        moveHandler: noop,
+        endHandler: noop,
+        cancelHandler: noop,
+        keyHandler: noop,
+        board,
+        captureTarget,
+        pointerId: 9,
+        autoScrollFrame: 12,
+        autoScrollFrameType: 'raf',
+    };
+    globalThis.document = documentStub;
+    globalThis.window = win;
+    globalThis.clearTimeout = (frame) => clearedFrames.push(frame);
+
+    try {
+        controller.renderTimeEntries.call(ctx, true);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.clearTimeout = originalClearTimeout;
+    }
+
+    assert.deepEqual(removedListeners.map(([type]) => type), ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'blur']);
+    assert.deepEqual(clearedFrames, [12]);
+    assert.equal(captureTarget.released, true);
+    assert.equal(preview.removed, true);
+    assert.equal(ctx.inlinePlanChipDragPreview, null);
+    assert.equal(ctx.inlinePlanChipDragState, null);
+    assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
+    assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+    assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
+});
+
+test('render cleanup cancels planned reorder, resize, and slot move interactions', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, documentStub } = createRenderTimeEntriesContext({ mobile: false });
+    const calls = [];
+    ctx.clearPlannedSegmentReorderState = () => calls.push('reorder');
+    ctx.cleanupPlanSegmentResizeState = (root) => calls.push(root === documentStub ? 'resize:document' : 'resize:other');
+    ctx.clearPlannedSlotMoveDragState = () => calls.push('slot-move');
+    globalThis.document = documentStub;
+
+    try {
+        controller.renderTimeEntries.call(ctx, true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.deepEqual(calls, ['reorder', 'resize:document', 'slot-move']);
 });
