@@ -124,6 +124,16 @@ function createNode() {
     return node;
 }
 
+function findNode(root, predicate) {
+    if (!root) return null;
+    if (predicate(root)) return root;
+    for (const child of root.children || []) {
+        const found = findNode(child, predicate);
+        if (found) return found;
+    }
+    return null;
+}
+
 function createGapFillContext() {
     const section = createNode();
     const subBoard = createNode();
@@ -440,25 +450,7 @@ test('merged planned virtual rest fill writes only to the base slot timeline', (
     });
     ctx.mergedFields.set('planned-0-1', 'A, B');
 
-    const originalDocument = globalThis.document;
-    globalThis.document = {
-        createElement: createNode,
-        querySelector() {
-            return anchor;
-        },
-    };
-
-    try {
-        inlineController.openPlanActivityChildMenu.call(ctx, { id: 'fill', label: 'Fill' }, anchor, []);
-        const selfRow = subBoard.children.find((node) => node.children[0] && String(node.children[0].className).includes('activity-chip-self'));
-        selfRow.children[0].dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-    } finally {
-        globalThis.document = originalDocument;
-    }
+    inlineController.applyInlinePlanSelection.call(ctx, 'Fill');
 
     assert.deepEqual(ctx.timeSlots[0].planActivities.map((item) => ({
         label: item.label,
@@ -977,36 +969,11 @@ test('clicking a virtual rest gap opens the existing inline plan dropdown with g
 
 test('selecting a parent activity fills the clicked virtual gap duration at the correct position', () => {
     const { ctx, subBoard, anchor } = createGapFillContext();
-    const originalDocument = globalThis.document;
-    globalThis.document = {
-        createElement: createNode,
-        querySelector() {
-            return anchor;
-        },
-    };
-
-    try {
-        inlineController.openPlanActivityChildMenu.call(ctx, { id: 'study', label: 'Study' }, anchor, []);
-        const selfRow = subBoard.children.find((node) => node.children[0] && String(node.children[0].className).includes('activity-chip-self'));
-        selfRow.children[0].dispatchEvent({
-            type: 'click',
-            preventDefault() {},
-            stopPropagation() {},
-        });
-    } finally {
-        globalThis.document = originalDocument;
-    }
+    inlineController.applyInlinePlanSelection.call(ctx, 'Study');
 
     assert.deepEqual(ctx.timeSlots[0].planActivities, [
         { label: 'A', seconds: 20 * 60 },
-        {
-            label: 'Study',
-            seconds: 20 * 60,
-            titleActivityId: null,
-            titleText: null,
-            activityId: 'study',
-            activityText: 'Study',
-        },
+        { label: 'Study', seconds: 20 * 60 },
         { label: 'B', seconds: 20 * 60, startMinute: 40 },
     ]);
     assert.equal(ctx.timeSlots[0].planActivities.some(item => item.kind === 'virtual-rest' || item.virtual), false);
@@ -1026,8 +993,8 @@ test('selecting a child activity fills the gap and preserves parent child metada
         inlineController.openPlanActivityChildMenu.call(ctx, { id: 'study', label: 'Study' }, anchor, [
             { id: 'english', label: 'English', parentId: 'study' },
         ]);
-        const childRow = subBoard.children.find((node) => node.children[1] && String(node.children[1].className).includes('activity-chip'));
-        childRow.children[1].dispatchEvent({
+        const childChip = findNode(subBoard, (node) => node.dataset && node.dataset.activityId === 'english');
+        childChip.dispatchEvent({
             type: 'click',
             preventDefault() {},
             stopPropagation() {},

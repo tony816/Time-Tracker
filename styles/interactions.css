@@ -1031,7 +1031,6 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   color: #637083;
 }
 
-.activity-chip-edit-hint,
 .activity-chip-board-note {
   margin: 0 0 8px;
   color: #64748b;
@@ -1040,21 +1039,8 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
   line-height: 1.35;
 }
 
-.activity-chip-edit-hint {
-  padding: 7px 9px;
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
 .activity-chip-board-note {
   margin-top: -3px;
-}
-
-.inline-plan-dropdown-sheet .activity-chip-edit-hint {
-  padding: 6px 8px;
-  font-size: 11px;
 }
 
 .activity-chip-row {
@@ -1083,36 +1069,9 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
     box-shadow 0.14s ease;
 }
 
-.activity-chip-drag-handle {
-  width: 24px;
-  min-height: 38px;
-  flex: 0 0 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  background: #f1f5f9;
-  border-right: 1px solid #dbe3ec;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-}
-
-.activity-chip-drag-handle:active {
-  cursor: grabbing;
-}
-
 .activity-chip-drag-pending {
   border-color: #93c5fd;
   background: #eff6ff;
-}
-
-.activity-chip-drag-pending .activity-chip-drag-handle {
-  color: #1d4ed8;
-  background: #dbeafe;
 }
 
 .activity-chip-board-drag-active {
@@ -1152,8 +1111,7 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
 }
 
 .activity-chip-drag-preview .activity-chip-main,
-.activity-chip-drag-preview .activity-chip-caret,
-.activity-chip-drag-preview .activity-chip-drag-handle {
+.activity-chip-drag-preview .activity-chip-caret {
   cursor: grabbing;
 }
 
@@ -1446,30 +1404,6 @@ button.activity-chip,
   position: relative;
 }
 
-.activity-chip-add,
-.activity-chip-self {
-  padding: 0 10px;
-}
-
-.activity-chip-self {
-  background: #f4f8fc;
-  border-style: solid;
-  border-color: #d6e0eb;
-}
-
-.activity-chip-add {
-  background: #f7fbff;
-  border-style: dashed;
-  border-color: #b8d9ff;
-  color: #29659d;
-}
-
-.activity-chip-add:hover,
-.activity-chip-add:focus-within {
-  background: #edf6ff;
-  border-color: #7fb8eb;
-}
-
 .inline-plan-subsection button.activity-chip {
   display: inline-flex;
   align-items: center;
@@ -1496,17 +1430,6 @@ button.activity-chip,
     0 2px 5px rgba(15, 23, 42, 0.055),
     inset 0 1px 0 rgba(255, 255, 255, 0.98);
   outline: none;
-}
-
-.inline-plan-subsection button.activity-chip-self {
-  background: #f4f8fc;
-  border-color: #d6e0eb;
-}
-
-.inline-plan-subsection button.activity-chip-self:hover,
-.inline-plan-subsection button.activity-chip-self:focus-visible {
-  background: #eef6ff;
-  border-color: #b8d9ff;
 }
 
 .inline-plan-subsection {
@@ -1641,15 +1564,6 @@ button.activity-chip,
   gap: 6px;
 }
 
-.inline-plan-child-actions .activity-child-composer {
-  margin-top: 0;
-  width: 100%;
-}
-
-.inline-plan-child-actions .activity-child-composer-cancel {
-  display: none;
-}
-
 .inline-plan-sub-board .activity-chip-row + .activity-chip-board-title,
 .inline-plan-sub-board .inline-plan-empty {
   margin-top: 6px;
@@ -1660,64 +1574,6 @@ button.activity-chip,
   color: #6b7a89;
   font-size: 13px;
   line-height: 1.4;
-}
-
-.inline-plan-sub-board .activity-chip.activity-chip-add {
-  margin-top: 2px;
-}
-
-.activity-child-composer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  width: 100%;
-}
-
-.activity-child-composer-input {
-  min-width: 0;
-  flex: 1 1 auto;
-  height: 34px;
-  border: 1px solid #d5dee8;
-  border-radius: 9px;
-  padding: 0 10px;
-  font-size: 13px;
-  color: #111827;
-  background: #fff;
-}
-
-.activity-child-composer-input:focus {
-  outline: none;
-  border-color: #9ac5ef;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.14);
-}
-
-.activity-child-composer-submit,
-.activity-child-composer-cancel {
-  height: 34px;
-  border-radius: 9px;
-  border: 1px solid #d5dee8;
-  background: #fff;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.activity-child-composer-submit {
-  color: #2563eb;
-  border-color: #b8d9ff;
-  background: #f7fbff;
-}
-
-.activity-child-composer-cancel {
-  color: #526172;
-}
-
-.activity-child-composer-error {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #b45309;
 }
 
 .activity-chip-new-highlight {
