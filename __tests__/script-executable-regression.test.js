@@ -134,6 +134,8 @@ const getTimerRawElapsed = buildMethod('getTimerRawElapsed(slot)', '(slot)');
 const getTimeUiHostIndex = buildMethod('getTimeUiHostIndex(index)', '(index)');
 const getMobileTimeUiState = buildMethod('getMobileTimeUiState(index, slotOverride = null)', '(index, slotOverride = null)');
 const createTimerControls = buildMethod('createTimerControls(index, slot)', '(index, slot)');
+const calculateTotals = buildMethod('calculateTotals()', '()');
+const updateAnalysis = buildMethod('updateAnalysis(plannedSeconds, recordedSeconds)', '(plannedSeconds, recordedSeconds)');
 
 test('normalizeMergeKey accepts valid keys and rejects malformed values', () => {
   const ctx = { timeSlots: new Array(48).fill({}) };
@@ -353,4 +355,58 @@ test('createTimerControls keeps accessible labels and renders mobile icon spans'
   assert.match(html, /class="timer-btn-label">정지<\/span>/);
   assert.match(html, /aria-label="타이머 정지"/);
   assert.doesNotMatch(html, /timer-stop/);
+});
+
+test('calculateTotals and updateAnalysis no-op safely without removed summary elements', () => {
+  const calls = [];
+  const previousDocument = global.document;
+  global.document = {
+    getElementById(id) {
+      calls.push(['getElementById', id]);
+      return null;
+    },
+  };
+
+  const ctx = {
+    timeSlots: [
+      { planned: 'Merged', timer: { elapsed: 10, running: false }, planActivities: [{ seconds: 600 }] },
+      { planned: '', timer: { elapsed: 20, running: false } },
+      { planned: 'Solo', timer: { elapsed: 30, running: false }, planActivities: [] },
+      { planned: '', timer: { elapsed: 40, running: false }, planActivities: [{ seconds: 900 }] },
+    ],
+    mergedFields: new Map([['planned-0-1', 'Merged']]),
+    findMergeKey(type, index) {
+      return type === 'planned' && (index === 0 || index === 1) ? 'planned-0-1' : null;
+    },
+    normalizePlanActivitiesArray(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    formatDurationSummary(seconds) {
+      return `${seconds}s`;
+    },
+    updateAnalysis(plannedSeconds, recordedSeconds) {
+      calls.push(['updateAnalysis', plannedSeconds, recordedSeconds]);
+      return updateAnalysis.call(this, plannedSeconds, recordedSeconds);
+    },
+  };
+
+  try {
+    assert.doesNotThrow(() => calculateTotals.call(ctx));
+    assert.doesNotThrow(() => updateAnalysis.call(ctx, 1, 2));
+  } finally {
+    if (previousDocument === undefined) {
+      delete global.document;
+    } else {
+      global.document = previousDocument;
+    }
+  }
+
+  assert.deepEqual(calls.filter((call) => call[0] === 'updateAnalysis'), [
+    ['updateAnalysis', 5100, 100],
+  ]);
+  assert.deepEqual(calls.filter((call) => call[0] === 'getElementById'), [
+    ['getElementById', 'totalPlanned'],
+    ['getElementById', 'timerUsage'],
+    ['getElementById', 'timerUsage'],
+  ]);
 });

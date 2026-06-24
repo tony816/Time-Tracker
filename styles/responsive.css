@@ -64,12 +64,7 @@
         right: 0;
     }
 
-    .summary-row {
-        grid-template-columns: minmax(0, 1fr) 40px;
-    }
-
-    .header-row > div,
-    .summary-row > div {
+    .header-row > div {
         padding: 10px 8px;
         font-size: 0.9em;
     }
@@ -220,24 +215,6 @@
     .split-visualization-planned .split-title-segment,
     .split-visualization-planned .split-grid-segment {
         border-radius: 8px;
-    }
-
-    .analysis-row {
-        grid-template-columns: 64px 1fr;
-    }
-
-    .analysis-label {
-        padding: 10px 6px;
-        font-size: 0.85em;
-    }
-
-    .analysis-content {
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-
-    .analysis-item {
-        min-width: 120px;
     }
 
     .actions {
@@ -461,12 +438,7 @@
         right: 0;
     }
 
-    .summary-row {
-        grid-template-columns: minmax(0, 1fr) 40px;
-    }
-
-    .header-row > div,
-    .summary-row > div {
+    .header-row > div {
         padding: 8px 6px;
         font-size: 0.85em;
     }
@@ -518,20 +490,6 @@
 
     .time-entry.time-ui-visible .time-slot-container .timer-btn .timer-btn-mobile-icon {
         font-size: 8px;
-    }
-
-    .analysis-row {
-        grid-template-columns: 56px 1fr;
-    }
-
-    .analysis-content {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 8px;
-    }
-
-    .analysis-item {
-        width: 100%;
     }
 
     .schedule-preview {

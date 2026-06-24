@@ -5,6 +5,14 @@ const path = require('node:path');
 
 const renderer = require('../ui/time-entry-renderer');
 const cssSource = fs.readFileSync(path.join(__dirname, '..', 'styles', 'foundation.css'), 'utf8');
+const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+function cssRuleBody(source, selector) {
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\}`).exec(source);
+    assert.ok(match, `CSS rule not found: ${selector}`);
+    return match[1];
+}
 
 test('time-entry-renderer exports and global attach are available', () => {
     assert.equal(typeof renderer.buildRowRenderModel, 'function');
@@ -142,6 +150,55 @@ test('mobile time-column CSS contains labels and suppresses obsolete timer box c
     assert.doesNotMatch(interactionsCss, /\.merged-time-main::after/);
     assert.match(interactionsCss, /\.merged-time-main::before\s*\{[\s\S]*background:\s*#ecf0f1;[\s\S]*border-bottom:\s*2px solid #ccc;[\s\S]*box-shadow:\s*inset -2px 0 0 #ddd;[\s\S]*z-index:\s*6;/);
     assert.doesNotMatch(interactionsCss, /\.time-entry\.merge-selected-range \.merged-time-main::after/);
+});
+
+test('timesheet chrome omits bottom summary and keeps header sticky across responsive grids', () => {
+    const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
+    const combinedCss = `${cssSource}\n${responsiveCss}`;
+    const timesheetRule = cssRuleBody(cssSource, '.timesheet');
+    const headerRule = cssRuleBody(cssSource, '.header-row');
+
+    for (const token of [
+        'class="summary"',
+        'class="summary-row"',
+        'class="analysis-row"',
+        'id="totalPlanned"',
+        'id="analysisContent"',
+        'id="timerUsage"',
+    ]) {
+        assert.equal(indexSource.includes(token), false, `unexpected removed chrome token: ${token}`);
+    }
+
+    for (const selector of [
+        /\.summary\b/,
+        /\.summary-row\b/,
+        /\.summary-planned\b/,
+        /\.summary-label\b/,
+        /\.analysis-row\b/,
+        /\.analysis-label\b/,
+        /\.analysis-content\b/,
+        /\.analysis-item\b/,
+        /\.analysis-metric\b/,
+        /\.analysis-value\b/,
+    ]) {
+        assert.doesNotMatch(combinedCss, selector);
+    }
+
+    assert.match(timesheetRule, /overflow:\s*visible;/);
+    assert.doesNotMatch(timesheetRule, /overflow:\s*hidden;/);
+    assert.match(headerRule, /background-color:\s*#34495e;/);
+    assert.match(headerRule, /position:\s*sticky;/);
+    assert.match(headerRule, /top:\s*0;/);
+    assert.match(headerRule, /z-index:\s*30;/);
+    assert.match(headerRule, /border-radius:\s*6px 6px 0 0;/);
+
+    assert.match(cssSource, /\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*80px 1fr;/);
+    assert.match(cssSource, /@media \(max-width:\s*768px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*60px 1fr;/);
+    assert.match(responsiveCss, /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0,\s*1fr\);/);
+    assert.match(responsiveCss, /@media \(max-width:\s*480px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0,\s*1fr\);/);
+    assert.match(indexSource, /<div class="header-row">[\s\S]*id="plannedSlotMoveModeBtn"[\s\S]*id="plannedSlotClearModeBtn"[\s\S]*<\/div>\s*<div class="time-label">/);
+    assert.match(cssSource, /\.planned-slot-move-mode-btn\s*\{[\s\S]*pointer-events:\s*auto;/);
+    assert.match(indexSource, /id="plannedSlotClearModeBtn"[\s\S]*pointer-events:\s*auto;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {
