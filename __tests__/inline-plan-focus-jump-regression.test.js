@@ -45,7 +45,7 @@ test('mobile inline input intent is tracked to prevent focus-triggered scroll cl
     );
     assert.match(
         controllerSource,
-        /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?if \(this\.isInlinePlanMobileInputContext\(\)\) return;[\s\S]*?this\.closeInlinePlanDropdown\(\);[\s\S]*?\};/
+        /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?if \(event && isInlinePlanInternalScrollTarget\(this, event\.target\)\) return;[\s\S]*?this\.scheduleInlinePlanViewportSync\(\);[\s\S]*?\};/
     );
     assert.match(
         controllerSource,
@@ -64,11 +64,11 @@ test('viewport sync is debounced while mobile inline plan input is focused', () 
     );
     assert.match(
         controllerSource,
-        /if \(!inputFocused\) \{\s+runSync\(\);\s+return;\s+\}/
+        /const requestFrame = \(\) => \{[\s\S]*?if \(this\.inlinePlanViewportSyncFrame\) return;[\s\S]*?requestFrameFn\(runSync\);[\s\S]*?\};[\s\S]*?if \(!inputFocused\) \{\s+requestFrame\(\);\s+return;\s+\}/
     );
     assert.match(
         controllerSource,
-        /this\.inlinePlanViewportSyncTimer = setTimeout\(\(\) => \{[\s\S]*?runSync\(\);[\s\S]*?\}, 90\);/
+        /this\.inlinePlanViewportSyncTimer = setTimeout\(\(\) => \{[\s\S]*?requestFrame\(\);[\s\S]*?\}, 90\);/
     );
     assert.match(
         controllerSource,
@@ -95,7 +95,7 @@ test('focused mobile inline input keeps dropdown attached to the slot anchor and
     );
     assert.match(
         controllerSource,
-        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?positionMode: 'absolute'/
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?positionMode: 'fixed'/
     );
     assert.match(
         controllerSource,

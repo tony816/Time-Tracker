@@ -54,6 +54,7 @@ class TimeTracker {
         this.inlinePlanSheetTouchHandlers = null;
         this.inlinePlanFocusSyncTimer = null;
         this.inlinePlanViewportSyncTimer = null;
+        this.inlinePlanViewportSyncFrame = null;
         this.inlinePlanInputIntentUntil = 0;
         this.inlinePlanContext = null;
         this.inlinePlanChipDeleteMode = false;

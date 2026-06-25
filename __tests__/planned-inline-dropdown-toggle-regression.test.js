@@ -116,12 +116,14 @@ test('planned field listeners no longer own merge initiation while dropdown view
     assert.match(fieldInteractionControllerSource, /scheduleAfterAnimationFrame\(open\);/);
 });
 
-test('external page scroll closes desktop inline plan dropdown while internal scroll and visual viewport sync are isolated', () => {
+test('external page scroll keeps inline plan dropdown open while internal scroll and visual viewport sync are isolated', () => {
     assert.match(controllerSource, /function isInlinePlanInternalScrollTarget\(ctx, target\) \{[\s\S]*?nodeContains\(dropdown, target\)[\s\S]*?nodeContains\(childPopover, target\)[\s\S]*?return false;/);
-    assert.match(controllerSource, /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?if \(event && isInlinePlanInternalScrollTarget\(this, event\.target\)\) return;[\s\S]*?if \(this\.isInlinePlanMobileInputContext\(\)\) return;[\s\S]*?this\.closeInlinePlanDropdown\(\);[\s\S]*?\};/);
+    assert.match(controllerSource, /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?if \(event && isInlinePlanInternalScrollTarget\(this, event\.target\)\) return;[\s\S]*?this\.scheduleInlinePlanViewportSync\(\);[\s\S]*?\};/);
     assert.match(controllerSource, /window\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
     assert.match(controllerSource, /document\.addEventListener\('scroll', this\.inlinePlanPageScrollCloseHandler, true\);/);
-    assert.match(controllerSource, /this\.inlinePlanGestureCloseHandler = \(event\) => \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?this\.closeInlinePlanDropdown\(\);[\s\S]*?\};/);
+    assert.match(controllerSource, /this\.inlinePlanGestureCloseHandler = \(event\) => \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?this\.scheduleInlinePlanViewportSync\(\);[\s\S]*?\};/);
+    assert.match(controllerSource, /positionMode:\s*'fixed'/);
+    assert.match(controllerSource, /panel\.style\.position = positionMode;/);
     assert.match(controllerSource, /document\.addEventListener\('touchmove', this\.inlinePlanGestureCloseHandler, true\);/);
     assert.match(controllerSource, /window\.addEventListener\('wheel', this\.inlinePlanGestureCloseHandler, true\);/);
     assert.match(controllerSource, /window\.visualViewport\.addEventListener\('scroll', this\.inlinePlanScrollHandler\);/);

@@ -1568,7 +1568,20 @@ function createInlinePlanOpenHarness(options = {}) {
             node.parentNode = null;
         },
     };
-    const anchor = { isConnected: true, contains(target) { return target === anchor; } };
+    const anchor = {
+        isConnected: true,
+        contains(target) { return target === anchor; },
+        getBoundingClientRect() {
+            return {
+                left: options.anchorLeft || 120,
+                top: options.anchorTop || 160,
+                right: (options.anchorLeft || 120) + (options.anchorWidth || 180),
+                bottom: (options.anchorTop || 160) + (options.anchorHeight || 34),
+                width: options.anchorWidth || 180,
+                height: options.anchorHeight || 34,
+            };
+        },
+    };
     let closeCalls = 0;
     let positionCalls = 0;
     const ctx = {
@@ -1593,6 +1606,7 @@ function createInlinePlanOpenHarness(options = {}) {
             positionCalls += 1;
             controller.positionInlinePlanDropdown.call(this, targetAnchor);
         },
+        getInlinePlanMinimumInteractiveHeight() { return 120; },
         scheduleInlinePlanInputVisibilitySync() {},
         applyInlinePlanBackgroundContext() {},
         closeInlinePriorityMenu() {},
@@ -1628,6 +1642,12 @@ function createInlinePlanOpenHarness(options = {}) {
     globalThis.window = {
         addEventListener(type, handler) { windowListeners[type] = handler; },
         removeEventListener() {},
+        innerWidth: 1024,
+        innerHeight: 768,
+        scrollX: 0,
+        scrollY: 0,
+        requestAnimationFrame(callback) { callback(); return 101; },
+        cancelAnimationFrame() {},
         visualViewport: null,
     };
     globalThis.requestAnimationFrame = (callback) => callback();
@@ -1656,13 +1676,17 @@ function createInlinePlanOpenHarness(options = {}) {
     };
 }
 
-test('desktop inline dropdown closes on outside page scroll without reposition drift', () => {
+test('desktop inline dropdown remains open on outside page scroll and repositions without drift', () => {
     const harness = createInlinePlanOpenHarness();
     try {
+        assert.equal(harness.dropdown.style.position, 'fixed');
+        assert.equal(harness.dropdown.style.visibility, 'visible');
         harness.windowListeners.scroll({ target: globalThis.document });
-        assert.equal(harness.closeCalls, 1);
-        assert.equal(harness.positionCalls, 0);
-        assert.equal(harness.ctx.inlinePlanDropdown, null);
+        assert.equal(harness.closeCalls, 0);
+        assert.equal(harness.positionCalls, 1);
+        assert.ok(harness.ctx.inlinePlanDropdown);
+        assert.equal(harness.dropdown.style.position, 'fixed');
+        assert.equal(harness.dropdown.style.visibility, 'visible');
     } finally {
         harness.restore();
     }
@@ -1694,7 +1718,7 @@ test('mobile bottom sheet ignores background scroll and prevents outside gesture
         assert.equal(harness.dropdown.style.bottom, '0px');
         harness.windowListeners.scroll({ target: globalThis.document });
         assert.equal(harness.closeCalls, 0);
-        assert.equal(harness.positionCalls, 0);
+        assert.equal(harness.positionCalls, 1);
         assert.ok(harness.ctx.inlinePlanDropdown);
         harness.documentListeners.touchmove({
             target: { contains() { return false; } },
@@ -3331,6 +3355,64 @@ test('chipboard drag creates preview and applies reorder from chip body without 
         assert.equal(ctx.plannedActivities.find((item) => item.id === 'work').parentId, 'study');
         assert.equal(body.children.length, 0);
         assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+
+        dragHandle.dispatchEvent({
+            type: 'pointerdown',
+            button: 0,
+            pointerId: 14,
+            clientX: 104,
+            clientY: 119,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: dragHandle,
+        });
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), true);
+        documentListeners.pointerup({
+            type: 'pointerup',
+            pointerId: 14,
+            clientX: 105,
+            clientY: 120,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: sourceChip,
+        });
+        assert.equal(ctx.inlinePlanChipDragState, null);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
+        assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+
+        documentStub._dropTarget = targetChip;
+        dragHandle.dispatchEvent({
+            type: 'pointerdown',
+            button: 0,
+            pointerId: 15,
+            clientX: 104,
+            clientY: 119,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: dragHandle,
+        });
+        documentListeners.pointermove({
+            type: 'pointermove',
+            pointerId: 15,
+            clientX: 244,
+            clientY: 160,
+            cancelable: true,
+            preventDefault() {},
+            stopPropagation() {},
+            target: board.children[1],
+        });
+        assert.equal(ctx.inlinePlanChipDragState.active, true);
+        documentListeners.pointercancel({
+            type: 'pointercancel',
+            pointerId: 15,
+            stopPropagation() {},
+        });
+        assert.equal(ctx.inlinePlanChipDragState, null);
+        assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
         assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
     } finally {
         globalThis.document = originalDocument;

@@ -431,6 +431,7 @@ function scheduleInlinePlanViewportSync() {
         );
 
         const runSync = () => {
+            this.inlinePlanViewportSyncFrame = null;
             if (!this.inlinePlanDropdown) return;
             const target = getInlinePlanTargetState.call(this);
             const currentAnchor = target
@@ -441,6 +442,10 @@ function scheduleInlinePlanViewportSync() {
                 : null;
             if (target && currentAnchor) {
                 setInlinePlanAnchorState.call(this, currentAnchor);
+            }
+            if (target && !currentAnchor && typeof this.closeInlinePlanDropdown === 'function') {
+                this.closeInlinePlanDropdown();
+                return;
             }
             if (inputFocused && inlineInput) {
                 this.ensureInlinePlanInputVisible(inlineInput);
@@ -459,8 +464,21 @@ function scheduleInlinePlanViewportSync() {
             if (priorityAnchor) this.positionInlinePriorityMenu(priorityAnchor);
         };
 
+        const requestFrame = () => {
+            if (this.inlinePlanViewportSyncFrame) return;
+            const root = typeof window !== 'undefined' ? window : globalThis;
+            const requestFrameFn = root && typeof root.requestAnimationFrame === 'function'
+                ? root.requestAnimationFrame.bind(root)
+                : (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null);
+            if (requestFrameFn) {
+                this.inlinePlanViewportSyncFrame = requestFrameFn(runSync);
+            } else {
+                this.inlinePlanViewportSyncFrame = setTimeout(runSync, 16);
+            }
+        };
+
         if (!inputFocused) {
-            runSync();
+            requestFrame();
             return;
         }
 
@@ -470,7 +488,7 @@ function scheduleInlinePlanViewportSync() {
         }
         this.inlinePlanViewportSyncTimer = setTimeout(() => {
             this.inlinePlanViewportSyncTimer = null;
-            runSync();
+            requestFrame();
         }, 90);
     }
 
@@ -578,6 +596,7 @@ function layoutInlinePlanAnchoredPanel(panel, anchorRect, options = {}) {
         panel.style.minWidth = `${Math.round(width)}px`;
         panel.style.maxHeight = '';
         panel.style.visibility = 'hidden';
+        panel.style.position = positionMode;
         panel.style.left = '0px';
         panel.style.top = '0px';
 
@@ -796,7 +815,7 @@ function positionInlinePlanDropdown(anchorEl) {
         layoutAnchoredPanel.call(this, dropdown, rect, {
             margin,
             gap,
-            positionMode: 'absolute',
+            positionMode: 'fixed',
             preferredWidth: expandedWidth,
             minWidth: Math.min(240, expandedWidth),
             minHeight: this.getInlinePlanMinimumInteractiveHeight(dropdown),
@@ -1967,6 +1986,9 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
         }
         clearInlinePlanChipDropFeedback.call(this, state.board);
+        if (state.sourceChip) {
+            removeInlinePlanClass(state.sourceChip, 'activity-chip-drag-pending', 'activity-chip-dragging');
+        }
         removeInlinePlanChipDragPreview.call(this);
         if (state.board) removeInlinePlanClass(state.board, 'activity-chip-board-drag-active');
         this.inlinePlanChipDragState = null;
@@ -3548,8 +3570,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.inlinePlanPageScrollCloseHandler = (event) => {
             if (!this.inlinePlanDropdown) return;
             if (event && isInlinePlanInternalScrollTarget(this, event.target)) return;
-            if (this.isInlinePlanMobileInputContext()) return;
-            this.closeInlinePlanDropdown();
+            this.scheduleInlinePlanViewportSync();
         };
         window.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
         document.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
@@ -3567,9 +3588,8 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
             if (this.isInlinePlanMobileInputContext()) {
                 if (event.cancelable && typeof event.preventDefault === 'function') event.preventDefault();
-                return;
             }
-            this.closeInlinePlanDropdown();
+            this.scheduleInlinePlanViewportSync();
         };
         document.addEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
         window.addEventListener('wheel', this.inlinePlanGestureCloseHandler, true);
@@ -3663,6 +3683,15 @@ function closeInlinePlanDropdown() {
         if (this.inlinePlanViewportSyncTimer) {
             clearTimeout(this.inlinePlanViewportSyncTimer);
             this.inlinePlanViewportSyncTimer = null;
+        }
+        if (this.inlinePlanViewportSyncFrame) {
+            const root = typeof window !== 'undefined' ? window : globalThis;
+            if (root && typeof root.cancelAnimationFrame === 'function') {
+                root.cancelAnimationFrame(this.inlinePlanViewportSyncFrame);
+            } else {
+                clearTimeout(this.inlinePlanViewportSyncFrame);
+            }
+            this.inlinePlanViewportSyncFrame = null;
         }
         if (this.inlinePlanDropdown && this.inlinePlanWheelHandler) {
             this.inlinePlanDropdown.removeEventListener('wheel', this.inlinePlanWheelHandler);
