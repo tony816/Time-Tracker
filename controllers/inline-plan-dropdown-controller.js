@@ -79,6 +79,15 @@ function clearPlannedSelectionForMobileSheetDismiss() {
         }
     }
 
+function isInlinePlanInternalScrollTarget(ctx, target) {
+        if (!ctx || !target) return false;
+        const dropdown = ctx.inlinePlanDropdown || null;
+        if (dropdown && (target === dropdown || nodeContains(dropdown, target))) return true;
+        const childPopover = ctx.inlinePlanChildPopoverLayer || null;
+        if (childPopover && (target === childPopover || nodeContains(childPopover, target))) return true;
+        return false;
+    }
+
 function buildPlannedActivityOptions(extraLabels = []) {
         const grouped = { local: [], notion: [] };
         const seen = new Set();
@@ -1534,6 +1543,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             : null;
         if (board && board.classList && typeof board.classList.toggle === 'function') {
             board.classList.toggle('activity-chip-board-delete-mode', nextValue);
+            board.classList.toggle('activity-chip-board-reorder-enabled', !nextValue);
         }
         return nextValue;
     }
@@ -1558,6 +1568,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             : null;
         if (board && board.classList && typeof board.classList.toggle === 'function') {
             board.classList.toggle('activity-chip-board-delete-mode', Boolean(this.inlinePlanChipDeleteMode));
+            board.classList.toggle('activity-chip-board-reorder-enabled', !this.inlinePlanChipDeleteMode);
         }
         if (options && options.rerender !== false && this.inlinePlanDropdown) {
             if (typeof this.renderInlinePlanDropdownOptions === 'function') {
@@ -2455,6 +2466,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
         }
         if (board.classList && typeof board.classList.toggle === 'function') {
             board.classList.toggle('activity-chip-board-delete-mode', deleteModeEnabled);
+            board.classList.toggle('activity-chip-board-reorder-enabled', !deleteModeEnabled);
         }
         if (actions) actions.innerHTML = '';
 
@@ -2875,6 +2887,10 @@ function openPlanActivityChildMenu(parentItem, anchorEl, children = []) {
         const parentId = String(parentItem.id || '').trim();
         if (!parentId) return;
         const deleteModeEnabled = isInlinePlanChipDeleteModeEnabled.call(this);
+        if (board.classList && typeof board.classList.toggle === 'function') {
+            board.classList.toggle('activity-chip-board-delete-mode', deleteModeEnabled);
+            board.classList.toggle('activity-chip-board-reorder-enabled', !deleteModeEnabled);
+        }
         section.hidden = false;
         if (section.style) section.style.visibility = 'visible';
         if (this.inlinePlanDropdown.classList && typeof this.inlinePlanDropdown.classList.add === 'function') {
@@ -3530,23 +3546,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         document.addEventListener('keydown', this.inlinePlanEscHandler);
 
         this.inlinePlanPageScrollCloseHandler = (event) => {
-            if (this.inlinePlanDropdown && event && event.target) {
-                if (event.target === this.inlinePlanDropdown || this.inlinePlanDropdown.contains(event.target)) {
-                    return;
-                }
-                if (this.inlinePlanChildPopoverLayer && this.inlinePlanChildPopoverLayer.contains(event.target)) {
-                    return;
-                }
-            }
-            if (this.isInlinePlanMobileInputContext()) {
-                this.scheduleInlinePlanViewportSync();
-                return;
-            }
-            if (this.isInlinePlanInputFocused() || this.hasRecentInlinePlanInputIntent()) {
-                this.scheduleInlinePlanViewportSync();
-                return;
-            }
-            this.scheduleInlinePlanViewportSync();
+            if (!this.inlinePlanDropdown) return;
+            if (event && isInlinePlanInternalScrollTarget(this, event.target)) return;
+            if (this.isInlinePlanMobileInputContext()) return;
+            this.closeInlinePlanDropdown();
         };
         window.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
         document.addEventListener('scroll', this.inlinePlanPageScrollCloseHandler, true);
@@ -3563,10 +3566,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             if (currentAnchor && currentAnchor.contains(event.target)) return;
             if (this.isEventWithinCurrentInlinePlanRange(event.target)) return;
             if (this.isInlinePlanMobileInputContext()) {
-                this.scheduleInlinePlanViewportSync();
+                if (event.cancelable && typeof event.preventDefault === 'function') event.preventDefault();
                 return;
             }
-            this.scheduleInlinePlanViewportSync();
+            this.closeInlinePlanDropdown();
         };
         document.addEventListener('touchmove', this.inlinePlanGestureCloseHandler, true);
         window.addEventListener('wheel', this.inlinePlanGestureCloseHandler, true);

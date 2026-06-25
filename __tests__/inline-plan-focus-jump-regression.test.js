@@ -45,7 +45,7 @@ test('mobile inline input intent is tracked to prevent focus-triggered scroll cl
     );
     assert.match(
         controllerSource,
-        /if \(this\.isInlinePlanInputFocused\(\) \|\| this\.hasRecentInlinePlanInputIntent\(\)\) \{\s+this\.scheduleInlinePlanViewportSync\(\);\s+return;\s+\}/
+        /this\.inlinePlanPageScrollCloseHandler = \(event\) => \{[\s\S]*?if \(this\.isInlinePlanMobileInputContext\(\)\) return;[\s\S]*?this\.closeInlinePlanDropdown\(\);[\s\S]*?\};/
     );
     assert.match(
         controllerSource,

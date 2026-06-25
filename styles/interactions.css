@@ -1048,6 +1048,29 @@ body.inline-plan-sheet-open .split-cell-wrapper.split-type-planned.inline-plan-s
     box-shadow 0.14s ease;
 }
 
+.activity-chip-board-reorder-enabled {
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.activity-chip-board-reorder-enabled .activity-chip[data-draggable-activity="true"] {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.activity-chip-board-reorder-enabled .activity-chip[data-draggable-activity="true"] .activity-chip-main,
+.activity-chip-board-reorder-enabled .activity-chip[data-draggable-activity="true"] .activity-chip-caret {
+  cursor: inherit;
+}
+
+.activity-chip-board-delete-mode .activity-chip[data-draggable-activity="true"] {
+  cursor: default;
+  touch-action: manipulation;
+}
+
 .activity-chip-drag-pending {
   border-color: #93c5fd;
   background: #eff6ff;

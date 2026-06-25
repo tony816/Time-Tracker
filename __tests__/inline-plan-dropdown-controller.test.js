@@ -1483,6 +1483,233 @@ test('openInlinePlanDropdown ignores stale suppression for plan segment replacem
     }
 });
 
+function createInlinePlanOpenHarness(options = {}) {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const documentListeners = {};
+    const windowListeners = {};
+    const dropdownClasses = new Set(options.mobile ? ['inline-plan-dropdown-sheet'] : []);
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board';
+    board.classList.toggle = function toggle(className, force) {
+        const has = board.classList.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) board.classList.add(className);
+        if (!next && has) board.classList.remove(className);
+        return next;
+    };
+    const subBoard = createInlineSelectionNode('div');
+    subBoard.className = 'activity-chip-board inline-plan-sub-board';
+    subBoard.classList.toggle = function toggle(className, force) {
+        const has = subBoard.classList.contains(className);
+        const next = typeof force === 'boolean' ? force : !has;
+        if (next && !has) subBoard.classList.add(className);
+        if (!next && has) subBoard.classList.remove(className);
+        return next;
+    };
+    const subSection = createInlineSelectionNode('div');
+    subSection.className = 'inline-plan-subsection';
+    subSection.style = { removeProperty() {} };
+    const input = createInlineSelectionNode('input');
+    input.className = 'inline-plan-input';
+    const addBtn = createInlineSelectionNode('button');
+    addBtn.className = 'inline-plan-add-btn';
+    const closeBtn = createInlineSelectionNode('button');
+    closeBtn.className = 'inline-plan-close-btn';
+    const actions = createInlineSelectionNode('div');
+    actions.className = 'activity-chip-board-actions';
+    const dropdown = {
+        className: options.mobile ? 'inline-plan-dropdown inline-plan-dropdown-sheet' : 'inline-plan-dropdown',
+        innerHTML: '',
+        style: {},
+        parentNode: null,
+        classList: {
+            add(name) { dropdownClasses.add(name); },
+            remove(name) { dropdownClasses.delete(name); },
+            contains(name) { return dropdownClasses.has(name); },
+            toggle(name, force) {
+                const next = typeof force === 'boolean' ? force : !dropdownClasses.has(name);
+                if (next) dropdownClasses.add(name); else dropdownClasses.delete(name);
+                return next;
+            },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        contains(target) {
+            return target === dropdown
+                || target === input
+                || target === board
+                || target === subBoard
+                || target === subSection;
+        },
+        querySelector(selector) {
+            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-add-btn') return addBtn;
+            if (selector === '.inline-plan-close-btn') return closeBtn;
+            if (selector === '.inline-plan-subsection') return subSection;
+            if (selector === '.activity-chip-board') return board;
+            if (selector === '.inline-plan-sub-board') return subBoard;
+            if (selector === '.activity-chip-board-actions') return actions;
+            return null;
+        },
+        querySelectorAll() { return []; },
+    };
+    const body = {
+        children: [],
+        classList: { add() {}, remove() {} },
+        appendChild(node) {
+            node.parentNode = this;
+            this.children.push(node);
+            return node;
+        },
+        removeChild(node) {
+            this.children = this.children.filter((child) => child !== node);
+            node.parentNode = null;
+        },
+    };
+    const anchor = { isConnected: true, contains(target) { return target === anchor; } };
+    let closeCalls = 0;
+    let positionCalls = 0;
+    const ctx = {
+        timeSlots: [{ planned: '', planActivities: [] }],
+        getPlannedRangeInfo(index) { return { startIndex: index, endIndex: index }; },
+        resolveInlinePlanAnchor(anchorEl) { return anchorEl || anchor; },
+        isSameInlinePlanTarget(range, anchorEl) { return controller.isSameInlinePlanTarget.call(this, range, anchorEl); },
+        clearSelection() {},
+        closeInlinePlanDropdown() {
+            closeCalls += 1;
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+        },
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return Boolean(options.mobile); },
+        setupInlinePlanSheetTouchDismiss() {},
+        cleanupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        renderInlinePlanDropdownOptions() {},
+        positionInlinePlanDropdown(targetAnchor) {
+            positionCalls += 1;
+            controller.positionInlinePlanDropdown.call(this, targetAnchor);
+        },
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        closeInlinePriorityMenu() {},
+        closeRoutineMenu() {},
+        closePlanActivityMenu() {},
+        closePlanTitleMenu() {},
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {
+            controller.scheduleInlinePlanViewportSync.call(this);
+        },
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+        markInlinePlanInputIntent() {},
+    };
+    let createdDivCount = 0;
+    globalThis.document = {
+        activeElement: null,
+        createElement(tagName) {
+            if (tagName === 'div') {
+                createdDivCount += 1;
+                if (createdDivCount === 1) return dropdown;
+            }
+            return createInlineSelectionNode(tagName);
+        },
+        body,
+        addEventListener(type, handler) { documentListeners[type] = handler; },
+        removeEventListener() {},
+        querySelector() { return null; },
+        getElementById() { return null; },
+    };
+    globalThis.window = {
+        addEventListener(type, handler) { windowListeners[type] = handler; },
+        removeEventListener() {},
+        visualViewport: null,
+    };
+    globalThis.requestAnimationFrame = (callback) => callback();
+
+    const opened = controller.openInlinePlanDropdown.call(ctx, 0, anchor, 0, {});
+    assert.equal(opened, true);
+    closeCalls = 0;
+    positionCalls = 0;
+
+    return {
+        ctx,
+        anchor,
+        dropdown,
+        board,
+        subBoard,
+        subSection,
+        documentListeners,
+        windowListeners,
+        get closeCalls() { return closeCalls; },
+        get positionCalls() { return positionCalls; },
+        restore() {
+            globalThis.document = originalDocument;
+            globalThis.window = originalWindow;
+            globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+        },
+    };
+}
+
+test('desktop inline dropdown closes on outside page scroll without reposition drift', () => {
+    const harness = createInlinePlanOpenHarness();
+    try {
+        harness.windowListeners.scroll({ target: globalThis.document });
+        assert.equal(harness.closeCalls, 1);
+        assert.equal(harness.positionCalls, 0);
+        assert.equal(harness.ctx.inlinePlanDropdown, null);
+    } finally {
+        harness.restore();
+    }
+});
+
+test('desktop inline dropdown stays open for internal dropdown and child popover scroll', () => {
+    const harness = createInlinePlanOpenHarness();
+    const childPopover = createInlineSelectionNode('div');
+    const popoverScroller = createInlineSelectionNode('div');
+    childPopover.appendChild(popoverScroller);
+    popoverScroller.parentElement = childPopover;
+    harness.ctx.inlinePlanChildPopoverLayer = childPopover;
+    try {
+        harness.documentListeners.scroll({ target: harness.board });
+        harness.documentListeners.scroll({ target: popoverScroller });
+        assert.equal(harness.closeCalls, 0);
+        assert.equal(harness.positionCalls, 0);
+        assert.ok(harness.ctx.inlinePlanDropdown);
+    } finally {
+        harness.restore();
+    }
+});
+
+test('mobile bottom sheet ignores background scroll and prevents outside gestures while staying fixed', () => {
+    const harness = createInlinePlanOpenHarness({ mobile: true });
+    let prevented = false;
+    try {
+        assert.equal(harness.dropdown.style.position, 'fixed');
+        assert.equal(harness.dropdown.style.bottom, '0px');
+        harness.windowListeners.scroll({ target: globalThis.document });
+        assert.equal(harness.closeCalls, 0);
+        assert.equal(harness.positionCalls, 0);
+        assert.ok(harness.ctx.inlinePlanDropdown);
+        harness.documentListeners.touchmove({
+            target: { contains() { return false; } },
+            cancelable: true,
+            preventDefault() { prevented = true; },
+        });
+        assert.equal(prevented, true);
+        assert.equal(harness.closeCalls, 0);
+        assert.equal(harness.dropdown.style.position, 'fixed');
+        assert.equal(harness.dropdown.style.bottom, '0px');
+    } finally {
+        harness.restore();
+    }
+});
+
 test('openInlinePlanDropdown returns true when same mobile sheet target remains open', () => {
     const anchor = { isConnected: true };
     let corrected = false;
@@ -2535,6 +2762,7 @@ test('activity chipboard delete mode renders and toggles independently', () => {
         assert.equal(nextToggle.getAttribute('aria-pressed'), 'true');
         assert.equal(nextToggle.textContent, '삭제 모드 ON');
         assert.equal(board.classList.contains('activity-chip-board-delete-mode'), true);
+        assert.equal(board.classList.contains('activity-chip-board-reorder-enabled'), false);
     } finally {
         globalThis.document = originalDocument;
     }
@@ -2603,9 +2831,12 @@ test('activity chipboard renders no drag handles and marks chips draggable witho
         const workChip = findNode(board, (node) => node.dataset && node.dataset.activityId === 'work');
         assert.ok(workChip);
         assert.equal(workChip.dataset.draggableActivity, 'true');
+        assert.equal(board.classList.contains('activity-chip-board-reorder-enabled'), true);
         assert.equal(ctx.inlinePlanChipEditMode || false, false);
         assert.equal(findNode(board, (node) => node.className === 'activity-chip-drag-handle'), null);
         assert.equal(findNode(actions, (node) => node.className === 'activity-chip-edit-mode-toggle'), null);
+        assert.match(interactionsCss, /\.activity-chip-board-reorder-enabled\s*\{[\s\S]*touch-action:\s*pan-y;/);
+        assert.match(interactionsCss, /\.activity-chip-board-reorder-enabled \.activity-chip\[data-draggable-activity="true"\]\s*\{[\s\S]*cursor:\s*grab;[\s\S]*touch-action:\s*none;/);
     } finally {
         globalThis.document = originalDocument;
     }
