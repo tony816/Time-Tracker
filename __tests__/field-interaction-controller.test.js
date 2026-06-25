@@ -24,13 +24,27 @@ const attachCellClickListenersWrapper = buildMethod(
 
 function createListenerNode() {
     const listeners = {};
+    const captureListeners = {};
     return {
         dataset: {},
-        addEventListener(type, handler) {
-            if (!listeners[type]) listeners[type] = [];
-            listeners[type].push(handler);
+        addEventListener(type, handler, options) {
+            const isCapture = options && typeof options === "object" ? !!options.capture : false;
+            const map = isCapture ? captureListeners : listeners;
+            if (!map[type]) map[type] = [];
+            map[type].push(handler);
+        },
+        removeEventListener(type, handler, options) {
+            const isCapture = options && typeof options === "object" ? !!options.capture : false;
+            const map = isCapture ? captureListeners : listeners;
+            if (map[type]) { map[type] = map[type].filter((item) => item !== handler); }
         },
         dispatchEvent(event) {
+            const capHandlers = captureListeners[event.type] || [];
+            for (const handler of capHandlers) {
+                handler(event);
+                if (event.immediatePropagationStopped) break;
+            }
+            if (event.propagationStopped) return;
             const handlers = listeners[event.type] || [];
             for (const handler of handlers) {
                 handler(event);
@@ -78,20 +92,27 @@ function createClassList(initial = []) {
 
 function createDocumentListenerHarness() {
     const listeners = {};
+    const captureListeners = {};
     return {
-        addEventListener(type, handler) {
-            if (!listeners[type]) listeners[type] = [];
-            listeners[type].push(handler);
+        addEventListener(type, handler, options) {
+            const isCapture = options && typeof options === "object" ? !!options.capture : false;
+            const map = isCapture ? captureListeners : listeners;
+            if (!map[type]) map[type] = [];
+            map[type].push(handler);
         },
-        removeEventListener(type, handler) {
-            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        removeEventListener(type, handler, options) {
+            const isCapture = options && typeof options === "object" ? !!options.capture : false;
+            const map = isCapture ? captureListeners : listeners;
+            if (map[type]) { map[type] = map[type].filter((item) => item !== handler); }
         },
         dispatchEvent(event) {
+            const capHandlers = captureListeners[event.type] || [];
+            capHandlers.slice().forEach((handler) => handler(event));
             const handlers = listeners[event.type] || [];
             handlers.slice().forEach((handler) => handler(event));
         },
         listenerCount(type) {
-            return (listeners[type] || []).length;
+            return (captureListeners[type] || []).length + (listeners[type] || []).length;
         },
     };
 }
@@ -2496,4 +2517,226 @@ test("timeSlot touchstart sets wasGestureStartedByTimeSlot to prevent entryDiv d
     assert.equal(calls.some((call) => call[0] === "entryPrevent"), false);
     assert.equal(calls.some((call) => call[0] === "entryStop"), false);
     assert.equal(ctx.isSelectingPlanned, true);
+});
+
+test("wasGestureStartedByTimeSlot cleared after doc touchend, allowing next row-level hit-slop start", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+        const calls = [];
+        const ctx = {
+            currentColumnType: null,
+            isSelectingPlanned: false,
+            dragStartIndex: -1,
+            dragBaseEndIndex: -1,
+            findMergeKey() { return null; },
+            closeInlinePlanDropdown() { calls.push(["close"]); },
+            clearSelection(type) { calls.push(["clear", type]); },
+            selectFieldRange(type, start, end) { calls.push(["select", type, start, end]); },
+            getIndexAtClientPosition() { return 3; },
+        };
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({ type: "touchstart", target: timeSlot, touches: [{ clientX: 100, clientY: 220 }], preventDefault() {}, stopPropagation() {} });
+        assert.equal(ctx.isSelectingPlanned, true);
+        mockDocument.dispatchEvent({ type: "touchend", preventDefault() {}, stopPropagation() {} });
+        assert.equal(ctx.isSelectingPlanned, false);
+        calls.length = 0;
+        entryDiv.dispatchEvent({ type: "touchstart", target: entryDiv, touches: [{ clientX: 135, clientY: 220 }], preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+        assert.ok(calls.some((call) => call[0] === "prevent"));
+        assert.equal(ctx.isSelectingPlanned, true);
+    });
+});
+
+test("wasGestureStartedByTimeSlot cleared after timeSlot touchend, allowing next row-level hit-slop start", () => {
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = {
+        currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+        findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+        clearSelection(type) { calls.push(["clear", type]); },
+        selectFieldRange(type, start, end) { calls.push(["select", type, start, end]); },
+    };
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    timeSlot.dispatchEvent({ type: "touchstart", target: timeSlot, touches: [{ clientX: 100, clientY: 220 }], preventDefault() {}, stopPropagation() {} });
+    timeSlot.dispatchEvent({ type: "touchend", target: timeSlot, preventDefault() {}, stopPropagation() {} });
+    assert.equal(ctx.isSelectingPlanned, false);
+    calls.length = 0;
+    entryDiv.dispatchEvent({ type: "touchstart", target: entryDiv, touches: [{ clientX: 135, clientY: 220 }], preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+    assert.ok(calls.some((call) => call[0] === "prevent"));
+    assert.equal(ctx.isSelectingPlanned, true);
+});
+
+test("wasGestureStartedByTimeSlot cleared after touchcancel, allowing next row-level hit-slop start", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+        const calls = [];
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+            clearSelection(type) { calls.push(["clear", type]); },
+            selectFieldRange(type, start, end) { calls.push(["select", type, start, end]); },
+        };
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({ type: "touchstart", target: timeSlot, touches: [{ clientX: 100, clientY: 220 }], preventDefault() {}, stopPropagation() {} });
+        assert.equal(ctx.isSelectingPlanned, true);
+        mockDocument.dispatchEvent({ type: "touchcancel" });
+        assert.equal(ctx.isSelectingPlanned, false);
+        calls.length = 0;
+        entryDiv.dispatchEvent({ type: "touchstart", target: entryDiv, touches: [{ clientX: 135, clientY: 220 }], preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+        assert.ok(calls.some((call) => call[0] === "prevent"));
+        assert.equal(ctx.isSelectingPlanned, true);
+    });
+});
+
+test("row-level capture touchstart fires before planned child stopPropagation in hit slop", () => {
+    const plannedChild = createListenerNode();
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = {
+        currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+        findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+        clearSelection(type) { calls.push(["clear", type]); },
+        selectFieldRange(type, start, end) { calls.push(["select", type, start, end]); },
+    };
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    // plannedChild is NOT inside timeSlot (closest returns null)
+    plannedChild.closest = () => null;
+    entryDiv.dispatchEvent({ type: "touchstart", target: plannedChild, touches: [{ clientX: 135, clientY: 220 }], preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+    assert.ok(calls.some((call) => call[0] === "prevent"));
+    assert.ok(calls.some((call) => call[0] === "select"));
+    assert.equal(ctx.isSelectingPlanned, true);
+});
+
+test("document touch listeners registered and cleaned up correctly", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            findMergeKey() { return null; }, closeInlinePlanDropdown() {}, clearSelection() {}, selectFieldRange() {},
+        };
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({ type: "touchstart", target: timeSlot, touches: [{ clientX: 100, clientY: 220 }], preventDefault() {}, stopPropagation() {} });
+        assert.ok(mockDocument.listenerCount("touchmove") >= 1);
+        assert.ok(mockDocument.listenerCount("touchend") >= 1);
+        assert.ok(mockDocument.listenerCount("touchcancel") >= 1);
+        mockDocument.dispatchEvent({ type: "touchend", preventDefault() {}, stopPropagation() {} });
+        assert.equal(mockDocument.listenerCount("touchmove"), 0);
+        assert.equal(mockDocument.listenerCount("touchend"), 0);
+        assert.equal(mockDocument.listenerCount("touchcancel"), 0);
+    });
+});
+
+test("row-level mousedown in hit slop starts desktop merge selection", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+        const calls = [];
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+            clearSelection(type) { calls.push(["clear", type]); },
+            selectFieldRange(type, start, end) { calls.push(["select", type, start, end]); },
+            getIndexAtClientPosition(type, clientX, clientY) { calls.push(["hit", type, clientX, clientY]); return clientY > 220 ? 4 : 2; },
+        };
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        entryDiv.dispatchEvent({ type: "mousedown", button: 0, target: entryDiv, clientX: 123, clientY: 220, preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+        assert.ok(calls.some((call) => call[0] === "select"));
+        assert.equal(ctx.isSelectingPlanned, true);
+        assert.ok(mockDocument.listenerCount("mousemove") >= 1);
+        mockDocument.dispatchEvent({ type: "mouseup", preventDefault() {}, stopPropagation() {} });
+        assert.equal(ctx.isSelectingPlanned, false);
+        assert.equal(mockDocument.listenerCount("mousemove"), 0);
+    });
+});
+
+test("row-level mousedown outside hit slop does not start merge", () => {
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = {
+        findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+        selectFieldRange() { calls.push(["select"]); },
+    };
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    entryDiv.dispatchEvent({ type: "mousedown", button: 0, target: entryDiv, clientX: 200, clientY: 220, preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+    assert.equal(calls.some((call) => call[0] === "select"), false);
+    assert.equal(calls.some((call) => call[0] === "prevent"), false);
+});
+
+test("row-level mousedown capture skips when target is inside timeSlot", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const railTarget = createListenerNode();
+        railTarget.closest = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+        const calls = [];
+        const ctx = {
+            findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); },
+            selectFieldRange() { calls.push(["select"]); },
+        };
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        entryDiv.dispatchEvent({ type: "mousedown", button: 0, target: railTarget, clientX: 100, clientY: 220, preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+        assert.equal(calls.some((call) => call[0] === "select"), false);
+        assert.equal(calls.some((call) => call[0] === "prevent"), false);
+    });
+});
+
+test("row-level mousedown hit slop skipped when move mode is active", () => {
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = { isPlannedSlotMoveMode() { return true; }, findMergeKey() { calls.push(["find"]); return null; }, closeInlinePlanDropdown() { calls.push(["close"]); }, selectFieldRange() { calls.push(["select"]); } };
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    entryDiv.dispatchEvent({ type: "mousedown", button: 0, target: entryDiv, clientX: 123, clientY: 220, preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+    assert.deepEqual(calls, []);
+});
+
+test("row-level mousedown ignores timer controls even in hit slop", () => {
+    const timerButton = { closest(selector) { return selector === ".timer-btn" ? timerButton : null; } };
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = { findMergeKey() { return null; }, closeInlinePlanDropdown() { calls.push(["close"]); }, selectFieldRange() { calls.push(["select"]); } };
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+    entryDiv.dispatchEvent({ type: "mousedown", button: 0, target: timerButton, clientX: 123, clientY: 220, preventDefault() { calls.push(["prevent"]); }, stopPropagation() { calls.push(["stop"]); } });
+    assert.deepEqual(calls, []);
 });

@@ -421,6 +421,11 @@
             return point.clientX >= timeSlotRect.left && point.clientX <= timeSlotRect.right + slopPx;
         };
 
+        // --- determines whether the event target originated from inside the timeSlot ---
+        const isTargetInsideTimeSlot = (target) => {
+            return target && target.closest && target.closest('.time-slot-container') === timeSlot;
+        };
+
         let wasGestureStartedByTimeSlot = false;
         const clearWasGestureStartedByTimeSlot = () => { wasGestureStartedByTimeSlot = false; };
 
@@ -450,9 +455,15 @@
             const end = bounds ? bounds.end : index;
             return { start, end, mergeKey };
         };
+
         let activeMergeSelectionAdjustment = null;
 
+        // --- shared touch tracking for document-level capture ---
         let touchMergeSelectionActive = false;
+        const DOC_TOUCH_MOVE_OPTS = { capture: true, passive: false };
+        const DOC_TOUCH_END_OPTS = { capture: true, passive: false };
+        const DOC_TOUCH_CANCEL_OPTS = { capture: true, passive: true };
+
         const handleDocumentTouchMove = (event) => {
             if (!touchMergeSelectionActive) return;
             const t = event.touches && event.touches[0];
@@ -476,16 +487,16 @@
         };
         const removeDocumentTouchListeners = () => {
             if (doc && typeof doc.removeEventListener === 'function') {
-                doc.removeEventListener('touchmove', handleDocumentTouchMove);
-                doc.removeEventListener('touchend', handleDocumentTouchEnd);
-                doc.removeEventListener('touchcancel', handleDocumentTouchCancel);
+                doc.removeEventListener('touchmove', handleDocumentTouchMove, DOC_TOUCH_MOVE_OPTS);
+                doc.removeEventListener('touchend', handleDocumentTouchEnd, DOC_TOUCH_END_OPTS);
+                doc.removeEventListener('touchcancel', handleDocumentTouchCancel, DOC_TOUCH_CANCEL_OPTS);
             }
         };
         const attachDocumentTouchListeners = () => {
             if (doc && typeof doc.addEventListener === 'function') {
-                doc.addEventListener('touchmove', handleDocumentTouchMove, { passive: false });
-                doc.addEventListener('touchend', handleDocumentTouchEnd, { passive: false });
-                doc.addEventListener('touchcancel', handleDocumentTouchCancel, { passive: true });
+                doc.addEventListener('touchmove', handleDocumentTouchMove, DOC_TOUCH_MOVE_OPTS);
+                doc.addEventListener('touchend', handleDocumentTouchEnd, DOC_TOUCH_END_OPTS);
+                doc.addEventListener('touchcancel', handleDocumentTouchCancel, DOC_TOUCH_CANCEL_OPTS);
             }
         };
 
@@ -506,6 +517,7 @@
             this.pendingMergedMouseSelection = null;
             activeMergeSelectionAdjustment = null;
             touchMergeSelectionActive = false;
+            clearWasGestureStartedByTimeSlot();
             if (entryDiv && entryDiv.classList) {
                 entryDiv.classList.remove('merge-hover');
             }
@@ -607,6 +619,8 @@
             }
             return true;
         };
+
+        // --- mouse: document-level move/up ---
         const handleDocumentMouseMove = (event) => {
             if (typeof event.buttons === 'number' && event.buttons === 0) {
                 handleDocumentMouseUp();
@@ -622,6 +636,27 @@
             }
         };
 
+        // --- row-level mouse hit-slop (desktop) ---
+        const ROW_MOUSE_OPTS = { capture: true };
+        const handleRowMouseDown = (e) => {
+            if (e.button !== undefined && e.button !== 0) return;
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
+            // If the click landed inside timeSlot, let the timeSlot mousedown handler do it
+            if (isTargetInsideTimeSlot(e.target)) return;
+            if (isNonMergeTimeSlotControl(e.target)) return;
+            if (!isTimeRailMergeGestureStart(e)) return;
+            const result = beginTimeSlotMergeSelection(e);
+            if (!result) return;
+            if (result === 'cleared') return;
+            if (doc && typeof doc.addEventListener === 'function') {
+                doc.addEventListener('mousemove', handleDocumentMouseMove);
+                doc.addEventListener('mouseup', handleDocumentMouseUp);
+            }
+            e.preventDefault();
+            e.stopPropagation();
+        };
+
+        // --- hover / focus ---
         timeSlot.addEventListener('mouseenter', () => {
             updateTimeSlotMergeHoverState(true);
         });
@@ -648,6 +683,7 @@
             updateTimeSlotMergeHoverState(false);
         });
 
+        // --- mousedown (exact hit on timeSlot rail) ---
         timeSlot.addEventListener('mousedown', (e) => {
             if (e.button !== undefined && e.button !== 0) return;
             const result = beginTimeSlotMergeSelection(e);
@@ -661,7 +697,7 @@
             e.stopPropagation();
         });
 
-        // --- touchstart on timeSlot (exact hit) ---
+        // --- touchstart on timeSlot (exact hit, bubble phase) ---
         timeSlot.addEventListener('touchstart', (e) => {
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
             if (!e.touches || e.touches.length !== 1) return;
@@ -687,43 +723,44 @@
             attachDocumentTouchListeners();
         }, { passive: false });
 
-        // --- touchstart on entryDiv (row-level) for hit-slop captures ---
+        // --- row-level capture listeners (hit-slop + mouse) ---
         if (entryDiv && typeof entryDiv.addEventListener === 'function') {
-        entryDiv.addEventListener('touchstart', (e) => {
-            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
-            if (!e.touches || e.touches.length !== 1) return;
-            if (touchMergeSelectionActive) return;
-            if (wasGestureStartedByTimeSlot) {
-                clearWasGestureStartedByTimeSlot();
-                return;
-            }
-            if (isNonMergeTimeSlotControl(e.target)) return;
-            if (!isTimeRailMergeGestureStart(e)) return;
+            // Touch: capture phase so planned children do not block it via stopPropagation
+            entryDiv.addEventListener('touchstart', (e) => {
+                if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
+                if (!e.touches || e.touches.length !== 1) return;
+                if (touchMergeSelectionActive) return;
+                // If the touch landed on timeSlot, let the timeSlot bubble handler own it
+                if (isTargetInsideTimeSlot(e.target)) return;
+                if (isNonMergeTimeSlotControl(e.target)) return;
+                if (!isTimeRailMergeGestureStart(e)) return;
 
-            const result = beginTimeSlotMergeSelection(e);
-            if (!result) {
-                touchMergeSelectionActive = false;
-                return;
-            }
-            e.preventDefault();
-            e.stopPropagation();
-            if (result === 'cleared') {
-                touchMergeSelectionActive = false;
-                resetTimeSlotMergeSelectionState();
-                return;
-            }
-            touchMergeSelectionActive = true;
-            attachDocumentTouchListeners();
-        }, { passive: false });
+                const result = beginTimeSlotMergeSelection(e);
+                if (!result) {
+                    touchMergeSelectionActive = false;
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                if (result === 'cleared') {
+                    touchMergeSelectionActive = false;
+                    clearWasGestureStartedByTimeSlot();
+                    resetTimeSlotMergeSelectionState();
+                    return;
+                }
+                touchMergeSelectionActive = true;
+                attachDocumentTouchListeners();
+            }, { capture: true, passive: false });
+
+            // Mouse: capture phase for desktop hit-slop
+            entryDiv.addEventListener('mousedown', handleRowMouseDown, ROW_MOUSE_OPTS);
         }
 
         // Keep minimal timeSlot-level touch listeners as safety fallback;
-        // real tracking happens via document-level handlers.
+        // real tracking happens via document-level capture handlers.
         timeSlot.addEventListener('touchmove', (e) => {
             if (!touchMergeSelectionActive) return;
             e.preventDefault();
-            // Also update selection from the element-level handler as robustness
-            // fallback; the document-level handleDocumentTouchMove also runs.
             updateTimeSlotMergeSelection(e);
         }, { passive: false });
 
@@ -732,6 +769,7 @@
                 e.preventDefault();
                 e.stopPropagation();
                 touchMergeSelectionActive = false;
+                clearWasGestureStartedByTimeSlot();
                 resetTimeSlotMergeSelectionState();
                 removeDocumentTouchListeners();
             }
@@ -739,11 +777,11 @@
 
         timeSlot.addEventListener('touchcancel', () => {
             touchMergeSelectionActive = false;
+            clearWasGestureStartedByTimeSlot();
             resetTimeSlotMergeSelectionState();
             removeDocumentTouchListeners();
         }, { passive: true });
     }
-
     function attachCellClickListeners(entryDiv, index) {
         const plannedField = entryDiv.querySelector('.planned-input');
         if (plannedField && !plannedField.dataset.mergeKey) {

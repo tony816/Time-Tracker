@@ -526,6 +526,11 @@ h1 {
   .time-entry.merge-capable .time-slot-merge-affordance {
     opacity: 0.82;
   }
+  /* Tell the browser the rail area is not a scroll surface,
+     so drag-to-merge gestures are not stolen by page scroll. */
+  .time-entry.merge-capable .time-slot-container {
+    touch-action: none;
+  }
 }
 
 .time-entry .time-label {
