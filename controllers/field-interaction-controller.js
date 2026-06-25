@@ -402,6 +402,28 @@
         if (!timeSlot) return;
         const doc = (timeSlot.ownerDocument || (typeof document !== 'undefined' ? document : null));
 
+        // --- gesture-start coordinate check ---
+        const isTimeRailMergeGestureStart = (event) => {
+            const point = event && event.touches ? event.touches[0] : event;
+            if (!point || !timeSlot) return false;
+            const timeSlotRect = timeSlot.getBoundingClientRect();
+            if (!timeSlotRect || !Number.isFinite(timeSlotRect.left) || !Number.isFinite(timeSlotRect.right)) return false;
+            const entryRect = entryDiv && typeof entryDiv.getBoundingClientRect === 'function'
+                ? entryDiv.getBoundingClientRect()
+                : null;
+            if (entryRect && Number.isFinite(entryRect.top) && Number.isFinite(entryRect.bottom)) {
+                if (point.clientY < entryRect.top || point.clientY > entryRect.bottom) return false;
+            } else if (Number.isFinite(timeSlotRect.top) && Number.isFinite(timeSlotRect.bottom)) {
+                if (point.clientY < timeSlotRect.top || point.clientY > timeSlotRect.bottom) return false;
+            }
+            const isCoarse = Boolean(event && event.touches);
+            const slopPx = isCoarse ? 20 : 4;
+            return point.clientX >= timeSlotRect.left && point.clientX <= timeSlotRect.right + slopPx;
+        };
+
+        let wasGestureStartedByTimeSlot = false;
+        const clearWasGestureStartedByTimeSlot = () => { wasGestureStartedByTimeSlot = false; };
+
         const isNonMergeTimeSlotControl = (target) => {
             if (!target || !target.closest) return false;
             return [
@@ -429,6 +451,44 @@
             return { start, end, mergeKey };
         };
         let activeMergeSelectionAdjustment = null;
+
+        let touchMergeSelectionActive = false;
+        const handleDocumentTouchMove = (event) => {
+            if (!touchMergeSelectionActive) return;
+            const t = event.touches && event.touches[0];
+            if (!t) return;
+            event.preventDefault();
+            updateTimeSlotMergeSelection(event);
+        };
+        const handleDocumentTouchEnd = (event) => {
+            if (touchMergeSelectionActive) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            touchMergeSelectionActive = false;
+            resetTimeSlotMergeSelectionState();
+            removeDocumentTouchListeners();
+        };
+        const handleDocumentTouchCancel = () => {
+            touchMergeSelectionActive = false;
+            resetTimeSlotMergeSelectionState();
+            removeDocumentTouchListeners();
+        };
+        const removeDocumentTouchListeners = () => {
+            if (doc && typeof doc.removeEventListener === 'function') {
+                doc.removeEventListener('touchmove', handleDocumentTouchMove);
+                doc.removeEventListener('touchend', handleDocumentTouchEnd);
+                doc.removeEventListener('touchcancel', handleDocumentTouchCancel);
+            }
+        };
+        const attachDocumentTouchListeners = () => {
+            if (doc && typeof doc.addEventListener === 'function') {
+                doc.addEventListener('touchmove', handleDocumentTouchMove, { passive: false });
+                doc.addEventListener('touchend', handleDocumentTouchEnd, { passive: false });
+                doc.addEventListener('touchcancel', handleDocumentTouchCancel, { passive: true });
+            }
+        };
+
         const getContiguousSelectedPlannedRange = () => {
             const selectedSet = this.selectedPlannedFields;
             if (!selectedSet || selectedSet.size <= 1) return null;
@@ -445,9 +505,11 @@
             resetPlannedSelectionDragState(this);
             this.pendingMergedMouseSelection = null;
             activeMergeSelectionAdjustment = null;
+            touchMergeSelectionActive = false;
             if (entryDiv && entryDiv.classList) {
                 entryDiv.classList.remove('merge-hover');
             }
+            removeDocumentTouchListeners();
         };
         const updateTimeSlotMergeHoverState = (isHovering) => {
             if (!entryDiv || !entryDiv.classList) return;
@@ -495,11 +557,15 @@
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
                 return false;
             }
-            if (event && isNonMergeTimeSlotControl(event.target)) {
+            const target = event && event.target;
+            if (target && isNonMergeTimeSlotControl(target)) {
+                clearWasGestureStartedByTimeSlot();
                 return false;
             }
             const range = getRange();
-            this.closeInlinePlanDropdown();
+            if (typeof this.closeInlinePlanDropdown === 'function') {
+                this.closeInlinePlanDropdown();
+            }
             const selectedRange = getContiguousSelectedPlannedRange();
             if (selectedRange && range.start === range.end && range.start >= selectedRange.start && range.end <= selectedRange.end) {
                 let anchorIndex = null;
@@ -533,6 +599,7 @@
                 this.clearAllSelections();
                 this.selectMergedRange('planned', range.mergeKey, { append: false });
             } else {
+                if (typeof this.clearSelection !== 'function') return false;
                 if (!event || (!event.ctrlKey && !event.metaKey)) {
                     this.clearSelection('planned');
                 }
@@ -564,6 +631,7 @@
             if (relatedTarget && relatedTarget.closest && relatedTarget.closest('.time-slot-container') === timeSlot) {
                 return;
             }
+            clearWasGestureStartedByTimeSlot();
             updateTimeSlotMergeHoverState(false);
         });
 
@@ -576,6 +644,7 @@
             if (relatedTarget && relatedTarget.closest && relatedTarget.closest('.time-slot-container') === timeSlot) {
                 return;
             }
+            clearWasGestureStartedByTimeSlot();
             updateTimeSlotMergeHoverState(false);
         });
 
@@ -592,14 +661,45 @@
             e.stopPropagation();
         });
 
-        let touchMergeSelectionActive = false;
-
+        // --- touchstart on timeSlot (exact hit) ---
         timeSlot.addEventListener('touchstart', (e) => {
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
             if (!e.touches || e.touches.length !== 1) return;
-            if (isNonMergeTimeSlotControl(e.target)) {
+            if (touchMergeSelectionActive) return;
+            if (isNonMergeTimeSlotControl(e.target)) return;
+
+            const result = beginTimeSlotMergeSelection(e);
+            if (!result) {
+                touchMergeSelectionActive = false;
+                clearWasGestureStartedByTimeSlot();
                 return;
             }
+            e.preventDefault();
+            e.stopPropagation();
+            if (result === 'cleared') {
+                touchMergeSelectionActive = false;
+                clearWasGestureStartedByTimeSlot();
+                resetTimeSlotMergeSelectionState();
+                return;
+            }
+            wasGestureStartedByTimeSlot = true;
+            touchMergeSelectionActive = true;
+            attachDocumentTouchListeners();
+        }, { passive: false });
+
+        // --- touchstart on entryDiv (row-level) for hit-slop captures ---
+        if (entryDiv && typeof entryDiv.addEventListener === 'function') {
+        entryDiv.addEventListener('touchstart', (e) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
+            if (!e.touches || e.touches.length !== 1) return;
+            if (touchMergeSelectionActive) return;
+            if (wasGestureStartedByTimeSlot) {
+                clearWasGestureStartedByTimeSlot();
+                return;
+            }
+            if (isNonMergeTimeSlotControl(e.target)) return;
+            if (!isTimeRailMergeGestureStart(e)) return;
+
             const result = beginTimeSlotMergeSelection(e);
             if (!result) {
                 touchMergeSelectionActive = false;
@@ -613,13 +713,17 @@
                 return;
             }
             touchMergeSelectionActive = true;
+            attachDocumentTouchListeners();
         }, { passive: false });
+        }
 
+        // Keep minimal timeSlot-level touch listeners as safety fallback;
+        // real tracking happens via document-level handlers.
         timeSlot.addEventListener('touchmove', (e) => {
             if (!touchMergeSelectionActive) return;
-            const t = e.touches && e.touches[0];
-            if (!t) return;
             e.preventDefault();
+            // Also update selection from the element-level handler as robustness
+            // fallback; the document-level handleDocumentTouchMove also runs.
             updateTimeSlotMergeSelection(e);
         }, { passive: false });
 
@@ -627,14 +731,16 @@
             if (touchMergeSelectionActive) {
                 e.preventDefault();
                 e.stopPropagation();
+                touchMergeSelectionActive = false;
+                resetTimeSlotMergeSelectionState();
+                removeDocumentTouchListeners();
             }
-            resetTimeSlotMergeSelectionState();
-            touchMergeSelectionActive = false;
         }, { passive: false });
 
         timeSlot.addEventListener('touchcancel', () => {
             touchMergeSelectionActive = false;
             resetTimeSlotMergeSelectionState();
+            removeDocumentTouchListeners();
         }, { passive: true });
     }
 

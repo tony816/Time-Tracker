@@ -461,6 +461,11 @@ h1 {
   box-shadow: inset 0 0 0 2px var(--merge-outline);
 }
 
+/* Prevent browser scroll interference during active time-slot merge drag */
+.time-entry.merge-selecting .time-slot-container {
+  touch-action: none;
+}
+
 .time-entry.merge-hover .time-slot-container.merged-time-main,
 .time-entry.merge-hover .time-slot-container.merged-time-secondary,
 .time-entry.merge-selecting .time-slot-container.merged-time-main,
