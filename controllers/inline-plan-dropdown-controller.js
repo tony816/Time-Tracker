@@ -199,12 +199,48 @@ function filterInlinePlanSearchItems(items, query) {
 function resolveInlinePlanAnchor(anchorEl, fallbackIndex = null) {
         if (anchorEl && anchorEl.isConnected) return anchorEl;
         const target = getInlinePlanTargetState.call(this);
+        if (target && target.mode === 'plan-segment-replace') {
+            return resolvePlanSegmentInlinePlanAnchor.call(this, target, fallbackIndex);
+        }
         const index = Number.isInteger(fallbackIndex)
             ? fallbackIndex
             : (target && Number.isInteger(target.startIndex) ? target.startIndex : null);
         if (!Number.isInteger(index)) return anchorEl || null;
         return document.querySelector(`[data-index="${index}"] .planned-input`)
             || document.querySelector(`[data-index="${index}"]`);
+    }
+
+function resolvePlanSegmentInlinePlanAnchor(target = null, fallbackIndex = null) {
+        const planTarget = target || getInlinePlanTargetState.call(this);
+        if (!planTarget || planTarget.mode !== 'plan-segment-replace') return null;
+        const baseIndex = Number.isInteger(planTarget.baseIndex)
+            ? planTarget.baseIndex
+            : (Number.isInteger(planTarget.startIndex) ? planTarget.startIndex : fallbackIndex);
+        const segmentIndex = Number.isInteger(Number(planTarget.segmentIndex)) ? Number(planTarget.segmentIndex) : null;
+        if (!Number.isInteger(baseIndex) || !Number.isInteger(segmentIndex)) return null;
+        const expectedId = String(planTarget.segmentId || '');
+        const anchorInfo = typeof this.findPlanSegmentDropdownAnchorInfo === 'function'
+            ? this.findPlanSegmentDropdownAnchorInfo(baseIndex, segmentIndex, expectedId)
+            : null;
+        const anchor = anchorInfo && anchorInfo.anchor
+            ? anchorInfo.anchor
+            : (typeof this.findPlanSegmentDropdownAnchor === 'function'
+                ? this.findPlanSegmentDropdownAnchor(baseIndex, segmentIndex, expectedId)
+                : null);
+        if (anchor && anchor.isConnected !== false) return anchor;
+        if (typeof document === 'undefined' || !document.querySelector) return null;
+        const row = document.querySelector(`.time-entry[data-index="${baseIndex}"], [data-index="${baseIndex}"]`);
+        const candidates = row && typeof row.querySelectorAll === 'function'
+            ? Array.from(row.querySelectorAll(`.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${segmentIndex}"]`))
+            : [];
+        const segmentEl = expectedId
+            ? candidates.find((candidate) => String((candidate.dataset && candidate.dataset.segmentId) || '') === expectedId)
+            : candidates[0];
+        if (!segmentEl || segmentEl.isConnected === false) return null;
+        return (segmentEl.querySelector && (
+            segmentEl.querySelector('.plan-segment-label-text')
+            || segmentEl.querySelector('.plan-segment-graphic-label')
+        )) || segmentEl;
     }
 
 function canInlineWheelScroll(targetEl, boundaryEl, deltaY) {
@@ -434,12 +470,14 @@ function scheduleInlinePlanViewportSync() {
             this.inlinePlanViewportSyncFrame = null;
             if (!this.inlinePlanDropdown) return;
             const target = getInlinePlanTargetState.call(this);
-            const currentAnchor = target
-                ? this.resolveInlinePlanAnchor(
+            const currentAnchor = target && target.mode === 'plan-segment-replace'
+                ? resolvePlanSegmentInlinePlanAnchor.call(this, target, Number.isInteger(target.startIndex) ? target.startIndex : null)
+                : (target
+                    ? this.resolveInlinePlanAnchor(
                     getInlinePlanAnchorState.call(this),
                     Number.isInteger(target.startIndex) ? target.startIndex : null
-                )
-                : null;
+                    )
+                    : null);
             if (target && currentAnchor) {
                 setInlinePlanAnchorState.call(this, currentAnchor);
             }
@@ -800,9 +838,11 @@ function positionInlinePlanDropdown(anchorEl) {
         const expandedWidth = Number.isFinite(requestedMinWidth) && requestedMinWidth > preferredWidth
             ? requestedMinWidth
             : preferredWidth;
-        const anchor = this.resolveInlinePlanAnchor(anchorEl);
-        if (!anchor) return;
         const target = getInlinePlanTargetState.call(this);
+        const anchor = target && target.mode === 'plan-segment-replace'
+            ? ((anchorEl && anchorEl.isConnected) ? anchorEl : resolvePlanSegmentInlinePlanAnchor.call(this, target, Number.isInteger(target.startIndex) ? target.startIndex : null))
+            : this.resolveInlinePlanAnchor(anchorEl);
+        if (!anchor) return;
         if (target && getInlinePlanAnchorState.call(this) !== anchor) {
             setInlinePlanAnchorState.call(this, anchor);
         }
@@ -1714,9 +1754,16 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
 
     function removeInlinePlanChipDragPreview() {
         const preview = this.inlinePlanChipDragPreview || null;
-        if (!preview) return;
-        if (preview.parentNode && typeof preview.parentNode.removeChild === 'function') {
+        const doc = (preview && preview.ownerDocument) || (typeof document !== 'undefined' ? document : null);
+        if (preview && preview.parentNode && typeof preview.parentNode.removeChild === 'function') {
             preview.parentNode.removeChild(preview);
+        }
+        if (doc && typeof doc.querySelectorAll === 'function') {
+            doc.querySelectorAll('.activity-chip-drag-preview').forEach((node) => {
+                if (node !== preview && node.parentNode && typeof node.parentNode.removeChild === 'function') {
+                    node.parentNode.removeChild(node);
+                }
+            });
         }
         this.inlinePlanChipDragPreview = null;
     }
@@ -1969,7 +2016,12 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
 
     function cleanupInlinePlanChipDragState() {
         const state = this.inlinePlanChipDragState || null;
-        if (!state) return;
+        if (!state) {
+            removeInlinePlanChipDragPreview.call(this);
+            clearInlinePlanChipDropFeedback.call(this, this.inlinePlanDropdown || null);
+            return;
+        }
+        if (state.lifecycle !== 'committed') state.lifecycle = 'cancelled';
         const doc = state.document || (typeof document !== 'undefined' ? document : null);
         const win = state.window || (typeof window !== 'undefined' ? window : null);
         if (doc && typeof doc.removeEventListener === 'function') {
@@ -1986,6 +2038,32 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             try { state.captureTarget.releasePointerCapture(state.pointerId); } catch (_) {}
         }
         clearInlinePlanChipDropFeedback.call(this, state.board);
+        clearInlinePlanChipDropFeedback.call(this, this.inlinePlanDropdown || null);
+        if (doc && typeof doc.querySelectorAll === 'function') {
+            doc.querySelectorAll('.activity-chip-board-drag-active').forEach((node) => {
+                removeInlinePlanClass(node, 'activity-chip-board-drag-active');
+            });
+            doc.querySelectorAll('.activity-chip-drag-pending, .activity-chip-dragging, .activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid').forEach((node) => {
+                removeInlinePlanClass(
+                    node,
+                    'activity-chip-drag-pending',
+                    'activity-chip-dragging',
+                    'activity-chip-drop-before',
+                    'activity-chip-drop-after',
+                    'activity-chip-drop-nest',
+                    'activity-chip-drop-invalid'
+                );
+                if (node && node.dataset) {
+                    delete node.dataset.chipDropLabel;
+                    delete node.dataset.chipDropIntent;
+                }
+            });
+            doc.querySelectorAll('.activity-chip-drop-label').forEach((node) => {
+                if (node && node.parentNode && typeof node.parentNode.removeChild === 'function') {
+                    node.parentNode.removeChild(node);
+                }
+            });
+        }
         if (state.sourceChip) {
             removeInlinePlanClass(state.sourceChip, 'activity-chip-drag-pending', 'activity-chip-dragging');
         }
@@ -2089,12 +2167,18 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         const dragOffsetY = sourceRect && sourceHeight !== null && Number.isFinite(sourceRect.top) && Number.isFinite(eventClientY)
             ? Math.max(0, Math.min(sourceHeight, eventClientY - sourceRect.top))
             : null;
-        cleanupInlinePlanChipDragState.call(this);
+        if (this.inlinePlanChipDragState) {
+            cleanupInlinePlanChipDragState.call(this);
+            if (this.inlinePlanChipDragState) return;
+        } else {
+            cleanupInlinePlanChipDragState.call(this);
+        }
 
         const state = {
             board,
             sourceChip,
             sourceId,
+            lifecycle: 'pending',
             dragOffsetX,
             dragOffsetY,
             startX: Number.isFinite(eventClientX) ? eventClientX : 0,
@@ -2103,7 +2187,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             lastClientY: Number.isFinite(eventClientY) ? eventClientY : 0,
             active: false,
             pointerId: Number.isFinite(event.pointerId) ? event.pointerId : null,
-            captureTarget: target,
+            captureTarget: null,
             document: doc,
             window: win,
             context: this,
@@ -2127,6 +2211,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
                     if (typeof moveEvent.stopPropagation === 'function') moveEvent.stopPropagation();
                     return;
                 }
+                state.lifecycle = 'active';
                 activateInlinePlanChipDragState.call(this, state, moveEvent);
             }
             updateInlinePlanChipDragPreview.call(this, state, moveEvent);
@@ -2145,6 +2230,7 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             const finalIntent = state.intent;
             const finalValidation = state.validation;
             const wasActive = state.active;
+            state.lifecycle = wasActive ? 'committed' : 'cancelled';
             cleanupInlinePlanChipDragState.call(this);
             if (wasActive && finalIntent && finalValidation && finalValidation.valid) {
                 applyActivityChipboardDrop.call(this, state.sourceId, finalIntent);
@@ -2172,7 +2258,12 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
             win.addEventListener('blur', state.cancelHandler, true);
         }
         if (target && Number.isFinite(event.pointerId) && typeof target.setPointerCapture === 'function') {
-            try { target.setPointerCapture(event.pointerId); } catch (_) {}
+            try {
+                target.setPointerCapture(event.pointerId);
+                state.captureTarget = target;
+            } catch (_) {
+                state.captureTarget = null;
+            }
         }
         this.inlinePlanChipDragState = state;
         if (sourceChip) addInlinePlanClass(sourceChip, 'activity-chip-drag-pending');
@@ -3265,7 +3356,10 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 }
             }
         }
-        const anchor = this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
+        const pendingSegmentTarget = segmentReplaceTarget ? { ...range, mode: 'plan-segment-replace' } : null;
+        const anchor = pendingSegmentTarget
+            ? (anchorEl && anchorEl.isConnected ? anchorEl : resolvePlanSegmentInlinePlanAnchor.call(this, pendingSegmentTarget, range.startIndex))
+            : this.resolveInlinePlanAnchor(anchorEl, range.startIndex);
         if (!anchor) return false;
         const sheetTargetEl = options && options.sheetTargetEl && typeof options.sheetTargetEl.getBoundingClientRect === 'function'
             ? options.sheetTargetEl
@@ -3536,7 +3630,9 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
         this.positionInlinePlanDropdown(anchor);
         requestAnimationFrame(() => {
             if (!this.inlinePlanDropdown) return;
-            const anchorNow = this.resolveInlinePlanAnchor(anchor, range.startIndex);
+            const anchorNow = range.mode === 'plan-segment-replace'
+                ? resolvePlanSegmentInlinePlanAnchor.call(this, range, range.startIndex)
+                : this.resolveInlinePlanAnchor(anchor, range.startIndex);
             if (!anchorNow) return;
             setInlinePlanAnchorState.call(this, anchorNow);
             this.positionInlinePlanDropdown(anchorNow);
@@ -3841,6 +3937,7 @@ function applyInlinePlanSelection(label, options = {}) {
         scoreInlinePlanSearchMatch,
         filterInlinePlanSearchItems,
         resolveInlinePlanAnchor,
+        resolvePlanSegmentInlinePlanAnchor,
         canInlineWheelScroll,
         handleInlinePlanWheel,
         isInlinePlanMobileInputContext,

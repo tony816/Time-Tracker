@@ -6076,6 +6076,9 @@ class TimeTracker {
         resolveInlinePlanAnchor(anchorEl, fallbackIndex = null) {
         return globalThis.TimeTrackerInlinePlanDropdownController.resolveInlinePlanAnchor.call(this, anchorEl, fallbackIndex);
     }
+        resolvePlanSegmentInlinePlanAnchor(target = null, fallbackIndex = null) {
+        return globalThis.TimeTrackerInlinePlanDropdownController.resolvePlanSegmentInlinePlanAnchor.call(this, target, fallbackIndex);
+    }
         canInlineWheelScroll(targetEl, boundaryEl, deltaY) {
         return globalThis.TimeTrackerInlinePlanDropdownController.canInlineWheelScroll.call(this, targetEl, boundaryEl, deltaY);
     }

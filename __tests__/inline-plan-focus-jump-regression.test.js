@@ -79,7 +79,7 @@ test('viewport sync is debounced while mobile inline plan input is focused', () 
 test('focused mobile inline input keeps dropdown attached to the slot anchor and shrinks height before flipping above', () => {
     assert.match(
         controllerSource,
-        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?const anchor = this\.resolveInlinePlanAnchor\(anchorEl\);/
+        /positionInlinePlanDropdown\(anchorEl\) \{[\s\S]*?const target = getInlinePlanTargetState\.call\(this\);[\s\S]*?target && target\.mode === 'plan-segment-replace'[\s\S]*?resolvePlanSegmentInlinePlanAnchor\.call\(this, target[\s\S]*?: this\.resolveInlinePlanAnchor\(anchorEl\);/
     );
     assert.match(
         controllerSource,

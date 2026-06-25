@@ -154,6 +154,59 @@ test('index html does not load the temporary inline plan chipboard patch module'
     assert.doesNotMatch(indexHtml, /inline-plan-chipboard-patch\.js/);
 });
 
+test('segment replacement resolver never falls back to generic planned input', () => {
+    const originalDocument = globalThis.document;
+    const segment = createInlineSelectionNode('div');
+    segment.className = 'split-grid-segment';
+    segment.dataset.segmentKind = 'real-plan';
+    segment.dataset.segmentIndex = '1';
+    segment.dataset.segmentId = 'seg-1';
+    segment.isConnected = true;
+    const label = createInlineSelectionNode('span');
+    label.className = 'plan-segment-label-text';
+    label.isConnected = true;
+    segment.appendChild(label);
+    segment.querySelector = (selector) => {
+        if (selector === '.plan-segment-label-text') return label;
+        if (selector === '.plan-segment-graphic-label') return null;
+        return null;
+    };
+
+    const genericInput = { isConnected: true, className: 'planned-input' };
+    const row = {
+        querySelectorAll(selector) {
+            if (selector === '.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="1"]') {
+                return [segment];
+            }
+            return [];
+        },
+    };
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="4"], [data-index="4"]') return row;
+            if (selector === '[data-index="4"] .planned-input') return genericInput;
+            return null;
+        },
+    };
+
+    const ctx = {
+        inlinePlanTarget: {
+            mode: 'plan-segment-replace',
+            baseIndex: 4,
+            startIndex: 4,
+            segmentIndex: 1,
+            segmentId: 'seg-1',
+        },
+    };
+
+    try {
+        assert.equal(controller.resolveInlinePlanAnchor.call(ctx, null, 4), label);
+        assert.equal(controller.resolvePlanSegmentInlinePlanAnchor.call(ctx, ctx.inlinePlanTarget, 4), label);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+});
+
 test('layoutInlinePlanAnchoredPanel keeps absolute panels on page coordinates', () => {
     const restore = installInlinePlanPositionGlobals();
     const panel = {
@@ -3431,6 +3484,85 @@ test('normal activity chip click still selects when edit mode is off', () => {
 
     assert.equal(harness.ctx.timeSlots[0].planned, 'Work');
     assert.equal(harness.ctx.timeSlots[0].planActivities[0].activityId, 'work');
+});
+
+test('chip drag cleanup clears stale document-wide artifacts idempotently', () => {
+    const sourceChip = createInlineSelectionNode('span');
+    sourceChip.className = 'activity-chip activity-chip-drag-pending activity-chip-dragging activity-chip-drop-invalid';
+    sourceChip.dataset.chipDropLabel = 'invalid';
+    sourceChip.dataset.chipDropIntent = 'invalid';
+    const detachedTarget = createInlineSelectionNode('span');
+    detachedTarget.className = 'activity-chip activity-chip-drop-after';
+    detachedTarget.dataset.chipDropLabel = 'after';
+    detachedTarget.dataset.chipDropIntent = 'after';
+    const board = createInlineSelectionNode('div');
+    board.className = 'activity-chip-board activity-chip-board-drag-active';
+    board.appendChild(sourceChip);
+    const staleBoard = createInlineSelectionNode('div');
+    staleBoard.className = 'activity-chip-board-drag-active';
+    const staleLabel = createInlineSelectionNode('span');
+    staleLabel.className = 'activity-chip-drop-label';
+    staleBoard.appendChild(staleLabel);
+    const preview = createInlineSelectionNode('div');
+    preview.className = 'activity-chip-drag-preview';
+    const extraPreview = createInlineSelectionNode('div');
+    extraPreview.className = 'activity-chip-drag-preview';
+    const removed = [];
+    [preview, extraPreview, staleLabel].forEach((node) => {
+        node.parentNode = {
+            removeChild(child) {
+                removed.push(child);
+            },
+        };
+    });
+    const doc = {
+        removeEventListener() {},
+        querySelectorAll(selector) {
+            if (selector === '.activity-chip-board-drag-active') return [board, staleBoard];
+            if (selector === '.activity-chip-drag-pending, .activity-chip-dragging, .activity-chip-drop-before, .activity-chip-drop-after, .activity-chip-drop-nest, .activity-chip-drop-invalid') {
+                return [sourceChip, detachedTarget];
+            }
+            if (selector === '.activity-chip-drop-label') return [staleLabel];
+            if (selector === '.activity-chip-drag-preview') return [preview, extraPreview];
+            return [];
+        },
+    };
+    preview.ownerDocument = doc;
+    extraPreview.ownerDocument = doc;
+    const ctx = {
+        inlinePlanDropdown: board,
+        inlinePlanChipDragPreview: preview,
+        inlinePlanChipDragState: {
+            document: doc,
+            window: { removeEventListener() {} },
+            moveHandler() {},
+            endHandler() {},
+            cancelHandler() {},
+            keyHandler() {},
+            board,
+            sourceChip,
+            pointerId: 3,
+            captureTarget: { releasePointerCapture() {} },
+        },
+    };
+
+    controller.cleanupInlinePlanChipDragState.call(ctx);
+    controller.cleanupInlinePlanChipDragState.call(ctx);
+
+    assert.equal(ctx.inlinePlanChipDragState, null);
+    assert.equal(ctx.inlinePlanChipDragPreview, null);
+    assert.equal(board.classList.contains('activity-chip-board-drag-active'), false);
+    assert.equal(staleBoard.classList.contains('activity-chip-board-drag-active'), false);
+    assert.equal(sourceChip.classList.contains('activity-chip-drag-pending'), false);
+    assert.equal(sourceChip.classList.contains('activity-chip-dragging'), false);
+    assert.equal(sourceChip.classList.contains('activity-chip-drop-invalid'), false);
+    assert.equal(detachedTarget.classList.contains('activity-chip-drop-after'), false);
+    assert.equal(sourceChip.dataset.chipDropLabel, undefined);
+    assert.equal(detachedTarget.dataset.chipDropIntent, undefined);
+    assert.deepEqual(
+        removed.map((node) => node.className).sort(),
+        ['activity-chip-drag-preview', 'activity-chip-drag-preview', 'activity-chip-drop-label'].sort()
+    );
 });
 
 function createChipboardDropHarness() {
