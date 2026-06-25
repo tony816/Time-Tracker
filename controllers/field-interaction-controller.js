@@ -457,6 +457,7 @@
         };
 
         let activeMergeSelectionAdjustment = null;
+        let mergeDragHadMovement = false;
 
         // --- shared touch tracking for document-level capture ---
         let touchMergeSelectionActive = false;
@@ -476,8 +477,16 @@
                 event.preventDefault();
                 event.stopPropagation();
             }
-            touchMergeSelectionActive = false;
-            resetTimeSlotMergeSelectionState();
+            // Tap (no movement) inside an existing multi-selection: convert to single
+            if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
+                const singleIdx = activeMergeSelectionAdjustment.startIndex;
+                resetTimeSlotMergeSelectionState();
+                this.clearSelection('planned');
+                this.selectFieldRange('planned', singleIdx, singleIdx);
+            } else {
+                touchMergeSelectionActive = false;
+                resetTimeSlotMergeSelectionState();
+            }
             removeDocumentTouchListeners();
         };
         const handleDocumentTouchCancel = () => {
@@ -516,6 +525,7 @@
             resetPlannedSelectionDragState(this);
             this.pendingMergedMouseSelection = null;
             activeMergeSelectionAdjustment = null;
+            mergeDragHadMovement = false;
             touchMergeSelectionActive = false;
             clearWasGestureStartedByTimeSlot();
             if (entryDiv && entryDiv.classList) {
@@ -533,6 +543,7 @@
         };
         const updateTimeSlotMergeSelection = (event) => {
             if (this.currentColumnType !== 'planned' || !this.isSelectingPlanned) return;
+            mergeDragHadMovement = true;
             const point = event && event.touches ? event.touches[0] : event;
             if (!point) return;
             const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
@@ -629,7 +640,15 @@
             updateTimeSlotMergeSelection(event);
         };
         const handleDocumentMouseUp = () => {
-            resetTimeSlotMergeSelectionState();
+            // Click (no movement) inside an existing multi-selection: convert to single
+            if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
+                const singleIdx = activeMergeSelectionAdjustment.startIndex;
+                resetTimeSlotMergeSelectionState();
+                this.clearSelection('planned');
+                this.selectFieldRange('planned', singleIdx, singleIdx);
+            } else {
+                resetTimeSlotMergeSelectionState();
+            }
             if (doc && typeof doc.removeEventListener === 'function') {
                 doc.removeEventListener('mousemove', handleDocumentMouseMove);
                 doc.removeEventListener('mouseup', handleDocumentMouseUp);
@@ -768,9 +787,19 @@
             if (touchMergeSelectionActive) {
                 e.preventDefault();
                 e.stopPropagation();
-                touchMergeSelectionActive = false;
-                clearWasGestureStartedByTimeSlot();
-                resetTimeSlotMergeSelectionState();
+                // Tap (no movement) inside an existing multi-selection: convert to single
+                if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
+                    const singleIdx = activeMergeSelectionAdjustment.startIndex;
+                    touchMergeSelectionActive = false;
+                    clearWasGestureStartedByTimeSlot();
+                    resetTimeSlotMergeSelectionState();
+                    this.clearSelection('planned');
+                    this.selectFieldRange('planned', singleIdx, singleIdx);
+                } else {
+                    touchMergeSelectionActive = false;
+                    clearWasGestureStartedByTimeSlot();
+                    resetTimeSlotMergeSelectionState();
+                }
                 removeDocumentTouchListeners();
             }
         }, { passive: false });
