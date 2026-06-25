@@ -764,6 +764,74 @@ function createRealisticPlanSegmentDom() {
     return { ctx, entryDiv, segment, timerButton, resizeHandle, title, labelContainer, label, timerTime, calls };
 }
 
+function createSegmentDropdownClickHarness(options = {}) {
+    const harness = createRealisticPlanSegmentDom();
+    const { ctx, entryDiv, segment, label } = harness;
+    const openCalls = [];
+    const closeCalls = [];
+    ctx.timeSlots = [
+        {
+            planned: 'Focus',
+            planActivities: [
+                { label: 'Focus', activityText: 'Focus', activityId: 'focus', seconds: 3600 },
+            ],
+        },
+    ];
+    ctx.addInlinePlanSheetTargetClasses = addInlinePlanSheetTargetClasses;
+    ctx.openPlanSegmentReplacementDropdown = function(baseIndex, segmentIndex, segmentEl, dropdownOptions = {}) {
+        return openPlanSegmentReplacementDropdown.call(this, baseIndex, segmentIndex, segmentEl, dropdownOptions);
+    };
+    ctx.closeInlinePlanDropdown = function() {
+        closeCalls.push(this.inlinePlanTarget ? { ...this.inlinePlanTarget } : null);
+        this.inlinePlanDropdown = null;
+        this.inlinePlanTarget = null;
+        this.inlinePlanAnchor = null;
+        this.inlinePlanSheetTargetEl = null;
+        this.inlinePlanContext = null;
+        this.selectedPlanSegment = null;
+        this.suppressInlinePlanOpenUntil = 0;
+    };
+    ctx.openInlinePlanDropdown = function(startIndex, anchor, endIndex, dropdownOptions = {}) {
+        const nextTarget = { startIndex, endIndex, anchor, ...dropdownOptions };
+        if (
+            this.inlinePlanDropdown
+            && this.inlinePlanTarget
+            && this.inlinePlanTarget.mode === nextTarget.mode
+            && Number(this.inlinePlanTarget.startIndex) === Number(nextTarget.startIndex)
+            && Number(this.inlinePlanTarget.segmentIndex) === Number(nextTarget.segmentIndex)
+            && String(this.inlinePlanTarget.segmentId || '') === String(nextTarget.segmentId || '')
+            && options.mobile !== true
+        ) {
+            this.closeInlinePlanDropdown();
+            return false;
+        }
+        openCalls.push(nextTarget);
+        this.inlinePlanDropdown = createElementNode('div');
+        if (options.mobile) {
+            this.inlinePlanDropdown.className = 'inline-plan-dropdown inline-plan-dropdown-sheet';
+            this.inlinePlanDropdown.classList = {
+                contains(name) {
+                    return name === 'inline-plan-dropdown-sheet';
+                },
+            };
+        }
+        this.inlinePlanTarget = nextTarget;
+        this.inlinePlanAnchor = anchor;
+        return true;
+    };
+    attachPlanSegmentSelectionListeners.call(ctx, entryDiv, 0);
+    return { ...harness, openCalls, closeCalls, clickLabel() {
+        label.dispatchEvent({
+            type: 'click',
+            button: 0,
+            target: label,
+            bubbles: true,
+            preventDefault() { this.defaultPrevented = true; },
+            stopPropagation() { this.propagationStopped = true; },
+        });
+    } };
+}
+
 test('real planned segment DOM does not open title editing from any direct trigger', () => {
     withDocument(() => {
         const { ctx, entryDiv, segment, timerButton, resizeHandle, labelContainer, label, timerTime } = createRealisticPlanSegmentDom();
@@ -888,6 +956,68 @@ test('clicking label container space opens segment dropdown without title editin
         });
         assert.equal(hasNodeClass(segment, 'inline-plan-sheet-context-target'), true);
         assert.equal(hasNodeClass(segment, 'inline-plan-segment-context-target'), true);
+    });
+});
+
+test('real segment label click opens replacement dropdown and same target toggles then reopens', () => {
+    withDocument(() => {
+        const harness = createSegmentDropdownClickHarness();
+
+        harness.clickLabel();
+        assert.equal(harness.openCalls.length, 1);
+        assert.equal(harness.ctx.inlinePlanTarget.mode, 'plan-segment-replace');
+        assert.equal(harness.ctx.inlinePlanTarget.anchor, harness.label);
+
+        harness.clickLabel();
+        assert.equal(harness.ctx.inlinePlanDropdown, null);
+        assert.equal(harness.closeCalls.length, 1);
+
+        harness.clickLabel();
+        assert.equal(harness.openCalls.length, 2);
+        assert.equal(harness.ctx.inlinePlanTarget.mode, 'plan-segment-replace');
+    });
+});
+
+test('real segment label click reopens after explicit close and after replacement render', () => {
+    withDocument(() => {
+        const harness = createSegmentDropdownClickHarness();
+
+        harness.clickLabel();
+        harness.ctx.closeInlinePlanDropdown();
+        harness.clickLabel();
+        assert.equal(harness.openCalls.length, 2);
+
+        harness.ctx.selectedPlanSegment = { baseIndex: 0, segmentIndex: 0 };
+        harness.ctx.renderTimeEntries = function(preserveInlineDropdown) {
+            assert.equal(preserveInlineDropdown, true);
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+            this.inlinePlanAnchor = null;
+        };
+        harness.ctx.renderTimeEntries(true);
+        harness.clickLabel();
+
+        assert.equal(harness.openCalls.length, 3);
+        assert.equal(harness.ctx.inlinePlanTarget.mode, 'plan-segment-replace');
+        assert.equal(harness.ctx.suppressInlinePlanOpenUntil, 0);
+    });
+});
+
+test('mobile segment sheet tap opens, closes, and immediately opens again', () => {
+    withDocument(() => {
+        const harness = createSegmentDropdownClickHarness({ mobile: true });
+        harness.ctx.isCoarsePlanSegmentPointerContext = () => true;
+        harness.ctx.resolvePlanSegmentTapIntent = () => 'dropdown';
+
+        harness.clickLabel();
+        assert.equal(harness.openCalls.length, 1);
+        assert.equal(harness.ctx.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet'), true);
+
+        harness.ctx.closeInlinePlanDropdown();
+        harness.clickLabel();
+
+        assert.equal(harness.openCalls.length, 2);
+        assert.equal(harness.ctx.inlinePlanTarget.mode, 'plan-segment-replace');
     });
 });
 

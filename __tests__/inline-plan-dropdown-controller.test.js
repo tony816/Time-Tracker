@@ -1402,6 +1402,87 @@ test('openInlinePlanDropdown returns false when suppressed or anchor resolution 
     assert.equal(controller.openInlinePlanDropdown.call(ctx, 0, null, 0), false);
 });
 
+test('openInlinePlanDropdown ignores stale suppression for plan segment replacement opens', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const anchor = { isConnected: true };
+    const dropdown = {
+        className: '',
+        innerHTML: '',
+        style: {},
+        addEventListener() {},
+        removeEventListener() {},
+        contains() { return false; },
+        querySelector() { return null; },
+    };
+    const ctx = {
+        suppressInlinePlanOpenUntil: Date.now() + 1000,
+        timeSlots: [{ planActivities: [{ label: 'Focus' }] }],
+        getPlannedRangeInfo(index) {
+            return { startIndex: index, endIndex: index };
+        },
+        resolveInlinePlanAnchor(anchorEl) {
+            return anchorEl;
+        },
+        isSameInlinePlanTarget(range, anchorEl) {
+            return controller.isSameInlinePlanTarget.call(this, range, anchorEl);
+        },
+        clearSelection() {},
+        closeInlinePlanDropdown() {
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+        },
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return false; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        renderInlinePlanDropdownOptions() {},
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        closeInlinePriorityMenu() {},
+        closeRoutineMenu() {},
+        closePlanActivityMenu() {},
+        closePlanTitleMenu() {},
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+        markInlinePlanInputIntent() {},
+    };
+    globalThis.document = {
+        createElement() { return dropdown; },
+        body: {
+            appendChild() {},
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {}, visualViewport: null };
+    globalThis.requestAnimationFrame = (callback) => callback();
+
+    try {
+        const opened = controller.openInlinePlanDropdown.call(ctx, 0, anchor, 0, {
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        });
+        assert.equal(opened, true);
+        assert.equal(ctx.inlinePlanTarget.mode, 'plan-segment-replace');
+        assert.equal(ctx.inlinePlanTarget.segmentIndex, 0);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+});
+
 test('openInlinePlanDropdown returns true when same mobile sheet target remains open', () => {
     const anchor = { isConnected: true };
     let corrected = false;
@@ -2435,11 +2516,8 @@ test('activity chipboard delete mode renders and toggles independently', () => {
 
     try {
         controller.renderInlinePlanDropdownOptions.call(ctx);
-        assert.equal(actions.children.length, 2);
-        const editToggle = actions.children[0];
-        const toggle = actions.children[1];
-        assert.equal(editToggle.className, 'activity-chip-edit-mode-toggle');
-        assert.equal(editToggle.getAttribute('aria-pressed'), 'false');
+        assert.equal(actions.children.length, 1);
+        const toggle = actions.children[0];
         assert.equal(toggle.className, 'activity-chip-delete-mode-toggle');
         assert.equal(toggle.getAttribute('aria-pressed'), 'false');
         assert.equal(toggle.textContent, '삭제 모드');
@@ -2452,8 +2530,8 @@ test('activity chipboard delete mode renders and toggles independently', () => {
 
         assert.equal(ctx.inlinePlanChipDeleteMode, true);
         assert.equal(ctx.inlinePlanChipEditMode, false);
-        assert.equal(actions.children.length, 2);
-        const nextToggle = actions.children[1];
+        assert.equal(actions.children.length, 1);
+        const nextToggle = actions.children[0];
         assert.equal(nextToggle.getAttribute('aria-pressed'), 'true');
         assert.equal(nextToggle.textContent, '삭제 모드 ON');
         assert.equal(board.classList.contains('activity-chip-board-delete-mode'), true);
@@ -2527,10 +2605,7 @@ test('activity chipboard renders no drag handles and marks chips draggable witho
         assert.equal(workChip.dataset.draggableActivity, 'true');
         assert.equal(ctx.inlinePlanChipEditMode || false, false);
         assert.equal(findNode(board, (node) => node.className === 'activity-chip-drag-handle'), null);
-
-        actions.children[0].dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
-        assert.equal(ctx.inlinePlanChipEditMode, true);
-        assert.equal(findNode(board, (node) => node.className === 'activity-chip-drag-handle'), null);
+        assert.equal(findNode(actions, (node) => node.className === 'activity-chip-edit-mode-toggle'), null);
     } finally {
         globalThis.document = originalDocument;
     }
@@ -5313,6 +5388,56 @@ test('child chip can detach to top level and still nest under another parent', (
     assert.equal(result.changed, true);
     assert.equal(ctx.plannedActivities.find((item) => item.id === 'focus').parentId, 'study');
     assert.equal(saveCalls.length, 2);
+});
+
+test('child chip dragged from popover to main board empty space becomes top-level', () => {
+    const mainBoard = createInlineSelectionNode('div');
+    mainBoard.className = 'activity-chip-board';
+    const childBoard = createInlineSelectionNode('div');
+    childBoard.className = 'activity-chip-board inline-plan-sub-board';
+    const sourceChip = createInlineSelectionNode('span');
+    sourceChip.className = 'activity-chip';
+    sourceChip.dataset.activityId = 'focus';
+    sourceChip.dataset.boardSection = 'children';
+    sourceChip.closest = (selector) => {
+        if (selector === '.activity-chip[data-activity-id]') return sourceChip;
+        if (selector === '.activity-chip-board') return childBoard;
+        return null;
+    };
+    const emptyMainBoardSpace = createInlineSelectionNode('div');
+    emptyMainBoardSpace.closest = (selector) => selector === '.activity-chip-board' ? mainBoard : null;
+    const documentStub = {
+        elementFromPoint() {
+            return emptyMainBoardSpace;
+        },
+    };
+    const saveCalls = [];
+    const ctx = {
+        plannedActivities: [
+            { id: 'work', label: 'Work', name: 'Work', parentId: null, boardOrder: 0 },
+            { id: 'focus', label: 'Focus', name: 'Focus', parentId: 'work', boardOrder: 0 },
+            { id: 'study', label: 'Study', name: 'Study', parentId: null, boardOrder: 1 },
+        ],
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        dedupeAndSortPlannedActivities() {},
+        savePlannedActivities() { saveCalls.push('save'); },
+        renderPlannedActivityDropdown() {},
+        refreshSubActivityOptions() {},
+    };
+
+    const intent = controller.resolveInlinePlanChipDropIntent.call(ctx, { clientX: 40, clientY: 80 }, {
+        sourceChip,
+        sourceId: 'focus',
+        board: childBoard,
+        document: documentStub,
+    });
+
+    assert.equal(intent.type, 'detach');
+    assert.equal(intent.parentId, '');
+    const result = controller.applyActivityChipboardDrop.call(ctx, 'focus', intent);
+    assert.equal(result.status, 'detached');
+    assert.equal(ctx.plannedActivities.find((item) => item.id === 'focus').parentId, null);
+    assert.equal(saveCalls.length, 1);
 });
 
 test('createChildActivityForParent scopes children to one parent and rejects missing parents', () => {

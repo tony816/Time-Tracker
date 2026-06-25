@@ -99,7 +99,24 @@ function prepareTimeEntriesRender(preserveInlineDropdown = false) {
 function finalizeTimeEntriesRender(context = {}) {
         if (!context || !context.preserveInlineDropdown) return false;
         const target = getInlinePlanTargetState(this);
-        if (!target || !this.inlinePlanDropdown) return false;
+        if (!target || !this.inlinePlanDropdown) {
+            if ((target || this.inlinePlanDropdown) && typeof this.closeInlinePlanDropdown === 'function') {
+                this.closeInlinePlanDropdown();
+            }
+            return false;
+        }
+        const preservedTarget = context.target || null;
+        if (preservedTarget && preservedTarget.mode === 'plan-segment-replace') {
+            const sameSegmentTarget = target
+                && target.mode === 'plan-segment-replace'
+                && Number(target.startIndex) === Number(preservedTarget.startIndex)
+                && Number(target.segmentIndex) === Number(preservedTarget.segmentIndex)
+                && String(target.segmentId || '') === String(preservedTarget.segmentId || '');
+            if (!sameSegmentTarget) {
+                if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
+                return false;
+            }
+        }
         if (target.mode === 'plan-segment-replace') {
             const repositioned = typeof this.repositionOpenInlinePlanDropdown === 'function'
                 ? this.repositionOpenInlinePlanDropdown()

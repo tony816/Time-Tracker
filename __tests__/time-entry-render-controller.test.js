@@ -415,6 +415,74 @@ test('renderTimeEntries(true) closes inline dropdown when preserved anchor is st
     assert.equal(ctx.inlinePlanTarget, null);
 });
 
+test('finalizeTimeEntriesRender closes stale segment replacement when preserved target changed', () => {
+    let closeCalls = 0;
+    const ctx = {
+        inlinePlanDropdown: { id: 'dropdown' },
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+        },
+        closeInlinePlanDropdown() {
+            closeCalls += 1;
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+            this.selectedPlanSegment = null;
+            this.suppressInlinePlanOpenUntil = 0;
+        },
+        repositionOpenInlinePlanDropdown() {
+            assert.fail('changed segment target should close before repositioning');
+        },
+    };
+
+    const preserved = {
+        preserveInlineDropdown: true,
+        target: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+    };
+
+    assert.equal(controller.finalizeTimeEntriesRender.call(ctx, preserved), false);
+    assert.equal(closeCalls, 1);
+    assert.equal(ctx.inlinePlanDropdown, null);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
+test('finalizeTimeEntriesRender closes partially missing preserved dropdown state', () => {
+    let closeCalls = 0;
+    const ctx = {
+        inlinePlanDropdown: null,
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        closeInlinePlanDropdown() {
+            closeCalls += 1;
+            this.inlinePlanDropdown = null;
+            this.inlinePlanTarget = null;
+            this.selectedPlanSegment = null;
+            this.suppressInlinePlanOpenUntil = 0;
+        },
+    };
+
+    assert.equal(controller.finalizeTimeEntriesRender.call(ctx, {
+        preserveInlineDropdown: true,
+        target: { ...ctx.inlinePlanTarget },
+    }), false);
+    assert.equal(closeCalls, 1);
+    assert.equal(ctx.inlinePlanTarget, null);
+});
+
 test('renderTimeEntries(false) closes dropdown before rows are recreated', () => {
     const originalDocument = globalThis.document;
     const { ctx, container, documentStub } = createRenderTimeEntriesContext({ mobile: false });
