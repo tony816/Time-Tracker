@@ -751,6 +751,27 @@
             const el = document.createElement('div');
             el.className = 'selection-overlay';
             el.dataset.type = type;
+            if (type === 'planned' && typeof this.beginPlannedTimeSlotMergeSelection === 'function') {
+                const isOverlayActionButton = (target) => Boolean(
+                    target && target.closest && target.closest('.schedule-button, .undo-button, .merge-button')
+                );
+                const onOverlayPointerStart = (event) => {
+                    if (event.type === 'mousedown' && event.button !== 0) return;
+                    if (event.type === 'pointerdown' && event.button !== 0) return;
+                    if (event.type === 'touchstart' && event.touches && event.touches.length !== 1) return;
+                    if (isOverlayActionButton(event.target)) return;
+                    const result = this.beginPlannedTimeSlotMergeSelection(event);
+                    if (!result) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                };
+                el.addEventListener('mousedown', onOverlayPointerStart, true);
+                el.addEventListener('pointerdown', onOverlayPointerStart, true);
+                el.addEventListener('touchstart', onOverlayPointerStart, { capture: true, passive: false });
+                document.body.appendChild(el);
+                overlay = setSelectionOverlayElement.call(this, type, el);
+                return overlay;
+            }
 
             // 오버레이 위에서 드래그 시작을 허용하여 단일 선택 상태에서도 드래그 확장 가능
             let overlayDrag = { active: false, moved: false, startIndex: -1 };

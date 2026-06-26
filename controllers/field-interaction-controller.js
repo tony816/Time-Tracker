@@ -456,41 +456,45 @@
             return { start, end, mergeKey };
         };
 
-        let activeMergeSelectionAdjustment = null;
-        let mergeDragHadMovement = false;
+        const mergeState = this._plannedTimeSlotMergeSelectionState || (this._plannedTimeSlotMergeSelectionState = {
+            activeMergeSelectionAdjustment: null,
+            mergeDragHadMovement: false,
+            touchMergeSelectionActive: false,
+        });
+        let activeMergeSelectionAdjustment = mergeState.activeMergeSelectionAdjustment;
+        let mergeDragHadMovement = mergeState.mergeDragHadMovement;
 
         // --- shared touch tracking for document-level capture ---
-        let touchMergeSelectionActive = false;
         const DOC_TOUCH_MOVE_OPTS = { capture: true, passive: false };
         const DOC_TOUCH_END_OPTS = { capture: true, passive: false };
         const DOC_TOUCH_CANCEL_OPTS = { capture: true, passive: true };
 
         const handleDocumentTouchMove = (event) => {
-            if (!touchMergeSelectionActive) return;
+            if (!mergeState.touchMergeSelectionActive) return;
             const t = event.touches && event.touches[0];
             if (!t) return;
             event.preventDefault();
             updateTimeSlotMergeSelection(event);
         };
         const handleDocumentTouchEnd = (event) => {
-            if (touchMergeSelectionActive) {
+            if (mergeState.touchMergeSelectionActive) {
                 event.preventDefault();
                 event.stopPropagation();
             }
             // Tap (no movement) inside an existing multi-selection: convert to single
-            if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
-                const singleIdx = activeMergeSelectionAdjustment.startIndex;
+            if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+                const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                 resetTimeSlotMergeSelectionState();
                 this.clearSelection('planned');
                 this.selectFieldRange('planned', singleIdx, singleIdx);
             } else {
-                touchMergeSelectionActive = false;
+                mergeState.touchMergeSelectionActive = false;
                 resetTimeSlotMergeSelectionState();
             }
             removeDocumentTouchListeners();
         };
         const handleDocumentTouchCancel = () => {
-            touchMergeSelectionActive = false;
+            mergeState.touchMergeSelectionActive = false;
             resetTimeSlotMergeSelectionState();
             removeDocumentTouchListeners();
         };
@@ -526,7 +530,7 @@
             this.pendingMergedMouseSelection = null;
             activeMergeSelectionAdjustment = null;
             mergeDragHadMovement = false;
-            touchMergeSelectionActive = false;
+            mergeState.touchMergeSelectionActive = false;
             clearWasGestureStartedByTimeSlot();
             if (entryDiv && entryDiv.classList) {
                 entryDiv.classList.remove('merge-hover');
@@ -543,26 +547,26 @@
         };
         const updateTimeSlotMergeSelection = (event) => {
             if (this.currentColumnType !== 'planned' || !this.isSelectingPlanned) return;
-            mergeDragHadMovement = true;
+            mergeState.mergeDragHadMovement = true;
             const point = event && event.touches ? event.touches[0] : event;
             if (!point) return;
             const hoverIndex = this.getIndexAtClientPosition('planned', point.clientX, point.clientY);
             if (!Number.isInteger(hoverIndex)) return;
-            if (activeMergeSelectionAdjustment) {
-                if (!Number.isInteger(activeMergeSelectionAdjustment.anchorIndex)) {
-                    if (activeMergeSelectionAdjustment.startIndex === activeMergeSelectionAdjustment.selectedEnd) {
-                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedStart;
-                    } else if (activeMergeSelectionAdjustment.startIndex === activeMergeSelectionAdjustment.selectedStart) {
-                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedEnd;
-                    } else if (hoverIndex < activeMergeSelectionAdjustment.startIndex) {
-                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedStart;
-                    } else if (hoverIndex > activeMergeSelectionAdjustment.startIndex) {
-                        activeMergeSelectionAdjustment.anchorIndex = activeMergeSelectionAdjustment.selectedEnd;
+            if (mergeState.activeMergeSelectionAdjustment) {
+                if (!Number.isInteger(mergeState.activeMergeSelectionAdjustment.anchorIndex)) {
+                    if (mergeState.activeMergeSelectionAdjustment.startIndex === mergeState.activeMergeSelectionAdjustment.selectedEnd) {
+                        mergeState.activeMergeSelectionAdjustment.anchorIndex = mergeState.activeMergeSelectionAdjustment.selectedStart;
+                    } else if (mergeState.activeMergeSelectionAdjustment.startIndex === mergeState.activeMergeSelectionAdjustment.selectedStart) {
+                        mergeState.activeMergeSelectionAdjustment.anchorIndex = mergeState.activeMergeSelectionAdjustment.selectedEnd;
+                    } else if (hoverIndex < mergeState.activeMergeSelectionAdjustment.startIndex) {
+                        mergeState.activeMergeSelectionAdjustment.anchorIndex = mergeState.activeMergeSelectionAdjustment.selectedEnd;
+                    } else if (hoverIndex > mergeState.activeMergeSelectionAdjustment.startIndex) {
+                        mergeState.activeMergeSelectionAdjustment.anchorIndex = mergeState.activeMergeSelectionAdjustment.selectedStart;
                     } else {
                         return;
                     }
                 }
-                const anchorIndex = activeMergeSelectionAdjustment.anchorIndex;
+                const anchorIndex = mergeState.activeMergeSelectionAdjustment.anchorIndex;
                 this.clearSelection('planned');
                 this.selectFieldRange('planned', Math.min(anchorIndex, hoverIndex), Math.max(anchorIndex, hoverIndex));
                 return;
@@ -576,16 +580,16 @@
             this.clearSelection('planned');
             this.selectFieldRange('planned', selectionStart, selectionEnd);
         };
-        const beginTimeSlotMergeSelection = (event) => {
-            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) {
-                return false;
-            }
+        const beginTimeSlotMergeSelection = (event, forcedIndex = null) => {
+            if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return false;
             const target = event && event.target;
             if (target && isNonMergeTimeSlotControl(target)) {
                 clearWasGestureStartedByTimeSlot();
                 return false;
             }
-            const range = getRange();
+            const range = Number.isInteger(forcedIndex)
+                ? { start: forcedIndex, end: forcedIndex, mergeKey: this.findMergeKey ? this.findMergeKey('planned', forcedIndex) : null }
+                : getRange();
             if (typeof this.closeInlinePlanDropdown === 'function') {
                 this.closeInlinePlanDropdown();
             }
@@ -597,18 +601,20 @@
                 } else if (range.start === selectedRange.start) {
                     anchorIndex = selectedRange.end;
                 }
-                activeMergeSelectionAdjustment = {
+                mergeState.activeMergeSelectionAdjustment = {
                     selectedStart: selectedRange.start,
                     selectedEnd: selectedRange.end,
                     startIndex: range.start,
                     anchorIndex,
                 };
+                activeMergeSelectionAdjustment = mergeState.activeMergeSelectionAdjustment;
                 this.currentColumnType = 'planned';
                 this.dragStartIndex = range.start;
                 this.dragBaseEndIndex = range.end;
                 this.isSelectingPlanned = true;
                 return true;
             }
+            mergeState.activeMergeSelectionAdjustment = null;
             activeMergeSelectionAdjustment = null;
             if (isPlainPrimaryPointerEvent(event) && isPlannedRangeSelected(this, range.start, range.end)) {
                 clearSelectedPlannedRangeFromEvent(this, event);
@@ -641,8 +647,8 @@
         };
         const handleDocumentMouseUp = () => {
             // Click (no movement) inside an existing multi-selection: convert to single
-            if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
-                const singleIdx = activeMergeSelectionAdjustment.startIndex;
+            if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+                const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                 resetTimeSlotMergeSelectionState();
                 this.clearSelection('planned');
                 this.selectFieldRange('planned', singleIdx, singleIdx);
@@ -653,6 +659,16 @@
                 doc.removeEventListener('mousemove', handleDocumentMouseMove);
                 doc.removeEventListener('mouseup', handleDocumentMouseUp);
             }
+        };
+
+        const attachDocumentMergeListeners = (event) => {
+            if (!doc || typeof doc.addEventListener !== 'function') return;
+            if (event && event.touches) {
+                attachDocumentTouchListeners();
+                return;
+            }
+            doc.addEventListener('mousemove', handleDocumentMouseMove);
+            doc.addEventListener('mouseup', handleDocumentMouseUp);
         };
 
         // --- row-level mouse hit-slop (desktop) ---
@@ -673,6 +689,20 @@
             }
             e.preventDefault();
             e.stopPropagation();
+        };
+
+        this.beginPlannedTimeSlotMergeSelection = (event) => {
+            const forcedIndex = this.getIndexAtClientPosition
+                ? this.getIndexAtClientPosition('planned', event && event.clientX, event && event.clientY)
+                : null;
+            const result = beginTimeSlotMergeSelection(event, forcedIndex);
+            if (result && result !== 'cleared') {
+                attachDocumentMergeListeners(event);
+            }
+            return result;
+        };
+        this.endPlannedTimeSlotMergeSelection = () => {
+            resetTimeSlotMergeSelectionState();
         };
 
         // --- hover / focus ---
@@ -720,25 +750,25 @@
         timeSlot.addEventListener('touchstart', (e) => {
             if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
             if (!e.touches || e.touches.length !== 1) return;
-            if (touchMergeSelectionActive) return;
+            if (mergeState.touchMergeSelectionActive) return;
             if (isNonMergeTimeSlotControl(e.target)) return;
 
             const result = beginTimeSlotMergeSelection(e);
             if (!result) {
-                touchMergeSelectionActive = false;
+                mergeState.touchMergeSelectionActive = false;
                 clearWasGestureStartedByTimeSlot();
                 return;
             }
             e.preventDefault();
             e.stopPropagation();
             if (result === 'cleared') {
-                touchMergeSelectionActive = false;
+                mergeState.touchMergeSelectionActive = false;
                 clearWasGestureStartedByTimeSlot();
                 resetTimeSlotMergeSelectionState();
                 return;
             }
             wasGestureStartedByTimeSlot = true;
-            touchMergeSelectionActive = true;
+            mergeState.touchMergeSelectionActive = true;
             attachDocumentTouchListeners();
         }, { passive: false });
 
@@ -748,7 +778,7 @@
             entryDiv.addEventListener('touchstart', (e) => {
                 if (this.isPlannedSlotMoveMode && this.isPlannedSlotMoveMode()) return;
                 if (!e.touches || e.touches.length !== 1) return;
-                if (touchMergeSelectionActive) return;
+                if (mergeState.touchMergeSelectionActive) return;
                 // If the touch landed on timeSlot, let the timeSlot bubble handler own it
                 if (isTargetInsideTimeSlot(e.target)) return;
                 if (isNonMergeTimeSlotControl(e.target)) return;
@@ -756,18 +786,18 @@
 
                 const result = beginTimeSlotMergeSelection(e);
                 if (!result) {
-                    touchMergeSelectionActive = false;
+                    mergeState.touchMergeSelectionActive = false;
                     return;
                 }
                 e.preventDefault();
                 e.stopPropagation();
                 if (result === 'cleared') {
-                    touchMergeSelectionActive = false;
+                    mergeState.touchMergeSelectionActive = false;
                     clearWasGestureStartedByTimeSlot();
                     resetTimeSlotMergeSelectionState();
                     return;
                 }
-                touchMergeSelectionActive = true;
+                mergeState.touchMergeSelectionActive = true;
                 attachDocumentTouchListeners();
             }, { capture: true, passive: false });
 
@@ -778,25 +808,25 @@
         // Keep minimal timeSlot-level touch listeners as safety fallback;
         // real tracking happens via document-level capture handlers.
         timeSlot.addEventListener('touchmove', (e) => {
-            if (!touchMergeSelectionActive) return;
+            if (!mergeState.touchMergeSelectionActive) return;
             e.preventDefault();
             updateTimeSlotMergeSelection(e);
         }, { passive: false });
 
         timeSlot.addEventListener('touchend', (e) => {
-            if (touchMergeSelectionActive) {
+            if (mergeState.touchMergeSelectionActive) {
                 e.preventDefault();
                 e.stopPropagation();
                 // Tap (no movement) inside an existing multi-selection: convert to single
-                if (activeMergeSelectionAdjustment && !mergeDragHadMovement) {
-                    const singleIdx = activeMergeSelectionAdjustment.startIndex;
-                    touchMergeSelectionActive = false;
+                if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+                    const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
+                    mergeState.touchMergeSelectionActive = false;
                     clearWasGestureStartedByTimeSlot();
                     resetTimeSlotMergeSelectionState();
                     this.clearSelection('planned');
                     this.selectFieldRange('planned', singleIdx, singleIdx);
                 } else {
-                    touchMergeSelectionActive = false;
+                    mergeState.touchMergeSelectionActive = false;
                     clearWasGestureStartedByTimeSlot();
                     resetTimeSlotMergeSelectionState();
                 }
@@ -805,7 +835,7 @@
         }, { passive: false });
 
         timeSlot.addEventListener('touchcancel', () => {
-            touchMergeSelectionActive = false;
+            mergeState.touchMergeSelectionActive = false;
             clearWasGestureStartedByTimeSlot();
             resetTimeSlotMergeSelectionState();
             removeDocumentTouchListeners();

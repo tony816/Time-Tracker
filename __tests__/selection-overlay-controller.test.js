@@ -29,6 +29,13 @@ test('selection overlay writes merge visual state metadata for planned selection
     assert.match(controllerSource, /delete el\.dataset\.mergeVisualState/);
 });
 
+test('planned overlay delegates pointer start to canonical merge selection and preserves action buttons', () => {
+    assert.match(controllerSource, /beginPlannedTimeSlotMergeSelection/);
+    assert.match(controllerSource, /\.schedule-button, \.undo-button, \.merge-button/);
+    assert.match(controllerSource, /touchstart/);
+    assert.match(controllerSource, /pointerdown/);
+});
+
 test('updateSelectionOverlay does not throw when planned selection overlay refreshes', () => {
     const originalDocument = global.document;
     const originalWindow = global.window;

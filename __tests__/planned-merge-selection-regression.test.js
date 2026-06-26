@@ -827,3 +827,143 @@ test('planMergeSnapshot survives state snapshot restore enough for undoMerge to 
     assert.equal(restoredCtx.timeSlots[1].planSegmentTimers['planned-1-1-seg0'].startedAt, 345);
     assert.equal(restoredCtx.timeSlots[0].planMergeSnapshot, undefined);
 });
+
+test('planned overlay-started drag uses the same merge-selection path as the time rail', () => {
+    const originalDocument = global.document;
+    const listeners = {};
+    global.document = {
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
+    };
+
+    const timeSlot = createListenerNode();
+    timeSlot.ownerDocument = global.document;
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+            this.selectedPlannedFields.clear();
+            for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+        },
+        findMergeKey() { return 'planned-2-4'; },
+        getMergeRangeBounds() { return { start: 2, end: 4 }; },
+        getIndexAtClientPosition(type, clientX) {
+            assert.equal(type, 'planned');
+            return clientX >= 180 ? 5 : 3;
+        },
+        isPlannedSlotMoveMode() { return false; },
+    };
+
+    try {
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        ctx.beginPlannedTimeSlotMergeSelection({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        global.document.dispatchEvent({
+            type: 'mousemove',
+            clientX: 200,
+            clientY: 220,
+            buttons: 1,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        global.document.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(calls.filter((call) => call[0] === 'select').pop(), ['select', 'planned', 2, 5]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned multi-selection tap on selected middle slot collapses to one slot', () => {
+    const originalDocument = global.document;
+    global.document = {
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() {},
+    };
+
+    const timeSlot = createListenerNode();
+    timeSlot.ownerDocument = global.document;
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() { return 'planned-2-4'; },
+        getMergeRangeBounds() { return { start: 2, end: 4 }; },
+        getIndexAtClientPosition() { return 3; },
+        isPlannedSlotMoveMode() { return false; },
+    };
+
+    try {
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        ctx.beginPlannedTimeSlotMergeSelection({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        global.document.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [3]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
