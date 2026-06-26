@@ -2413,7 +2413,6 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest {
-  align-self: start;
   position: relative;
   z-index: 3;
   pointer-events: auto;
@@ -2421,7 +2420,8 @@ button.activity-chip,
   border: 1px dashed rgba(126, 140, 154, 0.42);
   border-bottom: 1px dashed rgba(126, 140, 154, 0.42) !important;
   color: rgba(85, 99, 112, 0.72);
-  height: calc(100% - 3px);
+  height: 100%;
+  box-sizing: border-box;
   box-shadow: none;
   cursor: pointer;
 }
@@ -2749,9 +2749,8 @@ body.is-plan-segment-reorder-ghost-active {
 }
 
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-rest {
-  align-self: start;
-  height: calc(100% - 3px);
-  max-height: calc(100% - 3px);
+  height: 100%;
+  box-sizing: border-box;
   border: 1px dashed rgba(96, 110, 128, 0.58);
   border-bottom: 1px dashed rgba(96, 110, 128, 0.58);
   background: rgba(231, 236, 241, 0.72);
