@@ -261,6 +261,33 @@ test('CSS: planned real segment ::after is neutralized (no z-index artifact)', (
     assert.doesNotMatch(afterBlock[0], /box-shadow/);
 });
 
+
+test('CSS: planned real segment keeps rounded corners regardless of connect-top/connect-bottom', () => {
+    // connect-top override — must restore top corner rounding
+    const connectTopBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind=\"real-plan\"\]\.connect-top\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(connectTopBlock, 'real-plan.connect-top override must exist');
+    assert.match(connectTopBlock[0], /border-top-left-radius:\s*7px/);
+    assert.match(connectTopBlock[0], /border-top-right-radius:\s*7px/);
+    assert.doesNotMatch(connectTopBlock[0], /border-top-left-radius:\s*0/);
+
+    // connect-bottom override — must restore bottom corner rounding
+    const connectBottomBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind=\"real-plan\"\]\.connect-bottom\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(connectBottomBlock, 'real-plan.connect-bottom override must exist');
+    assert.match(connectBottomBlock[0], /border-bottom-left-radius:\s*7px/);
+    assert.match(connectBottomBlock[0], /border-bottom-right-radius:\s*7px/);
+    assert.doesNotMatch(connectBottomBlock[0], /border-bottom-left-radius:\s*0/);
+
+    // combined connect-top.connect-bottom — must force full rounding
+    const connectBothBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind=\"real-plan\"\]\.connect-top\.connect-bottom\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(connectBothBlock, 'real-plan.connect-top.connect-bottom override must exist');
+    assert.match(connectBothBlock[0], /border-radius:\s*7px/);
+});
 test('CSS: is-selected-plan-segment does NOT apply blue border or glow', () => {
     const selectedBlock = interactionsCss.match(
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\.is-selected-plan-segment\s*\{[\s\S]*?\n}/
