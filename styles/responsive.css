@@ -725,8 +725,10 @@ textarea:focus-visible,
 
     .plan-segment-boundary-resize-handle-line {
         width: 8px;
-    .is-short-plan-segment .plan-segment-timer-time {
+    }
+
+    .split-grid-segment.is-short-plan-segment[data-segment-kind="real-plan"] .plan-segment-timer-time {
         display: none !important;
     }
 
-    }
+}

@@ -736,10 +736,29 @@ test('is-short-plan-segment is NOT added for actual segments regardless of durat
     assert.ok(!result.includes('has-plan-segment-timer'), 'should NOT include has-plan-segment-timer for actual segments');
 });
 
-test('responsive CSS has rule hiding plan-segment-timer-time in is-short-plan-segment', () => {
+test('responsive CSS has standalone (non-nested) hide rule for short plan segment timer text', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
-    assert.ok(responsiveCss.includes('.is-short-plan-segment .plan-segment-timer-time'), 'CSS must contain the hide rule for short plan segments');
+    const ruleIdx = responsiveCss.indexOf('is-short-plan-segment');
+    assert.ok(ruleIdx >= 0, 'CSS must contain is-short-plan-segment selector');
+    // Verify the rule is not nested inside another block by checking that
+    // the text immediately before is-short-plan-segment is whitespace or '}',
+    // not the middle of another selector block.
+    // More robust: extract the rule cluster and check braces.
+    const prefix = responsiveCss.substring(0, ruleIdx);
+    // Find the start of the line containing is-short-plan-segment
+    const lineStart = prefix.lastIndexOf('\n') + 1;
+    const lineContent = responsiveCss.substring(lineStart, ruleIdx).trim();
+    // The line should be either empty or start with '.' (the rule's own selector)
+    const lineContentBeforeTag = lineContent === '' || lineContent.startsWith('.split-grid-segment');
+    // Also check: the last non-whitespace character before the line must be '}'
+    const beforeLine = responsiveCss.substring(0, lineStart);
+    const trimmedBefore = beforeLine.trimEnd();
+    const lastChar = trimmedBefore.length > 0 ? trimmedBefore[trimmedBefore.length - 1] : '';
+    const precededByClose = lastChar === '}' || lastChar === '{' || trimmedBefore === '';
+    assert.ok(lineContentBeforeTag, 'is-short-plan-segment must not appear mid-line inside another rule');
+    assert.ok(precededByClose, 'is-short-plan-segment rule must not be nested inside another block');
+    assert.ok(responsiveCss.includes('.split-grid-segment.is-short-plan-segment'), 'selector should scope to .split-grid-segment.is-short-plan-segment');
     assert.ok(responsiveCss.includes('display: none !important'), 'CSS must use display: none');
 });
