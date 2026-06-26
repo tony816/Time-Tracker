@@ -4111,8 +4111,12 @@ class TimeTracker {
 
     getSplitColorBasePalette() {
         return [
-            '#a6d9ff', '#ffdca3', '#c8f0c0',
-            '#cbbef3', '#ffb2a3', '#fafca4'
+            '#FCAD9A',  // soft-coral
+            '#FBE1B4',  // sand-beige
+            '#E1EADB',  // sage-green
+            '#DFE6F0',  // dusty-blue
+            '#F3F2F7',  // lavender-gray
+            '#EAEFF2',  // blue-gray
         ];
     }
 
@@ -4149,10 +4153,14 @@ class TimeTracker {
         return '#dfe4ea';
     }
 
-    getSplitColor(type, label, isExtra = false, reservedIndices = null, role = 'grid') {
+    getSplitColor(type, label, isExtra = false, reservedIndices = null, role = 'grid', segmentColorKey = null) {
+        if (type === 'planned') {
+            return this.resolvePlannedSegmentColor(segmentColorKey);
+        }
+
         const colorKey = this.getSplitColorKey(type, label, role);
         if (!colorKey) {
-            return type === 'planned' ? 'rgba(223, 228, 234, 0.6)' : 'rgba(224, 236, 255, 0.45)';
+            return 'rgba(224, 236, 255, 0.45)';
         }
         if (!this.splitColorRegistry) {
             this.splitColorRegistry = new Map();
@@ -4165,6 +4173,16 @@ class TimeTracker {
             this.splitColorRegistry.set(colorKey, color);
         }
         return color;
+    }
+
+    resolvePlannedSegmentColor(segmentColorKey) {
+        if (segmentColorKey) {
+            const palette = this.getSplitColorBasePalette();
+            const names = ['soft-coral', 'sand-beige', 'sage-green', 'dusty-blue', 'lavender-gray', 'blue-gray'];
+            const idx = names.indexOf(segmentColorKey);
+            if (idx >= 0) return palette[idx];
+        }
+        return '#FFFFFF';
     }
 
     hashStringColor(label) {

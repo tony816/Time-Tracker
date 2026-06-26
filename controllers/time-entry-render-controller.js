@@ -369,7 +369,7 @@ function buildSplitVisualization(type, index) {
         const titleHtml = renderTitleBand
             ? `<div class="split-title-band">${(titleSegments || []).map((segment) => {
                 const safeLabel = segment.label ? this.escapeHtml(segment.label) : '&nbsp;';
-                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'title');
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'title', segment.colorKey || null);
                 const emptyClass = segment.label ? '' : ' split-empty';
                 return `<div class="split-title-segment${emptyClass}" style="grid-column: span ${segment.span}; --split-segment-color: ${color};">${safeLabel}</div>`;
             }).join('')}</div>`
@@ -387,7 +387,7 @@ function buildSplitVisualization(type, index) {
                     return getSegmentStartMinute(item) + (Number(item && item.durationMinutes) || 0);
                 };
                 return gridSegments.map((segment, idx) => {
-                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid');
+                const color = this.getSplitColor(type, segment.label, segment.isExtra, segment.reservedIndices, 'grid', segment.colorKey || null);
                 const emptyClass = segment.label ? '' : ' split-empty';
                 const activeClass = (isActual && toggleable) ? (segment.active ? ' is-on' : ' is-off') : '';
                 const lockedClass = (isActual && toggleable && segment.locked) ? ' is-locked' : '';

@@ -2354,6 +2354,11 @@ button.activity-chip,
   text-overflow: ellipsis;
 }
 
+.split-visualization-planned .split-title-segment:not(.split-empty) {
+  border: 1px solid var(--plan-segment-default-border, #E5E7EB);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.055);
+}
+
 .split-title-segment.split-empty {
   background: rgba(236, 240, 241, 0.35);
   color: transparent;
@@ -2438,6 +2443,23 @@ button.activity-chip,
   overflow: visible;
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
+  border: 1px solid var(--plan-segment-default-border, #E5E7EB);
+  border-bottom: 3px solid var(--plan-segment-default-border, #E5E7EB);
+  box-shadow: var(--plan-segment-default-shadow);
+  background-clip: border-box;
+}
+
+.split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"]:hover {
+  box-shadow: var(--plan-segment-hover-shadow);
+  background-color: var(--plan-segment-hover-bg, #FAFBFC);
+}
+
+.split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment {
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.055),
+    0 4px 10px rgba(15, 23, 42, 0.035),
+    inset 0 0 0 1px rgba(59, 130, 246, 0.18);
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] {
