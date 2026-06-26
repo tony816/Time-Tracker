@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 require('../controllers/controller-state-access');
+const fieldInteractionController = require('../controllers/field-interaction-controller');
 const controller = require('../controllers/selection-overlay-controller');
 const { buildMethod } = require('./helpers/script-method-builder');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
@@ -37,6 +38,58 @@ test('planned overlay delegates pointer start to canonical merge selection and p
     assert.match(controllerSource, /touchstart/);
     assert.match(controllerSource, /pointerdown/);
 });
+
+function createSelectionGestureHarness() {
+    const listeners = {};
+    const doc = {
+        createElement() {
+            return {
+                dataset: {},
+                style: {},
+                parentNode: null,
+                addEventListener(type, handler) {
+                    if (!listeners[type]) listeners[type] = [];
+                    listeners[type].push(handler);
+                },
+            };
+        },
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+        },
+    };
+    return { doc, listeners };
+}
+
+function createDomLikeNode(sharedListeners = null) {
+    const listeners = sharedListeners || {};
+    return {
+        dataset: {},
+        style: {},
+        parentNode: null,
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
+        closest() {
+            return null;
+        },
+    };
+}
 
 test('planned overlay starts at most once across pointerdown and mousedown', () => {
     const originalDocument = global.document;
@@ -101,6 +154,333 @@ test('planned overlay starts at most once across pointerdown and mousedown', () 
             stopPropagation() {},
         });
         assert.deepEqual(calls, ['pointerdown']);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay pointer drag updates the selected planned range', { concurrency: false }, () => {
+    const originalDocument = global.document;
+    const { doc, listeners } = createSelectionGestureHarness();
+    const calls = [];
+    const timeSlot = createDomLikeNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, top: 200, right: 120, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createDomLikeNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, top: 200, right: 400, bottom: 244, width: 320, height: 44 });
+    const overlay = createDomLikeNode(listeners);
+    doc.createElement = () => overlay;
+
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            calls.push(['clear', type]);
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(['select', type, start, end]);
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() {
+            return 'planned-2-4';
+        },
+        getMergeRangeBounds() {
+            return { start: 2, end: 4 };
+        },
+        getIndexAtClientPosition(type, clientX) {
+            assert.equal(type, 'planned');
+            return clientX >= 180 ? 5 : 3;
+        },
+        isPlannedSlotMoveMode() {
+            return false;
+        },
+    };
+
+    try {
+        global.document = doc;
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        const overlayNode = ensureSelectionOverlayWrapper.call(ctx, 'planned');
+        assert.equal(overlayNode, overlay);
+
+        listeners.pointerdown[0]({
+            type: 'pointerdown',
+            pointerId: 7,
+            pointerType: 'mouse',
+            button: 0,
+            target: { closest() { return null; }, ownerDocument: doc },
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        doc.dispatchEvent({
+            type: 'pointermove',
+            pointerId: 7,
+            pointerType: 'mouse',
+            clientX: 200,
+            clientY: 220,
+            preventDefault() {},
+        });
+        doc.dispatchEvent({
+            type: 'pointerup',
+            pointerId: 7,
+            pointerType: 'mouse',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [2, 3, 4, 5]);
+        assert.ok(calls.some((call) => call[0] === 'select' && call[2] === 2 && call[3] === 5));
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay pointer tap collapses to the pressed slot', { concurrency: false }, () => {
+    const originalDocument = global.document;
+    const { doc, listeners } = createSelectionGestureHarness();
+    const timeSlot = createDomLikeNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, top: 200, right: 120, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createDomLikeNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, top: 200, right: 400, bottom: 244, width: 320, height: 44 });
+    const overlay = createDomLikeNode(listeners);
+    doc.createElement = () => overlay;
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() {
+            return 'planned-2-4';
+        },
+        getMergeRangeBounds() {
+            return { start: 2, end: 4 };
+        },
+        getIndexAtClientPosition(type) {
+            assert.equal(type, 'planned');
+            return 3;
+        },
+        isPlannedSlotMoveMode() {
+            return false;
+        },
+    };
+
+    try {
+        global.document = doc;
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        ensureSelectionOverlayWrapper.call(ctx, 'planned');
+
+        listeners.pointerdown[0]({
+            type: 'pointerdown',
+            pointerId: 9,
+            pointerType: 'mouse',
+            button: 0,
+            target: { closest() { return null; }, ownerDocument: doc },
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        doc.dispatchEvent({
+            type: 'pointerup',
+            pointerId: 9,
+            pointerType: 'mouse',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [3]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay touch drag is not blocked after a prior pointer gesture', { concurrency: false }, () => {
+    const originalDocument = global.document;
+    const { doc, listeners } = createSelectionGestureHarness();
+    const timeSlot = createDomLikeNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, top: 200, right: 120, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createDomLikeNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, top: 200, right: 400, bottom: 244, width: 320, height: 44 });
+    const overlay = createDomLikeNode(listeners);
+    doc.createElement = () => overlay;
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() {
+            return 'planned-2-4';
+        },
+        getMergeRangeBounds() {
+            return { start: 2, end: 4 };
+        },
+        getIndexAtClientPosition(type, clientX) {
+            assert.equal(type, 'planned');
+            return clientX >= 180 ? 5 : 3;
+        },
+        isPlannedSlotMoveMode() {
+            return false;
+        },
+    };
+
+    try {
+        global.document = doc;
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        ensureSelectionOverlayWrapper.call(ctx, 'planned');
+
+        listeners.pointerdown[0]({
+            type: 'pointerdown',
+            pointerId: 4,
+            pointerType: 'mouse',
+            button: 0,
+            target: { closest() { return null; }, ownerDocument: doc },
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        doc.dispatchEvent({
+            type: 'pointerup',
+            pointerId: 4,
+            pointerType: 'mouse',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        ctx.selectedPlannedFields.clear();
+        [2, 3, 4].forEach((index) => ctx.selectedPlannedFields.add(index));
+
+        listeners.touchstart[0]({
+            type: 'touchstart',
+            touches: [{ clientX: 95, clientY: 220 }],
+            target: { closest() { return null; }, ownerDocument: doc },
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        doc.dispatchEvent({
+            type: 'touchmove',
+            touches: [{ clientX: 200, clientY: 220 }],
+            preventDefault() {},
+        });
+        doc.dispatchEvent({
+            type: 'touchend',
+            changedTouches: [{ clientX: 200, clientY: 220 }],
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [2, 3, 4, 5]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay mouse drag fallback still updates the selected planned range', { concurrency: false }, () => {
+    const originalDocument = global.document;
+    const { doc, listeners } = createSelectionGestureHarness();
+    const timeSlot = createDomLikeNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, top: 200, right: 120, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createDomLikeNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, top: 200, right: 400, bottom: 244, width: 320, height: 44 });
+    const overlay = createDomLikeNode(listeners);
+    doc.createElement = () => overlay;
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() {
+            return 'planned-2-4';
+        },
+        getMergeRangeBounds() {
+            return { start: 2, end: 4 };
+        },
+        getIndexAtClientPosition(type, clientX) {
+            assert.equal(type, 'planned');
+            return clientX >= 180 ? 5 : 3;
+        },
+        isPlannedSlotMoveMode() {
+            return false;
+        },
+    };
+
+    try {
+        global.document = doc;
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        ensureSelectionOverlayWrapper.call(ctx, 'planned');
+
+        listeners.mousedown[0]({
+            type: 'mousedown',
+            button: 0,
+            target: { closest() { return null; }, ownerDocument: doc },
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        doc.dispatchEvent({
+            type: 'mousemove',
+            clientX: 200,
+            clientY: 220,
+            buttons: 1,
+            preventDefault() {},
+        });
+        doc.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [2, 3, 4, 5]);
     } finally {
         global.document = originalDocument;
     }

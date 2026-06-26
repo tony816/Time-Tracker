@@ -880,7 +880,9 @@ test('planned overlay-started drag uses the same merge-selection path as the tim
     try {
         fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
         ctx.beginPlannedTimeSlotMergeSelection({
-            type: 'mousedown',
+            type: 'pointerdown',
+            pointerId: 7,
+            pointerType: 'mouse',
             button: 0,
             target: timeSlot,
             clientX: 95,
@@ -889,15 +891,18 @@ test('planned overlay-started drag uses the same merge-selection path as the tim
             stopPropagation() {},
         });
         global.document.dispatchEvent({
-            type: 'mousemove',
+            type: 'pointermove',
+            pointerId: 7,
+            pointerType: 'mouse',
             clientX: 200,
             clientY: 220,
-            buttons: 1,
             preventDefault() {},
             stopPropagation() {},
         });
         global.document.dispatchEvent({
-            type: 'mouseup',
+            type: 'pointerup',
+            pointerId: 7,
+            pointerType: 'mouse',
             preventDefault() {},
             stopPropagation() {},
         });
