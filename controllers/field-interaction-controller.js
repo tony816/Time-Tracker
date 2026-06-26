@@ -471,6 +471,7 @@
             activePointerId: null,
             gestureStartClientX: null,
             gestureStartClientY: null,
+            pendingSelectedRangeClearOnTap: false,
         });
         let activeMergeSelectionAdjustment = mergeState.activeMergeSelectionAdjustment;
         let mergeDragHadMovement = mergeState.mergeDragHadMovement;
@@ -496,7 +497,10 @@
                 event.stopPropagation();
             }
             // Tap (no movement) inside an existing multi-selection: convert to single
-            if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+            if (mergeState.pendingSelectedRangeClearOnTap && !mergeState.mergeDragHadMovement) {
+                resetTimeSlotMergeSelectionState();
+                this.clearSelection('planned');
+            } else if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
                 const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                 resetTimeSlotMergeSelectionState();
                 this.clearSelection('planned');
@@ -541,7 +545,10 @@
             }
             event.preventDefault();
             event.stopPropagation();
-            if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+            if (mergeState.pendingSelectedRangeClearOnTap && !mergeState.mergeDragHadMovement) {
+                resetTimeSlotMergeSelectionState();
+                this.clearSelection('planned');
+            } else if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
                 const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                 resetTimeSlotMergeSelectionState();
                 this.clearSelection('planned');
@@ -601,6 +608,7 @@
             mergeState.activePointerId = null;
             mergeState.gestureStartClientX = null;
             mergeState.gestureStartClientY = null;
+            mergeState.pendingSelectedRangeClearOnTap = false;
             clearWasGestureStartedByTimeSlot();
             if (entryDiv && entryDiv.classList) {
                 entryDiv.classList.remove('merge-hover');
@@ -702,9 +710,14 @@
             mergeState.activeMergeSelectionAdjustment = null;
             activeMergeSelectionAdjustment = null;
             if (isPlainPrimaryPointerEvent(event) && isPlannedRangeSelected(this, range.start, range.end)) {
-                clearSelectedPlannedRangeFromEvent(this, event);
-                return 'cleared';
+                mergeState.pendingSelectedRangeClearOnTap = true;
+                this.currentColumnType = 'planned';
+                this.dragStartIndex = range.start;
+                this.dragBaseEndIndex = range.end;
+                this.isSelectingPlanned = true;
+                return true;
             }
+            mergeState.pendingSelectedRangeClearOnTap = false;
             this.currentColumnType = 'planned';
             this.dragStartIndex = range.start;
             this.dragBaseEndIndex = range.end;
@@ -732,7 +745,10 @@
         };
         const handleDocumentMouseUp = () => {
             // Click (no movement) inside an existing multi-selection: convert to single
-            if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+            if (mergeState.pendingSelectedRangeClearOnTap && !mergeState.mergeDragHadMovement) {
+                resetTimeSlotMergeSelectionState();
+                this.clearSelection('planned');
+            } else if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
                 const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                 resetTimeSlotMergeSelectionState();
                 this.clearSelection('planned');
@@ -911,7 +927,12 @@
                 e.preventDefault();
                 e.stopPropagation();
                 // Tap (no movement) inside an existing multi-selection: convert to single
-                if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
+                if (mergeState.pendingSelectedRangeClearOnTap && !mergeState.mergeDragHadMovement) {
+                    mergeState.touchMergeSelectionActive = false;
+                    clearWasGestureStartedByTimeSlot();
+                    resetTimeSlotMergeSelectionState();
+                    this.clearSelection('planned');
+                } else if (mergeState.activeMergeSelectionAdjustment && !mergeState.mergeDragHadMovement) {
                     const singleIdx = mergeState.activeMergeSelectionAdjustment.startIndex;
                     mergeState.touchMergeSelectionActive = false;
                     clearWasGestureStartedByTimeSlot();
