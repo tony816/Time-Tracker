@@ -5175,7 +5175,7 @@ class TimeTracker {
                            data-index="${index}"
                            data-type="${type}"
                            value="${this.escapeAttribute(value || '')}"
-                           placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">`;
+                           readonly tabindex="0" aria-label="계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">`;
         }
 
         const [, startStr, endStr] = safeMergeKey.split('-');
@@ -5200,7 +5200,7 @@ class TimeTracker {
                                        data-merge-start="${start}"
                                        data-merge-end="${end}"
                                        value="${safeMergeValue}"
-                                       placeholder="계획???�력?�려�??�릭 ?�는 Enter" readonly tabindex="0" aria-label="병합??계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">
+                                       readonly tabindex="0" aria-label="병합??계획 ?�동 ?�력" title="?�릭?�서 계획 ?�택/?�력" style="cursor: pointer;">
                             </div>
                         </div>`;
             } else {
@@ -9586,7 +9586,7 @@ class TimeTracker {
                            data-index="${index}"
                            data-type="${type}"
                            value="${this.escapeAttribute(value || '')}"
-                           placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
+                           readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
         }
 
         const [, startStr, endStr] = safeMergeKey.split('-');
@@ -9628,7 +9628,7 @@ class TimeTracker {
                                    data-merge-start="${start}"
                                    data-merge-end="${end}"
                                value="${safeMergeValue}"
-                               placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
+                               readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
                         </div>
                         ${clearOverlayHtml}
                         ${shiftOverlayHtml}

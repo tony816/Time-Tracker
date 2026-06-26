@@ -278,7 +278,8 @@ test('renderTimeEntries keeps desktop time UI state classes', () => {
     assert.equal(row.classList.contains('running-timer-slot'), true);
 });
 
-test('createMergedField renders readable Korean placeholder text for merged planned slots', () => {
+
+test('createMergedField does not render deprecated Korean placeholder on merged planned slots', () => {
     const ctx = {
         mergedFields: new Map([['planned-2-4', '계획 내용']]),
         normalizeMergeKey(mergeKey) {
@@ -291,7 +292,9 @@ test('createMergedField renders readable Korean placeholder text for merged plan
 
     const markup = createMergedFieldWrapper.call(ctx, 'planned-2-4', 'planned', 2, '');
 
-    assert.match(markup, /계획을 입력하려면 클릭 또는 Enter/);
+    // Placeholder was removed — the input should not carry a visible placeholder attribute
+    assert.doesNotMatch(markup, /placeholder/);
+    // aria-label and title remain for accessibility
     assert.match(markup, /병합된 계획 활동 입력/);
     assert.match(markup, /클릭해서 계획 선택\/입력/);
 });

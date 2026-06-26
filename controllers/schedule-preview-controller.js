@@ -126,7 +126,7 @@ function updateSchedulePreview() {
                         data-index="${index}"
                         data-type="planned"
                         value="${this.escapeAttribute(slot.planned)}"
-                        placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
+                        readonly tabindex="0" aria-label="계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">`;
              plannedContent = this.wrapWithSplitVisualization('planned', index, plannedContent);
              const timeMergeKey = this.findMergeKey('time', index);
             const timerControls = this.createTimerControls(index, slot);
