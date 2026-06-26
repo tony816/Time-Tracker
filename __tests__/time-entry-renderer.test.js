@@ -222,3 +222,71 @@ test('time-slot merge affordance styling remains visible in CSS', () => {
     assert.match(cssSource, /\.selection-overlay\[data-type="planned"\]\[data-merge-visual-state="existing"\]/);
     assert.match(cssSource, /@media \(hover: none\), \(pointer: coarse\)/);
 });
+
+test('buildRowRenderModel does not render deprecated Korean placeholder text', () => {
+    const row = renderer.buildRowRenderModel({
+        slot: { time: '4', planned: '' },
+        index: 0,
+        currentDate: '2026-06-26',
+        findMergeKey: () => null,
+        createMergedField: () => '<div class="merged"></div>',
+        wrapWithSplitVisualization: (_type, _index, content) => content,
+        createTimerControls: () => '',
+        createMergedTimeField: () => '<div>merged-time</div>',
+        formatSlotTimeLabel: (rawHour) => String(rawHour).padStart(2, '0'),
+        escapeAttribute: (value) => String(value),
+        getRoutineForPlannedIndex: () => null,
+    });
+
+    // The deprecated Korean placeholder must not appear anywhere in the markup
+    assert.doesNotMatch(row.innerHtml, /placeholder/);
+    assert.doesNotMatch(row.innerHtml, /\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter/);
+    // aria-label and title remain for accessibility (visible only on hover/focus)
+    assert.match(row.innerHtml, /aria-label/);
+    assert.match(row.innerHtml, /title=/);
+});
+
+test('buildRowRenderModel sanitizes legacy placeholder stored as planned value', () => {
+    var legacyText = '\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter';
+    const row = renderer.buildRowRenderModel({
+        slot: { time: '4', planned: legacyText },
+        index: 0,
+        currentDate: '2026-06-26',
+        findMergeKey: () => null,
+        createMergedField: () => '<div class="merged"></div>',
+        wrapWithSplitVisualization: (_type, _index, content) => content,
+        createTimerControls: () => '',
+        createMergedTimeField: () => '<div>merged-time</div>',
+        formatSlotTimeLabel: (rawHour) => String(rawHour).padStart(2, '0'),
+        escapeAttribute: (value) => String(value),
+        getRoutineForPlannedIndex: () => null,
+    });
+
+    // The legacy text must not appear in the markup (sanitized to empty)
+    assert.doesNotMatch(row.innerHtml, /placeholder/);
+    assert.doesNotMatch(row.innerHtml, new RegExp(legacyText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    // aria-label and title remain
+    assert.match(row.innerHtml, /aria-label/);
+    assert.match(row.innerHtml, /title=/);
+    // The input value should be empty
+    assert.match(row.innerHtml, /value=""/);
+});
+
+test('buildRowRenderModel preserves normal user-entered planned text', () => {
+    const row = renderer.buildRowRenderModel({
+        slot: { time: '4', planned: 'Actual user plan text' },
+        index: 0,
+        currentDate: '2026-06-26',
+        findMergeKey: () => null,
+        createMergedField: () => '<div class="merged"></div>',
+        wrapWithSplitVisualization: (_type, _index, content) => content,
+        createTimerControls: () => '',
+        createMergedTimeField: () => '<div>merged-time</div>',
+        formatSlotTimeLabel: (rawHour) => String(rawHour).padStart(2, '0'),
+        escapeAttribute: (value) => String(value),
+        getRoutineForPlannedIndex: () => null,
+    });
+
+    assert.doesNotMatch(row.innerHtml, /placeholder/);
+    assert.match(row.innerHtml, /Actual user plan text/);
+});

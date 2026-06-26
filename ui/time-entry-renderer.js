@@ -23,15 +23,19 @@
     }
 
     function buildPlannedInputMarkup(index, plannedValue, escapeAttribute) {
-        const escapedValue = (typeof escapeAttribute === 'function')
-            ? escapeAttribute(plannedValue)
-            : String(plannedValue || '');
+        var rawValue = (plannedValue != null) ? String(plannedValue) : '';
+        if (rawValue === '\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter') {
+            rawValue = '';
+        }
+        var escapedValue = (typeof escapeAttribute === 'function')
+            ? escapeAttribute(rawValue)
+            : rawValue;
 
         return `<input type="text" class="input-field planned-input" 
                         data-index="${index}" 
                         data-type="planned" 
                         value="${escapedValue}"
-                        placeholder="\uacc4\ud68d\uc744 \uc785\ub825\ud558\ub824\uba74 \ud074\ub9ad \ub610\ub294 Enter" readonly tabindex="0" aria-label="\uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">`;
+                        readonly tabindex="0" aria-label="\uacc4\ud68d \ud65c\ub3d9 \uc785\ub825" title="\ud074\ub9ad\ud574\uc11c \uacc4\ud68d \uc120\ud0dd/\uc785\ub825" style="cursor: pointer;">`;
     }
 
     function buildTimeSlotContainerMarkup(formattedLabel, timerControls) {
