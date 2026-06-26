@@ -675,6 +675,9 @@
             if (typeof this.closeInlinePlanDropdown === 'function') {
                 this.closeInlinePlanDropdown();
             }
+            const point = getPrimaryPointFromEvent(event);
+            mergeState.gestureStartClientX = point && Number.isFinite(point.clientX) ? point.clientX : null;
+            mergeState.gestureStartClientY = point && Number.isFinite(point.clientY) ? point.clientY : null;
             const selectedRange = getContiguousSelectedPlannedRange();
             if (selectedRange && range.start === range.end && range.start >= selectedRange.start && range.end <= selectedRange.end) {
                 let anchorIndex = null;
@@ -706,9 +709,6 @@
             this.dragStartIndex = range.start;
             this.dragBaseEndIndex = range.end;
             this.isSelectingPlanned = true;
-            const point = getPrimaryPointFromEvent(event);
-            mergeState.gestureStartClientX = point && Number.isFinite(point.clientX) ? point.clientX : null;
-            mergeState.gestureStartClientY = point && Number.isFinite(point.clientY) ? point.clientY : null;
             if (range.mergeKey && typeof this.selectMergedRange === 'function') {
                 this.clearAllSelections();
                 this.selectMergedRange('planned', range.mergeKey, { append: false });
@@ -933,18 +933,6 @@
             resetTimeSlotMergeSelectionState();
             removeDocumentTouchListeners();
         }, { passive: true });
-
-        timeSlot.addEventListener('pointerdown', (e) => {
-            if (e.button !== undefined && e.button !== 0) return;
-            const result = beginTimeSlotMergeSelection(e);
-            if (!result) return;
-            if (result === 'cleared') return;
-            if (doc && typeof doc.addEventListener === 'function') {
-                attachDocumentPointerListeners();
-            }
-            e.preventDefault();
-            e.stopPropagation();
-        });
     }
     function attachCellClickListeners(entryDiv, index) {
         const plannedField = entryDiv.querySelector('.planned-input');

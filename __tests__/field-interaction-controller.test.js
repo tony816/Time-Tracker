@@ -1667,7 +1667,7 @@ test('existing selected time-slot range touch drag from bottom edge shrinks upwa
     timeSlot.dispatchEvent({
         type: 'touchstart',
         target: timeSlot,
-        touches: [{ clientX: 10, clientY: 10 }],
+        touches: [{ clientX: 10, clientY: 17 }],
         preventDefault() {
             calls.push(['preventStart']);
         },
@@ -2981,5 +2981,151 @@ test("touch drag from inside multi-selected range preserves range adjustment", (
         // Range should have been adjusted, not set to single
         assert.ok(calls.some((call) => call[0] === "select" && call[2] === 1 && call[3] === 4));
         assert.equal(ctx.isSelectingPlanned, false);
+    });
+});
+
+test("direct time-slot rail mouse drag selects multiple planned slots", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.classList = createClassList(["time-entry"]);
+        const selectedSet = new Set();
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            selectedPlannedFields: selectedSet,
+            findMergeKey() { return null; },
+            closeInlinePlanDropdown() {},
+            clearSelection(type) { if (type === "planned") selectedSet.clear(); },
+            selectFieldRange(type, start, end) {
+                if (type !== "planned") return;
+                selectedSet.clear();
+                for (let i = start; i <= end; i += 1) selectedSet.add(i);
+            },
+            getIndexAtClientPosition() { return 4; },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({ type: "mousedown", button: 0, target: timeSlot, clientX: 100, clientY: 220, preventDefault() {}, stopPropagation() {} });
+        mockDocument.dispatchEvent({ type: "mousemove", buttons: 1, clientX: 100, clientY: 260, preventDefault() {} });
+        mockDocument.dispatchEvent({ type: "mouseup", preventDefault() {}, stopPropagation() {} });
+
+        assert.deepEqual(Array.from(selectedSet), [2, 3, 4]);
+        assert.equal(ctx.isSelectingPlanned, false);
+    });
+});
+
+test("direct time-slot rail touch drag selects multiple planned slots", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.classList = createClassList(["time-entry"]);
+        const selectedSet = new Set();
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            selectedPlannedFields: selectedSet,
+            findMergeKey() { return null; },
+            closeInlinePlanDropdown() {},
+            clearSelection(type) { if (type === "planned") selectedSet.clear(); },
+            selectFieldRange(type, start, end) {
+                if (type !== "planned") return;
+                selectedSet.clear();
+                for (let i = start; i <= end; i += 1) selectedSet.add(i);
+            },
+            getIndexAtClientPosition() { return 4; },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({ type: "touchstart", target: timeSlot, touches: [{ clientX: 100, clientY: 220 }], preventDefault() {}, stopPropagation() {} });
+        mockDocument.dispatchEvent({ type: "touchmove", touches: [{ clientX: 100, clientY: 260 }], preventDefault() {} });
+        mockDocument.dispatchEvent({ type: "touchend", preventDefault() {}, stopPropagation() {} });
+
+        assert.deepEqual(Array.from(selectedSet), [2, 3, 4]);
+        assert.equal(ctx.isSelectingPlanned, false);
+    });
+});
+
+test("direct time-slot rail drag from selected middle slot adjusts existing range", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.classList = createClassList(["time-entry"]);
+        const selectedSet = new Set([2, 3, 4]);
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            selectedPlannedFields: selectedSet,
+            findMergeKey() { return null; },
+            closeInlinePlanDropdown() {},
+            clearSelection(type) { if (type === "planned") selectedSet.clear(); },
+            selectFieldRange(type, start, end) {
+                if (type !== "planned") return;
+                selectedSet.clear();
+                for (let i = start; i <= end; i += 1) selectedSet.add(i);
+            },
+            getIndexAtClientPosition() { return 5; },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+        timeSlot.dispatchEvent({ type: "mousedown", button: 0, target: timeSlot, clientX: 100, clientY: 220, preventDefault() {}, stopPropagation() {} });
+        mockDocument.dispatchEvent({ type: "mousemove", buttons: 1, clientX: 100, clientY: 260, preventDefault() {} });
+        mockDocument.dispatchEvent({ type: "mouseup", preventDefault() {}, stopPropagation() {} });
+
+        assert.deepEqual(Array.from(selectedSet), [2, 3, 4, 5]);
+        assert.equal(ctx.isSelectingPlanned, false);
+    });
+});
+
+test("time-slot pointerdown does not suppress mousedown fallback", () => {
+    withMockDocument((mockDocument) => {
+        const timeSlot = createListenerNode();
+        timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+        timeSlot.ownerDocument = mockDocument;
+        const entryDiv = createListenerNode();
+        entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+        entryDiv.classList = createClassList(["time-entry"]);
+        const selectedSet = new Set();
+        const calls = [];
+        const ctx = {
+            currentColumnType: null, isSelectingPlanned: false, dragStartIndex: -1, dragBaseEndIndex: -1,
+            selectedPlannedFields: selectedSet,
+            findMergeKey() { return null; },
+            closeInlinePlanDropdown() {},
+            clearSelection(type) { if (type === "planned") selectedSet.clear(); },
+            selectFieldRange(type, start, end) {
+                if (type !== "planned") return;
+                selectedSet.clear();
+                for (let i = start; i <= end; i += 1) selectedSet.add(i);
+            },
+            getIndexAtClientPosition() { return 4; },
+        };
+
+        controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 2);
+        timeSlot.dispatchEvent({
+            type: "pointerdown",
+            button: 0,
+            pointerId: 9,
+            target: timeSlot,
+            clientX: 100,
+            clientY: 220,
+            preventDefault() { calls.push("pointer-prevent"); },
+            stopPropagation() { calls.push("pointer-stop"); },
+        });
+        mockDocument.dispatchEvent({ type: "pointermove", pointerId: 9, clientX: 100, clientY: 260, preventDefault() { calls.push("pointer-move-prevent"); } });
+        assert.deepEqual(calls, []);
+        assert.deepEqual(Array.from(selectedSet), []);
+
+        timeSlot.dispatchEvent({ type: "mousedown", button: 0, target: timeSlot, clientX: 100, clientY: 220, preventDefault() {}, stopPropagation() {} });
+        mockDocument.dispatchEvent({ type: "mousemove", buttons: 1, clientX: 100, clientY: 260, preventDefault() {} });
+        mockDocument.dispatchEvent({ type: "mouseup", preventDefault() {}, stopPropagation() {} });
+
+        assert.deepEqual(Array.from(selectedSet), [2, 3, 4]);
     });
 });
