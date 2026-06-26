@@ -2626,11 +2626,16 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             this.calculateTotals();
             this.autoSave();
             if (keepOpenAfterSelection && options && options.keepOpenSegmentReplace) {
-                if (typeof this.renderInlinePlanDropdownOptions === 'function') {
-                    this.renderInlinePlanDropdownOptions();
-                }
-                if (typeof this.positionInlinePlanDropdown === 'function') {
-                    this.positionInlinePlanDropdown();
+                const isMobileSeg = typeof this.isInlinePlanMobileInputContext === 'function' && this.isInlinePlanMobileInputContext();
+                if (isMobileSeg) {
+                    this.closeInlinePlanDropdown();
+                } else {
+                    if (typeof this.renderInlinePlanDropdownOptions === 'function') {
+                        this.renderInlinePlanDropdownOptions();
+                    }
+                    if (typeof this.positionInlinePlanDropdown === 'function') {
+                        this.positionInlinePlanDropdown();
+                    }
                 }
             } else {
                 this.closeInlinePlanDropdown();
@@ -3698,7 +3703,8 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             if (target && target.mode === 'plan-segment-replace') {
                 const activityItem = (this.plannedActivities || []).find((item) => getCatalogItemLabel.call(this, item) === val)
                     || { label: val, name: val, activityText: val };
-                applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: true, keepOpenOnMobile: true, keepOpenSegmentReplace: true });
+                const isMobile = this.isInlinePlanMobileInputContext();
+                applyActivityCatalogSelection.call(this, activityItem, null, { ...options, keepOpen: isMobile ? false : true, keepOpenOnMobile: isMobile ? false : true, keepOpenSegmentReplace: isMobile ? false : true });
                 return;
             }
             const startIndex = target && Number.isInteger(target.startIndex) ? target.startIndex : 0;

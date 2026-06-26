@@ -3053,7 +3053,7 @@ test('activity chip selection into non-empty planned target keeps dropdown open 
     // lookup fails. The key assertion is renderTimeEntries was called with true.
 });
 
-test('segment replacement add button keeps dropdown open unchanged', () => {
+test('desktop segment replacement add button keeps dropdown open', () => {
     const originalDocument = globalThis.document;
     const originalWindow = globalThis.window;
     const originalRAF = globalThis.requestAnimationFrame;
@@ -3176,6 +3176,285 @@ test('segment replacement add button keeps dropdown open unchanged', () => {
         globalThis.requestAnimationFrame = originalRAF;
     }
 });
+test('mobile segment replacement add button closes sheet after apply', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const input = {
+        value: 'Segment Focus',
+        addEventListener() {},
+        focus() {},
+        select() {},
+    };
+    const addBtn = {
+        listeners: {},
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
+        },
+    };
+    const board = { innerHTML: '', appendChild() {}, querySelector() { return null; }, querySelectorAll() { return []; } };
+    const dropdown = {
+        className: '',
+        style: {},
+        parentNode: { removeChild() {} },
+        addEventListener() {},
+        contains() { return false; },
+        querySelector(selector) {
+            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-add-btn') return addBtn;
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+        querySelectorAll() { return []; },
+    };
+    const backdrop = {
+        className: '',
+        style: {},
+        parentNode: { removeChild() {} },
+        addEventListener() {},
+        classList: { add() {}, remove() {}, contains() { return false; } },
+    };
+    const childLayer = { parentNode: { removeChild() {} }, style: {} };
+    const replaceCalls = [];
+    let closed = false;
+    let positionCalled = false;
+    const ctx = {
+        inlinePlanDropdown: null,
+        timeSlots: [{ planned: '', planActivities: [] }],
+        plannedActivities: [],
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        addPlannedActivityOption(label) {
+            this.plannedActivities.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label, name: label, normalizedName: label, parentId: null, archived: false, source: 'local' });
+        },
+        isPlanSlotEmptyForInline() { return true; },
+        replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem) {
+            replaceCalls.push({ baseIndex, segmentIndex, label: activityItem.label, id: activityItem.id });
+            return true;
+        },
+        renderTimeEntries() {},
+        renderInlinePlanDropdownOptions() {},
+        calculateTotals() {},
+        autoSave() {},
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return true; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        positionInlinePlanDropdown() { positionCalled = true; },
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlannedRangeInfo() { return { startIndex: 0, endIndex: 0, baseIndex: 0 }; },
+        resolveInlinePlanAnchor(anchorEl) { return anchorEl; },
+        isSameInlinePlanTarget() { return false; },
+        closeInlinePlanDropdown() {
+            closed = true;
+            this.inlinePlanDropdown = null;
+        },
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+        clearSelection() {},
+        inlinePlanChildPopoverLayer: null,
+    };
+    let createdDivs = 0;
+    globalThis.document = {
+        createElement(tagName) {
+            if (tagName === 'div') {
+                createdDivs += 1;
+                if (createdDivs === 1) return dropdown;
+                if (createdDivs === 2) return backdrop;
+                if (createdDivs === 3) return childLayer;
+            }
+            return createInlineSelectionNode(tagName);
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {}, visualViewport: null };
+    globalThis.requestAnimationFrame = (cb) => cb();
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 0, { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }; } }, 0, {
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            baseIndex: 0,
+        });
+        closed = false;
+        positionCalled = false;
+        addBtn.listeners.click({ preventDefault() {}, stopPropagation() {} });
+
+        assert.equal(closed, true);
+        assert.equal(ctx.inlinePlanDropdown, null);
+        assert.deepEqual(replaceCalls, [{ baseIndex: 0, segmentIndex: 1, label: 'Segment Focus', id: 'segment-focus' }]);
+        assert.equal(positionCalled, false);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('failed plan-segment-replace does not close dropdown', () => {
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const input = {
+        value: 'Fail',
+        addEventListener() {},
+        focus() {},
+        select() {},
+    };
+    const addBtn = {
+        listeners: {},
+        addEventListener(type, handler) {
+            this.listeners[type] = handler;
+        },
+    };
+    const board = { innerHTML: '', appendChild() {}, querySelector() { return null; }, querySelectorAll() { return []; } };
+    const dropdown = {
+        className: '',
+        style: {},
+        parentNode: { removeChild() {} },
+        addEventListener() {},
+        contains() { return false; },
+        querySelector(selector) {
+            if (selector === '.inline-plan-input') return input;
+            if (selector === '.inline-plan-add-btn') return addBtn;
+            if (selector === '.activity-chip-board') return board;
+            return null;
+        },
+        querySelectorAll() { return []; },
+    };
+    const childLayer = { parentNode: { removeChild() {} }, style: {} };
+    let closed = false;
+    const ctx = {
+        inlinePlanDropdown: null,
+        timeSlots: [{ planned: '', planActivities: [] }],
+        plannedActivities: [],
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        addPlannedActivityOption(label) {
+            this.plannedActivities.push({ id: label.toLowerCase().replace(/\s+/g, '-'), label, name: label, normalizedName: label, parentId: null, archived: false, source: 'local' });
+        },
+        isPlanSlotEmptyForInline() { return true; },
+        replacePlanSegmentActivity() { return false; },
+        renderTimeEntries() {},
+        renderInlinePlanDropdownOptions() {},
+        calculateTotals() {},
+        autoSave() {},
+        getActivePlanSource() { return 'local'; },
+        isInlinePlanMobileInputContext() { return false; },
+        setupInlinePlanSheetTouchDismiss() {},
+        handleInlinePlanWheel() {},
+        shouldAutofocusInlinePlanInput() { return false; },
+        positionInlinePlanDropdown() {},
+        scheduleInlinePlanInputVisibilitySync() {},
+        applyInlinePlanBackgroundContext() {},
+        bindInlinePlanDropdownContext() {},
+        closeInlinePriorityMenu() {},
+        getPlannedRangeInfo() { return { startIndex: 0, endIndex: 0, baseIndex: 0 }; },
+        resolveInlinePlanAnchor(anchorEl) { return anchorEl; },
+        isSameInlinePlanTarget() { return false; },
+        closeInlinePlanDropdown() {
+            closed = true;
+            this.inlinePlanDropdown = null;
+        },
+        getPlanActivitiesForIndex() { return []; },
+        isEventWithinCurrentInlinePlanRange() { return false; },
+        scheduleInlinePlanViewportSync() {},
+        isInlinePlanInputFocused() { return false; },
+        hasRecentInlinePlanInputIntent() { return false; },
+        isNotionUIVisible() { return false; },
+        clearSelection() {},
+        inlinePlanChildPopoverLayer: null,
+    };
+    let createdDivs = 0;
+    globalThis.document = {
+        createElement(tagName) {
+            if (tagName === 'div') {
+                createdDivs += 1;
+                if (createdDivs === 1) return dropdown;
+                if (createdDivs === 2) return childLayer;
+            }
+            return createInlineSelectionNode(tagName);
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+            classList: { add() {}, remove() {} },
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        querySelector() { return null; },
+    };
+    globalThis.window = { addEventListener() {}, removeEventListener() {}, visualViewport: null };
+    globalThis.requestAnimationFrame = (cb) => cb();
+
+    try {
+        controller.openInlinePlanDropdown.call(ctx, 0, { isConnected: true, getBoundingClientRect() { return { left: 0, top: 0, right: 10, bottom: 10, width: 10, height: 10 }; } }, 0, {
+            mode: 'plan-segment-replace',
+            segmentIndex: 1,
+            segmentId: 'planned-0-1',
+            baseIndex: 0,
+        });
+        closed = false;
+        addBtn.listeners.click({ preventDefault() {}, stopPropagation() {} });
+
+        assert.equal(closed, false);
+        assert.equal(ctx.inlinePlanDropdown !== null, true);
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('mobile activity chip selection into plan segment target closes sheet', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: { startIndex: 0, endIndex: 0, baseIndex: 0, mode: 'plan-segment-replace', segmentIndex: 0, segmentId: 'planned-0-0' },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return true; },
+            touchPlannedActivityUsage() { return true; },
+            dedupeAndSortPlannedActivities() {},
+            savePlannedActivities() {},
+            replacePlanSegmentActivity(baseIndex, segmentIndex, activityItem) {
+                return true;
+            },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() { return null; },
+    };
+    try {
+        dispatchInlineSelectionClick(chipButton);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    assert.deepEqual(harness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+});
+
+
 
 
 test('segment add button keeps inline dropdown open after typing a new activity', () => {
