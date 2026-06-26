@@ -7434,6 +7434,177 @@ test('captureMobileInlinePlanApplyScrollAnchor captures non-segment-replace mobi
     }
 });
 
+test('mobile segment sheet open captures pre-open scroll anchor', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    globalThis.window = {
+        scrollY: 500,
+        pageYOffset: 500,
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 500 },
+    };
+    const segmentEl = {
+        getBoundingClientRect() {
+            return { top: 180, bottom: 240 };
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    try {
+        const snapshot = controller.captureMobileSegmentSheetOpenScrollAnchor(ctx, segmentEl, {
+            mode: 'plan-segment-replace',
+            baseIndex: 8,
+            startIndex: 8,
+            segmentIndex: 1,
+            segmentId: 'planned-8-1',
+        });
+        assert.ok(snapshot);
+        assert.equal(snapshot.scrollY, 500);
+        assert.equal(snapshot.docScrollTop, 500);
+        assert.equal(snapshot.targetTop, 180);
+        assert.equal(snapshot.targetBottom, 240);
+        assert.equal(snapshot.baseIndex, 8);
+        assert.equal(snapshot.segmentIndex, 1);
+        assert.equal(snapshot.segmentId, 'planned-8-1');
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+    }
+});
+
+test('mobile segment sheet open restores scroll after overflow lock jump', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const originalSetTimeout = globalThis.setTimeout;
+    const scrollToCalls = [];
+    globalThis.requestAnimationFrame = (fn) => { fn(); };
+    globalThis.setTimeout = (fn) => { fn(); return 1; };
+    globalThis.window = {
+        scrollY: 780,
+        pageYOffset: 780,
+        scrollTo(opts) {
+            scrollToCalls.push(opts);
+            this.scrollY = opts.top;
+            this.pageYOffset = opts.top;
+        },
+        scrollBy() {},
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 780 },
+        querySelector() { return null; },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    try {
+        controller.restoreMobileSegmentSheetOpenScrollAnchor(ctx, {
+            scrollY: 500,
+            docScrollTop: 500,
+            targetTop: 180,
+            baseIndex: 8,
+            segmentIndex: 0,
+        });
+        assert.equal(scrollToCalls.length, 1);
+        assert.deepEqual(scrollToCalls[0], { top: 500, behavior: 'instant' });
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.setTimeout = originalSetTimeout;
+    }
+});
+
+test('mobile segment sheet open restores tapped segment top after overflow lock shift', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const originalSetTimeout = globalThis.setTimeout;
+    const scrollByCalls = [];
+    const segmentEl = {
+        getBoundingClientRect() {
+            return { top: 420, bottom: 480 };
+        },
+    };
+    globalThis.requestAnimationFrame = (fn) => { fn(); };
+    globalThis.setTimeout = (fn) => { fn(); return 1; };
+    globalThis.window = {
+        scrollY: 500,
+        pageYOffset: 500,
+        scrollTo() {},
+        scrollBy(opts) { scrollByCalls.push(opts); },
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 500 },
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="8"]') {
+                return {
+                    querySelector(segmentSelector) {
+                        if (segmentSelector === '.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="0"]') {
+                            return segmentEl;
+                        }
+                        return null;
+                    },
+                };
+            }
+            return null;
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    try {
+        controller.restoreMobileSegmentSheetOpenScrollAnchor(ctx, {
+            scrollY: 500,
+            docScrollTop: 500,
+            targetTop: 180,
+            baseIndex: 8,
+            segmentIndex: 0,
+        });
+        assert.ok(scrollByCalls.length >= 1);
+        assert.deepEqual(scrollByCalls[0], { top: 240, behavior: 'instant' });
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+        globalThis.setTimeout = originalSetTimeout;
+    }
+});
+
+test('desktop segment sheet open does not schedule scroll restoration', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    let rafCalled = false;
+    globalThis.requestAnimationFrame = (fn) => { rafCalled = true; fn(); };
+    globalThis.window = {
+        scrollY: 780,
+        pageYOffset: 780,
+        scrollTo() {},
+        scrollBy() {},
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 780 },
+        querySelector() { return null; },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return false; },
+    };
+    try {
+        assert.equal(controller.captureMobileSegmentSheetOpenScrollAnchor(ctx, {
+            getBoundingClientRect() { return { top: 180, bottom: 240 }; },
+        }, { mode: 'plan-segment-replace' }), null);
+        controller.restoreMobileSegmentSheetOpenScrollAnchor(ctx, { scrollY: 500, baseIndex: 8, segmentIndex: 0 });
+        assert.equal(rafCalled, false);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
 test('scheduleMobileInlinePlanApplyScrollRestoration does not run on desktop', () => {
     const originalWindow = globalThis.window;
     const originalRAF = globalThis.requestAnimationFrame;

@@ -6806,10 +6806,21 @@ class TimeTracker {
                 height: Math.max(0, segmentRect.bottom - segmentRect.top),
             }
             : null;
-        this.openInlinePlanDropdown(effectiveBaseIndex, anchor, effectiveBaseIndex, {
+        const target = {
             mode: options.dropdownMode || 'plan-segment-replace',
+            baseIndex: effectiveBaseIndex,
+            startIndex: effectiveBaseIndex,
             segmentIndex,
             segmentId: segmentEl.dataset ? String(segmentEl.dataset.segmentId ?? '') : '',
+        };
+        const openScrollAnchorSnapshot = globalThis.TimeTrackerInlinePlanDropdownController
+            && typeof globalThis.TimeTrackerInlinePlanDropdownController.captureMobileSegmentSheetOpenScrollAnchor === 'function'
+            ? globalThis.TimeTrackerInlinePlanDropdownController.captureMobileSegmentSheetOpenScrollAnchor(this, segmentEl, target)
+            : null;
+        this.openInlinePlanDropdown(effectiveBaseIndex, anchor, effectiveBaseIndex, {
+            mode: target.mode,
+            segmentIndex,
+            segmentId: target.segmentId,
             anchorAlign: 'center',
             anchorMinWidth,
             sourceRect,
@@ -6825,6 +6836,16 @@ class TimeTracker {
         if (!opened) return false;
         if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
             this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
+        }
+        if (
+            openScrollAnchorSnapshot
+            && this.inlinePlanDropdown
+            && this.inlinePlanDropdown.classList
+            && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
+            && globalThis.TimeTrackerInlinePlanDropdownController
+            && typeof globalThis.TimeTrackerInlinePlanDropdownController.restoreMobileSegmentSheetOpenScrollAnchor === 'function'
+        ) {
+            globalThis.TimeTrackerInlinePlanDropdownController.restoreMobileSegmentSheetOpenScrollAnchor(this, openScrollAnchorSnapshot);
         }
         return true;
     }

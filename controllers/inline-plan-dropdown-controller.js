@@ -2657,6 +2657,57 @@ function captureMobileInlinePlanApplyScrollAnchor(ctx) {
         return snapshot;
     }
 
+    function captureMobileSegmentSheetOpenScrollAnchor(ctx, segmentEl, target) {
+        if (!ctx || !segmentEl || typeof window === 'undefined' || typeof document === 'undefined') return null;
+        if (typeof ctx.isInlinePlanMobileInputContext !== 'function' || !ctx.isInlinePlanMobileInputContext()) return null;
+        if (!target || target.mode !== 'plan-segment-replace') return null;
+
+        const rect = segmentEl.getBoundingClientRect ? segmentEl.getBoundingClientRect() : null;
+        return {
+            scrollY: window.scrollY || window.pageYOffset || 0,
+            docScrollTop: document.documentElement ? document.documentElement.scrollTop || 0 : 0,
+            targetTop: rect && Number.isFinite(rect.top) ? rect.top : null,
+            targetBottom: rect && Number.isFinite(rect.bottom) ? rect.bottom : null,
+            baseIndex: target.baseIndex,
+            startIndex: target.startIndex,
+            segmentIndex: target.segmentIndex,
+            segmentId: target.segmentId || '',
+        };
+    }
+
+    function restoreMobileSegmentSheetOpenScrollAnchor(ctx, snapshot) {
+        if (!snapshot || typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (!ctx || typeof ctx.isInlinePlanMobileInputContext !== 'function' || !ctx.isInlinePlanMobileInputContext()) return;
+        const run = () => {
+            const currentY = window.scrollY || window.pageYOffset || 0;
+            const desiredY = Number.isFinite(snapshot.scrollY) ? snapshot.scrollY : snapshot.docScrollTop;
+            if (Number.isFinite(desiredY) && Math.abs(currentY - desiredY) > 2 && typeof window.scrollTo === 'function') {
+                window.scrollTo({ top: Math.max(0, Math.round(desiredY)), behavior: 'instant' });
+            }
+
+            const row = Number.isInteger(snapshot.baseIndex)
+                ? document.querySelector(`.time-entry[data-index="${snapshot.baseIndex}"]`)
+                : null;
+            const segment = row && Number.isInteger(snapshot.segmentIndex)
+                ? row.querySelector(`.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${snapshot.segmentIndex}"]`)
+                : null;
+            const targetEl = segment || row;
+            if (targetEl && targetEl.getBoundingClientRect && Number.isFinite(snapshot.targetTop) && typeof window.scrollBy === 'function') {
+                const rect = targetEl.getBoundingClientRect();
+                const delta = rect.top - snapshot.targetTop;
+                if (Number.isFinite(delta) && Math.abs(delta) > 2) {
+                    window.scrollBy({ top: delta, behavior: 'instant' });
+                }
+            }
+        };
+
+        const requestFrame = typeof requestAnimationFrame === 'function'
+            ? (fn) => requestAnimationFrame(fn)
+            : (fn) => setTimeout(fn, 16);
+        requestFrame(() => requestFrame(run));
+        setTimeout(run, 120);
+    }
+
     function scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot) {
         if (!ctx || !snapshot || typeof document === "undefined" || typeof window === "undefined") return;
         const isMobile = typeof ctx.isInlinePlanMobileInputContext === "function"
@@ -4395,6 +4446,8 @@ function applyInlinePlanSelection(label, options = {}) {
         applyInlinePlanBackgroundContext,
         closeInlinePlanDropdown,
         captureMobileInlinePlanApplyScrollAnchor,
+        captureMobileSegmentSheetOpenScrollAnchor,
+        restoreMobileSegmentSheetOpenScrollAnchor,
         scheduleMobileInlinePlanApplyScrollRestoration,
         applyInlinePlanSelection
     });

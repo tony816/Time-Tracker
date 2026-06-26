@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { buildMethod } = require('./helpers/script-method-builder');
+const controller = require('../controllers/inline-plan-dropdown-controller');
 
 const attachPlanSegmentSelectionListeners = buildMethod(
     'attachPlanSegmentSelectionListeners(entryDiv, index)',
@@ -62,6 +63,10 @@ const correctInlinePlanSheetTargetViewport = buildMethod(
 const applyPlanSegmentTitleTextEdit = buildMethod(
     'applyPlanSegmentTitleTextEdit(baseIndex, segmentIndex, rawTitle)',
     '(baseIndex, segmentIndex, rawTitle)'
+);
+const openPlanSegmentReplacementDropdown = buildMethod(
+    'openPlanSegmentReplacementDropdown(baseIndex, segmentIndex, segmentEl, options = {})',
+    '(baseIndex, segmentIndex, segmentEl, options = {})'
 );
 
 function rect(left, top, right, bottom) {
@@ -515,6 +520,257 @@ test('mobile segment background tap opens replacement dropdown when segment is a
             ['dropdown', 0, 0, harness.segment, {}],
         ]);
     });
+});
+
+test('mobile segment replacement open restores pre-open scroll after body overflow lock jump', () => {
+    const originalWindow = global.window;
+    const originalDocument = global.document;
+    const originalRAF = global.requestAnimationFrame;
+    const originalSetTimeout = global.setTimeout;
+    const originalController = globalThis.TimeTrackerInlinePlanDropdownController;
+    const rafQueue = [];
+    const timeoutQueue = [];
+    const scrollToCalls = [];
+    const scrollByCalls = [];
+
+    const row = createElementNode('div', 'time-entry');
+    row.dataset.index = '8';
+    const segment = createElementNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        segmentId: 'planned-8-0',
+    });
+    const label = createElementNode('span', 'plan-segment-label-text');
+    let segmentTop = 180;
+    segment.getBoundingClientRect = () => rect(0, segmentTop, 300, segmentTop + 60);
+    row.querySelector = (selector) => {
+        if (String(selector).includes('.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="0"]')) {
+            return segment;
+        }
+        return null;
+    };
+    row.appendChild(segment);
+    segment.appendChild(label);
+
+    global.requestAnimationFrame = (fn) => { rafQueue.push(fn); return rafQueue.length; };
+    global.setTimeout = (fn) => { timeoutQueue.push(fn); return timeoutQueue.length; };
+    global.window = {
+        scrollY: 500,
+        pageYOffset: 500,
+        scrollTo(options) {
+            scrollToCalls.push(options);
+            this.scrollY = options.top;
+            this.pageYOffset = options.top;
+        },
+        scrollBy(options) {
+            scrollByCalls.push(options);
+        },
+    };
+    global.document = {
+        documentElement: { scrollTop: 500 },
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="8"]') return row;
+            return null;
+        },
+    };
+    globalThis.TimeTrackerInlinePlanDropdownController = controller;
+
+    const ctx = {
+        timeSlots: [
+            null, null, null, null, null, null, null, null,
+            { planActivities: [{ label: 'Work', activityText: 'Work', seconds: 3600 }] },
+        ],
+        isInlinePlanMobileInputContext() { return true; },
+        openInlinePlanDropdown(index, anchor, endIndex, options) {
+            assert.equal(index, 8);
+            assert.equal(endIndex, 8);
+            assert.equal(anchor, label);
+            assert.equal(options.mode, 'plan-segment-replace');
+            assert.equal(options.segmentIndex, 0);
+            assert.equal(options.segmentId, 'planned-8-0');
+            global.window.scrollY = 780;
+            global.window.pageYOffset = 780;
+            this.inlinePlanDropdown = {
+                classList: {
+                    contains(className) { return className === 'inline-plan-dropdown-sheet'; },
+                },
+            };
+            this.inlinePlanTarget = {
+                mode: 'plan-segment-replace',
+                segmentIndex: 0,
+            };
+        },
+        addInlinePlanSheetTargetClasses() {},
+        scheduleInlinePlanSheetTargetViewportCorrection() {
+            throw new Error('segment replacement must not use open-time viewport correction');
+        },
+    };
+
+    try {
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 8, 0, segment), true);
+        assert.equal(scrollToCalls.length, 0);
+        while (rafQueue.length > 0) {
+            const fn = rafQueue.shift();
+            fn();
+        }
+        assert.equal(scrollToCalls.length, 1);
+        assert.deepEqual(scrollToCalls[0], { top: 500, behavior: 'instant' });
+        assert.deepEqual(scrollByCalls, []);
+    } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+        global.requestAnimationFrame = originalRAF;
+        global.setTimeout = originalSetTimeout;
+        globalThis.TimeTrackerInlinePlanDropdownController = originalController;
+    }
+});
+
+test('mobile segment replacement open restores tapped segment top after sheet open shift', () => {
+    const originalWindow = global.window;
+    const originalDocument = global.document;
+    const originalRAF = global.requestAnimationFrame;
+    const originalSetTimeout = global.setTimeout;
+    const originalController = globalThis.TimeTrackerInlinePlanDropdownController;
+    const rafQueue = [];
+    const scrollByCalls = [];
+
+    const row = createElementNode('div', 'time-entry');
+    row.dataset.index = '8';
+    const segment = createElementNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        segmentId: 'planned-8-0',
+    });
+    const label = createElementNode('span', 'plan-segment-label-text');
+    let segmentTop = 180;
+    segment.getBoundingClientRect = () => rect(0, segmentTop, 300, segmentTop + 60);
+    row.querySelector = (selector) => {
+        if (String(selector).includes('.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="0"]')) {
+            return segment;
+        }
+        return null;
+    };
+    row.appendChild(segment);
+    segment.appendChild(label);
+
+    global.requestAnimationFrame = (fn) => { rafQueue.push(fn); return rafQueue.length; };
+    global.setTimeout = () => 1;
+    global.window = {
+        scrollY: 500,
+        pageYOffset: 500,
+        scrollTo() {},
+        scrollBy(options) { scrollByCalls.push(options); },
+    };
+    global.document = {
+        documentElement: { scrollTop: 500 },
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="8"]') return row;
+            return null;
+        },
+    };
+    globalThis.TimeTrackerInlinePlanDropdownController = controller;
+
+    const ctx = {
+        timeSlots: [
+            null, null, null, null, null, null, null, null,
+            { planActivities: [{ label: 'Work', activityText: 'Work', seconds: 3600 }] },
+        ],
+        isInlinePlanMobileInputContext() { return true; },
+        openInlinePlanDropdown() {
+            segmentTop = 420;
+            this.inlinePlanDropdown = {
+                classList: {
+                    contains(className) { return className === 'inline-plan-dropdown-sheet'; },
+                },
+            };
+            this.inlinePlanTarget = { mode: 'plan-segment-replace', segmentIndex: 0 };
+        },
+        addInlinePlanSheetTargetClasses() {},
+        scheduleInlinePlanSheetTargetViewportCorrection() {
+            throw new Error('segment replacement must not use open-time viewport correction');
+        },
+    };
+
+    try {
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 8, 0, segment), true);
+        while (rafQueue.length > 0) {
+            const fn = rafQueue.shift();
+            fn();
+        }
+        assert.ok(scrollByCalls.length >= 1);
+        assert.deepEqual(scrollByCalls[0], { top: 240, behavior: 'instant' });
+    } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+        global.requestAnimationFrame = originalRAF;
+        global.setTimeout = originalSetTimeout;
+        globalThis.TimeTrackerInlinePlanDropdownController = originalController;
+    }
+});
+
+test('desktop segment replacement open does not run mobile open scroll restoration', () => {
+    const originalWindow = global.window;
+    const originalDocument = global.document;
+    const originalRAF = global.requestAnimationFrame;
+    const originalSetTimeout = global.setTimeout;
+    const originalController = globalThis.TimeTrackerInlinePlanDropdownController;
+    let rafCalled = false;
+    let timeoutCalled = false;
+
+    const segment = createElementNode('div', 'split-grid-segment', {
+        segmentKind: 'real-plan',
+        segmentIndex: '0',
+        segmentId: 'planned-8-0',
+    });
+    const label = createElementNode('span', 'plan-segment-label-text');
+    segment.getBoundingClientRect = () => rect(0, 180, 300, 240);
+    segment.appendChild(label);
+
+    global.requestAnimationFrame = (fn) => { rafCalled = true; fn(); };
+    global.setTimeout = (fn) => { timeoutCalled = true; fn(); return 1; };
+    global.window = {
+        scrollY: 500,
+        pageYOffset: 500,
+        scrollTo() {},
+        scrollBy() {},
+    };
+    global.document = {
+        documentElement: { scrollTop: 500 },
+        querySelector() { return null; },
+    };
+    globalThis.TimeTrackerInlinePlanDropdownController = controller;
+
+    const ctx = {
+        timeSlots: [
+            null, null, null, null, null, null, null, null,
+            { planActivities: [{ label: 'Work', activityText: 'Work', seconds: 3600 }] },
+        ],
+        isInlinePlanMobileInputContext() { return false; },
+        openInlinePlanDropdown() {
+            this.inlinePlanDropdown = {
+                classList: {
+                    contains(className) { return className === 'inline-plan-dropdown-sheet'; },
+                },
+            };
+            this.inlinePlanTarget = { mode: 'plan-segment-replace', segmentIndex: 0 };
+        },
+        addInlinePlanSheetTargetClasses() {},
+        scheduleInlinePlanSheetTargetViewportCorrection() {
+            throw new Error('desktop segment replacement must not use mobile sheet correction');
+        },
+    };
+
+    try {
+        assert.equal(openPlanSegmentReplacementDropdown.call(ctx, 8, 0, segment), true);
+        assert.equal(rafCalled, false);
+        assert.equal(timeoutCalled, false);
+    } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+        global.requestAnimationFrame = originalRAF;
+        global.setTimeout = originalSetTimeout;
+        globalThis.TimeTrackerInlinePlanDropdownController = originalController;
+    }
 });
 
 test('mobile empty planned slot pre-scroll uses the shared sheet target viewport helper', () => {

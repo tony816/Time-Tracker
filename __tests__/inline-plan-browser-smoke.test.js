@@ -337,13 +337,47 @@ test('browser mobile plan segment apply preserves target visibility without scro
         try {
             const mobile = await newSmokePage(browser, url, { mobile: true, viewport: { width: 390, height: 780 } });
             try {
-                await openSegmentDropdown(mobile.page, 0);
+                const selector = `.time-entry[data-index="8"] .split-grid-segment[data-segment-kind="real-plan"][data-segment-index="0"]`;
+                await mobile.page.evaluate((targetSelector) => {
+                    const target = document.querySelector(targetSelector);
+                    if (!target) return;
+                    const rect = target.getBoundingClientRect();
+                    window.scrollTo(0, Math.max(0, window.scrollY + rect.top - 180));
+                }, selector);
+                await mobile.page.waitForTimeout(100);
+                const preOpen = await mobile.page.evaluate((targetSelector) => {
+                    const target = document.querySelector(targetSelector);
+                    const rect = target ? target.getBoundingClientRect() : null;
+                    return {
+                        found: Boolean(target),
+                        scrollY: window.scrollY || window.pageYOffset || 0,
+                        top: rect ? rect.top : null,
+                    };
+                }, selector);
+                assert.equal(preOpen.found, true, 'target segment missing before open');
+
+                await mobile.page.locator(selector).click();
                 await assertDropdownOpen(mobile.page);
                 assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 1);
+                await mobile.page.waitForTimeout(260);
+                const postOpen = await mobile.page.evaluate((targetSelector) => {
+                    const target = document.querySelector(targetSelector);
+                    const rect = target ? target.getBoundingClientRect() : null;
+                    const active = document.activeElement;
+                    return {
+                        found: Boolean(target),
+                        scrollY: window.scrollY || window.pageYOffset || 0,
+                        top: rect ? rect.top : null,
+                        activeElIsPlannedInput: Boolean(active && active.classList && active.classList.contains('planned-input')),
+                    };
+                }, selector);
+                assert.equal(postOpen.found, true, 'target segment missing after open');
+                assert.ok(Math.abs(postOpen.scrollY - preOpen.scrollY) <= 4,
+                    'open scroll jump too large: pre=' + preOpen.scrollY + ' post=' + postOpen.scrollY);
+                assert.ok(Math.abs(postOpen.top - preOpen.top) <= 8,
+                    'open target top moved too far: pre=' + preOpen.top + ' post=' + postOpen.top);
+                assert.equal(postOpen.activeElIsPlannedInput, false, 'activeElement should not be another planned input after open');
 
-                // Scroll to a known position to have a predictable baseline
-                await mobile.page.evaluate(() => window.scrollTo(0, 200));
-                await mobile.page.waitForTimeout(100);
                 const preScrollY = await mobile.page.evaluate(() => window.scrollY || window.pageYOffset || 0);
 
                 // Select an activity to apply to the segment
