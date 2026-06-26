@@ -325,19 +325,16 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             if (scrollTop > 2) return false;
             const target = event && event.target ? event.target : null;
             if (!target || typeof target.closest !== 'function') return false;
+            if (target.closest('.inline-plan-sheet-drag-handle')) return true;
             const interactive = target.closest(
                 'input, textarea, button, select, .inline-plan-options, .activity-chip-board, .inline-plan-subsection, .inline-plan-sub-board, .inline-plan-input-row, .inline-plan-child-actions'
             );
             if (interactive) return false;
-            return Boolean(
-                target.closest('.inline-plan-sheet-drag-handle')
-                || target.closest('.inline-plan-dropdown-sheet')
-            );
+            return Boolean(target.closest('.inline-plan-dropdown-sheet'));
         };
         const start = (event) => {
+            if (state.armed) return;
             const source = getEventSource(event);
-            if (supportsPointerEvents && source === 'touch') return;
-            if (!supportsPointerEvents && source === 'pointer') return;
             if (!shouldArm(event)) return;
             if (state.closeTimer) {
                 clearTimeout(state.closeTimer);
@@ -361,8 +358,6 @@ function setupInlinePlanSheetTouchDismiss(dropdown) {
             if (!state.armed) return;
             const source = getEventSource(event);
             if (state.activeSource && source !== 'unknown' && source !== state.activeSource) return;
-            if (supportsPointerEvents && source === 'touch') return;
-            if (!supportsPointerEvents && source === 'pointer') return;
             if (state.pointerId !== null && Number.isFinite(event.pointerId) && event.pointerId !== state.pointerId) return;
             const currentY = getPointY(event);
             const deltaY = currentY - state.startY;

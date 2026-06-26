@@ -221,6 +221,116 @@ test('browser dropdown and mobile sheet remain open and stable during page scrol
     });
 });
 
+
+test('browser mobile sheet closes via pointerType touch drag and reopens after close', async () => {
+    await withServer(async (url) => {
+        const browser = await chromium.launch();
+        try {
+            const mobile = await newSmokePage(browser, url, { mobile: true, viewport: { width: 390, height: 780 } });
+            try {
+                // First open
+                await openSegmentDropdown(mobile.page, 0);
+                await assertDropdownOpen(mobile.page);
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 1);
+
+                // Dispatch pointerType="touch" drag via evaluate to simulate real mobile touch
+                const handle = await mobile.page.locator('.inline-plan-sheet-drag-handle').boundingBox();
+                assert.ok(handle, 'drag handle missing');
+                const startX = handle.x + handle.width / 2;
+                const startY = handle.y + handle.height / 2;
+
+                await mobile.page.evaluate(({ x, y }) => {
+                    const target = document.elementFromPoint(x, y);
+                    if (!target) return;
+                    target.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerType: 'touch', pointerId: 1, clientX: x, clientY: y, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointermove', {
+                        pointerType: 'touch', pointerId: 1, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointerup', {
+                        pointerType: 'touch', pointerId: 1, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                }, { x: startX, y: startY });
+
+                await mobile.page.waitForFunction(() => !document.querySelector('.inline-plan-dropdown'));
+                await assertNoAppErrors(mobile.errors);
+
+                // Reopen and drag close again
+                await openSegmentDropdown(mobile.page, 0);
+                await assertDropdownOpen(mobile.page);
+                await mobile.page.waitForSelector('.inline-plan-sheet-drag-handle');
+                const handle2 = await mobile.page.locator('.inline-plan-sheet-drag-handle').boundingBox();
+                const sx = handle2.x + handle2.width / 2;
+                const sy = handle2.y + handle2.height / 2;
+
+                await mobile.page.evaluate(({ x, y }) => {
+                    const target = document.elementFromPoint(x, y);
+                    if (!target) return;
+                    target.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerType: 'touch', pointerId: 2, clientX: x, clientY: y, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointermove', {
+                        pointerType: 'touch', pointerId: 2, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointerup', {
+                        pointerType: 'touch', pointerId: 2, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                }, { x: sx, y: sy });
+
+                await mobile.page.waitForFunction(() => !document.querySelector('.inline-plan-dropdown'));
+                await assertNoAppErrors(mobile.errors);
+            } finally {
+                await mobile.context.close();
+            }
+        } finally {
+            await browser.close();
+        }
+    });
+});
+
+test('browser mobile sheet does not close when drag starts from chipboard', async () => {
+    await withServer(async (url) => {
+        const browser = await chromium.launch();
+        try {
+            const mobile = await newSmokePage(browser, url, { mobile: true, viewport: { width: 390, height: 780 } });
+            try {
+                await openSegmentDropdown(mobile.page, 0);
+                await assertDropdownOpen(mobile.page);
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 1);
+
+                // Try to drag from a chip inside the chipboard
+                const chip = await mobile.page.locator('.activity-chip').first().boundingBox();
+                assert.ok(chip, 'chip missing');
+                const cx = chip.x + chip.width / 2;
+                const cy = chip.y + chip.height / 2;
+
+                await mobile.page.evaluate(({ x, y }) => {
+                    const target = document.elementFromPoint(x, y);
+                    if (!target) return;
+                    target.dispatchEvent(new PointerEvent('pointerdown', {
+                        pointerType: 'touch', pointerId: 3, clientX: x, clientY: y, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointermove', {
+                        pointerType: 'touch', pointerId: 3, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                    target.dispatchEvent(new PointerEvent('pointerup', {
+                        pointerType: 'touch', pointerId: 3, clientX: x, clientY: y + 120, bubbles: true, cancelable: true,
+                    }));
+                }, { x: cx, y: cy });
+
+                await mobile.page.waitForTimeout(300);
+                // Sheet should still be open
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 1);
+                await assertNoAppErrors(mobile.errors);
+            } finally {
+                await mobile.context.close();
+            }
+        } finally {
+            await browser.close();
+        }
+    });
+});
 test('browser chipboard supports repeated mixed drag gestures without stale drag state', async () => {
     await withServer(async (url) => {
         const browser = await chromium.launch();
