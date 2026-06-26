@@ -119,6 +119,13 @@
         return !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
     }
 
+    function getPrimaryPointFromEvent(event) {
+        if (!event) return null;
+        if (event.touches && event.touches[0]) return event.touches[0];
+        if (event.changedTouches && event.changedTouches[0]) return event.changedTouches[0];
+        return event;
+    }
+
     function resolvePlannedInputFromEvent(event) {
         const target = event && event.target;
         if (target && target.matches && target.matches('.planned-input')) {
@@ -530,6 +537,8 @@
             this.pendingMergedMouseSelection = null;
             activeMergeSelectionAdjustment = null;
             mergeDragHadMovement = false;
+            mergeState.activeMergeSelectionAdjustment = null;
+            mergeState.mergeDragHadMovement = false;
             mergeState.touchMergeSelectionActive = false;
             clearWasGestureStartedByTimeSlot();
             if (entryDiv && entryDiv.classList) {
@@ -692,8 +701,9 @@
         };
 
         this.beginPlannedTimeSlotMergeSelection = (event) => {
-            const forcedIndex = this.getIndexAtClientPosition
-                ? this.getIndexAtClientPosition('planned', event && event.clientX, event && event.clientY)
+            const point = getPrimaryPointFromEvent(event);
+            const forcedIndex = this.getIndexAtClientPosition && point
+                ? this.getIndexAtClientPosition('planned', point.clientX, point.clientY)
                 : null;
             const result = beginTimeSlotMergeSelection(event, forcedIndex);
             if (result && result !== 'cleared') {

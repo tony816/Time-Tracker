@@ -828,7 +828,7 @@ test('planMergeSnapshot survives state snapshot restore enough for undoMerge to 
     assert.equal(restoredCtx.timeSlots[0].planMergeSnapshot, undefined);
 });
 
-test('planned overlay-started drag uses the same merge-selection path as the time rail', () => {
+test('planned overlay-started drag uses the same merge-selection path as the time rail', { concurrency: false }, () => {
     const originalDocument = global.document;
     const listeners = {};
     global.document = {
@@ -908,12 +908,20 @@ test('planned overlay-started drag uses the same merge-selection path as the tim
     }
 });
 
-test('planned multi-selection tap on selected middle slot collapses to one slot', () => {
+test('planned multi-selection tap on selected middle slot collapses to one slot', { concurrency: false }, () => {
     const originalDocument = global.document;
+    const listeners = {};
     global.document = {
-        addEventListener() {},
-        removeEventListener() {},
-        dispatchEvent() {},
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
     };
 
     const timeSlot = createListenerNode();
@@ -963,6 +971,74 @@ test('planned multi-selection tap on selected middle slot collapses to one slot'
         });
 
         assert.deepEqual(Array.from(ctx.selectedPlannedFields), [3]);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned single tap on unselected slot collapses to that slot', { concurrency: false }, () => {
+    const originalDocument = global.document;
+    const listeners = {};
+    global.document = {
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        dispatchEvent(event) {
+            (listeners[event.type] || []).slice().forEach((handler) => handler(event));
+        },
+    };
+
+    const timeSlot = createListenerNode();
+    timeSlot.ownerDocument = global.document;
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === '.time-slot-container' ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const ctx = {
+        timeSlots: new Array(10).fill({}),
+        selectedPlannedFields: new Set([2, 3, 4]),
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        closeInlinePlanDropdown() {},
+        clearSelection(type) {
+            if (type === 'planned') this.selectedPlannedFields.clear();
+        },
+        selectFieldRange(type, start, end) {
+            if (type === 'planned') {
+                this.selectedPlannedFields.clear();
+                for (let i = start; i <= end; i += 1) this.selectedPlannedFields.add(i);
+            }
+        },
+        findMergeKey() { return null; },
+        getMergeRangeBounds() { return null; },
+        getIndexAtClientPosition() { return 6; },
+        isPlannedSlotMoveMode() { return false; },
+    };
+
+    try {
+        fieldInteractionController.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 6);
+        ctx.beginPlannedTimeSlotMergeSelection({
+            type: 'mousedown',
+            button: 0,
+            target: timeSlot,
+            clientX: 95,
+            clientY: 220,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        global.document.dispatchEvent({
+            type: 'mouseup',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.deepEqual(Array.from(ctx.selectedPlannedFields), [6]);
     } finally {
         global.document = originalDocument;
     }

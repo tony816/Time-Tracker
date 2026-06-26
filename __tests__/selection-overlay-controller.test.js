@@ -5,8 +5,10 @@ const path = require('node:path');
 
 require('../controllers/controller-state-access');
 const controller = require('../controllers/selection-overlay-controller');
+const { buildMethod } = require('./helpers/script-method-builder');
 const scriptSource = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
 const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'selection-overlay-controller.js'), 'utf8');
+const ensureSelectionOverlayWrapper = buildMethod('ensureSelectionOverlay(type)', '(type)');
 
 test('selection-overlay-controller exports and global attach are available', () => {
     assert.equal(globalThis.TimeTrackerSelectionOverlayController.selectFieldRange, controller.selectFieldRange);
@@ -34,6 +36,188 @@ test('planned overlay delegates pointer start to canonical merge selection and p
     assert.match(controllerSource, /\.schedule-button, \.undo-button, \.merge-button/);
     assert.match(controllerSource, /touchstart/);
     assert.match(controllerSource, /pointerdown/);
+});
+
+test('planned overlay starts at most once across pointerdown and mousedown', () => {
+    const originalDocument = global.document;
+    const calls = [];
+    const listeners = {};
+    const overlay = {
+        dataset: {},
+        style: {},
+        parentNode: null,
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+    };
+    global.document = {
+        createElement() {
+            return overlay;
+        },
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            listeners[type] = (listeners[type] || []).filter((item) => item !== handler);
+        },
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+        },
+    };
+    const ctx = {
+        beginPlannedTimeSlotMergeSelection(event) {
+            calls.push(event.type);
+            return true;
+        },
+        getSelectionOverlay() {
+            return null;
+        },
+        setSelectionOverlay(type, node) {
+            this._overlay = node;
+            return node;
+        },
+    };
+
+    try {
+        const result = ensureSelectionOverlayWrapper.call(ctx, 'planned');
+        assert.equal(result, overlay);
+        listeners.pointerdown[0]({
+            type: 'pointerdown',
+            button: 0,
+            target: { closest() { return null; } },
+            preventDefault() {},
+            stopPropagation() {},
+            target: { closest() { return null; }, ownerDocument: global.document },
+        });
+        listeners.mousedown[0]({
+            type: 'mousedown',
+            button: 0,
+            target: { closest() { return null; }, ownerDocument: global.document },
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.deepEqual(calls, ['pointerdown']);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay buttons bypass gesture handling', () => {
+    const originalDocument = global.document;
+    const calls = [];
+    const listeners = {};
+    const overlay = {
+        dataset: {},
+        style: {},
+        parentNode: null,
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+    };
+    global.document = {
+        createElement() {
+            return overlay;
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+        },
+    };
+    const ctx = {
+        beginPlannedTimeSlotMergeSelection(event) {
+            calls.push(event.type);
+            return true;
+        },
+        getSelectionOverlay() {
+            return null;
+        },
+        setSelectionOverlay(type, node) {
+            this._overlay = node;
+            return node;
+        },
+    };
+
+    try {
+        ensureSelectionOverlayWrapper.call(ctx, 'planned');
+        const buttonTarget = {
+            closest(selector) {
+                return selector.includes('.schedule-button') ? this : null;
+            },
+            ownerDocument: global.document,
+        };
+        listeners.mousedown[0]({
+            type: 'mousedown',
+            button: 0,
+            target: buttonTarget,
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.deepEqual(calls, []);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('planned overlay touchstart forwards the touch point once', () => {
+    const originalDocument = global.document;
+    const calls = [];
+    const listeners = {};
+    const overlay = {
+        dataset: {},
+        style: {},
+        parentNode: null,
+        addEventListener(type, handler) {
+            if (!listeners[type]) listeners[type] = [];
+            listeners[type].push(handler);
+        },
+    };
+    global.document = {
+        createElement() {
+            return overlay;
+        },
+        addEventListener() {},
+        removeEventListener() {},
+        body: {
+            appendChild(node) {
+                node.parentNode = this;
+            },
+        },
+    };
+    const ctx = {
+        beginPlannedTimeSlotMergeSelection(event) {
+            calls.push([event.type, event.touches && event.touches[0].clientX, event.touches && event.touches[0].clientY]);
+            return true;
+        },
+        getSelectionOverlay() {
+            return null;
+        },
+        setSelectionOverlay(type, node) {
+            this._overlay = node;
+            return node;
+        },
+    };
+
+    try {
+        ensureSelectionOverlayWrapper.call(ctx, 'planned');
+        listeners.touchstart[0]({
+            type: 'touchstart',
+            touches: [{ clientX: 112, clientY: 223 }],
+            target: { closest() { return null; }, ownerDocument: global.document },
+            preventDefault() {},
+            stopPropagation() {},
+        });
+        assert.deepEqual(calls, [['touchstart', 112, 223]]);
+    } finally {
+        global.document = originalDocument;
+    }
 });
 
 test('updateSelectionOverlay does not throw when planned selection overlay refreshes', () => {

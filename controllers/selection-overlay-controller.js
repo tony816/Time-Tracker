@@ -751,19 +751,47 @@
             const el = document.createElement('div');
             el.className = 'selection-overlay';
             el.dataset.type = type;
+            let overlayGestureActive = false;
             if (type === 'planned' && typeof this.beginPlannedTimeSlotMergeSelection === 'function') {
                 const isOverlayActionButton = (target) => Boolean(
                     target && target.closest && target.closest('.schedule-button, .undo-button, .merge-button')
                 );
                 const onOverlayPointerStart = (event) => {
+                    if (overlayGestureActive) return;
                     if (event.type === 'mousedown' && event.button !== 0) return;
                     if (event.type === 'pointerdown' && event.button !== 0) return;
                     if (event.type === 'touchstart' && event.touches && event.touches.length !== 1) return;
                     if (isOverlayActionButton(event.target)) return;
+                    overlayGestureActive = true;
                     const result = this.beginPlannedTimeSlotMergeSelection(event);
-                    if (!result) return;
+                    if (!result) {
+                        overlayGestureActive = false;
+                        return;
+                    }
                     event.preventDefault();
                     event.stopPropagation();
+                    const doc = event && event.target && event.target.ownerDocument
+                        ? event.target.ownerDocument
+                        : (typeof document !== 'undefined' ? document : null);
+                    const endGesture = () => {
+                        overlayGestureActive = false;
+                        if (doc && typeof doc.removeEventListener === 'function') {
+                            doc.removeEventListener('mouseup', endGesture, true);
+                            doc.removeEventListener('touchend', endGesture, true);
+                            doc.removeEventListener('touchcancel', endGesture, true);
+                            doc.removeEventListener('pointerup', endGesture, true);
+                            doc.removeEventListener('pointercancel', endGesture, true);
+                        }
+                    };
+                    if (doc && typeof doc.addEventListener === 'function') {
+                        doc.addEventListener('mouseup', endGesture, true);
+                        doc.addEventListener('touchend', endGesture, true);
+                        doc.addEventListener('touchcancel', endGesture, true);
+                        doc.addEventListener('pointerup', endGesture, true);
+                        doc.addEventListener('pointercancel', endGesture, true);
+                    } else {
+                        overlayGestureActive = false;
+                    }
                 };
                 el.addEventListener('mousedown', onOverlayPointerStart, true);
                 el.addEventListener('pointerdown', onOverlayPointerStart, true);

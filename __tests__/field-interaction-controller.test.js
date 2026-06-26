@@ -2415,6 +2415,49 @@ test("document-level touchcancel cleans up state and listeners", () => {
     });
 });
 
+test("planned merge start resolves touch coordinates from touch events instead of a stale row index", () => {
+    const timeSlot = createListenerNode();
+    timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
+    const entryDiv = createListenerNode();
+    entryDiv.querySelector = (selector) => selector === ".time-slot-container" ? timeSlot : null;
+    entryDiv.getBoundingClientRect = () => ({ left: 80, right: 400, top: 200, bottom: 244, width: 320, height: 44 });
+    const calls = [];
+    const ctx = {
+        currentColumnType: null,
+        isSelectingPlanned: false,
+        dragStartIndex: -1,
+        dragBaseEndIndex: -1,
+        selectedPlannedFields: new Set([2, 3, 4]),
+        findMergeKey() { return "planned-2-4"; },
+        getMergeRangeBounds() { return { start: 2, end: 4 }; },
+        getIndexAtClientPosition(type, clientX, clientY) {
+            calls.push(["hit", type, clientX, clientY]);
+            return clientX === 173 && clientY === 231 ? 3 : 9;
+        },
+        clearSelection(type) {
+            calls.push(["clear", type]);
+        },
+        selectFieldRange(type, start, end) {
+            calls.push(["select", type, start, end]);
+        },
+        closeInlinePlanDropdown() {},
+        isPlannedSlotMoveMode() { return false; },
+    };
+
+    controller.attachTimeSlotMergeEntryListeners.call(ctx, entryDiv, 3);
+    const result = ctx.beginPlannedTimeSlotMergeSelection({
+        type: "touchstart",
+        target: timeSlot,
+        touches: [{ clientX: 173, clientY: 231 }],
+        changedTouches: [{ clientX: 173, clientY: 231 }],
+        preventDefault() {},
+        stopPropagation() {},
+    });
+
+    assert.equal(result, true);
+    assert.deepEqual(calls[0], ["hit", "planned", 173, 231]);
+});
+
 test("row-level touchstart skip when move mode is active", () => {
     const timeSlot = createListenerNode();
     timeSlot.getBoundingClientRect = () => ({ left: 80, right: 120, top: 200, bottom: 244, width: 40, height: 44 });
