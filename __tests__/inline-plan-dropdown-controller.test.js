@@ -7387,12 +7387,13 @@ test('captureMobileInlinePlanApplyScrollAnchor captures scroll state on mobile',
         const snapshot = controller.captureMobileInlinePlanApplyScrollAnchor(ctx);
         assert.ok(snapshot);
         assert.equal(snapshot.scrollY, 200);
-        assert.equal(snapshot.targetTop, 100);
-        assert.equal(snapshot.targetBottom, 140);
+        assert.equal(snapshot.targetViewportTop, 100);
+        assert.equal(snapshot.targetViewportBottom, 140);
         assert.equal(snapshot.baseIndex, 3);
         assert.equal(snapshot.segmentIndex, 1);
         assert.equal(snapshot.segmentId, 'planned-3-1');
         assert.equal(snapshot.visualViewportHeight, 600);
+        assert.equal(snapshot.mode, 'plan-segment-replace');
     } finally {
         globalThis.window = originalWindow;
         globalThis.document = originalDocument;
@@ -7407,18 +7408,26 @@ test('captureMobileInlinePlanApplyScrollAnchor returns null on desktop', () => {
     assert.equal(snapshot, null);
 });
 
-test('captureMobileInlinePlanApplyScrollAnchor returns null for non-segment-replace mode', () => {
+test('captureMobileInlinePlanApplyScrollAnchor captures non-segment-replace mobile targets', () => {
     const originalWindow = globalThis.window;
     const originalDocument = globalThis.document;
     globalThis.window = { scrollY: 0, pageYOffset: 0, visualViewport: null };
-    globalThis.document = { documentElement: { scrollTop: 0 } };
+    globalThis.document = {
+        documentElement: { scrollTop: 0 },
+        querySelector() { return null; },
+    };
     const ctx = {
         isInlinePlanMobileInputContext() { return true; },
-        inlinePlanTarget: { mode: 'range', startIndex: 0, endIndex: 0 },
+        inlinePlanTarget: { mode: 'range', startIndex: 0, endIndex: 0, baseIndex: 0 },
     };
     try {
         const snapshot = controller.captureMobileInlinePlanApplyScrollAnchor(ctx);
-        assert.equal(snapshot, null);
+        assert.ok(snapshot, 'should capture snapshot for non-segment-replace mobile target');
+        assert.equal(snapshot.mode, 'range');
+        assert.equal(snapshot.baseIndex, 0);
+        assert.equal(snapshot.startIndex, 0);
+        assert.equal(snapshot.endIndex, 0);
+        assert.equal(snapshot.segmentIndex, null);
     } finally {
         globalThis.window = originalWindow;
         globalThis.document = originalDocument;
@@ -7455,6 +7464,8 @@ test('scheduleMobileInlinePlanApplyScrollRestoration uses double RAF on mobile',
     };
     globalThis.window = {
         innerHeight: 800,
+        scrollY: 0,
+        pageYOffset: 0,
         scrollBy() {},
         visualViewport: null,
     };
@@ -7464,7 +7475,7 @@ test('scheduleMobileInlinePlanApplyScrollRestoration uses double RAF on mobile',
     const ctx = {
         isInlinePlanMobileInputContext() { return true; },
     };
-    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    const snapshot = { mode: '', baseIndex: 0 };
     try {
         controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
         assert.equal(rafCalls.length, 2);
@@ -7483,6 +7494,8 @@ test('scheduleMobileInlinePlanApplyScrollRestoration skips adjustment when targe
     globalThis.requestAnimationFrame = (fn) => fn();
     globalThis.window = {
         innerHeight: 800,
+        scrollY: 0,
+        pageYOffset: 0,
         scrollBy() { scrollByCalled = true; },
         visualViewport: null,
     };
@@ -7493,16 +7506,16 @@ test('scheduleMobileInlinePlanApplyScrollRestoration skips adjustment when targe
     };
     globalThis.document = {
         querySelector(selector) {
-            if (selector === '.time-entry[data-index="0"]') return {
-                querySelectorAll() { return [targetEl]; },
-            };
+            if (selector && selector.includes && selector.includes('data-index="0"')) {
+                return targetEl;
+            }
             return null;
         },
     };
     const ctx = {
         isInlinePlanMobileInputContext() { return true; },
     };
-    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    const snapshot = { mode: '', baseIndex: 0 };
     try {
         controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
         assert.equal(scrollByCalled, false);
@@ -7521,6 +7534,8 @@ test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is belo
     globalThis.requestAnimationFrame = (fn) => fn();
     globalThis.window = {
         innerHeight: 800,
+        scrollY: 0,
+        pageYOffset: 0,
         scrollBy(opts) { scrollByCalls.push(opts); },
         visualViewport: null,
     };
@@ -7531,16 +7546,16 @@ test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is belo
     };
     globalThis.document = {
         querySelector(selector) {
-            if (selector === '.time-entry[data-index="0"]') return {
-                querySelectorAll() { return [targetEl]; },
-            };
+            if (selector && selector.includes && selector.includes('data-index="0"')) {
+                return targetEl;
+            }
             return null;
         },
     };
     const ctx = {
         isInlinePlanMobileInputContext() { return true; },
     };
-    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    const snapshot = { mode: '', baseIndex: 0 };
     try {
         controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
         assert.ok(scrollByCalls.length >= 1);
@@ -7563,6 +7578,8 @@ test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is abov
     globalThis.requestAnimationFrame = (fn) => fn();
     globalThis.window = {
         innerHeight: 800,
+        scrollY: 0,
+        pageYOffset: 0,
         scrollBy(opts) { scrollByCalls.push(opts); },
         visualViewport: null,
     };
@@ -7573,16 +7590,16 @@ test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is abov
     };
     globalThis.document = {
         querySelector(selector) {
-            if (selector === '.time-entry[data-index="0"]') return {
-                querySelectorAll() { return [targetEl]; },
-            };
+            if (selector && selector.includes && selector.includes('data-index="0"')) {
+                return targetEl;
+            }
             return null;
         },
     };
     const ctx = {
         isInlinePlanMobileInputContext() { return true; },
     };
-    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    const snapshot = { mode: '', baseIndex: 0 };
     try {
         controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
         assert.ok(scrollByCalls.length >= 1);
@@ -7720,6 +7737,7 @@ test('mobile plan-segment-replace scroll restoration adjusts when target is belo
         scrollY: 100,
         pageYOffset: 100,
         scrollBy(opts) { scrollByCalls.push(opts); },
+        scrollTo(opts) { scrollByCalls.push(opts); },
         visualViewport: null,
     };
 
@@ -7731,10 +7749,17 @@ test('mobile plan-segment-replace scroll restoration adjusts when target is belo
     globalThis.document = {
         documentElement: { scrollTop: 100 },
         querySelector(selector) {
-            if (selector && selector.includes('.time-entry[data-index=')) {
-                return {
-                    querySelectorAll() { return [targetEl]; },
-                };
+            if (selector && selector.includes && selector.includes('data-index=')) {
+                const idxMatch = selector.match(/data-index="(\d+)"/);
+                if (idxMatch) {
+                    return {
+                        querySelectorAll(sel) {
+                            if (sel && sel.includes('[data-segment-kind=')) return [targetEl];
+                            return null;
+                        },
+                        getBoundingClientRect() { return targetEl.getBoundingClientRect(); },
+                    };
+                }
             }
             return null;
         },

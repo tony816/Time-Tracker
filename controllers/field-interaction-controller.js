@@ -241,6 +241,18 @@
     }
 
     function handleMergedClickCapture(e) {
+        // Suppress background clicks after mobile sheet apply to prevent fall-through
+        if (typeof this.suppressMobileInlinePlanBackgroundClickUntil === "number" && Date.now() < this.suppressMobileInlinePlanBackgroundClickUntil) {
+            const isMobileSheet = this.inlinePlanDropdown
+                && this.inlinePlanDropdown.classList
+                && this.inlinePlanDropdown.classList.contains("inline-plan-dropdown-sheet");
+            if (!isMobileSheet) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e && typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+                return;
+            }
+        }
         const target = e.target;
         if (target && target.closest && target.closest('.planned-slot-clear-btn')) {
             return;
