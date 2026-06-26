@@ -2581,6 +2581,101 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
         }
     }
 
+
+function captureMobileInlinePlanApplyScrollAnchor(ctx) {
+        if (!ctx || typeof document === "undefined" || typeof window === "undefined") return null;
+        const isMobile = typeof ctx.isInlinePlanMobileInputContext === "function"
+            && ctx.isInlinePlanMobileInputContext();
+        if (!isMobile) return null;
+        const target = getInlinePlanTargetState.call(ctx);
+        if (!target || target.mode !== "plan-segment-replace") return null;
+        const baseIndex = Number.isInteger(target.baseIndex)
+            ? target.baseIndex
+            : (Number.isFinite(target.startIndex) ? Number(target.startIndex) : null);
+        const segmentIndex = Number.isFinite(target.segmentIndex) ? Number(target.segmentIndex) : null;
+        const segmentId = String(target.segmentId || "");
+        let targetTop = null;
+        let targetBottom = null;
+        const targetEl = ctx.inlinePlanSheetTargetEl
+            || (typeof ctx.resolvePlanSegmentInlinePlanAnchor === "function"
+                ? ctx.resolvePlanSegmentInlinePlanAnchor(target, baseIndex)
+                : null);
+        if (targetEl && typeof targetEl.getBoundingClientRect === "function") {
+            try {
+                const rect = targetEl.getBoundingClientRect();
+                targetTop = rect.top;
+                targetBottom = rect.bottom;
+            } catch (_) {}
+        }
+        const snapshot = {
+            scrollY: window.scrollY || window.pageYOffset || 0,
+            docScrollTop: document.documentElement ? (document.documentElement.scrollTop || 0) : 0,
+            targetTop,
+            targetBottom,
+            baseIndex,
+            segmentIndex,
+            segmentId,
+        };
+        if (window.visualViewport) {
+            try {
+                snapshot.visualViewportOffsetTop = window.visualViewport.offsetTop || 0;
+                snapshot.visualViewportHeight = window.visualViewport.height || 0;
+            } catch (_) {}
+        }
+        return snapshot;
+    }
+
+    function scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot) {
+        if (!ctx || !snapshot || typeof document === "undefined" || typeof window === "undefined") return;
+        const isMobile = typeof ctx.isInlinePlanMobileInputContext === "function"
+            && ctx.isInlinePlanMobileInputContext();
+        if (!isMobile) return;
+        const requestFrame = typeof requestAnimationFrame === "function"
+            ? (fn) => requestAnimationFrame(fn)
+            : (fn) => setTimeout(fn, 16);
+        requestFrame(() => {
+            requestFrame(() => {
+                if (!snapshot || typeof document === "undefined") return;
+                let targetEl = null;
+                if (Number.isInteger(snapshot.baseIndex) && Number.isInteger(snapshot.segmentIndex)) {
+                    const row = document.querySelector(`.time-entry[data-index="${snapshot.baseIndex}"]`);
+                    if (row) {
+                        const segments = row.querySelectorAll(
+                            `.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${snapshot.segmentIndex}"]`
+                        );
+                        if (snapshot.segmentId) {
+                            targetEl = Array.from(segments).find(
+                                (seg) => String((seg.dataset && seg.dataset.segmentId) || "") === snapshot.segmentId
+                            ) || segments[0];
+                        } else {
+                            targetEl = segments[0];
+                        }
+                    }
+                    if (!targetEl) targetEl = row;
+                }
+                if (!targetEl || typeof targetEl.getBoundingClientRect !== "function") return;
+                try {
+                    const postRect = targetEl.getBoundingClientRect();
+                    const viewportHeight = window.visualViewport
+                        ? (window.visualViewport.height || window.innerHeight)
+                        : window.innerHeight;
+                    const MARGIN = 12;
+                    if (postRect.top >= MARGIN && postRect.bottom <= viewportHeight - MARGIN) return;
+                    let scrollDelta = 0;
+                    if (postRect.top < MARGIN) {
+                        scrollDelta = postRect.top - MARGIN;
+                    } else if (postRect.bottom > viewportHeight - MARGIN) {
+                        scrollDelta = postRect.bottom - (viewportHeight - MARGIN);
+                    }
+                    if (Math.abs(scrollDelta) > 1) {
+                        window.scrollBy({ top: scrollDelta, behavior: "instant" });
+                    }
+                } catch (_) {}
+            });
+        });
+    }
+
+
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
         if (!activityItem) return;
         if (this.inlinePlanTarget && this.inlinePlanTarget.mode !== 'plan-segment-replace' && typeof this.isPlanSlotEmptyForInline === 'function') {
@@ -2609,6 +2704,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
                 ? this.inlinePlanTarget.baseIndex
                 : Number(this.inlinePlanTarget.startIndex);
             const segmentIndex = Number(this.inlinePlanTarget.segmentIndex);
+            const _mobileScrollAnchor = captureMobileInlinePlanApplyScrollAnchor(this);
             const replaced = Number.isInteger(baseIndex)
                 && Number.isInteger(segmentIndex)
                 && typeof this.replacePlanSegmentActivity === 'function'
@@ -2640,6 +2736,7 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             } else {
                 this.closeInlinePlanDropdown();
             }
+            scheduleMobileInlinePlanApplyScrollRestoration(this, _mobileScrollAnchor);
             return;
         }
 
@@ -4204,6 +4301,8 @@ function applyInlinePlanSelection(label, options = {}) {
         openInlinePlanDropdown,
         applyInlinePlanBackgroundContext,
         closeInlinePlanDropdown,
+        captureMobileInlinePlanApplyScrollAnchor,
+        scheduleMobileInlinePlanApplyScrollRestoration,
         applyInlinePlanSelection
     });
 });

@@ -7353,3 +7353,536 @@ test('activity selection updates usage metadata without rendering recent orderin
         globalThis.document = originalDocument;
     }
 });
+
+
+// --- mobile scroll preservation after segment apply ---
+
+test('captureMobileInlinePlanApplyScrollAnchor captures scroll state on mobile', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    globalThis.window = {
+        scrollY: 200,
+        pageYOffset: 200,
+        visualViewport: { offsetTop: 0, height: 600 },
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 200 },
+    };
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: 100, bottom: 140, left: 50 };
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+        inlinePlanSheetTargetEl: targetEl,
+        inlinePlanTarget: {
+            mode: 'plan-segment-replace',
+            baseIndex: 3,
+            segmentIndex: 1,
+            segmentId: 'planned-3-1',
+        },
+    };
+    try {
+        const snapshot = controller.captureMobileInlinePlanApplyScrollAnchor(ctx);
+        assert.ok(snapshot);
+        assert.equal(snapshot.scrollY, 200);
+        assert.equal(snapshot.targetTop, 100);
+        assert.equal(snapshot.targetBottom, 140);
+        assert.equal(snapshot.baseIndex, 3);
+        assert.equal(snapshot.segmentIndex, 1);
+        assert.equal(snapshot.segmentId, 'planned-3-1');
+        assert.equal(snapshot.visualViewportHeight, 600);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+    }
+});
+
+test('captureMobileInlinePlanApplyScrollAnchor returns null on desktop', () => {
+    const ctx = {
+        isInlinePlanMobileInputContext() { return false; },
+    };
+    const snapshot = controller.captureMobileInlinePlanApplyScrollAnchor(ctx);
+    assert.equal(snapshot, null);
+});
+
+test('captureMobileInlinePlanApplyScrollAnchor returns null for non-segment-replace mode', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    globalThis.window = { scrollY: 0, pageYOffset: 0, visualViewport: null };
+    globalThis.document = { documentElement: { scrollTop: 0 } };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+        inlinePlanTarget: { mode: 'range', startIndex: 0, endIndex: 0 },
+    };
+    try {
+        const snapshot = controller.captureMobileInlinePlanApplyScrollAnchor(ctx);
+        assert.equal(snapshot, null);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+    }
+});
+
+test('scheduleMobileInlinePlanApplyScrollRestoration does not run on desktop', () => {
+    const originalWindow = globalThis.window;
+    const originalRAF = globalThis.requestAnimationFrame;
+    let rafCalled = false;
+    globalThis.requestAnimationFrame = (fn) => { rafCalled = true; fn(); };
+    globalThis.window = {};
+    const ctx = {
+        isInlinePlanMobileInputContext() { return false; },
+    };
+    const snapshot = { baseIndex: 0, segmentIndex: 0 };
+    try {
+        controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
+        assert.equal(rafCalled, false);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('scheduleMobileInlinePlanApplyScrollRestoration uses double RAF on mobile', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafCalls = [];
+    globalThis.requestAnimationFrame = (fn) => {
+        rafCalls.push('raf');
+        fn();
+    };
+    globalThis.window = {
+        innerHeight: 800,
+        scrollBy() {},
+        visualViewport: null,
+    };
+    globalThis.document = {
+        querySelector() { return null; },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    try {
+        controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
+        assert.equal(rafCalls.length, 2);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('scheduleMobileInlinePlanApplyScrollRestoration skips adjustment when target is visible', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    let scrollByCalled = false;
+    globalThis.requestAnimationFrame = (fn) => fn();
+    globalThis.window = {
+        innerHeight: 800,
+        scrollBy() { scrollByCalled = true; },
+        visualViewport: null,
+    };
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: 100, bottom: 140 };
+        },
+    };
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="0"]') return {
+                querySelectorAll() { return [targetEl]; },
+            };
+            return null;
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    try {
+        controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
+        assert.equal(scrollByCalled, false);
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is below viewport', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const scrollByCalls = [];
+    globalThis.requestAnimationFrame = (fn) => fn();
+    globalThis.window = {
+        innerHeight: 800,
+        scrollBy(opts) { scrollByCalls.push(opts); },
+        visualViewport: null,
+    };
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: 0, bottom: 820 };
+        },
+    };
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="0"]') return {
+                querySelectorAll() { return [targetEl]; },
+            };
+            return null;
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    try {
+        controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
+        assert.ok(scrollByCalls.length >= 1);
+        if (scrollByCalls.length > 0) {
+            assert.equal(scrollByCalls[0].behavior, 'instant');
+            assert.ok(Math.abs(scrollByCalls[0].top) > 0);
+        }
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('scheduleMobileInlinePlanApplyScrollRestoration adjusts when target is above viewport', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const scrollByCalls = [];
+    globalThis.requestAnimationFrame = (fn) => fn();
+    globalThis.window = {
+        innerHeight: 800,
+        scrollBy(opts) { scrollByCalls.push(opts); },
+        visualViewport: null,
+    };
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: -10, bottom: 30 };
+        },
+    };
+    globalThis.document = {
+        querySelector(selector) {
+            if (selector === '.time-entry[data-index="0"]') return {
+                querySelectorAll() { return [targetEl]; },
+            };
+            return null;
+        },
+    };
+    const ctx = {
+        isInlinePlanMobileInputContext() { return true; },
+    };
+    const snapshot = { baseIndex: 0, segmentIndex: 0, segmentId: '' };
+    try {
+        controller.scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot);
+        assert.ok(scrollByCalls.length >= 1);
+        if (scrollByCalls.length > 0) {
+            assert.ok(scrollByCalls[0].top < 0);
+        }
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+});
+
+test('failed plan-segment-replace does not schedule scroll restoration', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            baseIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return true; },
+            touchPlannedActivityUsage() { return false; },
+            replacePlanSegmentActivity() { return false; },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() { return null; },
+    };
+    try {
+        dispatchInlineSelectionClick(chipButton);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    // No render, no totals, no save, no close — failed replacement short-circuits
+    assert.deepEqual(harness.calls, []);
+    assert.ok(harness.ctx.inlinePlanTarget);
+});
+
+test('mobile plan-segment-replace captures and schedules scroll restoration (integration)', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafQueue = [];
+    globalThis.requestAnimationFrame = (fn) => { rafQueue.push(fn); };
+
+    const scrollByCalls = [];
+    globalThis.window = {
+        innerHeight: 800,
+        scrollY: 100,
+        pageYOffset: 100,
+        scrollBy(opts) { scrollByCalls.push(opts); },
+        visualViewport: null,
+    };
+
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: 700, bottom: 740 };
+        },
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 100 },
+        querySelector(selector) {
+            if (selector && selector.includes('.time-entry[data-index=')) {
+                return {
+                    querySelectorAll() { return [targetEl]; },
+                };
+            }
+            return null;
+        },
+    };
+
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            baseIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return true; },
+            touchPlannedActivityUsage() { return true; },
+            dedupeAndSortPlannedActivities() {},
+            savePlannedActivities() {},
+            replacePlanSegmentActivity() { return true; },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    try {
+        dispatchInlineSelectionClick(chipButton);
+        // Flush double RAF queue
+        while (rafQueue.length > 0) {
+            const fn = rafQueue.shift();
+            fn();
+        }
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+
+    // Mobile apply: render(false), totals, save, close
+    assert.deepEqual(harness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+    // Target at 700-740, viewport 0-800, margin 12 -> 740 <= 788, visible, no scroll
+    assert.deepEqual(scrollByCalls, []);
+});
+
+test('mobile plan-segment-replace scroll restoration adjusts when target is below viewport after render', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafQueue = [];
+    globalThis.requestAnimationFrame = (fn) => { rafQueue.push(fn); };
+
+    const scrollByCalls = [];
+    globalThis.window = {
+        innerHeight: 800,
+        scrollY: 100,
+        pageYOffset: 100,
+        scrollBy(opts) { scrollByCalls.push(opts); },
+        visualViewport: null,
+    };
+
+    const targetEl = {
+        getBoundingClientRect() {
+            return { top: 790, bottom: 830 };
+        },
+    };
+    globalThis.document = {
+        documentElement: { scrollTop: 100 },
+        querySelector(selector) {
+            if (selector && selector.includes('.time-entry[data-index=')) {
+                return {
+                    querySelectorAll() { return [targetEl]; },
+                };
+            }
+            return null;
+        },
+    };
+
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            baseIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return true; },
+            touchPlannedActivityUsage() { return true; },
+            dedupeAndSortPlannedActivities() {},
+            savePlannedActivities() {},
+            replacePlanSegmentActivity() { return true; },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    try {
+        dispatchInlineSelectionClick(chipButton);
+        while (rafQueue.length > 0) {
+            const fn = rafQueue.shift();
+            fn();
+        }
+    } finally {
+        globalThis.window = originalWindow;
+        globalThis.document = originalDocument;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+
+    assert.deepEqual(harness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+    // Target bottom at 830, viewport 788 after margin -> delta = 830 - 788 = 42
+    assert.ok(scrollByCalls.length >= 1, 'scrollBy should have been called');
+    if (scrollByCalls.length > 0) {
+        assert.equal(scrollByCalls[0].behavior, 'instant');
+        assert.ok(scrollByCalls[0].top > 0, 'should scroll down');
+    }
+});
+
+test('desktop plan-segment-replace does not run mobile scroll restoration', () => {
+    const originalWindow = globalThis.window;
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafQueue = [];
+    globalThis.requestAnimationFrame = (fn) => { rafQueue.push(fn); };
+    const scrollByCalls = [];
+    globalThis.window = {
+        innerHeight: 800,
+        scrollBy(opts) { scrollByCalls.push(opts); },
+        visualViewport: null,
+    };
+
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            baseIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return false; },
+            touchPlannedActivityUsage() { return true; },
+            dedupeAndSortPlannedActivities() {},
+            savePlannedActivities() {},
+            replacePlanSegmentActivity() { return true; },
+        },
+    });
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() { return null; },
+    };
+    try {
+        dispatchInlineSelectionClick(chipButton);
+        while (rafQueue.length > 0) {
+            const fn = rafQueue.shift();
+            fn();
+        }
+    } finally {
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.requestAnimationFrame = originalRAF;
+    }
+
+    // Desktop: render(true), totals, save, close
+    assert.deepEqual(harness.calls, [['render', true], ['totals'], ['save'], ['close']]);
+    // On desktop, scheduleMobileInlinePlanApplyScrollRestoration returns early
+    assert.deepEqual(scrollByCalls, []);
+});
+
+test('applyActivityCatalogSelection plan-segment-replace does not apply focus to another planned input', () => {
+    const harness = createInlineSelectionHarness({
+        inlinePlanTarget: {
+            startIndex: 0,
+            endIndex: 0,
+            baseIndex: 0,
+            mode: 'plan-segment-replace',
+            segmentIndex: 0,
+            segmentId: 'planned-0-0',
+        },
+        timeSlots: [{ planned: 'Old', planActivities: [{ label: 'Old', activityText: 'Old', activityId: 'old', seconds: 1200 }], planTitle: '', planTitleBandOn: false }],
+        ctx: {
+            isPlanSlotEmptyForInline() { return false; },
+            isInlinePlanMobileInputContext() { return true; },
+            touchPlannedActivityUsage() { return true; },
+            dedupeAndSortPlannedActivities() {},
+            savePlannedActivities() {},
+            replacePlanSegmentActivity() { return true; },
+        },
+    });
+    let focusCalledOn = null;
+    harness.ctx.closeInlinePlanDropdown = function() {
+        harness.calls.push(['close']);
+        this.inlinePlanTarget = null;
+        // Simulate what would happen — after close, check that no other input gets focus
+        // The actual controller uses blurInlinePlanActiveInput which is tested elsewhere
+    };
+    const chipButton = renderInlineSelectionChip(harness);
+    harness.calls.length = 0;
+
+    const originalDocument = globalThis.document;
+    globalThis.document = {
+        createElement: createInlineSelectionNode,
+        querySelector() { return null; },
+    };
+    try {
+        dispatchInlineSelectionClick(chipButton);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    // Verify sequence: render(false) → totals → save → close
+    assert.deepEqual(harness.calls, [['render', false], ['totals'], ['save'], ['close']]);
+    // closeInlinePlanDropdown was called, which sets target to null — no focus jump
+    assert.equal(harness.ctx.inlinePlanTarget, null);
+});

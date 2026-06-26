@@ -331,6 +331,88 @@ test('browser mobile sheet does not close when drag starts from chipboard', asyn
         }
     });
 });
+test('browser mobile plan segment apply preserves target visibility without scroll jump', async () => {
+    await withServer(async (url) => {
+        const browser = await chromium.launch();
+        try {
+            const mobile = await newSmokePage(browser, url, { mobile: true, viewport: { width: 390, height: 780 } });
+            try {
+                await openSegmentDropdown(mobile.page, 0);
+                await assertDropdownOpen(mobile.page);
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 1);
+
+                // Scroll to a known position to have a predictable baseline
+                await mobile.page.evaluate(() => window.scrollTo(0, 200));
+                await mobile.page.waitForTimeout(100);
+                const preScrollY = await mobile.page.evaluate(() => window.scrollY || window.pageYOffset || 0);
+
+                // Select an activity to apply to the segment
+                await mobile.page.locator('.activity-chip', { hasText: 'Review' }).first().click();
+
+                // Wait for sheet to close
+                await mobile.page.waitForFunction(() => !document.querySelector('.inline-plan-dropdown'));
+                // Give double-RAF time to execute
+                await mobile.page.waitForTimeout(350);
+
+                const postScrollY = await mobile.page.evaluate(() => window.scrollY || window.pageYOffset || 0);
+                const jump = postScrollY - preScrollY;
+
+                // Assert sheet and backdrop are removed
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown').count(), 0);
+                assert.equal(await mobile.page.locator('.inline-plan-dropdown-sheet').count(), 0);
+
+                // Assert the target segment row is visible
+                const targetInfo = await mobile.page.evaluate(() => {
+                    const row = document.querySelector('.time-entry[data-index="8"]');
+                    if (!row) return { found: false, top: -1, bottom: -1, vh: -1, scrollY: -1 };
+                    const rect = row.getBoundingClientRect();
+                    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                    return {
+                        found: true,
+                        top: Math.round(rect.top),
+                        bottom: Math.round(rect.bottom),
+                        vh: Math.round(vh),
+                        scrollY: Math.round(window.scrollY || window.pageYOffset || 0),
+                    };
+                });
+                assert.equal(targetInfo.found, true, 'target row [data-index="8"] not found after apply');
+                const rowVisible = targetInfo.top >= -20 && targetInfo.bottom <= targetInfo.vh + 20;
+                assert.equal(rowVisible, true,
+                    'row not visible: top=' + targetInfo.top + ' bottom=' + targetInfo.bottom +
+                    ' vh=' + targetInfo.vh + ' scrollY=' + targetInfo.scrollY + ' jump=' + jump);
+
+                // Assert scroll did not jump far from our pre-defined position
+                assert.ok(Math.abs(jump) <= 300,
+                    'scroll jump too large: ' + jump + ' (pre=' + preScrollY + ' post=' + postScrollY + ')');
+
+                // Assert the segment was replaced with Review
+                const segmentPresent = await mobile.page.locator(
+                    '.time-entry[data-index="8"] .split-grid-segment[data-segment-index="0"]'
+                ).count();
+                if (segmentPresent > 0) {
+                    const segmentText = await mobile.page.locator(
+                        '.time-entry[data-index="8"] .split-grid-segment[data-segment-index="0"]'
+                    ).textContent();
+                    assert.match(segmentText, /Review/);
+                }
+
+                // Assert activeElement is not another planned input
+                const activeElIsPlannedInput = await mobile.page.evaluate(() => {
+                    const active = document.activeElement;
+                    return active && active.classList && active.classList.contains('planned-input');
+                });
+                assert.equal(activeElIsPlannedInput, false, 'activeElement should not be another planned input');
+
+                await assertNoAppErrors(mobile.errors);
+            } finally {
+                await mobile.context.close();
+            }
+        } finally {
+            await browser.close();
+        }
+    });
+});
+
 test('browser chipboard supports repeated mixed drag gestures without stale drag state', async () => {
     await withServer(async (url) => {
         const browser = await chromium.launch();
