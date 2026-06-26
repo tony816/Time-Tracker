@@ -491,6 +491,7 @@ function scheduleInlinePlanViewportSync() {
                 && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
                 && this.inlinePlanSheetTargetEl
                 && typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function'
+                && (!target || target.mode !== 'plan-segment-replace')
             ) {
                 this.scheduleInlinePlanSheetTargetViewportCorrection(this.inlinePlanSheetTargetEl);
             }

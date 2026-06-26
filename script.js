@@ -6826,14 +6826,6 @@ class TimeTracker {
         if (typeof this.addInlinePlanSheetTargetClasses === 'function') {
             this.addInlinePlanSheetTargetClasses(segmentEl, 'inline-plan-segment-context-target');
         }
-        if (
-            this.inlinePlanDropdown
-            && this.inlinePlanDropdown.classList
-            && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
-            && typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function'
-        ) {
-            this.scheduleInlinePlanSheetTargetViewportCorrection(segmentEl);
-        }
         return true;
     }
     addInlinePlanSheetTargetClasses(targetEl, specificClass = '') {
