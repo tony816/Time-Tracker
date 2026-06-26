@@ -2583,6 +2583,22 @@ function touchPlannedActivityUsage(activityItem, parentItem = null) {
 
 function applyActivityCatalogSelection(activityItem, parentItem = null, options = {}) {
         if (!activityItem) return;
+        if (this.inlinePlanTarget && this.inlinePlanTarget.mode !== 'plan-segment-replace' && typeof this.isPlanSlotEmptyForInline === 'function') {
+            const targetStart = this.inlinePlanTarget.startIndex;
+            const targetEnd = this.inlinePlanTarget.endIndex;
+            const preCheckStart = Math.min(Number.isInteger(targetStart) ? targetStart : 0, Number.isInteger(targetEnd) ? targetEnd : targetStart);
+            const preCheckEnd = Math.max(Number.isInteger(targetStart) ? targetStart : 0, Number.isInteger(targetEnd) ? targetEnd : targetStart);
+            let isEmpty = true;
+            for (let i = preCheckStart; i <= preCheckEnd; i++) {
+                if (!this.isPlanSlotEmptyForInline(i)) {
+                    isEmpty = false;
+                    break;
+                }
+            }
+            if (isEmpty) {
+                options = { ...options, keepOpen: false };
+            }
+        }
         const keepOpenAfterSelection = shouldKeepInlinePlanOpenAfterSelection(this, options);
         if (this.inlinePlanSegmentTitleEditSession) {
             this.inlinePlanSegmentTitleEditSession = null;
@@ -3697,7 +3713,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
                 }
             }
             if (canAutoApply) {
-                const applyOptions = { ...options, keepOpen: true, keepOpenOnMobile: true };
+                const applyOptions = { ...options, keepOpen: false, keepOpenOnMobile: false };
                 this.applyInlinePlanSelection(val, applyOptions);
             }
         };
