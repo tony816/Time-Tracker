@@ -419,6 +419,7 @@ function buildSplitVisualization(type, index) {
                     ? `<span class="split-grid-label${labelClass}" title="${safeLabel}">${safeLabel}</span>`
                     : '';
                 const planOnlyTimerClass = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest) ? ' has-plan-segment-timer' : '';
+                const shortPlanClass = planOnlyTimerClass && Number(segment.durationMinutes) <= 10 ? ' is-short-plan-segment' : '';
                 let planSegmentId = '';
                 let planSegmentIndex = Number.isFinite(segment.segmentIndex) ? Math.floor(segment.segmentIndex) : null;
                 let isRunningPlanSegment = false;
@@ -536,7 +537,7 @@ function buildSplitVisualization(type, index) {
                     ? `${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
                     : '';
                 const segmentLayer = gridSegments.length - idx + 2;
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${resizeDisabledClass}${selectedClass}${sharedBoundaryOwnerClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color}; --split-segment-layer: ${segmentLayer};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${shortPlanClass}${resizeDisabledClass}${selectedClass}${sharedBoundaryOwnerClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color}; --split-segment-layer: ${segmentLayer};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';

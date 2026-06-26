@@ -725,4 +725,8 @@ textarea:focus-visible,
 
     .plan-segment-boundary-resize-handle-line {
         width: 8px;
+    .is-short-plan-segment .plan-segment-timer-time {
+        display: none !important;
+    }
+
     }

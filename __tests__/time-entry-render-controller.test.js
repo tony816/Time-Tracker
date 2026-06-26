@@ -615,3 +615,131 @@ test('render cleanup cancels planned reorder, resize, and slot move interactions
 
     assert.deepEqual(calls, ['reorder', 'resize:document', 'slot-move']);
 });
+
+test('is-short-plan-segment class is added for real planned segments with duration <= 10 minutes', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        selectedPlanSegment: null,
+        escapeHtml: (value) => String(value || ''),
+        escapeAttribute: (value) => String(value || '').replace(/"/g, '&quot;'),
+        getSplitColor: () => '#ccc',
+        getPlanSegmentBaseIndex: (index) => index,
+        getPlanSegmentId: (baseIndex, segmentIndex) => `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`,
+        buildPlanSegmentViewModel: (baseIndex, segmentId, timerSegmentContext) => ({
+            id: segmentId,
+            display: {
+                icon: '\u25B6',
+                timeText: `0m / ${timerSegmentContext.durationMinutes}m`,
+                tone: 'under',
+            },
+        }),
+        computeSplitSegments(type, index) {
+            return {
+                titleSegments: [],
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: 'Test',
+                        span: 1,
+                        startMinute: 0,
+                        durationMinutes: 5,
+                        endMinute: 5,
+                        segmentIndex: 0,
+                        seconds: 0,
+                    },
+                ],
+            };
+        },
+    };
+
+    const result = buildSplitVisualizationWrapper.call(ctx, 'planned', 0);
+    assert.ok(result.includes('is-short-plan-segment'), 'should include is-short-plan-segment for 5-minute segment');
+    assert.ok(result.includes('has-plan-segment-timer'), 'should still include has-plan-segment-timer');
+    assert.ok(result.includes('plan-segment-timer-time'), 'timer time element should still be rendered');
+    assert.ok(result.includes('plan-segment-timer-button'), 'timer button should still be rendered');
+});
+
+test('is-short-plan-segment class is NOT added for real planned segments with duration > 10 minutes', () => {
+    const ctx = {
+        actualRecordingDisabled: true,
+        selectedPlanSegment: null,
+        escapeHtml: (value) => String(value || ''),
+        escapeAttribute: (value) => String(value || '').replace(/"/g, '&quot;'),
+        getSplitColor: () => '#ccc',
+        getPlanSegmentBaseIndex: (index) => index,
+        getPlanSegmentId: (baseIndex, segmentIndex) => `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`,
+        buildPlanSegmentViewModel: (baseIndex, segmentId, timerSegmentContext) => ({
+            id: segmentId,
+            display: {
+                icon: '\u25B6',
+                timeText: `0m / ${timerSegmentContext.durationMinutes}m`,
+                tone: 'under',
+            },
+        }),
+        computeSplitSegments(type, index) {
+            return {
+                titleSegments: [],
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: 'Test',
+                        span: 1,
+                        startMinute: 0,
+                        durationMinutes: 15,
+                        endMinute: 15,
+                        segmentIndex: 0,
+                        seconds: 0,
+                    },
+                ],
+            };
+        },
+    };
+
+    const result = buildSplitVisualizationWrapper.call(ctx, 'planned', 0);
+    assert.ok(!result.includes('is-short-plan-segment'), 'should NOT include is-short-plan-segment for 15-minute segment');
+    assert.ok(result.includes('has-plan-segment-timer'), 'should still include has-plan-segment-timer');
+    assert.ok(result.includes('plan-segment-timer-time'), 'timer time element should be rendered for long segments');
+});
+
+test('is-short-plan-segment is NOT added for actual segments regardless of duration', () => {
+    const ctx = {
+        actualRecordingDisabled: false,
+        selectedPlanSegment: null,
+        escapeHtml: (value) => String(value || ''),
+        escapeAttribute: (value) => String(value || '').replace(/"/g, '&quot;'),
+        getSplitColor: () => '#ccc',
+        getPlanSegmentBaseIndex: (index) => index,
+        getPlanSegmentId: (baseIndex, segmentIndex) => `planned-${baseIndex}-${segmentIndex != null ? segmentIndex : baseIndex}`,
+        buildPlanSegmentViewModel: () => ({ id: 'test', display: { icon: '>', timeText: '', tone: 'under' } }),
+        computeSplitSegments(type, index) {
+            return {
+                titleSegments: [],
+                showTitleBand: false,
+                gridSegments: [
+                    {
+                        label: 'Test',
+                        span: 1,
+                        startMinute: 0,
+                        durationMinutes: 5,
+                        endMinute: 5,
+                        segmentIndex: 0,
+                        seconds: 0,
+                    },
+                ],
+                toggleable: true,
+            };
+        },
+    };
+
+    const result = buildSplitVisualizationWrapper.call(ctx, 'actual', 0);
+    assert.ok(!result.includes('is-short-plan-segment'), 'should NOT include is-short-plan-segment for actual segments');
+    assert.ok(!result.includes('has-plan-segment-timer'), 'should NOT include has-plan-segment-timer for actual segments');
+});
+
+test('responsive CSS has rule hiding plan-segment-timer-time in is-short-plan-segment', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const responsiveCss = fs.readFileSync(path.join(__dirname, '..', 'styles', 'responsive.css'), 'utf8');
+    assert.ok(responsiveCss.includes('.is-short-plan-segment .plan-segment-timer-time'), 'CSS must contain the hide rule for short plan segments');
+    assert.ok(responsiveCss.includes('display: none !important'), 'CSS must use display: none');
+});
