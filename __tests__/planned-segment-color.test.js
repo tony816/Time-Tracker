@@ -257,7 +257,7 @@ test('CSS: planned real segment has soft shadow ::after pseudo-element', () => {
     assert.ok(realPlanBlock, 'real-plan base rule must exist');
     assert.match(realPlanBlock[0], /overflow:\s*visible/);
     assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border/);
-    assert.match(realPlanBlock[0], /border-bottom:\s*3px solid var\(--plan-segment-default-border/);
+    assert.doesNotMatch(realPlanBlock[0], /border-bottom:\s*3px/); // 3px bottom border removed per soft-shadow card treatment
 
     const afterBlock = interactionsCss.match(
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]::after\s*\{[\s\S]*?\n}/
@@ -273,7 +273,7 @@ test('CSS: planned real segment default uses inset 0 1px 0 white highlight', () 
     const realPlanBlock = interactionsCss.match(
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\s*\{[\s\S]*?\n}/
     );
-    assert.match(realPlanBlock[0], /box-shadow:\s*inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*0\.98\)/);
+    assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/); // updated to pure white inset
 });
 
 test('CSS: is-selected-plan-segment does NOT apply blue border or glow', () => {
@@ -330,7 +330,8 @@ test('CSS: foundation planned segment tokens use pure white and soft shadow valu
     assert.match(foundationCss, /--plan-segment-default-bg:\s*#FFFFFF/);
     assert.match(foundationCss, /--plan-segment-default-border:\s*#E5E7EB/);
     assert.match(foundationCss, /--plan-segment-default-shadow:/);
-    assert.match(foundationCss, /0 1px 3px rgba\(15,\s*23,\s*42/);
-    assert.match(foundationCss, /0 4px 14px rgba\(15,\s*23,\s*42/);
+    assert.match(foundationCss, /0 1px 2px rgba\(15,\s*23,\s*42/);
+    assert.match(foundationCss, /0 6px 14px rgba\(15,\s*23,\s*42/);
     assert.match(foundationCss, /inset 0 1px 0 rgba\(255,\s*255,\s*255/);
+    assert.match(foundationCss, /0 12px 24px rgba\(15,\s*23,\s*42/);
 });
