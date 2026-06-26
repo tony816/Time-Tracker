@@ -2332,6 +2332,11 @@ button.activity-chip,
   /* Fill extra space within the overlay */
 }
 
+.split-visualization-planned .split-grid {
+  row-gap: 2px;
+  column-gap: 2px;
+}
+
 .split-grid-label {
   display: block;
   width: 100%;
@@ -2416,10 +2421,10 @@ button.activity-chip,
   position: relative;
   z-index: 3;
   pointer-events: auto;
-  background: rgba(231, 236, 241, 0.42) !important;
-  border: 1px dashed rgba(126, 140, 154, 0.42);
-  border-bottom: 1px dashed rgba(126, 140, 154, 0.42) !important;
-  color: rgba(85, 99, 112, 0.72);
+  background: rgba(231, 236, 241, 0.28) !important;
+  border: 1px dashed rgba(126, 140, 154, 0.28);
+  border-bottom: 1px dashed rgba(126, 140, 154, 0.28) !important;
+  color: rgba(85, 99, 112, 0.55);
   height: 100%;
   box-sizing: border-box;
   box-shadow: none;
@@ -2428,13 +2433,13 @@ button.activity-chip,
 
 .split-visualization-planned .split-grid-segment-virtual-rest:hover,
 .split-visualization-planned .split-grid-segment-virtual-rest:focus-visible {
-  background: rgba(223, 231, 238, 0.58) !important;
-  border-color: rgba(96, 110, 128, 0.5);
-  border-bottom-color: rgba(96, 110, 128, 0.5) !important;
+  background: rgba(223, 231, 238, 0.45) !important;
+  border-color: rgba(96, 110, 128, 0.38);
+  border-bottom-color: rgba(96, 110, 128, 0.38) !important;
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest .split-grid-label {
-  color: rgba(85, 99, 112, 0.72);
+  color: rgba(85, 99, 112, 0.55);
   font-weight: 600;
 }
 
