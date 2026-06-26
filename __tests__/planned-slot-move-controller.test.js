@@ -73,16 +73,22 @@ function createCtx() {
 test('planned slot move controller exports and attaches to global', () => {
     assert.equal(typeof controller.initPlannedSlotMoveModeControls, 'function');
     assert.equal(typeof controller.initPlannedSlotClearModeControls, 'function');
+    assert.equal(typeof controller.initPlannedSlotShiftModeControls, 'function');
     assert.equal(typeof controller.setPlannedSlotMoveMode, 'function');
     assert.equal(typeof controller.setPlannedSlotClearMode, 'function');
+    assert.equal(typeof controller.setPlannedSlotShiftMode, 'function');
     assert.equal(typeof controller.togglePlannedSlotMoveMode, 'function');
     assert.equal(typeof controller.togglePlannedSlotClearMode, 'function');
+    assert.equal(typeof controller.togglePlannedSlotShiftMode, 'function');
     assert.equal(typeof controller.isPlannedSlotMoveMode, 'function');
     assert.equal(typeof controller.isPlannedSlotClearMode, 'function');
+    assert.equal(typeof controller.isPlannedSlotShiftMode, 'function');
     assert.equal(typeof controller.attachPlannedSlotMoveListeners, 'function');
     assert.equal(typeof controller.attachPlannedSlotClearListeners, 'function');
+    assert.equal(typeof controller.attachPlannedSlotShiftListeners, 'function');
     assert.equal(typeof controller.movePlannedSlotBlock, 'function');
     assert.equal(typeof controller.clearPlannedSlotContents, 'function');
+    assert.equal(typeof controller.shiftPlannedSlotsDownFrom, 'function');
     assert.equal(globalThis.TimeTrackerPlannedSlotMoveController.movePlannedSlotBlock, controller.movePlannedSlotBlock);
 });
 
@@ -166,6 +172,227 @@ test('active plan segment timer blocks move', () => {
     assert.equal(controller.movePlannedSlotBlock.call(ctx, 0, 3), false);
     assert.equal(ctx.timeSlots[0].planned, 'Source');
     assert.equal(ctx.notifications[0], '\uC2E4\uD589 \uC911\uC778 \uD0C0\uC774\uBA38\uAC00 \uC788\uC5B4 \uC774\uB3D9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.');
+});
+
+function createLargeCtx(slotCount = 20) {
+    const ctx = createCtx();
+    ctx.timeSlots = Array.from({ length: slotCount }, (_, index) => createSlot(String(index)));
+    return ctx;
+}
+
+test('shift mode is mutually exclusive with move and clear modes', () => {
+    const originalDocument = global.document;
+    const root = { classList: { toggle() {} } };
+    global.document = {
+        documentElement: root,
+        body: root,
+        querySelector() { return root; },
+        getElementById() { return root; },
+        querySelectorAll() { return []; },
+    };
+    try {
+        const ctx = createCtx();
+        ctx.renderTimeEntries = () => {};
+        ctx.clearPlannedSegmentReorderState = () => {};
+        ctx.plannedSlotMovePulseShown = true;
+        controller.setPlannedSlotMoveMode.call(ctx, true);
+        assert.equal(ctx.plannedSlotMoveMode, true);
+        controller.setPlannedSlotShiftMode.call(ctx, true);
+        assert.equal(ctx.plannedSlotShiftMode, true);
+        assert.equal(ctx.plannedSlotMoveMode, false);
+        controller.setPlannedSlotClearMode.call(ctx, true);
+        assert.equal(ctx.plannedSlotClearMode, true);
+        assert.equal(ctx.plannedSlotShiftMode, false);
+    } finally {
+        global.document = originalDocument;
+    }
+});
+
+test('shifting from first affected row pushes consecutive planned slots down one hour', () => {
+    const ctx = createLargeCtx(20);
+    [12, 13, 14, 15, 16].forEach((index) => {
+        ctx.timeSlots[index].planned = `Plan ${index}`;
+    });
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 12), true);
+    assert.equal(ctx.timeSlots[12].planned, '');
+    [13, 14, 15, 16, 17].forEach((index, offset) => {
+        assert.equal(ctx.timeSlots[index].planned, `Plan ${12 + offset}`);
+    });
+    assert.equal(ctx.renderCalls, 1);
+    assert.equal(ctx.totalCalls, 1);
+    assert.equal(ctx.saveCalls, 1);
+});
+
+test('shifting from a later pivot leaves earlier planned blocks unchanged', () => {
+    const ctx = createLargeCtx(20);
+    [12, 13, 14, 15, 16].forEach((index) => {
+        ctx.timeSlots[index].planned = `Plan ${index}`;
+    });
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 14), true);
+    assert.equal(ctx.timeSlots[12].planned, 'Plan 12');
+    assert.equal(ctx.timeSlots[13].planned, 'Plan 13');
+    assert.equal(ctx.timeSlots[14].planned, '');
+    assert.equal(ctx.timeSlots[15].planned, 'Plan 14');
+    assert.equal(ctx.timeSlots[16].planned, 'Plan 15');
+    assert.equal(ctx.timeSlots[17].planned, 'Plan 16');
+});
+
+test('empty pivot row shifts later planned blocks', () => {
+    const ctx = createLargeCtx(8);
+    ctx.timeSlots[4].planned = 'Later';
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 2), true);
+    assert.equal(ctx.timeSlots[4].planned, '');
+    assert.equal(ctx.timeSlots[5].planned, 'Later');
+});
+
+test('merged planned block shifts as one block and remaps merge metadata', () => {
+    const ctx = createLargeCtx(8);
+    ctx.timeSlots[1].planned = 'A';
+    ctx.timeSlots[1].planMergeSnapshot = { mergeKey: 'planned-1-2', startIndex: 1, endIndex: 2, rangeStart: 1, rangeEnd: 2 };
+    ctx.timeSlots[2].planned = 'B';
+    ctx.mergedFields.set('planned-1-2', 'Merged AB');
+    ctx.mergedFields.set('time-1-2', '1-2');
+    ctx.mergedFields.set('actual-1-2', 'Actual AB');
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 1), true);
+    assert.equal(ctx.mergedFields.has('planned-1-2'), false);
+    assert.equal(ctx.mergedFields.get('planned-2-3'), 'Merged AB');
+    assert.equal(ctx.mergedFields.get('time-2-3'), '2-3');
+    assert.equal(ctx.mergedFields.get('actual-2-3'), 'Actual AB');
+    assert.equal(ctx.timeSlots[2].planMergeSnapshot.mergeKey, 'planned-2-3');
+    assert.equal(ctx.timeSlots[2].planMergeSnapshot.startIndex, 2);
+    assert.equal(ctx.timeSlots[2].planMergeSnapshot.endIndex, 3);
+    assert.equal(ctx.timeSlots[2].planMergeSnapshot.rangeStart, 2);
+    assert.equal(ctx.timeSlots[2].planMergeSnapshot.rangeEnd, 3);
+});
+
+test('plan segment timers are preserved and remapped during shift', () => {
+    const ctx = createLargeCtx(6);
+    ctx.timeSlots[2].planned = 'Timed';
+    ctx.timeSlots[2].planSegmentTimers = { 'planned-2-2-seg0': { status: 'idle', elapsedSeconds: 44 } };
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 2), true);
+    assert.deepEqual(ctx.timeSlots[2].planSegmentTimers, {});
+    assert.equal(ctx.timeSlots[3].planSegmentTimers['planned-3-3-seg0'].elapsedSeconds, 44);
+});
+
+test('shift rejects overflow without mutating planned data', () => {
+    const ctx = createLargeCtx(5);
+    ctx.timeSlots[4].planned = 'End';
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 4), false);
+    assert.equal(ctx.timeSlots[4].planned, 'End');
+    assert.equal(ctx.renderCalls, 0);
+});
+
+test('shift rejects active planned segment timers without mutating planned data', () => {
+    const ctx = createLargeCtx(6);
+    ctx.timeSlots[2].planned = 'Running';
+    ctx.timeSlots[2].planSegmentTimers = { 'planned-2-2-seg0': { status: 'active', running: false } };
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 2), false);
+    assert.equal(ctx.timeSlots[2].planned, 'Running');
+    assert.equal(ctx.renderCalls, 0);
+});
+
+test('shift preserves actual activityLog contents', () => {
+    const ctx = createLargeCtx(6);
+    ctx.timeSlots[2].planned = 'Planned';
+    ctx.timeSlots[2].activityLog = { title: 'Actual stays', details: 'Done' };
+    const originalActivityLog = ctx.timeSlots[2].activityLog;
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 2), true);
+    assert.equal(ctx.timeSlots[2].activityLog, originalActivityLog);
+    assert.deepEqual(ctx.timeSlots[2].activityLog, { title: 'Actual stays', details: 'Done' });
+    assert.deepEqual(ctx.timeSlots[3].activityLog, {});
+});
+
+test('empty shift range is a no-op with light notification', () => {
+    const ctx = createLargeCtx(5);
+
+    assert.equal(controller.shiftPlannedSlotsDownFrom.call(ctx, 1), false);
+    assert.equal(ctx.renderCalls, 0);
+    assert.equal(ctx.notifications[0], '밀 계획이 없습니다.');
+});
+
+function createFakeShiftButton({ buttonIndex = '0', hostIndex = '0' } = {}) {
+    const listeners = new Map();
+    const host = {
+        dataset: { index: hostIndex, plannedSlotHost: 'true', plannedSlotShiftTarget: 'true' },
+        className: 'split-cell-wrapper split-type-planned planned-slot-shift-target',
+    };
+    const button = {
+        dataset: { index: buttonIndex },
+        listeners,
+        closest(selector) {
+            if (selector === '.planned-slot-shift-btn') return button;
+            if (selector === '.split-grid-segment') return null;
+            if (selector === '[class*="plan-segment"]') return null;
+            if (selector === '[data-planned-slot-shift-target="true"]') return host;
+            return null;
+        },
+        addEventListener(type, listener) {
+            if (!listeners.has(type)) listeners.set(type, []);
+            listeners.get(type).push(listener);
+        },
+        dispatch(type) {
+            const event = {
+                type,
+                defaultPrevented: false,
+                propagationStopped: false,
+                immediateStopped: false,
+                preventDefault() { this.defaultPrevented = true; },
+                stopPropagation() { this.propagationStopped = true; },
+                stopImmediatePropagation() {
+                    this.immediateStopped = true;
+                    this.propagationStopped = true;
+                },
+            };
+            for (const listener of listeners.get(type) || []) {
+                listener(event);
+                if (event.immediateStopped) break;
+            }
+            return event;
+        },
+    };
+    const entryDiv = {
+        querySelector(selector) { return selector === '.planned-slot-shift-btn' ? button : null; },
+        querySelectorAll() { return [button]; },
+    };
+    return { button, entryDiv, host };
+}
+
+test('shift button belongs to the planned slot host and not to any segment node', () => {
+    const { button, host } = createFakeShiftButton();
+    assert.equal(button.closest('.split-grid-segment'), null);
+    assert.equal(button.closest('[class*="plan-segment"]'), null);
+    assert.equal(button.closest('[data-planned-slot-shift-target="true"]'), host);
+});
+
+test('clicking rendered shift button shifts and stops slot interaction events', () => {
+    const ctx = createLargeCtx(5);
+    ctx.plannedSlotShiftMode = true;
+    ctx.timeSlots[1].planned = 'Shift me';
+    const { button, entryDiv } = createFakeShiftButton({ buttonIndex: '1', hostIndex: '1' });
+
+    controller.attachPlannedSlotShiftListeners.call(ctx, entryDiv, 1);
+    controller.attachPlannedSlotShiftListeners.call(ctx, entryDiv, 1);
+
+    assert.equal(button.dataset.shiftListenerAttached, 'true');
+    assert.equal((button.listeners.get('click') || []).length, 1);
+    const downEvent = button.dispatch('pointerdown');
+    assert.equal(downEvent.defaultPrevented, true);
+    assert.equal(downEvent.immediateStopped, true);
+
+    const clickEvent = button.dispatch('click');
+    assert.equal(clickEvent.defaultPrevented, true);
+    assert.equal(clickEvent.immediateStopped, true);
+    assert.equal(ctx.timeSlots[1].planned, '');
+    assert.equal(ctx.timeSlots[2].planned, 'Shift me');
+    assert.equal(ctx.renderCalls, 1);
 });
 
 test('move mode marks planned slot wrapper only on movable base row', () => {

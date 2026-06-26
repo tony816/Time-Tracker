@@ -285,6 +285,9 @@ function renderTimeEntries(preserveInlineDropdown = false) {
             if (typeof this.attachPlannedSlotClearListeners === 'function') {
                 this.attachPlannedSlotClearListeners(entryDiv, index);
             }
+            if (typeof this.attachPlannedSlotShiftListeners === 'function') {
+                this.attachPlannedSlotShiftListeners(entryDiv, index);
+            }
             if (typeof this.attachPlanSegmentResizeListeners === 'function') {
                 this.attachPlanSegmentResizeListeners(entryDiv, index);
             }
@@ -320,17 +323,25 @@ function wrapWithSplitVisualization(type, index, content) {
         const clearButtonHtml = type === 'planned' && typeof this.createPlannedSlotClearButtonHtml === 'function'
             ? this.createPlannedSlotClearButtonHtml(index)
             : '';
-        if (!splitMarkup && !clearButtonHtml) return content;
+        const shiftButtonHtml = type === 'planned' && typeof this.createPlannedSlotShiftButtonHtml === 'function'
+            ? this.createPlannedSlotShiftButtonHtml(index)
+            : '';
+        if (!splitMarkup && !clearButtonHtml && !shiftButtonHtml) return content;
         const typeClass = type === 'planned' ? 'split-type-planned' : 'split-type-actual';
         const clearClass = clearButtonHtml ? ' planned-slot-clear-target' : '';
+        const shiftClass = shiftButtonHtml ? ' planned-slot-shift-target' : '';
         const clearOverlayHtml = clearButtonHtml
             ? `<div class="planned-slot-clear-overlay">${clearButtonHtml}</div>`
             : '';
+        const shiftOverlayHtml = shiftButtonHtml
+            ? `<div class="planned-slot-shift-overlay">${shiftButtonHtml}</div>`
+            : '';
         const slotHostAttr = type === 'planned' ? ' data-planned-slot-host="true"' : '';
-        return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}" data-split-type="${type}" data-index="${index}"${slotHostAttr}${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}>
+        return `<div class="split-cell-wrapper ${typeClass} split-has-data${clearClass}${shiftClass}" data-split-type="${type}" data-index="${index}"${slotHostAttr}${clearButtonHtml ? ' data-planned-slot-clear-target="true"' : ''}${shiftButtonHtml ? ' data-planned-slot-shift-target="true"' : ''}>
                     ${content}
                     ${splitMarkup}
                     ${clearOverlayHtml}
+                    ${shiftOverlayHtml}
                 </div>`;
     }
 

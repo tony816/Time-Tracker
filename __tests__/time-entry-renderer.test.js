@@ -196,9 +196,10 @@ test('timesheet chrome omits bottom summary and keeps header sticky across respo
     assert.match(cssSource, /@media \(max-width:\s*768px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*60px 1fr;/);
     assert.match(responsiveCss, /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0,\s*1fr\);/);
     assert.match(responsiveCss, /@media \(max-width:\s*480px\)\s*\{[\s\S]*\.header-row,[\s\S]*\.time-entry\s*\{[\s\S]*grid-template-columns:\s*40px minmax\(0,\s*1fr\);/);
-    assert.match(indexSource, /<div class="header-row">[\s\S]*id="plannedSlotMoveModeBtn"[\s\S]*id="plannedSlotClearModeBtn"[\s\S]*<\/div>\s*<div class="time-label">/);
+    assert.match(indexSource, /<div class="header-row">[\s\S]*id="plannedSlotMoveModeBtn"[\s\S]*id="plannedSlotClearModeBtn"[\s\S]*id="plannedSlotShiftModeBtn"[\s\S]*<\/div>\s*<div class="time-label">/);
     assert.match(cssSource, /\.planned-slot-move-mode-btn\s*\{[\s\S]*pointer-events:\s*auto;/);
     assert.match(indexSource, /id="plannedSlotClearModeBtn"[\s\S]*pointer-events:\s*auto;/);
+    assert.match(indexSource, /id="plannedSlotShiftModeBtn"[\s\S]*pointer-events:\s*auto;/);
 });
 
 test('time-slot merge affordance styling remains visible in CSS', () => {

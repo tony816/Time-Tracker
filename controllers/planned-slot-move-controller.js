@@ -122,6 +122,16 @@
         setPlannedSlotClearModeUi.call(this);
     }
 
+    function initPlannedSlotShiftModeControls() {
+        this.plannedSlotShiftModeButton = document.getElementById('plannedSlotShiftModeBtn');
+        if (this.plannedSlotShiftModeButton && !this.plannedSlotShiftModeButton.dataset.shiftModeBound) {
+            this.plannedSlotShiftModeButton.style.pointerEvents = 'auto';
+            this.plannedSlotShiftModeButton.dataset.shiftModeBound = 'true';
+            this.plannedSlotShiftModeButton.addEventListener('click', () => this.togglePlannedSlotShiftMode());
+        }
+        setPlannedSlotShiftModeUi.call(this);
+    }
+
     function setPlannedSlotMoveModeUi() {
         const enabled = Boolean(this.plannedSlotMoveMode);
         const roots = [
@@ -157,6 +167,30 @@
         }
     }
 
+    function setPlannedSlotShiftModeUi() {
+        const enabled = Boolean(this.plannedSlotShiftMode);
+        const roots = [
+            document.documentElement,
+            document.body,
+            document.querySelector('.timesheet'),
+            document.getElementById('timeEntries'),
+        ].filter(Boolean);
+        roots.forEach((el) => el.classList.toggle('planned-slot-shift-mode', enabled));
+        if (this.plannedSlotShiftModeButton) {
+            this.plannedSlotShiftModeButton.textContent = enabled ? '밀기 완료' : '+1h 밀기';
+            this.plannedSlotShiftModeButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+        }
+    }
+
+    function preparePlannedSlotExclusiveModeEntry() {
+        if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
+        if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
+        if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
+        if (typeof this.cancelPlanSegmentResize === 'function') this.cancelPlanSegmentResize();
+        if (typeof this.clearPlannedSegmentReorderState === 'function') this.clearPlannedSegmentReorderState();
+        if (typeof this.clearPlannedSlotMoveDragState === 'function') this.clearPlannedSlotMoveDragState();
+    }
+
     function setPlannedSlotMoveMode(enabled) {
         const next = Boolean(enabled);
         if (next === Boolean(this.plannedSlotMoveMode)) {
@@ -167,10 +201,10 @@
             if (this.plannedSlotClearMode) {
                 setPlannedSlotClearMode.call(this, false);
             }
-            if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
-            if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
-            if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
-            if (typeof this.cancelPlanSegmentResize === 'function') this.cancelPlanSegmentResize();
+            if (this.plannedSlotShiftMode) {
+                setPlannedSlotShiftMode.call(this, false);
+            }
+            preparePlannedSlotExclusiveModeEntry.call(this);
             this.plannedSlotMovePulseActive = !this.plannedSlotMovePulseShown;
             this.plannedSlotMovePulseShown = true;
         } else {
@@ -199,15 +233,36 @@
             if (this.plannedSlotMoveMode) {
                 setPlannedSlotMoveMode.call(this, false);
             }
-            if (typeof this.closeInlinePlanDropdown === 'function') this.closeInlinePlanDropdown();
-            if (typeof this.clearAllSelections === 'function') this.clearAllSelections();
-            if (typeof this.hideHoverScheduleButton === 'function') this.hideHoverScheduleButton();
-            if (typeof this.cancelPlanSegmentResize === 'function') this.cancelPlanSegmentResize();
+            if (this.plannedSlotShiftMode) {
+                setPlannedSlotShiftMode.call(this, false);
+            }
+            preparePlannedSlotExclusiveModeEntry.call(this);
         }
         this.plannedSlotClearMode = next;
         setPlannedSlotClearModeUi.call(this);
         if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(next ? false : true);
         return this.plannedSlotClearMode;
+    }
+
+    function setPlannedSlotShiftMode(enabled) {
+        const next = Boolean(enabled);
+        if (next === Boolean(this.plannedSlotShiftMode)) {
+            setPlannedSlotShiftModeUi.call(this);
+            return this.plannedSlotShiftMode;
+        }
+        if (next) {
+            if (this.plannedSlotMoveMode) {
+                setPlannedSlotMoveMode.call(this, false);
+            }
+            if (this.plannedSlotClearMode) {
+                setPlannedSlotClearMode.call(this, false);
+            }
+            preparePlannedSlotExclusiveModeEntry.call(this);
+        }
+        this.plannedSlotShiftMode = next;
+        setPlannedSlotShiftModeUi.call(this);
+        if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(next ? false : true);
+        return this.plannedSlotShiftMode;
     }
 
     function togglePlannedSlotMoveMode() {
@@ -218,12 +273,20 @@
         return setPlannedSlotClearMode.call(this, !this.plannedSlotClearMode);
     }
 
+    function togglePlannedSlotShiftMode() {
+        return setPlannedSlotShiftMode.call(this, !this.plannedSlotShiftMode);
+    }
+
     function isPlannedSlotMoveMode() {
         return Boolean(this && this.plannedSlotMoveMode);
     }
 
     function isPlannedSlotClearMode() {
         return Boolean(this && this.plannedSlotClearMode);
+    }
+
+    function isPlannedSlotShiftMode() {
+        return Boolean(this && this.plannedSlotShiftMode);
     }
 
     function getPlannedSlotClearContext(index) {
@@ -252,6 +315,7 @@
     function shouldRenderPlannedSlotClearButton(index) {
         if (!this || !this.plannedSlotClearMode) return false;
         if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return false;
+        if (this.plannedSlotShiftMode === true || (typeof this.isPlannedSlotShiftMode === 'function' && this.isPlannedSlotShiftMode())) return false;
         const context = getPlannedSlotClearContext.call(this, index);
         return Boolean(context.clearable && context.baseIndex === index);
     }
@@ -284,6 +348,26 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="planned-slot-clear-icon">
                         <path d="M9 3.5h6l1 1.5H20v2h-1l-1 12.5A2 2 0 0 1 15 21H9a2 2 0 0 1-2-1.5L6 7H5v-2h4l0-1.5Zm1.6 5.5v8h1.8v-8h-1.8Zm3.8 0v8h1.8v-8h-1.8ZM8.1 7l.8 11.2c.04.52.47.93 1 .93h4.2c.53 0 .96-.41 1-.93L15.9 7H8.1Z"></path>
                     </svg>
+                </button>`;
+    }
+
+    function shouldRenderPlannedSlotShiftButton(index) {
+        if (!this || !this.plannedSlotShiftMode) return false;
+        if (this.plannedSlotMoveMode === true || (typeof this.isPlannedSlotMoveMode === 'function' && this.isPlannedSlotMoveMode())) return false;
+        if (this.plannedSlotClearMode === true || (typeof this.isPlannedSlotClearMode === 'function' && this.isPlannedSlotClearMode())) return false;
+        return Number.isInteger(index) && index >= 0 && this.timeSlots && index < this.timeSlots.length;
+    }
+
+    function createPlannedSlotShiftButtonHtml(index) {
+        if (!shouldRenderPlannedSlotShiftButton.call(this, index)) return '';
+        return `<button type="button"
+                        class="planned-slot-shift-btn"
+                        data-index="${index}"
+                        data-time-slot-merge-ignore="true"
+                        aria-label="+1h 밀기"
+                        title="+1h 밀기">
+                    <span class="planned-slot-shift-text">+1h</span>
+                    <span class="planned-slot-shift-arrow" aria-hidden="true">↓</span>
                 </button>`;
     }
 
@@ -626,6 +710,38 @@
         }, true);
     }
 
+    function attachPlannedSlotShiftListeners(entryDiv, index) {
+        if (!entryDiv || !entryDiv.querySelectorAll || !this.plannedSlotShiftMode) return;
+        const button = entryDiv.querySelector('.planned-slot-shift-btn');
+        if (!button || button.dataset.shiftListenerAttached === 'true') return;
+        if (!shouldRenderPlannedSlotShiftButton.call(this, index)) return;
+        button.dataset.shiftListenerAttached = 'true';
+        if (button.dataset && button.dataset.timeSlotMergeIgnore == null) {
+            button.dataset.timeSlotMergeIgnore = 'true';
+        }
+        const resolveShiftIndex = () => {
+            const host = button.closest && button.closest('[data-planned-slot-shift-target="true"]');
+            const rawIndex = (button.dataset && button.dataset.index != null)
+                ? button.dataset.index
+                : (host && host.dataset ? host.dataset.index : index);
+            const parsedIndex = parseInt(rawIndex, 10);
+            return Number.isInteger(parsedIndex) ? parsedIndex : index;
+        };
+        const stopShiftControlEvent = (event) => {
+            if (!event) return;
+            if (event.preventDefault) event.preventDefault();
+            if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+            else if (event.stopPropagation) event.stopPropagation();
+        };
+        ['pointerdown', 'mousedown', 'touchstart'].forEach((type) => {
+            button.addEventListener(type, stopShiftControlEvent, true);
+        });
+        button.addEventListener('click', (event) => {
+            stopShiftControlEvent(event);
+            shiftPlannedSlotsDownFrom.call(this, resolveShiftIndex(), 1);
+        }, true);
+    }
+
     function snapshotSlot(slot, sourceStart, sourceEnd, targetStart, targetEnd) {
         return {
             planned: slot.planned || '',
@@ -645,6 +761,161 @@
         slot.planTitleBandOn = false;
         slot.planSegmentTimers = {};
         delete slot.planMergeSnapshot;
+    }
+
+    function getShiftBlockContext(index) {
+        const context = getPlannedSlotMoveContext.call(this, index);
+        const rangeStart = Number.isInteger(context.rangeStart) ? context.rangeStart : index;
+        const rangeEnd = Number.isInteger(context.rangeEnd) ? context.rangeEnd : rangeStart;
+        return {
+            ...context,
+            rangeStart,
+            rangeEnd,
+            blockLength: Math.max(1, rangeEnd - rangeStart + 1),
+            movable: Boolean(context.movable),
+        };
+    }
+
+    function collectPlannedShiftBlocks(pivotIndex) {
+        const blocks = [];
+        const seenRanges = new Set();
+        let index = Math.max(0, Number.isInteger(pivotIndex) ? pivotIndex : parseInt(pivotIndex, 10));
+        if (!Number.isInteger(index)) index = 0;
+        while (index < this.timeSlots.length) {
+            const context = getShiftBlockContext.call(this, index);
+            if (context.rangeEnd < index) {
+                index += 1;
+                continue;
+            }
+            if (context.rangeStart < index) {
+                index = context.rangeEnd + 1;
+                continue;
+            }
+            const rangeKey = `${context.rangeStart}-${context.rangeEnd}`;
+            if (!seenRanges.has(rangeKey) && context.movable) {
+                blocks.push(context);
+                seenRanges.add(rangeKey);
+            }
+            index = Math.max(index + 1, context.rangeEnd + 1);
+        }
+        return blocks;
+    }
+
+    function hasDestinationCollisionOutsideAffected(ctx, blocks, offsetSlots) {
+        const affectedIndices = new Set();
+        blocks.forEach((block) => {
+            for (let index = block.rangeStart; index <= block.rangeEnd; index += 1) {
+                affectedIndices.add(index);
+            }
+        });
+        return blocks.some((block) => {
+            const targetStart = block.rangeStart + offsetSlots;
+            const targetEnd = block.rangeEnd + offsetSlots;
+            for (let index = targetStart; index <= targetEnd; index += 1) {
+                if (affectedIndices.has(index)) continue;
+                const slot = ctx.timeSlots[index];
+                if (isPlannedContentPresent(slot)) return true;
+                if (typeof ctx.findMergeKey === 'function' && ctx.findMergeKey('planned', index)) return true;
+            }
+            return false;
+        });
+    }
+
+    function getMergeValuesForShift(ctx, block) {
+        if (!block.mergeKey || !ctx.mergedFields) return null;
+        const sourcePlannedKey = `planned-${block.rangeStart}-${block.rangeEnd}`;
+        const sourceTimeKey = `time-${block.rangeStart}-${block.rangeEnd}`;
+        const sourceActualKey = `actual-${block.rangeStart}-${block.rangeEnd}`;
+        return {
+            planned: ctx.mergedFields.has(sourcePlannedKey) ? ctx.mergedFields.get(sourcePlannedKey) : '',
+            time: ctx.mergedFields.has(sourceTimeKey) ? ctx.mergedFields.get(sourceTimeKey) : '',
+            actual: ctx.mergedFields.has(sourceActualKey) ? ctx.mergedFields.get(sourceActualKey) : '',
+        };
+    }
+
+    function shiftPlannedSlotsDownFrom(index, offsetSlots = 1) {
+        const pivot = Number.isInteger(index) ? index : parseInt(index, 10);
+        const offset = Number.isInteger(offsetSlots) ? offsetSlots : parseInt(offsetSlots, 10);
+        if (!Number.isInteger(pivot) || pivot < 0 || !Number.isInteger(offset) || offset <= 0 || !Array.isArray(this.timeSlots)) return false;
+        const blocks = collectPlannedShiftBlocks.call(this, pivot);
+        if (blocks.length === 0) {
+            if (typeof this.showNotification === 'function') this.showNotification('밀 계획이 없습니다.');
+            return false;
+        }
+        const lastBlock = blocks[blocks.length - 1];
+        if (lastBlock.rangeEnd + offset >= this.timeSlots.length) {
+            if (typeof this.showNotification === 'function') this.showNotification('마지막 시간 이후로 밀 수 없습니다.');
+            return false;
+        }
+        for (const block of blocks) {
+            for (let slotIndex = block.rangeStart; slotIndex <= block.rangeEnd; slotIndex += 1) {
+                if (hasBlockingTimer(this.timeSlots[slotIndex])) {
+                    if (typeof this.showNotification === 'function') this.showNotification('실행 중인 타이머가 있어 밀 수 없습니다.');
+                    return false;
+                }
+            }
+        }
+        if (hasDestinationCollisionOutsideAffected(this, blocks, offset)) {
+            if (typeof this.showNotification === 'function') this.showNotification('밀기 대상 위치에 다른 계획이 있습니다.');
+            return false;
+        }
+
+        const blockSnapshots = blocks.map((block) => {
+            const targetStart = block.rangeStart + offset;
+            const targetEnd = block.rangeEnd + offset;
+            const slots = [];
+            for (let slotIndex = block.rangeStart; slotIndex <= block.rangeEnd; slotIndex += 1) {
+                slots.push(snapshotSlot(this.timeSlots[slotIndex], block.rangeStart, block.rangeEnd, targetStart, targetEnd));
+            }
+            return {
+                block,
+                targetStart,
+                targetEnd,
+                slots,
+                mergeValues: getMergeValuesForShift(this, block),
+            };
+        });
+
+        if (this.mergedFields && typeof this.mergedFields.delete === 'function') {
+            blockSnapshots.forEach(({ block }) => {
+                ['planned', 'time', 'actual'].forEach((type) => {
+                    this.mergedFields.delete(`${type}-${block.rangeStart}-${block.rangeEnd}`);
+                });
+            });
+        }
+        blockSnapshots.forEach(({ block }) => {
+            for (let slotIndex = block.rangeStart; slotIndex <= block.rangeEnd; slotIndex += 1) {
+                clearPlannedFields(this.timeSlots[slotIndex]);
+            }
+        });
+        blockSnapshots.forEach(({ targetStart, slots }) => {
+            slots.forEach((snapshot, offsetIndex) => {
+                const targetSlot = this.timeSlots[targetStart + offsetIndex];
+                PLANNED_FIELDS.forEach((field) => {
+                    if (field === 'planMergeSnapshot' && snapshot[field] == null) {
+                        delete targetSlot[field];
+                        return;
+                    }
+                    targetSlot[field] = cloneValue(snapshot[field]);
+                });
+            });
+        });
+        if (this.mergedFields && typeof this.mergedFields.set === 'function') {
+            blockSnapshots.forEach(({ targetStart, targetEnd, slots, mergeValues }) => {
+                if (!mergeValues) return;
+                this.mergedFields.set(`planned-${targetStart}-${targetEnd}`, mergeValues.planned || slots[0].planned || '');
+                const startTime = this.timeSlots[targetStart] ? this.timeSlots[targetStart].time : '';
+                const endTime = this.timeSlots[targetEnd] ? this.timeSlots[targetEnd].time : '';
+                this.mergedFields.set(`time-${targetStart}-${targetEnd}`, `${startTime}-${endTime}`);
+                this.mergedFields.set(`actual-${targetStart}-${targetEnd}`, mergeValues.actual || '');
+            });
+        }
+
+        if (typeof this.renderTimeEntries === 'function') this.renderTimeEntries(true);
+        if (typeof this.calculateTotals === 'function') this.calculateTotals();
+        if (typeof this.autoSave === 'function') this.autoSave();
+        if (typeof this.showNotification === 'function') this.showNotification('계획을 1시간 밀었습니다.');
+        return true;
     }
 
     function movePlannedSlotBlock(sourceIndex, targetStartIndex) {
@@ -708,21 +979,29 @@
     return {
         initPlannedSlotMoveModeControls,
         initPlannedSlotClearModeControls,
+        initPlannedSlotShiftModeControls,
         setPlannedSlotMoveMode,
         setPlannedSlotClearMode,
+        setPlannedSlotShiftMode,
         togglePlannedSlotMoveMode,
         togglePlannedSlotClearMode,
+        togglePlannedSlotShiftMode,
         isPlannedSlotMoveMode,
         isPlannedSlotClearMode,
+        isPlannedSlotShiftMode,
         attachPlannedSlotMoveListeners,
         attachPlannedSlotClearListeners,
+        attachPlannedSlotShiftListeners,
         movePlannedSlotBlock,
         clearPlannedSlotContents,
+        shiftPlannedSlotsDownFrom,
         getPlannedSlotMoveContext,
         getPlannedSlotClearContext,
         canDropPlannedSlotBlock,
         shouldRenderPlannedSlotClearButton,
         createPlannedSlotClearButtonHtml,
+        shouldRenderPlannedSlotShiftButton,
+        createPlannedSlotShiftButtonHtml,
         clearPlannedSlotMoveDragState,
     };
 });

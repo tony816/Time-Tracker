@@ -142,6 +142,8 @@ class TimeTracker {
         this.plannedSlotMoveStatus = null;
         this.plannedSlotClearMode = false;
         this.plannedSlotClearModeButton = null;
+        this.plannedSlotShiftMode = false;
+        this.plannedSlotShiftModeButton = null;
         this.plannedSegmentReorderState = null;
         this.planSegmentReorderClickSuppressUntil = 0;
 
@@ -516,12 +518,20 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotClearModeControls.call(this);
     }
 
+    initPlannedSlotShiftModeControls() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.initPlannedSlotShiftModeControls.call(this);
+    }
+
     setPlannedSlotMoveMode(enabled) {
         return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotMoveMode.call(this, enabled);
     }
 
     setPlannedSlotClearMode(enabled) {
         return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotClearMode.call(this, enabled);
+    }
+
+    setPlannedSlotShiftMode(enabled) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.setPlannedSlotShiftMode.call(this, enabled);
     }
 
     togglePlannedSlotMoveMode() {
@@ -532,12 +542,20 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedSlotMoveController.togglePlannedSlotClearMode.call(this);
     }
 
+    togglePlannedSlotShiftMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.togglePlannedSlotShiftMode.call(this);
+    }
+
     isPlannedSlotMoveMode() {
         return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotMoveMode.call(this);
     }
 
     isPlannedSlotClearMode() {
         return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotClearMode.call(this);
+    }
+
+    isPlannedSlotShiftMode() {
+        return globalThis.TimeTrackerPlannedSlotMoveController.isPlannedSlotShiftMode.call(this);
     }
 
     attachPlannedSlotMoveListeners(entryDiv, index) {
@@ -548,12 +566,20 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedSlotMoveController.attachPlannedSlotClearListeners.call(this, entryDiv, index);
     }
 
+    attachPlannedSlotShiftListeners(entryDiv, index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.attachPlannedSlotShiftListeners.call(this, entryDiv, index);
+    }
+
     movePlannedSlotBlock(sourceIndex, targetStartIndex) {
         return globalThis.TimeTrackerPlannedSlotMoveController.movePlannedSlotBlock.call(this, sourceIndex, targetStartIndex);
     }
 
     clearPlannedSlotContents(index) {
         return globalThis.TimeTrackerPlannedSlotMoveController.clearPlannedSlotContents.call(this, index);
+    }
+
+    shiftPlannedSlotsDownFrom(index, offsetSlots = 1) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.shiftPlannedSlotsDownFrom.call(this, index, offsetSlots);
     }
 
     getPlannedSlotMoveContext(index) {
@@ -576,6 +602,14 @@ class TimeTracker {
         return globalThis.TimeTrackerPlannedSlotMoveController.createPlannedSlotClearButtonHtml.call(this, index);
     }
 
+    shouldRenderPlannedSlotShiftButton(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.shouldRenderPlannedSlotShiftButton.call(this, index);
+    }
+
+    createPlannedSlotShiftButtonHtml(index) {
+        return globalThis.TimeTrackerPlannedSlotMoveController.createPlannedSlotShiftButtonHtml.call(this, index);
+    }
+
     clearPlannedSlotMoveDragState() {
         return globalThis.TimeTrackerPlannedSlotMoveController.clearPlannedSlotMoveDragState.call(this);
     }
@@ -595,6 +629,7 @@ class TimeTracker {
     attachEventListeners() {
         this.initPlannedSlotMoveModeControls();
         this.initPlannedSlotClearModeControls();
+        this.initPlannedSlotShiftModeControls();
         if (this.authButton) {
             this.authButton.addEventListener('click', () => {
                 if (!this.supabaseConfigured || !this.supabase) {
@@ -9549,16 +9584,24 @@ class TimeTracker {
             const clearButtonHtml = typeof this.createPlannedSlotClearButtonHtml === 'function'
                 ? this.createPlannedSlotClearButtonHtml(start)
                 : '';
+            const shiftButtonHtml = typeof this.createPlannedSlotShiftButtonHtml === 'function'
+                ? this.createPlannedSlotShiftButtonHtml(start)
+                : '';
             const clearTargetClass = clearButtonHtml ? ' planned-slot-clear-target' : '';
+            const shiftTargetClass = shiftButtonHtml ? ' planned-slot-shift-target' : '';
             const clearTargetAttr = clearButtonHtml ? ' data-planned-slot-clear-target="true"' : '';
+            const shiftTargetAttr = shiftButtonHtml ? ' data-planned-slot-shift-target="true"' : '';
             const clearOverlayHtml = clearButtonHtml
                 ? `<div class="planned-slot-clear-overlay">${clearButtonHtml}</div>`
                 : '';
-            return `<div class="planned-merged-main-container${clearTargetClass}"
+            const shiftOverlayHtml = shiftButtonHtml
+                ? `<div class="planned-slot-shift-overlay">${shiftButtonHtml}</div>`
+                : '';
+            return `<div class="planned-merged-main-container${clearTargetClass}${shiftTargetClass}"
                            data-merge-key="${safeMergeKey}"
                            data-merge-start="${start}"
                            data-merge-end="${end}"
-                           data-planned-slot-host="true"${clearTargetAttr}>
+                           data-planned-slot-host="true"${clearTargetAttr}${shiftTargetAttr}>
                         <div class="planned-merged-overlay">
                             <input type="text" class="input-field ${type}-input merged-field merged-main"
                                    data-index="${index}"
@@ -9570,6 +9613,7 @@ class TimeTracker {
                                placeholder="계획을 입력하려면 클릭 또는 Enter" readonly tabindex="0" aria-label="병합된 계획 활동 입력" title="클릭해서 계획 선택/입력" style="cursor: pointer;">
                         </div>
                         ${clearOverlayHtml}
+                        ${shiftOverlayHtml}
                     </div>`;
         }
 

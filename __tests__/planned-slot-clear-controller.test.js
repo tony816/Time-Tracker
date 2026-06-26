@@ -38,6 +38,7 @@ function createContext(overrides = {}) {
         mergedFields: new Map(overrides.mergedFields || []),
         plannedSlotClearMode: overrides.plannedSlotClearMode !== undefined ? overrides.plannedSlotClearMode : true,
         plannedSlotMoveMode: Boolean(overrides.plannedSlotMoveMode),
+        plannedSlotShiftMode: Boolean(overrides.plannedSlotShiftMode),
         renderCalls: 0,
         totalCalls: 0,
         saveCalls: 0,
@@ -96,8 +97,14 @@ function createContext(overrides = {}) {
         createPlannedSlotClearButtonHtml(index) {
             return controller.createPlannedSlotClearButtonHtml.call(this, index);
         },
+        createPlannedSlotShiftButtonHtml(index) {
+            return controller.createPlannedSlotShiftButtonHtml.call(this, index);
+        },
         shouldRenderPlannedSlotClearButton(index) {
             return controller.shouldRenderPlannedSlotClearButton.call(this, index);
+        },
+        shouldRenderPlannedSlotShiftButton(index) {
+            return controller.shouldRenderPlannedSlotShiftButton.call(this, index);
         },
     };
 }
@@ -122,7 +129,7 @@ test('planned slot clear activation button lives inside the sheet title cell', (
     const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     assert.match(
         html,
-        /<div class="planned-label">[\s\S]*id="plannedSlotMoveModeBtn"[\s\S]*id="plannedSlotClearModeBtn"[\s\S]*<\/div>/
+        /<div class="planned-label">[\s\S]*id="plannedSlotMoveModeBtn"[\s\S]*id="plannedSlotClearModeBtn"[\s\S]*id="plannedSlotShiftModeBtn"[\s\S]*<\/div>/
     );
 });
 
@@ -133,6 +140,15 @@ test('planned slot clear activation button remains pointer-clickable in the titl
     assert.match(html, /id="plannedSlotClearModeBtn"[^>]*style="[^"]*pointer-events:\s*auto;?[^"]*"/);
     assert.match(css, /\.planned-slot-clear-mode-btn\s*\{[\s\S]*pointer-events:\s*auto;/);
     assert.match(controllerSource, /plannedSlotClearModeButton\.style\.pointerEvents\s*=\s*'auto'/);
+});
+
+test('planned slot shift activation button remains pointer-clickable in the title cell', () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'interactions.css'), 'utf8');
+    const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'planned-slot-move-controller.js'), 'utf8');
+    assert.match(html, /id="plannedSlotShiftModeBtn"[^>]*style="[^"]*pointer-events:\s*auto;?[^"]*"/);
+    assert.match(css, /\.planned-slot-shift-mode-btn\s*\{[\s\S]*pointer-events:\s*auto;/);
+    assert.match(controllerSource, /plannedSlotShiftModeButton\.style\.pointerEvents\s*=\s*'auto'/);
 });
 
 test('clear mode renders a host-level button for non-empty planned slots only', () => {
@@ -197,6 +213,64 @@ test('slot clear overlay is a child of the planned slot host, not a split segmen
     const stack = getOpenDivClassStackAt(html, overlayIndex);
     assert.ok(stack.some((className) => className.includes('split-cell-wrapper')));
     assert.equal(stack.some((className) => className.includes('split-grid-segment')), false);
+});
+
+test('shift mode renders a host-level button only while active', () => {
+    const inactiveCtx = createContext({ plannedSlotClearMode: false, plannedSlotShiftMode: false });
+    const inactiveHtml = wrapWithSplitVisualization.call(inactiveCtx, 'planned', 0, '<input class="planned-input" />');
+    assert.doesNotMatch(inactiveHtml, /planned-slot-shift-btn/);
+
+    const ctx = createContext({ plannedSlotClearMode: false, plannedSlotShiftMode: true });
+    const html = wrapWithSplitVisualization.call(ctx, 'planned', 0, '<input class="planned-input" />');
+    assert.match(html, /planned-slot-shift-target/);
+    assert.match(html, /data-planned-slot-host="true"/);
+    assert.match(html, /data-planned-slot-shift-target="true"/);
+    assert.match(html, /class="planned-slot-shift-overlay"/);
+    assert.match(html, /class="planned-slot-shift-btn"/);
+    const overlayIndex = html.indexOf('class="planned-slot-shift-overlay"');
+    const firstSegmentIndex = html.indexOf('class="split-grid-segment');
+    assert.ok(overlayIndex > firstSegmentIndex);
+    const stack = getOpenDivClassStackAt(html, overlayIndex);
+    assert.ok(stack.some((className) => className.includes('split-cell-wrapper')));
+    assert.equal(stack.some((className) => className.includes('split-grid-segment')), false);
+});
+
+test('merged planned slot renders one shift overlay at the merged slot host', () => {
+    const ctx = createContext({
+        plannedSlotClearMode: false,
+        plannedSlotShiftMode: true,
+        mergedFields: [['planned-0-1', 'Merged focus']],
+    });
+    ctx.timeSlots.push({
+        time: '10',
+        planned: '',
+        planActivities: [],
+        planTitle: '',
+        planTitleBandOn: false,
+        planSegmentTimers: {},
+    });
+    ctx.resolvePlannedSlotContext = function resolvePlannedSlotContext(index) {
+        return {
+            clickedIndex: index,
+            baseIndex: 0,
+            rangeStart: 0,
+            rangeEnd: 1,
+            mergeKey: 'planned-0-1',
+            isMerged: true,
+            slotCount: 2,
+            blockMinutes: 120,
+        };
+    };
+
+    const mainHtml = createMergedField.call(ctx, 'planned-0-1', 'planned', 0, 'Merged focus');
+    const secondaryHtml = createMergedField.call(ctx, 'planned-0-1', 'planned', 1, '');
+
+    assert.match(mainHtml, /planned-merged-main-container planned-slot-shift-target/);
+    assert.match(mainHtml, /data-planned-slot-host="true"/);
+    assert.match(mainHtml, /data-planned-slot-shift-target="true"/);
+    assert.equal((mainHtml.match(/planned-slot-shift-overlay/g) || []).length, 1);
+    assert.equal((mainHtml.match(/planned-slot-shift-btn/g) || []).length, 1);
+    assert.doesNotMatch(secondaryHtml, /planned-slot-shift-btn/);
 });
 
 test('merged planned slot renders one clear overlay at the merged slot host', () => {

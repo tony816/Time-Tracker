@@ -216,7 +216,8 @@ h1 {
   min-width: 0;
 }
 
-.planned-slot-move-mode-btn {
+.planned-slot-move-mode-btn,
+.planned-slot-shift-mode-btn {
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.12);
@@ -230,9 +231,14 @@ h1 {
   pointer-events: auto;
 }
 
-.planned-slot-move-mode-btn[aria-pressed="true"] {
+.planned-slot-move-mode-btn[aria-pressed="true"],
+.planned-slot-shift-mode-btn[aria-pressed="true"] {
   background: #ffffff;
   color: #243447;
+}
+
+.planned-slot-move-mode-btn {
+  pointer-events: auto;
 }
 
 /* ?ㅻ뜑??'?쒓컙' ?쇰꺼??蹂몃Ц ?쒓컙 ?쇰꺼 ?ㅽ??쇱뿉 ?곹뼢??諛쏆? ?딅룄濡?紐낆떆 */
