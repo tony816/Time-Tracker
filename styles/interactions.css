@@ -1,4 +1,4 @@
-﻿/* 타이머 UI 스타일 */
+/* 타이머 UI 스타일 */
 .timer-controls-container {
   display: flex;
   flex-direction: column;
@@ -2446,30 +2446,17 @@ button.activity-chip,
   border: 1px solid var(--plan-segment-default-border, #E5E7EB);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.08),
-    0 6px 14px rgba(15, 23, 42, 0.07),
-    0 12px 24px rgba(15, 23, 42, 0.035),
+    0 5px 12px rgba(15, 23, 42, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 1);
   background-clip: border-box;
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"]::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.08),
-    0 6px 14px rgba(15, 23, 42, 0.07),
-    0 12px 24px rgba(15, 23, 42, 0.035);
+  display: none;
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"]:hover::after {
-  box-shadow:
-    0 2px 4px rgba(15, 23, 42, 0.09),
-    0 8px 18px rgba(15, 23, 42, 0.075),
-    0 14px 28px rgba(15, 23, 42, 0.04);
+  display: none;
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"]:hover {
@@ -2481,10 +2468,7 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment::after {
-  box-shadow:
-    0 2px 4px rgba(15, 23, 42, 0.09),
-    0 8px 18px rgba(15, 23, 42, 0.075),
-    0 14px 28px rgba(15, 23, 42, 0.04);
+  display: none;
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] {

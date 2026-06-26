@@ -250,30 +250,15 @@ test('buildSplitVisualization passes segment.colorKey to getSplitColor', () => {
     assert.equal(gridCall.segmentColorKey, 'soft-coral');
 });
 
-test('CSS: planned real segment has soft shadow ::after pseudo-element', () => {
-    const realPlanBlock = interactionsCss.match(
-        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\s*\{[\s\S]*?\n}/
-    );
-    assert.ok(realPlanBlock, 'real-plan base rule must exist');
-    assert.match(realPlanBlock[0], /overflow:\s*visible/);
-    assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border/);
-    assert.doesNotMatch(realPlanBlock[0], /border-bottom:\s*3px/); // 3px bottom border removed per soft-shadow card treatment
 
+test('CSS: planned real segment ::after is neutralized (no z-index artifact)', () => {
     const afterBlock = interactionsCss.match(
-        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]::after\s*\{[\s\S]*?\n}/
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind=\"real-plan\"]::after\s*\{[\s\S]*?\n}/
     );
     assert.ok(afterBlock, 'real-plan ::after rule must exist');
-    assert.match(afterBlock[0], /z-index:\s*-1/);
-    assert.match(afterBlock[0], /pointer-events:\s*none/);
-    assert.match(afterBlock[0], /box-shadow/);
-    assert.match(afterBlock[0], /position:\s*absolute/);
-});
-
-test('CSS: planned real segment default uses inset 0 1px 0 white highlight', () => {
-    const realPlanBlock = interactionsCss.match(
-        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\s*\{[\s\S]*?\n}/
-    );
-    assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/); // updated to pure white inset
+    assert.match(afterBlock[0], /display:\s*none/);
+    assert.doesNotMatch(afterBlock[0], /z-index:\s*-1/);
+    assert.doesNotMatch(afterBlock[0], /box-shadow/);
 });
 
 test('CSS: is-selected-plan-segment does NOT apply blue border or glow', () => {
