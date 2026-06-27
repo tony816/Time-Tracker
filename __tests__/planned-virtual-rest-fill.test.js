@@ -1085,6 +1085,7 @@ test('renderTimeEntries renders a full-duration virtual rest segment for empty p
     assert.equal(restEl.dataset.segmentKind, 'virtual-rest');
     assert.equal(restEl.dataset.gapStartMinute, '0');
     assert.equal(restEl.dataset.gapDurationMinutes, '60');
+    assert.equal(restEl.querySelector('.split-grid-label'), null);
     // slot.planActivities should remain empty (not infected with virtual rest)
     assert.equal(ctx.timeSlots[0].planActivities.length, 0);
 });
@@ -1132,6 +1133,7 @@ test('rendered DOM right-handle drag shrinks segment, rerenders gap, and reattac
         const firstGap = container.querySelector('.split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]');
         assert.equal(firstGap.dataset.gapStartMinute, '50');
         assert.equal(firstGap.dataset.gapDurationMinutes, '10');
+        assert.equal(firstGap.querySelector('.split-grid-label'), null);
         assert.equal(firstGap.querySelector('.plan-segment-resize-handle-left'), null);
 
         const secondHandle = container.querySelector('.plan-segment-resize-handle-right');
@@ -1838,7 +1840,7 @@ test('plan segment resize preview shows virtual rest gap and cancels without app
 
         assert.deepEqual(getPreviewSegments(container), [
             { className: 'split-grid-segment has-plan-segment-timer plan-segment-resize-preview-segment', gridColumn: 'span 3', color: '#abcdef', label: '샤워', duration: '30m' },
-            { className: 'split-grid-segment split-grid-segment-virtual-rest plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: 'span 3', color: '', label: '휴식', duration: '30m' },
+            { className: 'split-grid-segment split-grid-segment-virtual-rest plan-segment-resize-preview-segment plan-segment-resize-preview-rest', gridColumn: 'span 3', color: '', label: '', duration: '30m' },
         ]);
         assert.equal(JSON.stringify(ctx.timeSlots[0].planActivities), originalPlan);
         assert.deepEqual(applyCalls, []);

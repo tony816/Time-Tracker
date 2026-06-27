@@ -116,6 +116,7 @@ test('buildSplitVisualization renders virtual rest gaps without plan timer contr
     const virtualRestSegment = html.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
     assert.doesNotMatch(virtualRestSegment, /plan-segment-timer-button/);
     assert.doesNotMatch(virtualRestSegment, /plan-segment-timer-time/);
+    assert.doesNotMatch(virtualRestSegment, /split-grid-label/);
     assert.match(html, /class="plan-segment-timer-button"/);
 });
 
@@ -658,6 +659,7 @@ test('buildSplitVisualization renders resize handles only for idle real plan seg
     const virtualRestSegment = runningHtml.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/)[0];
     assert.doesNotMatch(virtualRestSegment, /data-segment-kind="real-plan"/);
     assert.doesNotMatch(virtualRestSegment, /plan-segment-resize-handle/);
+    assert.doesNotMatch(virtualRestSegment, /split-grid-label/);
 });
 
 test('buildSplitVisualization renders one persistent shared handle at adjacent boundaries', () => {

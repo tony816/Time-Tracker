@@ -408,7 +408,8 @@ function buildSplitVisualization(type, index) {
                     virtualRestIndex = restKeyByRange.get(virtualRestKey);
                 }
                 const virtualRestClass = isVirtualRest ? ' split-grid-segment-virtual-rest' : '';
-                const canRenderLabel = Boolean(segment.label)
+                const canRenderLabel = !isVirtualRest
+                    && Boolean(segment.label)
                     && !segment.suppressHoverLabel
                     && (showLabels || Boolean(segment.alwaysVisibleLabel));
                 const safeLabel = canRenderLabel ? this.escapeHtml(segment.label) : '';
@@ -506,8 +507,12 @@ function buildSplitVisualization(type, index) {
                     : '';
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
+                const virtualRestDuration = Number(segment.durationMinutes) || 0;
+                const virtualRestAriaLabel = this.escapeAttribute
+                    ? this.escapeAttribute(`빈 시간 ${virtualRestDuration}분`)
+                    : `빈 시간 ${virtualRestDuration}분`;
                 const virtualRestAttr = isVirtualRest
-                    ? ` data-segment-kind="virtual-rest" data-reorder-item-type="virtual-rest" data-reorder-item-id="rest-${Number.isFinite(virtualRestIndex) ? virtualRestIndex : 0}" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}"${isEmptySlotDefaultRest ? ' data-empty-slot-default-rest="true"' : ''} title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
+                    ? ` data-segment-kind="virtual-rest" data-reorder-item-type="virtual-rest" data-reorder-item-id="rest-${Number.isFinite(virtualRestIndex) ? virtualRestIndex : 0}" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${virtualRestDuration}"${isEmptySlotDefaultRest ? ' data-empty-slot-default-rest="true"' : ''} aria-label="${virtualRestAriaLabel}"`
                     : '';
                 const realPlanAttr = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest)
                     ? ` data-segment-kind="real-plan" data-reorder-item-type="real" data-reorder-item-id="real-${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-id="${this.escapeAttribute ? this.escapeAttribute(planSegmentId) : planSegmentId}" data-segment-index="${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-start-minute="${Number(segment.startMinute) || 0}" data-segment-duration-minutes="${Number(segment.durationMinutes) || 0}" data-segment-end-minute="${Number(segment.endMinute) || 0}"`

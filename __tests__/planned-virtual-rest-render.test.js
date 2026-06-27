@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 globalThis.TimeTrackerActualGridCore = require('../core/actual-grid-core');
 globalThis.TimeTrackerPlanSegmentCore = require('../core/plan-segment-core');
@@ -8,6 +10,7 @@ const { buildMethod } = require('./helpers/script-method-builder');
 
 const computeSplitSegments = buildMethod('computeSplitSegments(type, index)', '(type, index)');
 const getSplitActivities = buildMethod('getSplitActivities(type, baseIndex)', '(type, baseIndex)');
+const repoRoot = path.resolve(__dirname, '..');
 
 function createContext(planActivities, overrides = {}) {
     const slot = {
@@ -226,11 +229,20 @@ function createRenderContext(planActivities, overrides = {}) {
     });
 }
 
+function getVirtualRestSegmentHtml(html) {
+    const match = html.match(/<div class="split-grid-segment[^"]*split-grid-segment-virtual-rest[^>]*>[\s\S]*?<\/div>/);
+    assert.ok(match, "virtual rest segment must render");
+    return match[0];
+}
+
 test("buildSplitVisualization sets data-empty-slot-default-rest on empty planned block", () => {
     const ctx = createRenderContext([]);
     const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    const restHtml = getVirtualRestSegmentHtml(html);
     assert.ok(html.includes('data-empty-slot-default-rest="true"'), "empty slot must carry default rest attribute");
-    assert.ok(html.includes("휴식"), "rest label must be in HTML for accessibility");
+    assert.ok(!restHtml.includes("split-grid-label"), "virtual rest must not render a visual label");
+    assert.ok(!restHtml.includes("title="), "virtual rest must not expose a native visual tooltip");
+    assert.ok(restHtml.includes("aria-label="), "virtual rest keeps non-visual accessibility text");
     assert.ok(html.includes("split-grid-segment-virtual-rest"), "must include virtual-rest class");
 });
 
@@ -239,8 +251,10 @@ test("buildSplitVisualization does NOT set data-empty-slot-default-rest on parti
         { label: "Work", seconds: 40 * 60, startMinute: 0, durationMinutes: 40, endMinute: 40 },
     ]);
     const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    const restHtml = getVirtualRestSegmentHtml(html);
     assert.ok(!html.includes('data-empty-slot-default-rest="true"'), "partial gap must not carry default rest attribute");
-    assert.ok(html.includes("휴식"), "virtual rest label still present for gap");
+    assert.ok(!restHtml.includes("split-grid-label"), "partial virtual rest gap must not render a visual label");
+    assert.ok(restHtml.includes("aria-label="), "partial virtual rest gap keeps non-visual accessibility text");
     assert.ok(html.includes("split-grid-segment-virtual-rest"), "must include virtual-rest class");
 });
 
@@ -262,13 +276,30 @@ test("full virtual rest block structurally clickable with data attributes", () =
     assert.ok(html.includes('data-empty-slot-default-rest="true"'), "default rest attribute set");
 });
 
-test("non-empty virtual rest gap label intact, no default rest attribute", () => {
+test("non-empty virtual rest gap has no visual label and no default rest attribute", () => {
     const ctx = createRenderContext([
         { label: "A", seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
     ]);
     const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
-    assert.ok(html.includes("휴식"), "gap label present");
+    const restHtml = getVirtualRestSegmentHtml(html);
+    assert.ok(!restHtml.includes("split-grid-label"), "gap label must not be visually rendered");
     assert.ok(!html.includes('data-empty-slot-default-rest="true"'), "gap must not be marked empty-slot default");
     assert.ok(html.includes("split-grid-segment-virtual-rest"), "must have virtual-rest class");
+});
+
+test("virtual rest CSS keeps labels hidden across hover focus and targeted states", () => {
+    const css = fs.readFileSync(path.join(repoRoot, "styles", "interactions.css"), "utf8");
+    assert.match(
+        css,
+        /\.split-visualization-planned \.split-grid-segment-virtual-rest\[data-segment-kind="virtual-rest"\] \.split-grid-label,[\s\S]*?display:\s*none !important;/
+    );
+    assert.match(
+        css,
+        /\.split-visualization-planned \.split-grid-segment-virtual-rest\[data-segment-kind="virtual-rest"\]\.is-rest-slot-targeted\s*\{[\s\S]*?color:\s*transparent;/
+    );
+    assert.doesNotMatch(
+        css,
+        /\.split-grid-segment-virtual-rest\[data-empty-slot-default-rest="true"\][\s\S]*?opacity:\s*1;/
+    );
 });
 

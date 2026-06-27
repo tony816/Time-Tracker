@@ -703,13 +703,9 @@
         setStyleProperty(segmentEl, 'grid-column', `span ${span}`);
 
         if (isRest) {
-            const label = document.createElement('span');
             segmentEl.className = 'split-grid-segment split-grid-segment-virtual-rest plan-segment-reorder-preview-rest';
             segmentEl.dataset.segmentKind = 'virtual-rest';
             segmentEl.dataset.reorderItemType = 'virtual-rest';
-            label.className = 'split-grid-label';
-            label.textContent = Number(chunk.chunkIndex) === 0 ? '휴식' : '';
-            segmentEl.appendChild(label);
             layer.appendChild(segmentEl);
             return;
         }

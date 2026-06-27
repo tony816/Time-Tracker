@@ -8173,7 +8173,12 @@ class TimeTracker {
                         : 'plan-segment-timer-time plan-segment-resize-preview-duration tone-under';
                     const minutes = Number.isFinite(segment && segment.durationMinutes) ? Math.max(0, Math.floor(segment.durationMinutes)) : span * 10;
                     duration.textContent = isEmpty ? '' : `${minutes}m`;
-                    if (isVirtualRest || isEmpty) {
+                    if (isVirtualRest) {
+                        previewSegment.appendChild(duration);
+                        layer.appendChild(previewSegment);
+                        return;
+                    }
+                    if (isEmpty) {
                         label.className = 'split-grid-label plan-segment-resize-preview-label';
                         previewSegment.appendChild(label);
                         previewSegment.appendChild(duration);

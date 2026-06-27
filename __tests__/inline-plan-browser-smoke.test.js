@@ -68,6 +68,13 @@ async function openSegmentDropdown(page, segmentIndex = 0) {
     return selector;
 }
 
+async function openEmptyVirtualRestDropdown(page, index = 10) {
+    const selector = `.time-entry[data-index="${index}"] .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"]`;
+    await page.locator(selector).click();
+    await page.waitForSelector('.inline-plan-dropdown');
+    return selector;
+}
+
 async function closeDropdown(page) {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.inline-plan-dropdown'));
@@ -169,8 +176,7 @@ test('browser dropdown and mobile sheet remain open and stable during page scrol
         try {
             const { page, context, errors } = await newSmokePage(browser, url);
             try {
-                await page.locator('.time-entry[data-index="10"] .planned-input').click();
-                await assertDropdownOpen(page);
+                await openEmptyVirtualRestDropdown(page, 10);
                 const before = await page.locator('.inline-plan-dropdown').boundingBox();
                 await page.evaluate(() => window.scrollBy(0, 120));
                 await page.waitForTimeout(100);
@@ -452,8 +458,7 @@ test('browser chipboard supports repeated mixed drag gestures without stale drag
         const browser = await chromium.launch();
         const { page, context, errors } = await newSmokePage(browser, url);
         try {
-            await page.locator('.time-entry[data-index="10"] .planned-input').click();
-            await assertDropdownOpen(page);
+            await openEmptyVirtualRestDropdown(page, 10);
             await dragChip(page, 'Work', 'Study', 'after');
             await dragChip(page, 'Study', 'Work', 'before');
             await dragChip(page, 'Plan', 'Work', 'center');

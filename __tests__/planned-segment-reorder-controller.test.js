@@ -1785,7 +1785,7 @@ test('virtual rest segment can start long press reorder and drop after real segm
     assert.equal(restPreview.dataset.segmentKind, 'virtual-rest');
     assert.equal(hasClass(restPreview, 'plan-segment-reorder-preview-rest'), true);
     assert.equal(hasClass(restPreview, 'plan-segment-reorder-preview-segment'), false);
-    assert.match(layer.innerHTML, /휴식/);
+    assert.equal(restPreview.querySelector('.split-grid-label'), null);
     listeners.pointerup[0](createPointerEvent('pointerup', second, 260));
     assert.equal(root.querySelector('.plan-segment-reorder-drag-ghost'), null);
 
