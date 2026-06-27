@@ -261,6 +261,30 @@ test('CSS: planned real segment ::after is neutralized (no z-index artifact)', (
     assert.doesNotMatch(afterBlock[0], /box-shadow/);
 });
 
+test('CSS: planned real segment border is a slightly stronger neutral without touching rest or actual styles', () => {
+    const realPlanBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(realPlanBlock, 'real-plan base rule must exist');
+    assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border,\s*#E5E7EB\)/);
+    assert.match(realPlanBlock[0], /border-color:\s*#CDD5DE/);
+    assert.doesNotMatch(realPlanBlock[0], /data-segment-kind="virtual-rest"/);
+    assert.doesNotMatch(realPlanBlock[0], /actual/);
+
+    const selectedBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\.is-selected-plan-segment\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(selectedBlock, 'real-plan selected rule must exist');
+    assert.match(selectedBlock[0], /border-color:\s*#CDD5DE/);
+
+    const virtualRestBlock = interactionsCss.match(
+        /\.split-visualization-planned \.split-grid-segment-virtual-rest\s*\{[\s\S]*?\n}/
+    );
+    assert.ok(virtualRestBlock, 'virtual-rest base rule must exist');
+    assert.match(virtualRestBlock[0], /border:\s*1px solid rgba\(15,\s*23,\s*42,\s*0\.14\)/);
+    assert.doesNotMatch(virtualRestBlock[0], /#CDD5DE/);
+});
+
 
 test('CSS: planned real segment keeps rounded corners regardless of connect-top/connect-bottom', () => {
     // connect-top override — must restore top corner rounding
