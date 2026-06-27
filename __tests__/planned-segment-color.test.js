@@ -261,13 +261,19 @@ test('CSS: planned real segment ::after is neutralized (no z-index artifact)', (
     assert.doesNotMatch(afterBlock[0], /box-shadow/);
 });
 
-test('CSS: planned real segment border is a slightly stronger neutral without touching rest or actual styles', () => {
+test('CSS: planned real segment border and shadow stay neutral without touching rest or actual styles', () => {
     const realPlanBlock = interactionsCss.match(
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\s*\{[\s\S]*?\n}/
     );
     assert.ok(realPlanBlock, 'real-plan base rule must exist');
     assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border,\s*#E5E7EB\)/);
     assert.match(realPlanBlock[0], /border-color:\s*#CDD5DE/);
+    assert.match(realPlanBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
+    assert.match(realPlanBlock[0], /0 6px 14px rgba\(15,\s*23,\s*42,\s*0\.075\)/);
+    assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/);
+    assert.match(realPlanBlock[0], /border-radius:\s*7px/);
+    assert.doesNotMatch(realPlanBlock[0], /background(?:-color)?:/);
+    assert.doesNotMatch(realPlanBlock[0], /transform:/);
     assert.doesNotMatch(realPlanBlock[0], /data-segment-kind="virtual-rest"/);
     assert.doesNotMatch(realPlanBlock[0], /actual/);
 
@@ -283,6 +289,8 @@ test('CSS: planned real segment border is a slightly stronger neutral without to
     assert.ok(virtualRestBlock, 'virtual-rest base rule must exist');
     assert.match(virtualRestBlock[0], /border:\s*1px solid rgba\(15,\s*23,\s*42,\s*0\.14\)/);
     assert.doesNotMatch(virtualRestBlock[0], /#CDD5DE/);
+    assert.doesNotMatch(virtualRestBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
+    assert.doesNotMatch(virtualRestBlock[0], /0 6px 14px rgba\(15,\s*23,\s*42,\s*0\.075\)/);
 });
 
 
