@@ -2333,3 +2333,119 @@ test('getSplitActivities planned preserves segment positions and strips virtual 
     ]);
     assert.equal(result.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
 });
+
+test('empty-slot default rest click routes through openPlannedFieldDropdownWithViewportPreparation', () => {
+    const scheduledCorrections = [];
+    const FieldInteractionCtrl = {
+        openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex, options = {}) {
+            scheduledCorrections.push({ index, plannedField, endIndex });
+            // Simulate what the real function would do: call scheduleInlinePlanSheetTargetViewportCorrection
+            if (ctx && typeof ctx.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
+                ctx.scheduleInlinePlanSheetTargetViewportCorrection(plannedField);
+            }
+        },
+    };
+    const saved = globalThis.TimeTrackerFieldInteractionController;
+    globalThis.TimeTrackerFieldInteractionController = FieldInteractionCtrl;
+
+    const entryDiv = createRenderNode('div');
+    entryDiv.className = 'time-entry';
+    entryDiv.dataset.index = 0;
+    const plannedInput = createRenderNode('input');
+    plannedInput.className = 'input-field planned-input';
+    entryDiv.appendChild(plannedInput);
+    const wrapper = createRenderNode('div');
+    wrapper.className = 'split-cell-wrapper split-type-planned';
+    entryDiv.appendChild(wrapper);
+
+    const gap = createRenderNode('div');
+    gap.className = 'split-grid-segment split-grid-segment-virtual-rest';
+    gap.dataset = {
+        segmentKind: 'virtual-rest',
+        gapStartMinute: '0',
+        gapDurationMinutes: '60',
+        emptySlotDefaultRest: 'true',
+    };
+    wrapper.appendChild(gap);
+
+    const openInlinePlanCalls = [];
+    const viewportCorrectionTargets = [];
+    const ctx = {
+        getPlannedRangeInfo(index) {
+            return { startIndex: 0, endIndex: 0, baseIndex: 0, rangeStart: 0, rangeEnd: 0, mergeKey: null, isMerged: false, slotCount: 1, blockMinutes: 60 };
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
+            openInlinePlanCalls.push({ startIndex, anchor, endIndex, options });
+        },
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
+            viewportCorrectionTargets.push(targetEl);
+        },
+    };
+
+    try {
+        attachVirtualRestGapListeners.call(ctx, entryDiv, 0);
+        gap.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        // Should have routed through FieldInteractionCtrl, not called openInlinePlanDropdown directly
+        assert.equal(openInlinePlanCalls.length, 0, 'should not call openInlinePlanDropdown directly; must route through FieldInteractionCtrl');
+        // FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation should have been called
+        assert.equal(scheduledCorrections.length, 1);
+        assert.equal(scheduledCorrections[0].index, 0);
+        // The plannedField passed should be the actual .planned-input element
+        assert.equal(scheduledCorrections[0].plannedField, plannedInput);
+        // Viewport correction should target the planned slot input (not the rest segment)
+        assert.equal(viewportCorrectionTargets.length, 1);
+        assert.equal(viewportCorrectionTargets[0], plannedInput, 'correction target must be the planned input, not the rest segment');
+    } finally {
+        if (saved === undefined) {
+            delete globalThis.TimeTrackerFieldInteractionController;
+        } else {
+            globalThis.TimeTrackerFieldInteractionController = saved;
+        }
+    }
+});
+
+test('empty-slot default rest is identified by data-empty-slot-default-rest attribute in DOM', () => {
+    const originalDocument = globalThis.document;
+    const { ctx, container, document } = createRenderedResizeContext([]);
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const restEl = container.querySelector('.split-grid-segment-virtual-rest');
+    assert.ok(restEl);
+    assert.equal(restEl.dataset.emptySlotDefaultRest, 'true', 'empty slot rest must carry data-empty-slot-default-rest');
+    // slot state should still be clean
+    assert.equal(ctx.timeSlots[0].planActivities.length, 0);
+});
+
+test('explicit saved rest segment does not carry data-empty-slot-default-rest', () => {
+    const originalDocument = globalThis.document;
+    // A real saved segment labeled ?? (explicitly added by user)
+    const { ctx, container, document } = createRenderedResizeContext([
+        { label: '??', seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    globalThis.document = document;
+
+    try {
+        ctx.renderTimeEntries(true);
+    } finally {
+        globalThis.document = originalDocument;
+    }
+
+    const restEls = container.querySelectorAll('.split-grid-segment-virtual-rest');
+    // No virtual rest should be rendered since the slot is fully occupied
+    assert.equal(restEls.length, 0);
+
+    const realEl = container.querySelector('[data-segment-kind="real-plan"]');
+    assert.ok(realEl, 'explicit rest segment should be a real plan segment');
+    assert.equal(realEl.dataset.emptySlotDefaultRest, undefined, 'explicit rest must not carry empty-slot-default-rest');
+});
