@@ -2421,23 +2421,23 @@ button.activity-chip,
   position: relative;
   z-index: 3;
   pointer-events: auto;
-  background: rgba(38, 54, 75, 0.18) !important;
-  border: 1px solid rgba(38, 54, 75, 0.16);
-  border-bottom: 1px solid rgba(38, 54, 75, 0.16) !important;
+  background: rgba(30, 41, 59, 0.22) !important;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14) !important;
   color: transparent;
   height: 100%;
   box-sizing: border-box;
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.18),
-    inset 0 -8px 18px rgba(15, 23, 42, 0.04);
+    inset 0 1px 2px rgba(255, 255, 255, 0.14),
+    inset 0 -8px 18px rgba(15, 23, 42, 0.08);
   cursor: pointer;
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest:hover,
 .split-visualization-planned .split-grid-segment-virtual-rest:focus-visible {
-  background: rgba(38, 54, 75, 0.24) !important;
-  border-color: rgba(38, 54, 75, 0.24);
-  border-bottom-color: rgba(38, 54, 75, 0.24) !important;
+  background: rgba(30, 41, 59, 0.24) !important;
+  border-color: rgba(15, 23, 42, 0.16);
+  border-bottom-color: rgba(15, 23, 42, 0.16) !important;
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"] .split-grid-label,
@@ -2452,13 +2452,13 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment-virtual-rest[data-segment-kind="virtual-rest"].is-rest-slot-targeted {
-  background: rgba(38, 54, 75, 0.28) !important;
-  border-color: rgba(59, 130, 246, 0.34);
-  border-bottom-color: rgba(59, 130, 246, 0.34) !important;
+  background: rgba(30, 41, 59, 0.24) !important;
+  border-color: rgba(15, 23, 42, 0.18);
+  border-bottom-color: rgba(15, 23, 42, 0.18) !important;
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.2),
-    inset 0 -8px 18px rgba(15, 23, 42, 0.05),
-    inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+    inset 0 1px 2px rgba(255, 255, 255, 0.16),
+    inset 0 -8px 18px rgba(15, 23, 42, 0.1),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.08);
   color: transparent;
 }
 
@@ -2776,13 +2776,13 @@ body.is-plan-segment-reorder-ghost-active {
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-rest {
   height: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(38, 54, 75, 0.16);
-  border-bottom: 1px solid rgba(38, 54, 75, 0.16);
-  background: rgba(38, 54, 75, 0.18);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(30, 41, 59, 0.22);
   color: transparent;
   box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.18),
-    inset 0 -8px 18px rgba(15, 23, 42, 0.04);
+    inset 0 1px 2px rgba(255, 255, 255, 0.14),
+    inset 0 -8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .plan-segment-resize-preview-segment.plan-segment-resize-preview-empty {
