@@ -2468,7 +2468,7 @@ button.activity-chip,
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   border: 1px solid var(--plan-segment-default-border, #E5E7EB);
-  border-color: #CDD5DE;
+  border-color: #C2CBD6;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.085),
     0 6px 14px rgba(15, 23, 42, 0.075),
@@ -2490,7 +2490,7 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment {
-  border-color: #CDD5DE;
+  border-color: #C2CBD6;
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment::after {

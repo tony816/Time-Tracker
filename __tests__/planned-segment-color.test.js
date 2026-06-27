@@ -267,7 +267,7 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
     );
     assert.ok(realPlanBlock, 'real-plan base rule must exist');
     assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border,\s*#E5E7EB\)/);
-    assert.match(realPlanBlock[0], /border-color:\s*#CDD5DE/);
+    assert.match(realPlanBlock[0], /border-color:\s*#C2CBD6/);
     assert.match(realPlanBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
     assert.match(realPlanBlock[0], /0 6px 14px rgba\(15,\s*23,\s*42,\s*0\.075\)/);
     assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/);
@@ -281,14 +281,14 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\.is-selected-plan-segment\s*\{[\s\S]*?\n}/
     );
     assert.ok(selectedBlock, 'real-plan selected rule must exist');
-    assert.match(selectedBlock[0], /border-color:\s*#CDD5DE/);
+    assert.match(selectedBlock[0], /border-color:\s*#C2CBD6/);
 
     const virtualRestBlock = interactionsCss.match(
         /\.split-visualization-planned \.split-grid-segment-virtual-rest\s*\{[\s\S]*?\n}/
     );
     assert.ok(virtualRestBlock, 'virtual-rest base rule must exist');
     assert.match(virtualRestBlock[0], /border:\s*1px solid rgba\(15,\s*23,\s*42,\s*0\.14\)/);
-    assert.doesNotMatch(virtualRestBlock[0], /#CDD5DE/);
+    assert.doesNotMatch(virtualRestBlock[0], /#C2CBD6/);
     assert.doesNotMatch(virtualRestBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
     assert.doesNotMatch(virtualRestBlock[0], /0 6px 14px rgba\(15,\s*23,\s*42,\s*0\.075\)/);
 });
