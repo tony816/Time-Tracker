@@ -3770,7 +3770,6 @@ class TimeTracker {
                     durationMinutes: Math.max(0, endMinute - startMinute),
                 };
             }).filter((segment) => segment && segment.durationMinutes > 0);
-            if (realSegments.length === 0) return null;
             const sortedRealSegments = realSegments.slice().sort((a, b) => {
                 return (a.startMinute - b.startMinute) || (a.segmentIndex - b.segmentIndex);
             });

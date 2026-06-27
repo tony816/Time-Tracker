@@ -81,12 +81,20 @@ test('computeSplitSegments does not render a virtual rest gap under ten minutes'
     assert.equal(result.gridSegments.some(segment => segment.kind === 'virtual-rest'), false);
 });
 
-test('computeSplitSegments does not render full-row virtual rest for an empty planned block', () => {
+test('computeSplitSegments renders a full-duration virtual rest segment for an empty planned block', () => {
     const ctx = createContext([]);
 
     const result = computeSplitSegments.call(ctx, 'planned', 0);
 
-    assert.equal(result, null);
+    assert.ok(result);
+    assert.equal(result.gridSegments.length, 1);
+    assert.equal(result.gridSegments[0].label, '휴식');
+    assert.equal(result.gridSegments[0].kind, 'virtual-rest');
+    assert.equal(result.gridSegments[0].virtual, true);
+    assert.equal(result.gridSegments[0].startMinute, 0);
+    assert.equal(result.gridSegments[0].durationMinutes, 60);
+    // slot.planActivities should remain empty (not infected with virtual rest)
+    assert.equal(ctx.timeSlots[0].planActivities.length, 0);
 });
 
 test('computeSplitSegments renders leading and trailing virtual rest around a middle real segment', () => {
