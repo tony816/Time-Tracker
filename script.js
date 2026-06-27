@@ -6369,9 +6369,12 @@ class TimeTracker {
                 if (gapEl.dataset.emptySlotDefaultRest === 'true') {
                     event.preventDefault();
                     event.stopPropagation();
+                    const range = this.getPlannedRangeInfo(index);
+                    if (typeof this.selectFieldRange === 'function') {
+                        this.selectFieldRange('planned', range.startIndex, range.endIndex);
+                    }
                     const plannedField = entryDiv.querySelector('.planned-input');
                     if (plannedField) {
-                        const range = this.getPlannedRangeInfo(index);
                         const FieldInteractionCtrl = globalThis.TimeTrackerFieldInteractionController;
                         if (FieldInteractionCtrl && typeof FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation === 'function') {
                             FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation(this, range.startIndex, plannedField, range.endIndex);

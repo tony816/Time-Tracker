@@ -2334,8 +2334,9 @@ test('getSplitActivities planned preserves segment positions and strips virtual 
     assert.equal(result.some(item => item.kind === 'virtual-rest' || item.virtual === true), false);
 });
 
-test('empty-slot default rest click routes through openPlannedFieldDropdownWithViewportPreparation', () => {
+test('empty-slot default rest click routes through selectFieldRange and openPlannedFieldDropdownWithViewportPreparation', () => {
     const scheduledCorrections = [];
+    const selectionCalls = [];
     const FieldInteractionCtrl = {
         openPlannedFieldDropdownWithViewportPreparation(ctx, index, plannedField, endIndex, options = {}) {
             scheduledCorrections.push({ index, plannedField, endIndex });
@@ -2374,6 +2375,9 @@ test('empty-slot default rest click routes through openPlannedFieldDropdownWithV
         getPlannedRangeInfo(index) {
             return { startIndex: 0, endIndex: 0, baseIndex: 0, rangeStart: 0, rangeEnd: 0, mergeKey: null, isMerged: false, slotCount: 1, blockMinutes: 60 };
         },
+        selectFieldRange(type, startIndex, endIndex) {
+            selectionCalls.push({ type, startIndex, endIndex });
+        },
         openInlinePlanDropdown(startIndex, anchor, endIndex, options) {
             openInlinePlanCalls.push({ startIndex, anchor, endIndex, options });
         },
@@ -2390,6 +2394,11 @@ test('empty-slot default rest click routes through openPlannedFieldDropdownWithV
             stopPropagation() {},
         });
 
+        // Should have called selectFieldRange before opening dropdown
+        assert.equal(selectionCalls.length, 1, 'must call selectFieldRange to set highlight/spotlight');
+        assert.equal(selectionCalls[0].type, 'planned');
+        assert.equal(selectionCalls[0].startIndex, 0);
+        assert.equal(selectionCalls[0].endIndex, 0);
         // Should have routed through FieldInteractionCtrl, not called openInlinePlanDropdown directly
         assert.equal(openInlinePlanCalls.length, 0, 'should not call openInlinePlanDropdown directly; must route through FieldInteractionCtrl');
         // FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation should have been called
@@ -2448,4 +2457,66 @@ test('explicit saved rest segment does not carry data-empty-slot-default-rest', 
     const realEl = container.querySelector('[data-segment-kind="real-plan"]');
     assert.ok(realEl, 'explicit rest segment should be a real plan segment');
     assert.equal(realEl.dataset.emptySlotDefaultRest, undefined, 'explicit rest must not carry empty-slot-default-rest');
+});
+
+
+test('merged empty-slot default rest click selects the full merged planned range', () => {
+    const selectionCalls = [];
+    const entryDiv = createRenderNode('div');
+    entryDiv.className = 'time-entry';
+    entryDiv.dataset.index = 1; // secondary row of a merged range
+    const plannedInput = createRenderNode('input');
+    plannedInput.className = 'input-field planned-input';
+    entryDiv.appendChild(plannedInput);
+    const wrapper = createRenderNode('div');
+    wrapper.className = 'split-cell-wrapper split-type-planned';
+    entryDiv.appendChild(wrapper);
+
+    const gap = createRenderNode('div');
+    gap.className = 'split-grid-segment split-grid-segment-virtual-rest';
+    gap.dataset = {
+        segmentKind: 'virtual-rest',
+        gapStartMinute: '0',
+        gapDurationMinutes: '120',
+        emptySlotDefaultRest: 'true',
+    };
+    wrapper.appendChild(gap);
+
+    const ctx = {
+        getPlannedRangeInfo(index) {
+            // Simulate merged range: index=1 but the range spans 0-1
+            return { startIndex: 0, endIndex: 1, baseIndex: 0, rangeStart: 0, rangeEnd: 1, mergeKey: 'planned-0-1', isMerged: true, slotCount: 2, blockMinutes: 120 };
+        },
+        selectFieldRange(type, startIndex, endIndex) {
+            selectionCalls.push({ type, startIndex, endIndex });
+        },
+        openInlinePlanDropdown(startIndex, anchor, endIndex, options) {},
+        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {},
+    };
+
+    const saved = globalThis.TimeTrackerFieldInteractionController;
+    globalThis.TimeTrackerFieldInteractionController = {
+        openPlannedFieldDropdownWithViewportPreparation(ctx2, index, plannedField2, endIndex2, options) {},
+    };
+
+    try {
+        attachVirtualRestGapListeners.call(ctx, entryDiv, 1);
+        gap.dispatchEvent({
+            type: 'click',
+            preventDefault() {},
+            stopPropagation() {},
+        });
+
+        assert.equal(selectionCalls.length, 1, 'must call selectFieldRange');
+        assert.equal(selectionCalls[0].type, 'planned');
+        // The full merged range should be selected, not just the clicked row
+        assert.equal(selectionCalls[0].startIndex, 0);
+        assert.equal(selectionCalls[0].endIndex, 1);
+    } finally {
+        if (saved === undefined) {
+            delete globalThis.TimeTrackerFieldInteractionController;
+        } else {
+            globalThis.TimeTrackerFieldInteractionController = saved;
+        }
+    }
 });
