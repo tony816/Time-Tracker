@@ -6366,6 +6366,19 @@ class TimeTracker {
             gapEl.setAttribute('role', 'button');
             gapEl.setAttribute('tabindex', '0');
             const openGap = (event) => {
+                if (gapEl.dataset.emptySlotDefaultRest === 'true') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const plannedField = entryDiv.querySelector('.planned-input');
+                    if (plannedField) {
+                        const range = this.getPlannedRangeInfo(index);
+                        const FieldInteractionCtrl = globalThis.TimeTrackerFieldInteractionController;
+                        if (FieldInteractionCtrl && typeof FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation === 'function') {
+                            FieldInteractionCtrl.openPlannedFieldDropdownWithViewportPreparation(this, range.startIndex, plannedField, range.endIndex);
+                        }
+                    }
+                    return;
+                }
                 const gapStartMinute = Number(gapEl.dataset.gapStartMinute);
                 const gapDurationMinutes = Number(gapEl.dataset.gapDurationMinutes);
                 if (!Number.isFinite(gapStartMinute) || !Number.isFinite(gapDurationMinutes) || gapDurationMinutes <= 0) return;

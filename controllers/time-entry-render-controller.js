@@ -380,7 +380,7 @@ function buildSplitVisualization(type, index) {
                 const labeledSegmentCount = gridSegments.reduce((count, segment) => count + (segment && segment.label ? 1 : 0), 0);
                 const restKeyByRange = new Map();
                 let virtualRestCount = 0;
-                const isEmptySlotDefault = gridSegments.length > 0 && gridSegments.every((s) => !s || s.virtual || s.kind === 'virtual-rest');
+                const isEmptySlotDefaultRest = gridSegments.length === 1 && gridSegments[0] && (!!gridSegments[0].virtual || gridSegments[0].kind === 'virtual-rest');
                 const getSegmentStartMinute = (item) => Number(item && item.startMinute) || 0;
                 const getSegmentEndMinute = (item) => {
                     const explicitEnd = Number(item && item.endMinute);
@@ -507,7 +507,7 @@ function buildSplitVisualization(type, index) {
                 const extraSafe = (isActual && segment.extraLabel) ? this.escapeHtml(segment.extraLabel) : '';
                 const extraAttr = extraSafe ? ` data-extra-label="${extraSafe}"` : '';
                 const virtualRestAttr = isVirtualRest
-                    ? ` data-segment-kind="virtual-rest" data-reorder-item-type="virtual-rest" data-reorder-item-id="rest-${Number.isFinite(virtualRestIndex) ? virtualRestIndex : 0}" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}" title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
+                    ? ` data-segment-kind="virtual-rest" data-reorder-item-type="virtual-rest" data-reorder-item-id="rest-${Number.isFinite(virtualRestIndex) ? virtualRestIndex : 0}" data-gap-start-minute="${Number(segment.startMinute) || 0}" data-gap-duration-minutes="${Number(segment.durationMinutes) || 0}"${isEmptySlotDefaultRest ? ' data-empty-slot-default-rest="true"' : ''} title="${this.escapeAttribute ? this.escapeAttribute(`빈 시간 ${Number(segment.durationMinutes) || 0}분`) : ''}"`
                     : '';
                 const realPlanAttr = (!isActual && this.actualRecordingDisabled && segment.label && !isVirtualRest)
                     ? ` data-segment-kind="real-plan" data-reorder-item-type="real" data-reorder-item-id="real-${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-id="${this.escapeAttribute ? this.escapeAttribute(planSegmentId) : planSegmentId}" data-segment-index="${Number.isFinite(planSegmentIndex) ? planSegmentIndex : ''}" data-segment-start-minute="${Number(segment.startMinute) || 0}" data-segment-duration-minutes="${Number(segment.durationMinutes) || 0}" data-segment-end-minute="${Number(segment.endMinute) || 0}"`
@@ -538,7 +538,7 @@ function buildSplitVisualization(type, index) {
                     ? `${canRenderRightHandle ? `<span class="plan-segment-resize-handle plan-segment-boundary-resize-handle plan-segment-resize-handle-right plan-segment-boundary-resize-handle-right${nextTouches ? ' plan-segment-boundary-resize-handle-shared' : ''}" data-resize-edge="right" aria-hidden="true">${handleLine}</span>` : ''}`
                     : '';
                 const segmentLayer = gridSegments.length - idx + 2;
-                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${shortPlanClass}${resizeDisabledClass}${selectedClass}${sharedBoundaryOwnerClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color}; --split-segment-layer: ${segmentLayer};${isVirtualRest && isEmptySlotDefault ? ' pointer-events: none;' : ''}">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
+                return `<div class="split-grid-segment${emptyClass}${activeClass}${lockedClass}${failedClass}${runningClass}${runningTopClass}${runningRightClass}${runningBottomClass}${runningLeftClass}${connTopClass}${connBotClass}${virtualRestClass}${planOnlyTimerClass}${shortPlanClass}${resizeDisabledClass}${selectedClass}${sharedBoundaryOwnerClass}"${unitAttr}${extraAttr}${virtualRestAttr}${realPlanAttr}${resizeTitle} style="grid-column: span ${segment.span}; --split-segment-color: ${color}; --split-segment-layer: ${segmentLayer};">${resizeHandles}${labelHtml}${failedIconHtml}</div>`;
                 }).join('');
             })()}</div>`
             : '';
