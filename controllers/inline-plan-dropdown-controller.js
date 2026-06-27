@@ -4263,13 +4263,14 @@ function closeInlinePlanDropdown() {
         if (timeEntries) {
             timeEntries.classList.remove('inline-plan-context-active');
             timeEntries.querySelectorAll('.inline-plan-context-keep-clear').forEach((el) => el.classList.remove('inline-plan-context-keep-clear'));
-            timeEntries.querySelectorAll('.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target, .inline-plan-gap-context-target').forEach((el) => {
+            timeEntries.querySelectorAll('.inline-plan-sheet-context-target, .inline-plan-segment-context-target, .inline-plan-slot-context-target, .inline-plan-gap-context-target, .is-rest-slot-targeted').forEach((el) => {
                 removeInlinePlanClass(
                     el,
                     'inline-plan-sheet-context-target',
                     'inline-plan-segment-context-target',
                     'inline-plan-slot-context-target',
-                    'inline-plan-gap-context-target'
+                    'inline-plan-gap-context-target',
+                    'is-rest-slot-targeted'
                 );
             });
         }

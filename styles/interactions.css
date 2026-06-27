@@ -2443,6 +2443,27 @@ button.activity-chip,
   font-weight: 600;
 }
 
+/* 기본 휴식 세그먼트 (empty-slot default virtual rest): 평상시 라벨 숨김, hover/targeted 시에만 표시 */
+.split-visualization-planned .split-grid-segment-virtual-rest[data-empty-slot-default-rest="true"] .split-grid-label {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.split-visualization-planned .split-grid-segment-virtual-rest[data-empty-slot-default-rest="true"]:hover .split-grid-label,
+.split-visualization-planned .split-grid-segment-virtual-rest[data-empty-slot-default-rest="true"]:focus-visible .split-grid-label,
+.split-visualization-planned .split-grid-segment-virtual-rest[data-empty-slot-default-rest="true"].is-rest-slot-targeted .split-grid-label {
+  opacity: 1;
+}
+
+ /* Targeted rest slot: clearer white background + blue outline / subtle glow */
+ .split-visualization-planned .split-grid-segment-virtual-rest[data-empty-slot-default-rest="true"].is-rest-slot-targeted {
+   background: rgba(255, 255, 255, 0.94) !important;
+   border: 1px dashed rgba(37, 99, 235, 0.42);
+   border-bottom: 1px dashed rgba(37, 99, 235, 0.42) !important;
+   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.22), 0 2px 8px rgba(52, 152, 219, 0.08);
+   color: rgba(44, 62, 80, 0.75);
+ }
+
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"] {
   position: relative;
   overflow: visible;

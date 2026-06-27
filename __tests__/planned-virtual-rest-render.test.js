@@ -202,3 +202,73 @@ test('computeSplitSegments keeps non-adjacent same planned activity timing separ
         { label: 'Exercise', durationMinutes: 20, segmentIndex: 2, timerSegmentIndex: 2 },
     ]);
 });
+
+// ===== label visibility hooks for default virtual rest =====
+
+const renderController = require("../controllers/time-entry-render-controller");
+
+function createRenderContext(planActivities, overrides = {}) {
+    const base = createContext(planActivities, overrides);
+    return Object.assign(base, {
+        escapeHtml(text) { return String(text || ""); },
+        escapeAttribute(text) { return String(text || "").replace(/"/g, "&quot;"); },
+        getSplitColor(type, label) { return label ? "#abcdef" : "rgba(231,236,241,0.28)"; },
+        buildPlanSegmentViewModel(baseIndex, segmentId) {
+            return { id: segmentId, display: { icon: "▶", timeText: "", tone: "under" } };
+        },
+        isPlanSegmentRunning() { return false; },
+        getPlanSegmentTimerIcon() { return "▶"; },
+        getPlanSegmentTimerText() { return ""; },
+        getPlanSegmentTimeTone() { return "under"; },
+        getPlanSegmentId(index, segmentIndex) { return "planned-" + index + "-seg" + (segmentIndex != null ? segmentIndex : 0); },
+        selectedPlanSegment: null,
+        computeSplitSegments: computeSplitSegments,
+    });
+}
+
+test("buildSplitVisualization sets data-empty-slot-default-rest on empty planned block", () => {
+    const ctx = createRenderContext([]);
+    const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    assert.ok(html.includes('data-empty-slot-default-rest="true"'), "empty slot must carry default rest attribute");
+    assert.ok(html.includes("휴식"), "rest label must be in HTML for accessibility");
+    assert.ok(html.includes("split-grid-segment-virtual-rest"), "must include virtual-rest class");
+});
+
+test("buildSplitVisualization does NOT set data-empty-slot-default-rest on partial gap", () => {
+    const ctx = createRenderContext([
+        { label: "Work", seconds: 40 * 60, startMinute: 0, durationMinutes: 40, endMinute: 40 },
+    ]);
+    const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    assert.ok(!html.includes('data-empty-slot-default-rest="true"'), "partial gap must not carry default rest attribute");
+    assert.ok(html.includes("휴식"), "virtual rest label still present for gap");
+    assert.ok(html.includes("split-grid-segment-virtual-rest"), "must include virtual-rest class");
+});
+
+test("buildSplitVisualization treats explicit saved rest as real plan segment", () => {
+    const ctx = createRenderContext([
+        { label: "휴식", seconds: 60 * 60, startMinute: 0, durationMinutes: 60, endMinute: 60 },
+    ]);
+    const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    assert.ok(!html.includes("split-grid-segment-virtual-rest"), "explicit rest must not be virtual-rest");
+    assert.ok(!html.includes('data-empty-slot-default-rest="true"'), "explicit rest must not carry default rest attribute");
+    assert.ok(html.includes('data-segment-kind="real-plan"'), "explicit rest must be real-plan");
+    assert.ok(html.includes("휴식"), "label visible for explicit rest");
+});
+
+test("full virtual rest block structurally clickable with data attributes", () => {
+    const ctx = createRenderContext([]);
+    const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    assert.ok(html.includes("split-grid-segment-virtual-rest"), "virtual rest div present");
+    assert.ok(html.includes('data-empty-slot-default-rest="true"'), "default rest attribute set");
+});
+
+test("non-empty virtual rest gap label intact, no default rest attribute", () => {
+    const ctx = createRenderContext([
+        { label: "A", seconds: 30 * 60, startMinute: 0, durationMinutes: 30, endMinute: 30 },
+    ]);
+    const html = renderController.buildSplitVisualization.call(ctx, "planned", 0);
+    assert.ok(html.includes("휴식"), "gap label present");
+    assert.ok(!html.includes('data-empty-slot-default-rest="true"'), "gap must not be marked empty-slot default");
+    assert.ok(html.includes("split-grid-segment-virtual-rest"), "must have virtual-rest class");
+});
+

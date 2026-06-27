@@ -6370,6 +6370,7 @@ class TimeTracker {
                     event.preventDefault();
                     event.stopPropagation();
                     const range = this.getPlannedRangeInfo(index);
+                    gapEl.classList.add('is-rest-slot-targeted');
                     if (typeof this.selectFieldRange === 'function') {
                         this.selectFieldRange('planned', range.startIndex, range.endIndex);
                     }
@@ -6433,6 +6434,12 @@ class TimeTracker {
                 openGap(event);
             });
         });
+        const target = this.inlinePlanTarget;
+        if (target && target.mode === 'virtual-rest-gap' && Number(target.startIndex) === index) {
+            gaps.forEach((gapEl) => {
+                if (gapEl) gapEl.classList.add('is-rest-slot-targeted');
+            });
+        }
     }
     isPlanSegmentRunning(baseIndex, segmentId) {
         const slot = this.timeSlots && this.timeSlots[baseIndex];
