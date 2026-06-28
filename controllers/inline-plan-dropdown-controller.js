@@ -3813,9 +3813,11 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             : anchor;
         this.inlinePlanSheetTargetEl = sheetTargetEl;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
-            this.clearSelection('planned');
-            this.closeInlinePlanDropdown();
-            return false;
+            if (!segmentReplaceTarget && !virtualGapTarget) {
+                this.clearSelection('planned');
+                this.closeInlinePlanDropdown();
+                return false;
+            }
         }
         const preserveSheetScrollSpacer = typeof document !== 'undefined'
             && document.getElementById
