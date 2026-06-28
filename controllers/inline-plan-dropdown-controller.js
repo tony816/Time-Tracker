@@ -2699,6 +2699,8 @@ function captureMobileInlinePlanApplyScrollAnchor(ctx) {
                     window.scrollBy({ top: delta, behavior: 'instant' });
                 }
             }
+
+            correctMobileSegmentSheetTargetVisibility(ctx, snapshot);
         };
 
         const requestFrame = typeof requestAnimationFrame === 'function'
@@ -2706,6 +2708,62 @@ function captureMobileInlinePlanApplyScrollAnchor(ctx) {
             : (fn) => setTimeout(fn, 16);
         requestFrame(() => requestFrame(run));
         setTimeout(run, 120);
+    }
+
+    function correctMobileSegmentSheetTargetVisibility(ctx, snapshot) {
+        if (!ctx || typeof window === 'undefined' || typeof document === 'undefined') return false;
+        if (typeof ctx.isInlinePlanMobileInputContext !== 'function' || !ctx.isInlinePlanMobileInputContext()) return false;
+        const dropdown = ctx.inlinePlanDropdown;
+        if (!dropdown || !dropdown.classList || !dropdown.classList.contains('inline-plan-dropdown-sheet')) return false;
+        if (typeof dropdown.getBoundingClientRect !== 'function') return false;
+
+        const resolveTarget = () => {
+            if (snapshot && Number.isInteger(snapshot.baseIndex) && Number.isInteger(snapshot.segmentIndex)) {
+                const row = document.querySelector(`.time-entry[data-index="${snapshot.baseIndex}"]`);
+                if (row) {
+                    const seg = row.querySelector(`.split-grid-segment[data-segment-kind="real-plan"][data-segment-index="${snapshot.segmentIndex}"]`);
+                    if (seg) return seg;
+                    const wrapper = row.querySelector('.split-cell-wrapper.split-type-planned');
+                    if (wrapper) return wrapper;
+                    const input = row.querySelector('.planned-input');
+                    if (input) return input;
+                    return row;
+                }
+            }
+            const sheetTarget = ctx.inlinePlanSheetTargetEl;
+            if (sheetTarget && sheetTarget.isConnected) return sheetTarget;
+            return null;
+        };
+
+        const targetEl = resolveTarget();
+        if (!targetEl || typeof targetEl.getBoundingClientRect !== 'function') return false;
+
+        const sheetRect = dropdown.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+        if (!sheetRect || !targetRect) return false;
+
+        const visualViewport = window.visualViewport || null;
+        const viewportTop = visualViewport && Number.isFinite(Number(visualViewport.offsetTop))
+            ? Number(visualViewport.offsetTop)
+            : 0;
+        const visibleTop = viewportTop + 16;
+        const sheetTop = Number(sheetRect.top);
+        const targetBottom = Number(targetRect.bottom);
+        const targetTop = Number(targetRect.top);
+        if (![sheetTop, targetBottom, targetTop].every(Number.isFinite)) return false;
+
+        const visibleBottom = Math.max(visibleTop, sheetTop - 20);
+        let delta = 0;
+        if (targetBottom > visibleBottom) {
+            delta = targetBottom - visibleBottom;
+        } else if (targetTop < visibleTop) {
+            delta = targetTop - visibleTop;
+        }
+        if (!Number.isFinite(delta) || Math.abs(delta) < 2) return false;
+        if (typeof window.scrollBy === 'function') {
+            window.scrollBy({ top: delta, behavior: 'auto' });
+        }
+        return true;
     }
 
     function scheduleMobileInlinePlanApplyScrollRestoration(ctx, snapshot) {
@@ -4438,6 +4496,7 @@ function applyInlinePlanSelection(label, options = {}) {
         captureMobileInlinePlanApplyScrollAnchor,
         captureMobileSegmentSheetOpenScrollAnchor,
         restoreMobileSegmentSheetOpenScrollAnchor,
+        correctMobileSegmentSheetTargetVisibility,
         scheduleMobileInlinePlanApplyScrollRestoration,
         applyInlinePlanSelection
     });

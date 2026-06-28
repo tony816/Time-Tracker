@@ -6846,6 +6846,7 @@ class TimeTracker {
             anchorAlign: 'center',
             anchorMinWidth,
             sourceRect,
+            sheetTargetEl: segmentEl,
             forceAnchored: Boolean(options.forceAnchored),
             keepInlineEditor: Boolean(options.keepInlineEditor),
         });
