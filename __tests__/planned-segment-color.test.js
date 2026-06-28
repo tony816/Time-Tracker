@@ -269,8 +269,8 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
     assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border,\s*#E5E7EB\)/);
     assert.match(realPlanBlock[0], /border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
     assert.match(realPlanBlock[0], /border-bottom-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
-    assert.match(realPlanBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.09\)/);
-    assert.match(realPlanBlock[0], /0 7px 16px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
+    assert.match(realPlanBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.095\)/);
+    assert.match(realPlanBlock[0], /0 8px 18px rgba\(15,\s*23,\s*42,\s*0\.095\)/);
     assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/);
     assert.match(realPlanBlock[0], /border-radius:\s*7px/);
     assert.doesNotMatch(realPlanBlock[0], /background(?:-color)?:/);
@@ -308,8 +308,8 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
     assert.match(virtualRestBlock[0], /border:\s*1px dashed rgba\(15,\s*23,\s*42,\s*0\.14\)/);
     assert.match(virtualRestBlock[0], /background:\s*rgba\(30,\s*41,\s*59,\s*0\.035\)/);
     assert.doesNotMatch(virtualRestBlock[0], /rgba\(0,\s*0,\s*0,\s*0\.78\)/);
-    assert.doesNotMatch(virtualRestBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.09\)/);
-    assert.doesNotMatch(virtualRestBlock[0], /0 7px 16px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
+    assert.doesNotMatch(virtualRestBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.095\)/);
+    assert.doesNotMatch(virtualRestBlock[0], /0 8px 18px rgba\(15,\s*23,\s*42,\s*0\.095\)/);
     assert.doesNotMatch(virtualRestBlock[0], /linear-gradient/);
 });
 
