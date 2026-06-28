@@ -2468,7 +2468,8 @@ button.activity-chip,
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   border: 1px solid var(--plan-segment-default-border, #E5E7EB);
-  border-color: #AEBAC8;
+  border-color: #000;
+  border-bottom-color: #000;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.09),
     0 7px 16px rgba(15, 23, 42, 0.085),
@@ -2490,7 +2491,8 @@ button.activity-chip,
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment {
-  border-color: #AEBAC8;
+  border-color: #000;
+  border-bottom-color: #000;
 }
 
 .split-visualization-planned .split-grid-segment[data-segment-kind="real-plan"].is-selected-plan-segment::after {
@@ -2936,6 +2938,10 @@ body.is-plan-segment-reorder-ghost-active {
 
 .split-grid > .split-grid-segment:last-child {
   border-bottom-color: transparent;
+}
+
+.split-visualization-planned .split-grid > .split-grid-segment[data-segment-kind="real-plan"]:last-child {
+  border-bottom-color: #000;
 }
 
 .remove-sub-activity {
