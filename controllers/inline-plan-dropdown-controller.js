@@ -2965,12 +2965,13 @@ function applyActivityCatalogSelection(activityItem, parentItem = null, options 
             }
             return;
         }
-        // Suppress background clicks on mobile to prevent fall-through to lower rows
         const isMobile = typeof this.isInlinePlanMobileInputContext === "function" && this.isInlinePlanMobileInputContext();
         if (isMobile) {
             this.suppressInlinePlanOpenUntil = Date.now() + 800;
             this.suppressMobileInlinePlanBackgroundClickUntil = Date.now() + 800;
         }
+        this.inlinePlanHighlightRange = null;
+        if (typeof this.clearSelection === 'function') this.clearSelection('planned');
         this.closeInlinePlanDropdown();
         scheduleMobileInlinePlanApplyScrollRestoration(this, _mobileScrollAnchor);
     }
@@ -3850,9 +3851,7 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             : { ...range, anchor, keepInlineEditor: Boolean(options.keepInlineEditor) };
         setInlinePlanTargetState.call(this, nextInlinePlanTarget);
         this.inlinePlanSheetTargetEl = sheetTargetEl;
-        this.inlinePlanHighlightRange = isMobileInputContext
-            ? { startIndex: range.startIndex, endIndex: range.endIndex, mergeKey: range.mergeKey || null }
-            : null;
+        this.inlinePlanHighlightRange = null;
         const dropdown = document.createElement('div');
         dropdown.className = `inline-plan-dropdown${isMobileInputContext ? ' inline-plan-dropdown-sheet' : ''}`;
         dropdown.innerHTML = `
