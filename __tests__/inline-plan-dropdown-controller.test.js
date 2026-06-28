@@ -2061,9 +2061,10 @@ test('mobile bottom sheet ignores background scroll and prevents outside gesture
     }
 });
 
-test('openInlinePlanDropdown returns true when same mobile sheet target remains open', () => {
+test('openInlinePlanDropdown returns false when same mobile sheet target toggles closed', () => {
     const anchor = { isConnected: true };
-    let corrected = false;
+    let cleared = false;
+    let closed = false;
     const ctx = {
         inlinePlanDropdown: {
             classList: {
@@ -2085,14 +2086,17 @@ test('openInlinePlanDropdown returns true when same mobile sheet target remains 
         isInlinePlanMobileInputContext() {
             return true;
         },
-        scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
-            assert.equal(targetEl, anchor);
-            corrected = true;
+        clearSelection() {
+            cleared = true;
+        },
+        closeInlinePlanDropdown() {
+            closed = true;
         },
     };
 
-    assert.equal(controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1), true);
-    assert.equal(corrected, true);
+    assert.equal(controller.openInlinePlanDropdown.call(ctx, 1, anchor, 1), false);
+    assert.equal(cleared, true);
+    assert.equal(closed, true);
 });
 
 test('openInlinePlanDropdown returns false when same desktop target toggles closed', () => {
@@ -2241,11 +2245,12 @@ test('openInlinePlanDropdown marks mobile empty planned slot as sheet context ta
     assert.equal(plannedInput.classList.contains('inline-plan-slot-context-target'), true);
 });
 
-test('openInlinePlanDropdown corrects an existing mobile sheet to the tapped slot target', () => {
+test('openInlinePlanDropdown closes mobile sheet when same target tapped', () => {
     const startAnchor = createInlinePlanAnchor({ top: 80 });
     const tappedSlot = createInlinePlanAnchor({ top: 520 });
     let correctionTarget = null;
     let closed = false;
+    let cleared = false;
     const ctx = {
         inlinePlanDropdown: {
             classList: {
@@ -2269,7 +2274,9 @@ test('openInlinePlanDropdown corrects an existing mobile sheet to the tapped slo
         scheduleInlinePlanSheetTargetViewportCorrection(targetEl) {
             correctionTarget = targetEl;
         },
-        clearSelection() {},
+        clearSelection() {
+            cleared = true;
+        },
         closeInlinePlanDropdown() {
             closed = true;
         },
@@ -2279,8 +2286,9 @@ test('openInlinePlanDropdown corrects an existing mobile sheet to the tapped slo
         sheetTargetEl: tappedSlot,
     });
 
-    assert.equal(correctionTarget, tappedSlot);
-    assert.equal(closed, false);
+    assert.equal(correctionTarget, null);
+    assert.equal(closed, true);
+    assert.equal(cleared, true);
 });
 
 test('desktop empty planned slot add button closes inline dropdown after apply', () => {

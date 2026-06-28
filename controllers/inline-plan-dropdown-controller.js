@@ -3813,18 +3813,6 @@ function openInlinePlanDropdown(index, anchorEl, endIndex = null, options = {}) 
             : anchor;
         this.inlinePlanSheetTargetEl = sheetTargetEl;
         if (this.inlinePlanDropdown && this.isSameInlinePlanTarget(range, anchor)) {
-            if (
-                this.inlinePlanDropdown.classList
-                && this.inlinePlanDropdown.classList.contains('inline-plan-dropdown-sheet')
-                && this.isInlinePlanMobileInputContext()
-            ) {
-                if (typeof this.scheduleInlinePlanSheetTargetViewportCorrection === 'function') {
-                    this.scheduleInlinePlanSheetTargetViewportCorrection(sheetTargetEl);
-                } else if (typeof this.scheduleInlinePlanViewportSync === 'function') {
-                    this.scheduleInlinePlanViewportSync();
-                }
-                return true;
-            }
             this.clearSelection('planned');
             this.closeInlinePlanDropdown();
             return false;

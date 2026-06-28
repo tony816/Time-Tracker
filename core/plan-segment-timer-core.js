@@ -69,6 +69,10 @@
     }
 
     function formatSegmentTimerText(timer, plannedSeconds, nowMs = Date.now()) {
+        const normalized = normalizeSegmentTimer(timer);
+        if (normalized.status === 'idle') {
+            return formatPlannedMinutes(plannedSeconds);
+        }
         return `${formatElapsedForSegment(timer, nowMs)} / ${formatPlannedMinutes(plannedSeconds)}`;
     }
 

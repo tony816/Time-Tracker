@@ -20,7 +20,7 @@ test('plan segment timer icons describe the next action', () => {
 
 test('plan segment timer text uses live seconds while running and minutes otherwise', () => {
     const now = 10_000;
-    assert.equal(core.formatSegmentTimerText({ status: 'idle', elapsedSeconds: 0 }, 2400, now), '0m / 40m');
+    assert.equal(core.formatSegmentTimerText({ status: 'idle', elapsedSeconds: 0 }, 2400, now), '40m');
     assert.equal(core.formatSegmentTimerText({ status: 'running', elapsedSeconds: 720, startedAt: now - 34_000 }, 2400, now), '12:34 / 40m');
     assert.equal(core.formatSegmentTimerText({ status: 'paused', elapsedSeconds: 720 }, 2400, now), '12m / 40m');
 });

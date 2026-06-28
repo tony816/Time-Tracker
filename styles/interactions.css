@@ -713,11 +713,6 @@ body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.
   pointer-events: none;
 }
 
-body.inline-plan-sheet-open #timeEntries.inline-plan-context-active .time-entry.inline-plan-context-keep-clear .planned-input {
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.22);
-  border-color: #7fc5f3;
-  background: #f7fbff;
-}
 
 body.inline-plan-sheet-open .inline-plan-sheet-context-target {
   position: relative;
