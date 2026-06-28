@@ -612,7 +612,7 @@ test('merged downward resize preview uses down guide and keeps row chunks within
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('merged downward resize keeps same-size down guide stable when moving horizontally on the new row', () => {
+test('merged downward resize switches to horizontal guide when moving within the new row', () => {
     withDocument(({ listeners }) => {
         const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
         const ctx = {
@@ -651,13 +651,29 @@ test('merged downward resize keeps same-size down guide stable when moving horiz
 
         guide = latestGuide(fixture.grid);
         assert.ok(guide);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), true);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), false);
-        assert.equal(guide.getAttribute('viewBox'), '0 0 40 28');
+        assert.equal(guide.getAttribute('viewBox'), '56 0 40 28');
         assert.equal(guide.getAttribute('width'), '40');
         assert.equal(guide.getAttribute('height'), '28');
         assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 1);
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['80m']);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 250, 120));
+        guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['90m']);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150, 120));
+        guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(guide.getAttribute('viewBox'), '0 0 40 28');
         assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['80m']);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 150, 120));
@@ -790,14 +806,21 @@ test('merged planned segment touch resize uses vertical row movement like pointe
         });
         assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
 
-        listeners.touchend(createTouchEvent('touchend', fixture.handle, 50, 120));
+        listeners.touchmove(createTouchEvent('touchmove', fixture.handle, 150, 120));
+        const horizontalGuide = latestGuide(fixture.grid);
+        assert.ok(horizontalGuide);
+        assert.equal(hasClass(horizontalGuide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(horizontalGuide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['80m']);
+
+        listeners.touchend(createTouchEvent('touchend', fixture.handle, 150, 120));
 
         assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
             startMinute: item.startMinute,
             endMinute: item.endMinute,
             durationMinutes: item.durationMinutes,
         })), [
-            { startMinute: 0, endMinute: 70, durationMinutes: 70 },
+            { startMinute: 0, endMinute: 80, durationMinutes: 80 },
         ]);
     }, { planSegmentCore: realPlanSegmentCore });
 });

@@ -7834,6 +7834,9 @@ class TimeTracker {
             const originY = originPoint && Number.isFinite(originPoint.clientY) ? originPoint.clientY : NaN;
             let lastClientX = originX;
             let lastClientY = originY;
+            let lastGuideTargetRow = null;
+            let lastGuideTargetCol = null;
+            let lastVisibleGuideDirection = 'none';
             let cleanedUp = false;
             const pointerId = event && event.pointerId;
             const moveType = isPointerEvent ? 'pointermove' : (isTouchEvent ? 'touchmove' : 'mousemove');
@@ -8141,19 +8144,47 @@ class TimeTracker {
                     return Math.max(0, Math.min(rowCount - 1, rowIndex));
                 };
 
-                const resolveResizePreviewGuideDirection = (targetMinute) => {
+                const getResizeGuideTargetPosition = (minute) => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(minute)));
+                    if (!Number.isFinite(clampedMinute)) return null;
+                    const boundaryUnits = Math.max(0, Math.min(totalUnits, Math.round(clampedMinute / 10)));
+                    let row = Math.floor(boundaryUnits / unitsPerRow);
+                    let col = boundaryUnits % unitsPerRow;
+                    if (boundaryUnits > 0 && col === 0) {
+                        row -= 1;
+                        col = unitsPerRow;
+                    }
+                    return {
+                        row: Math.max(0, Math.min(rowCount - 1, row)),
+                        col: Math.max(0, Math.min(unitsPerRow, col)),
+                    };
+                };
+
+                const resolveResizePreviewGuideDirection = (targetMinute, targetPosition) => {
                     const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
                     if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute)) return 'none';
-                    const originalRow = getBoundaryRowForMinute(originalBoundaryMinute);
-                    const targetRow = getBoundaryRowForMinute(targetMinute);
-                    if (targetRow > originalRow) return 'down';
-                    if (targetMinute > originalBoundaryMinute) {
+                    if (targetMinute === originalBoundaryMinute) return 'none';
+                    const originalPosition = getResizeGuideTargetPosition(originalBoundaryMinute);
+                    const comparePosition = targetPosition || getResizeGuideTargetPosition(targetMinute);
+                    if (!comparePosition) return 'none';
+                    const previousRow = Number.isInteger(lastGuideTargetRow)
+                        ? lastGuideTargetRow
+                        : (originalPosition ? originalPosition.row : null);
+                    const previousCol = Number.isInteger(lastGuideTargetCol)
+                        ? lastGuideTargetCol
+                        : (originalPosition ? originalPosition.col : null);
+                    if (Number.isInteger(previousRow) && comparePosition.row > previousRow) return 'down';
+                    if (Number.isInteger(previousRow) && comparePosition.row < previousRow) return 'up';
+                    if (Number.isInteger(previousCol) && comparePosition.col > previousCol) {
                         return effectiveEdge === 'left' ? 'left' : 'right';
                     }
-                    if (targetMinute < originalBoundaryMinute) {
+                    if (Number.isInteger(previousCol) && comparePosition.col < previousCol) {
                         return effectiveEdge === 'left' ? 'right' : 'left';
                     }
-                    return 'none';
+                    return lastVisibleGuideDirection || 'none';
                 };
 
                 const getResizeGridRowFromY = (clientY) => {
@@ -8363,10 +8394,16 @@ class TimeTracker {
                     const resizeTarget = getResizeTargetFromPoint(clientX, clientY);
                     if (!resizeTarget) return;
                     const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes, usesWrappedRow } = resizeTarget;
-                    const previewGuideDirection = resolveResizePreviewGuideDirection(targetMinute);
-                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewGuideDirection}`;
+                    const guideTargetPosition = getResizeGuideTargetPosition(targetMinute);
+                    const previewGuideDirection = resolveResizePreviewGuideDirection(targetMinute, guideTargetPosition);
+                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewGuideDirection}:${guideTargetPosition ? `${guideTargetPosition.row}:${guideTargetPosition.col}` : 'na'}`;
                     if (previewKey === lastPreviewKey) return;
                     lastPreviewKey = previewKey;
+                    if (guideTargetPosition) {
+                        lastGuideTargetRow = guideTargetPosition.row;
+                        lastGuideTargetCol = guideTargetPosition.col;
+                    }
+                    lastVisibleGuideDirection = previewGuideDirection;
                     const layer = ensurePreviewLayer();
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
