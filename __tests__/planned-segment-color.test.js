@@ -267,8 +267,8 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
     );
     assert.ok(realPlanBlock, 'real-plan base rule must exist');
     assert.match(realPlanBlock[0], /border:\s*1px solid var\(--plan-segment-default-border,\s*#E5E7EB\)/);
-    assert.match(realPlanBlock[0], /border-color:\s*#000/);
-    assert.match(realPlanBlock[0], /border-bottom-color:\s*#000/);
+    assert.match(realPlanBlock[0], /border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
+    assert.match(realPlanBlock[0], /border-bottom-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
     assert.match(realPlanBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.09\)/);
     assert.match(realPlanBlock[0], /0 7px 16px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
     assert.match(realPlanBlock[0], /inset 0 1px 0 rgba\(255,\s*255,\s*255,\s*1\)/);
@@ -282,8 +282,8 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
         /\.split-visualization-planned \.split-grid-segment\[data-segment-kind="real-plan"]\.is-selected-plan-segment\s*\{[\s\S]*?\n}/
     );
     assert.ok(selectedBlock, 'real-plan selected rule must exist');
-    assert.match(selectedBlock[0], /border-color:\s*#000/);
-    assert.match(selectedBlock[0], /border-bottom-color:\s*#000/);
+    assert.match(selectedBlock[0], /border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
+    assert.match(selectedBlock[0], /border-bottom-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
 
     const genericLastChildBlock = interactionsCss.match(
         /\.split-grid > \.split-grid-segment:last-child\s*\{[\s\S]*?\n}/
@@ -295,7 +295,7 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
         /\.split-visualization-planned \.split-grid > \.split-grid-segment\[data-segment-kind="real-plan"]\:last-child\s*\{[\s\S]*?\n}/
     );
     assert.ok(realPlanLastChildBlock, 'real-plan last-child bottom border override must exist');
-    assert.match(realPlanLastChildBlock[0], /border-bottom-color:\s*#000/);
+    assert.match(realPlanLastChildBlock[0], /border-bottom-color:\s*rgba\(0,\s*0,\s*0,\s*0\.78\)/);
     assert.ok(
         interactionsCss.indexOf(realPlanLastChildBlock[0]) > interactionsCss.indexOf(genericLastChildBlock[0]),
         'real-plan last-child override must come after the generic transparent bottom border rule'
@@ -307,7 +307,7 @@ test('CSS: planned real segment border and shadow stay neutral without touching 
     assert.ok(virtualRestBlock, 'virtual-rest base rule must exist');
     assert.match(virtualRestBlock[0], /border:\s*1px dashed rgba\(15,\s*23,\s*42,\s*0\.14\)/);
     assert.match(virtualRestBlock[0], /background:\s*rgba\(30,\s*41,\s*59,\s*0\.035\)/);
-    assert.doesNotMatch(virtualRestBlock[0], /#000/);
+    assert.doesNotMatch(virtualRestBlock[0], /rgba\(0,\s*0,\s*0,\s*0\.78\)/);
     assert.doesNotMatch(virtualRestBlock[0], /0 1px 2px rgba\(15,\s*23,\s*42,\s*0\.09\)/);
     assert.doesNotMatch(virtualRestBlock[0], /0 7px 16px rgba\(15,\s*23,\s*42,\s*0\.085\)/);
     assert.doesNotMatch(virtualRestBlock[0], /linear-gradient/);
