@@ -7830,7 +7830,9 @@ class TimeTracker {
             let deletePending = false;
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
+            const originY = originPoint && Number.isFinite(originPoint.clientY) ? originPoint.clientY : NaN;
             let lastClientX = originX;
+            let lastClientY = originY;
             let lastPreviewClientX = originX;
             let previewArrowDirection = null;
             let cleanedUp = false;
@@ -8079,6 +8081,97 @@ class TimeTracker {
                     return Number.isFinite(numeric) ? numeric : fallback;
                 };
 
+                const clampResizeMinute = (value) => {
+                    if (!Number.isFinite(value)) return effectiveEdge === 'left' ? startMinute : endMinute;
+                    return Math.max(0, Math.min(blockMinutes, value));
+                };
+
+                const getResizeRowHeight = () => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const gridHeight = gridRect && Number.isFinite(gridRect.height) && gridRect.height > 0
+                        ? gridRect.height
+                        : NaN;
+                    const surfaceRect = resizeSurfaceEl && typeof resizeSurfaceEl.getBoundingClientRect === 'function'
+                        ? resizeSurfaceEl.getBoundingClientRect()
+                        : null;
+                    const surfaceHeight = surfaceRect && Number.isFinite(surfaceRect.height) && surfaceRect.height > 0
+                        ? surfaceRect.height
+                        : NaN;
+                    if (!Number.isFinite(gridHeight)) {
+                        return Number.isFinite(surfaceHeight) ? surfaceHeight : 40;
+                    }
+                    if (rowCount <= 1) return gridHeight;
+                    if (Number.isFinite(surfaceHeight) && gridHeight <= surfaceHeight * 1.25) {
+                        return gridHeight;
+                    }
+                    return Math.max(1, gridHeight / rowCount);
+                };
+
+                const getBoundaryRowForMinute = (minute) => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const boundaryUnits = Math.max(0, Math.min(totalUnits, minute / 10));
+                    let rowIndex = Math.floor(boundaryUnits / unitsPerRow);
+                    if (boundaryUnits > 0 && boundaryUnits % unitsPerRow === 0) {
+                        rowIndex -= 1;
+                    }
+                    return Math.max(0, Math.min(rowCount - 1, rowIndex));
+                };
+
+                const getResizeGridRowFromY = (clientY) => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const rowHeight = getResizeRowHeight();
+                    const top = gridRect && Number.isFinite(gridRect.top) ? gridRect.top : 0;
+                    if (!Number.isFinite(clientY) || !Number.isFinite(rowHeight) || rowHeight <= 0) {
+                        return getBoundaryRowForMinute(effectiveEdge === 'left' ? startMinute : endMinute);
+                    }
+                    const rowIndex = Math.floor(((clientY - top) - 0.5) / rowHeight);
+                    return Math.max(0, Math.min(rowCount - 1, rowIndex));
+                };
+
+                const getResizeTargetFromPoint = (clientX, clientY) => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const unitWidth = gridWidth / unitsPerRow;
+                    const boundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
+                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return null;
+                    const originRow = Number.isFinite(originY)
+                        ? getResizeGridRowFromY(originY)
+                        : getBoundaryRowForMinute(boundaryMinute);
+                    const currentRow = getResizeGridRowFromY(clientY);
+                    const usesWrappedRow = blockMinutes > 60 && rowCount > 1 && currentRow !== originRow;
+                    let targetMinute;
+                    let rawTargetMinute;
+                    let deltaUnits;
+                    if (usesWrappedRow) {
+                        const gridLeft = gridRect && Number.isFinite(gridRect.left) ? gridRect.left : 0;
+                        const rawColumn = (clientX - gridLeft) / unitWidth;
+                        const column = Math.max(0, Math.min(unitsPerRow - 1, Math.floor(rawColumn)));
+                        const boundaryUnit = (currentRow * unitsPerRow) + column + (effectiveEdge === 'right' ? 1 : 0);
+                        targetMinute = clampResizeMinute(boundaryUnit * 10);
+                        rawTargetMinute = targetMinute;
+                        deltaUnits = Math.round((targetMinute - boundaryMinute) / 10);
+                    } else {
+                        const rawDeltaMinutes = ((clientX - originX) / unitWidth) * 10;
+                        deltaUnits = Math.round((clientX - originX) / unitWidth);
+                        targetMinute = clampResizeMinute(boundaryMinute + (deltaUnits * 10));
+                        rawTargetMinute = clampResizeMinute(boundaryMinute + rawDeltaMinutes);
+                    }
+                    return {
+                        targetMinute,
+                        rawTargetMinute,
+                        deltaUnits,
+                        deltaMinutes: targetMinute - boundaryMinute,
+                        rawDeltaMinutes: rawTargetMinute - boundaryMinute,
+                    };
+                };
+
                 const buildPreviewDisplaySegments = (segments) => {
                     const unitsPerRow = 6;
                     const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
@@ -8205,10 +8298,11 @@ class TimeTracker {
                     layer.appendChild(previewSegment);
                 };
 
-                const updatePreview = (clientX) => {
-                    const unitsPerRow = 6;
-                    const unitWidth = gridWidth / unitsPerRow;
-                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+                const updatePreview = (point) => {
+                    const clientX = point && Number.isFinite(point.clientX) ? point.clientX : lastClientX;
+                    const clientY = point && Number.isFinite(point.clientY) ? point.clientY : lastClientY;
+                    const resizeTarget = getResizeTargetFromPoint(clientX, clientY);
+                    if (!resizeTarget) return;
                     const movementDeltaX = clientX - lastPreviewClientX;
                     if (Math.abs(movementDeltaX) >= 0.5) {
                         previewArrowDirection = movementDeltaX > 0 ? 'right' : 'left';
@@ -8217,22 +8311,19 @@ class TimeTracker {
                         previewArrowDirection = null;
                     }
                     lastPreviewClientX = clientX;
-                    const rawDeltaMinutes = ((clientX - originX) / unitWidth) * 10;
-                    const deltaUnits = Math.round((clientX - originX) / unitWidth);
-                    const previewKey = `${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewArrowDirection || 'both'}`;
+                    const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes } = resizeTarget;
+                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewArrowDirection || 'both'}`;
                     if (previewKey === lastPreviewKey) return;
                     lastPreviewKey = previewKey;
                     const layer = ensurePreviewLayer();
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
-                    const deltaMinutes = deltaUnits * 10;
-                    const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     let visualStartMinute = effectiveEdge === 'left'
-                        ? Math.max(0, Math.min(endMinute, startMinute + rawDeltaMinutes))
+                        ? Math.max(0, Math.min(endMinute, rawTargetMinute))
                         : startMinute;
                     let visualEndMinute = effectiveEdge === 'left'
                         ? endMinute
-                        : Math.max(startMinute, Math.min(blockMinutes, endMinute + rawDeltaMinutes));
+                        : Math.max(startMinute, Math.min(blockMinutes, rawTargetMinute));
                     const resized = planSegmentCore.resizePlanSegmentInList(
                         originalPreviewActivities.map(item => ({ ...item })),
                         segmentIndex,
@@ -8334,7 +8425,10 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
                     }
-                    updatePreview(lastClientX);
+                    if (point && Number.isFinite(point.clientY)) {
+                        lastClientY = point.clientY;
+                    }
+                    updatePreview({ clientX: lastClientX, clientY: lastClientY });
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
                 }
@@ -8344,13 +8438,14 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
                     }
+                    if (point && Number.isFinite(point.clientY)) {
+                        lastClientY = point.clientY;
+                    }
                     const shouldDelete = deletePending;
                     cleanup();
-                    const unitsPerRow = 6;
-                    const unitWidth = gridWidth / unitsPerRow;
-                    if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
-                    const deltaUnits = Math.round((lastClientX - originX) / unitWidth);
-                    const deltaMinutes = deltaUnits * 10;
+                    const resizeTarget = getResizeTargetFromPoint(lastClientX, lastClientY);
+                    if (!resizeTarget) return;
+                    const { targetMinute, deltaMinutes } = resizeTarget;
                     if (shouldDelete) {
                         if (mergedResizeGroup && Array.isArray(resizeController.timeSlots && resizeController.timeSlots[baseIndex] && resizeController.timeSlots[baseIndex].planActivities)) {
                             const slot = resizeController.timeSlots[baseIndex];
@@ -8372,7 +8467,6 @@ class TimeTracker {
                         return;
                     }
                     if (deltaMinutes === 0) return;
-                    const targetMinute = effectiveEdge === 'left' ? startMinute + deltaMinutes : endMinute + deltaMinutes;
                     resizeController.applyPlanSegmentResize(baseIndex, segmentIndex, effectiveEdge, targetMinute, {
                         mergedResizeGroup,
                     });
@@ -8386,7 +8480,7 @@ class TimeTracker {
                     cleanup();
                 }
                 try {
-                    updatePreview(originX);
+                    updatePreview({ clientX: originX, clientY: originY });
                 } catch (_) {
                     cleanup();
                     return false;

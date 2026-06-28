@@ -501,6 +501,175 @@ test('merged identical planned segment right handle resizes and persists the ful
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
+test('merged planned segment right handle expands into next row first cell by dragging downward', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 50, 120));
+
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 50, 120));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            label: item.label,
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { label: 'Focus', startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        ]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('merged planned segment right handle combines downward and right movement for wrapped rows', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150, 120));
+
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['80m']);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 150, 120));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { startMinute: 0, endMinute: 80, durationMinutes: 80 },
+        ]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('normal sixty minute planned slot ignores downward drag as over-sixty expansion', () => {
+    withDocument(({ listeners }) => {
+        const applyCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 60, durationMinutes: 60, seconds: 3600 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                applyCalls.push({ baseIndex, segmentIndex, edge, targetMinute });
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ endMinute: 60 });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+
+        assert.deepEqual(latestPreviewDurations(fixture.grid), ['60m']);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 600, 120));
+
+        assert.deepEqual(applyCalls, []);
+        assert.equal(ctx.timeSlots[0].planActivities[0].endMinute, 60);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('merged planned segment touch resize uses vertical row movement like pointer resize', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createTouchEvent('touchstart', fixture.handle, 600, 40));
+        listeners.touchmove(createTouchEvent('touchmove', fixture.handle, 50, 120));
+
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
+
+        listeners.touchend(createTouchEvent('touchend', fixture.handle, 50, 120));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        ]);
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
 test('merged identical planned segment left handle resizes and persists the full visual span', () => {
     withDocument(({ listeners }) => {
         const fixture = createMergedResizeFixture({ handleEdge: 'left', startMinute: 20, endMinute: 80, segmentIndex: 1 });
@@ -1808,6 +1977,55 @@ test('mobile segment edge zone starts resize without targeting the handle', () =
         assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
         assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
     });
+});
+
+test('merged mobile edge-zone resize uses downward row movement', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            isCoarsePlanSegmentPointerContext() { return true; },
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        const down = createPointerEvent('pointerdown', fixture.segment, 590, 40);
+        fixture.segment.dispatchEvent(down);
+
+        assert.equal(down.defaultPrevented, true);
+        assert.equal(down.propagationStopped, true);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.segment, 50, 120));
+        assert.deepEqual([...new Set(getRealPreviewDurations(fixture.grid))], ['70m']);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.segment, 50, 120));
+
+        assert.deepEqual(ctx.timeSlots[0].planActivities.map(item => ({
+            startMinute: item.startMinute,
+            endMinute: item.endMinute,
+            durationMinutes: item.durationMinutes,
+        })), [
+            { startMinute: 0, endMinute: 70, durationMinutes: 70 },
+        ]);
+    }, { planSegmentCore: realPlanSegmentCore });
 });
 
 test('plan segment resize preview guide is removed on escape cancel', () => {
