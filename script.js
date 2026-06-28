@@ -7833,8 +7833,6 @@ class TimeTracker {
             const originY = originPoint && Number.isFinite(originPoint.clientY) ? originPoint.clientY : NaN;
             let lastClientX = originX;
             let lastClientY = originY;
-            let lastPreviewClientX = originX;
-            let previewArrowDirection = null;
             let cleanedUp = false;
             const pointerId = event && event.pointerId;
             const moveType = isPointerEvent ? 'pointermove' : (isTouchEvent ? 'touchmove' : 'mousemove');
@@ -7932,14 +7930,14 @@ class TimeTracker {
 
                         const guide = createSvgElement('svg');
                         guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${isDownArrow ? ' plan-segment-resize-preview-arrow-down' : ''}${!isDownArrow && hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${!isDownArrow && hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}${isDownArrow ? '' : insidePositionClass}`);
-                        guide.setAttribute('viewBox', isDownArrow ? '0 0 40 40' : (hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28')));
+                        guide.setAttribute('viewBox', isDownArrow ? '0 0 40 28' : (hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28')));
                         guide.setAttribute('width', isDownArrow ? '40' : (isSingleArrow ? '40' : '96'));
-                        guide.setAttribute('height', isDownArrow ? '40' : '28');
+                        guide.setAttribute('height', '28');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
                         if (guide.style) {
                             const leftPercent = isDownArrow
-                                ? (((Math.max(0, Math.min(unitsPerRow - 1, columnUnit - 0.5)) + 0.5) / unitsPerRow) * 100)
+                                ? (((Math.max(0, Math.min(unitsPerRow - 1, columnUnit - 1)) + 0.5) / unitsPerRow) * 100)
                                 : ((columnUnit / unitsPerRow) * 100);
                             guide.style.left = `${leftPercent}%`;
                             guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
@@ -8014,12 +8012,14 @@ class TimeTracker {
                             fill: `url(#${gradientId})`,
                             filter: `url(#${glowId})`,
                         });
+                        const downArrow = setAttributes(createSvgElement('path'), {
+                            class: 'plan-segment-resize-preview-arrow-shape',
+                            d: 'M12.8 4.2V13.4C12.8 15 11.5 16.3 9.9 16.3C8.6 16.3 6.4 17.8 7.2 18.8L18.4 26.1C19.4 27.3 21.2 27.3 22.2 26.1L33.2 18.8C34 17.8 31.8 16.3 30.5 16.3C28.9 16.3 27.6 15 27.6 13.4V4.2C27.6 1.4 25.4 0 22.6 0H17.8C15 0 12.8 1.4 12.8 4.2Z',
+                            fill: `url(#${gradientId})`,
+                            filter: `url(#${glowId})`,
+                        });
                         if (isDownArrow) {
-                            const downGroup = createSvgElement('g');
-                            downGroup.setAttribute('class', 'plan-segment-resize-preview-arrow-down-group');
-                            downGroup.setAttribute('transform', 'translate(6 2) rotate(90 14 14)');
-                            downGroup.appendChild(rightArrow);
-                            guide.appendChild(downGroup);
+                            guide.appendChild(downArrow);
                         } else if (!hideLeftArrow) {
                             guide.appendChild(leftArrow);
                         }
@@ -8029,8 +8029,8 @@ class TimeTracker {
 
                         [
                             ...(isDownArrow ? [
-                                'M20 11C17.2 18.8 16.2 25.1 16.9 32.3',
-                                'M22.8 8C25 18 25.6 26.2 23.9 32.5',
+                                'M18.2 5.6C15.4 11.2 14.6 16.3 15.2 21.9',
+                                'M22.8 5.6C25.6 11.2 26.4 16.3 25.8 21.9',
                             ] : []),
                             ...(!isDownArrow && !hideLeftArrow ? [
                                 'M17 13.8C24.8 11 31.1 10 38.3 10.7',
@@ -8048,8 +8048,8 @@ class TimeTracker {
                         });
                         [
                             ...(isDownArrow ? [
-                                ['15', '10.6', '0.65'],
-                                ['26', '26.2', '0.85'],
+                                ['14.2', '7.8', '0.65'],
+                                ['25.8', '20.2', '0.85'],
                             ] : []),
                             ...(!isDownArrow && !hideLeftArrow ? [
                                 ['16', '20.2', '0.85'],
@@ -8138,6 +8138,21 @@ class TimeTracker {
                         rowIndex -= 1;
                     }
                     return Math.max(0, Math.min(rowCount - 1, rowIndex));
+                };
+
+                const resolveResizePreviewGuideDirection = (targetMinute) => {
+                    const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
+                    if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute)) return 'none';
+                    const originalRow = getBoundaryRowForMinute(originalBoundaryMinute);
+                    const targetRow = getBoundaryRowForMinute(targetMinute);
+                    if (targetRow > originalRow) return 'down';
+                    if (targetMinute > originalBoundaryMinute) {
+                        return effectiveEdge === 'left' ? 'left' : 'right';
+                    }
+                    if (targetMinute < originalBoundaryMinute) {
+                        return effectiveEdge === 'left' ? 'right' : 'left';
+                    }
+                    return 'none';
                 };
 
                 const getResizeGridRowFromY = (clientY) => {
@@ -8346,17 +8361,9 @@ class TimeTracker {
                     const clientY = point && Number.isFinite(point.clientY) ? point.clientY : lastClientY;
                     const resizeTarget = getResizeTargetFromPoint(clientX, clientY);
                     if (!resizeTarget) return;
-                    const movementDeltaX = clientX - lastPreviewClientX;
-                    if (Math.abs(movementDeltaX) >= 0.5) {
-                        previewArrowDirection = movementDeltaX > 0 ? 'right' : 'left';
-                    }
-                    if (Math.abs(clientX - originX) < 0.5) {
-                        previewArrowDirection = null;
-                    }
-                    lastPreviewClientX = clientX;
-                    const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes, originRow, currentRow, usesWrappedRow } = resizeTarget;
-                    const previewGuideDirection = usesWrappedRow && currentRow > originRow ? 'down' : 'horizontal';
-                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewGuideDirection}:${previewArrowDirection || 'both'}`;
+                    const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes, usesWrappedRow } = resizeTarget;
+                    const previewGuideDirection = resolveResizePreviewGuideDirection(targetMinute);
+                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewGuideDirection}`;
                     if (previewKey === lastPreviewKey) return;
                     lastPreviewKey = previewKey;
                     const layer = ensurePreviewLayer();
@@ -8437,8 +8444,8 @@ class TimeTracker {
                     if (!deletePending) {
                         appendResizePreviewGuide(layer, guideBoundaryMinute, {
                             direction: previewGuideDirection,
-                            hideLeftArrow: previewArrowDirection === 'right',
-                            hideRightArrow: previewArrowDirection === 'left',
+                            hideLeftArrow: previewGuideDirection === 'right',
+                            hideRightArrow: previewGuideDirection === 'left',
                             insidePosition: effectiveEdge === 'left' ? 'after' : 'before',
                         });
                     }
