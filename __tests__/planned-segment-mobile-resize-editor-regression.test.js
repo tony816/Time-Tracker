@@ -424,9 +424,8 @@ test('plan segment resize cleans preview state and lets a newly rendered handle 
         const first = createResizeFixture();
         attachPlanSegmentResizeListeners.call(ctx, first.entry, 0);
         first.handle.dispatchEvent(createPointerEvent('pointerdown', first.handle, 0));
-        const activeGuide = first.grid.querySelector('.plan-segment-resize-preview-guide');
-        assert.ok(activeGuide);
-        assert.equal(activeGuide.style.pointerEvents, 'none');
+        assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+        assert.equal(first.grid.querySelector('.plan-segment-resize-preview-guide'), null);
         listeners.pointermove(createPointerEvent('pointermove', first.handle, 100));
         assert.equal(first.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
         assert.ok(first.grid.querySelector('.plan-segment-resize-preview-guide'));
@@ -688,6 +687,101 @@ test('merged downward resize switches to horizontal guide when moving within the
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
+test('merged resize shows up guide when target row moves upward without horizontal fallback', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150, 40));
+
+        const guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-up'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(guide.getAttribute('viewBox'), '0 0 40 28');
+        assert.equal(guide.getAttribute('width'), '40');
+        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 1);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 150, 40));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('resize guide uses boundary position at row edges without jumping to adjacent row start', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
+        const ctx = {
+            timeSlots: [{
+                planActivities: [
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                    { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+                ],
+            }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentVisualIdentityKey,
+            resolveMergedPlanSegmentResizeGroup,
+            buildMergedPlanSegmentResizeSource,
+            applyPlanSegmentResize,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 2; },
+            normalizeActivityText(value) { return String(value || '').trim(); },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+            renderTimeEntries() {},
+            calculateTotals() {},
+            autoSave() {},
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        assert.equal(latestGuide(fixture.grid), null);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 50, 120));
+        let guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), true);
+        assert.equal(guide.style.left, `${(1 / 6) * 100}%`);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 590, 120));
+        guide = latestGuide(fixture.grid);
+        assert.ok(guide);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(guide.style.left, '100%');
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 590, 120));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
 test('merged planned segment right handle combines downward and right movement for wrapped rows', () => {
     withDocument(({ listeners }) => {
         const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1 });
@@ -939,17 +1033,19 @@ test('plan segment resize preview guide uses svg class attribute without classNa
 
         attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
         fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        assert.equal(fixture.grid.querySelector('.plan-segment-resize-preview-guide'), null);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
 
         const guide = fixture.grid.querySelector('.plan-segment-resize-preview-guide');
         assert.ok(guide);
         assert.equal(
             guide.getAttribute('class'),
-            'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow'
+            'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow plan-segment-resize-preview-arrow-right-only plan-segment-resize-preview-arrow-inside-before'
         );
-        assert.equal(guide.getAttribute('viewBox'), '0 0 96 28');
+        assert.equal(guide.getAttribute('viewBox'), '56 0 40 28');
+        assert.equal(guide.getAttribute('width'), '40');
         assert.equal(guide.style.pointerEvents, 'none');
 
-        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
 
         assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
@@ -960,6 +1056,30 @@ test('plan segment resize preview guide uses svg class attribute without classNa
         createElementNS(_namespace, tagName) {
             return createSvgLikeNode(tagName);
         },
+    });
+});
+
+test('plan segment resize target unchanged does not render preview guide', () => {
+    withDocument(() => {
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize() { return true; },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+
+        assert.ok(latestPreviewLayer(fixture.grid));
+        assert.equal(latestGuide(fixture.grid), null);
     });
 });
 
@@ -1028,7 +1148,7 @@ function createTenMinuteResizeContext(applyCalls = []) {
     };
 }
 
-test('ten minute plan segment right-shrink preview uses bidirectional guide at current boundary', () => {
+test('ten minute plan segment right-shrink delete-pending preview hides guide at current boundary', () => {
     withDocument(({ listeners }) => {
         const applyCalls = [];
         const ctx = createTenMinuteResizeContext(applyCalls);
@@ -1547,7 +1667,7 @@ test('delete-pending clears when a ten minute resize reverses before release', (
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('right-only preview guide anchors inside rightward 10m resize while bidirectional guide remains centered', () => {
+test('right-only preview guide anchors inside rightward 10m resize while no-move guide stays hidden', () => {
     const defaultGuideRule = interactionsCss.match(/\.plan-segment-resize-preview-guide\s*\{[^}]*\}/);
     assert.ok(defaultGuideRule);
     assert.match(defaultGuideRule[0], /transform:\s*translate\(-50%,\s*-50%\);/);
@@ -1578,7 +1698,7 @@ test('right-only preview guide anchors inside rightward 10m resize while bidirec
         listeners.pointerup(createPointerEvent('pointerup', shrinkFixture.handle, -100));
 
         const resizeCalls = [];
-        const bidirectionalCtx = {
+        const noMoveCtx = {
             timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
             removePlanSegmentResizePreviewLayer,
             clearActivePlanSegmentResizeClasses,
@@ -1593,27 +1713,12 @@ test('right-only preview guide anchors inside rightward 10m resize while bidirec
             closePlanSegmentMobileTextEditor() { return false; },
             closeInlinePlanDropdown() {},
         };
-        const bidirectionalFixture = createResizeFixture();
+        const noMoveFixture = createResizeFixture();
 
-        attachPlanSegmentResizeListeners.call(bidirectionalCtx, bidirectionalFixture.entry, 0);
-        bidirectionalFixture.handle.dispatchEvent(createPointerEvent('pointerdown', bidirectionalFixture.handle, 0));
+        attachPlanSegmentResizeListeners.call(noMoveCtx, noMoveFixture.entry, 0);
+        noMoveFixture.handle.dispatchEvent(createPointerEvent('pointerdown', noMoveFixture.handle, 0));
 
-        const bidirectionalGuide = latestGuide(bidirectionalFixture.grid);
-        assert.ok(bidirectionalGuide);
-        assert.equal(hasClass(bidirectionalGuide, 'plan-segment-resize-preview-arrow-right-only'), false);
-        assert.equal(hasClass(bidirectionalGuide, 'plan-segment-resize-preview-arrow-inside-before'), false);
-        assert.equal(hasClass(bidirectionalGuide, 'plan-segment-resize-preview-arrow-inside-after'), false);
-        assert.equal(
-            bidirectionalGuide.getAttribute('class'),
-            'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow'
-        );
-        assert.equal(bidirectionalGuide.getAttribute('viewBox'), '0 0 96 28');
-        assert.equal(bidirectionalGuide.getAttribute('width'), '96');
-        assert.equal(bidirectionalGuide.style.width || '', '');
-        assert.equal(bidirectionalGuide.style.minWidth || '', '');
-        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 2);
-        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-sheen').length, 4);
-        assert.equal(bidirectionalGuide.querySelectorAll('.plan-segment-resize-preview-arrow-spark').length, 4);
+        assert.equal(latestGuide(noMoveFixture.grid), null);
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
@@ -1662,7 +1767,7 @@ test('plan resize preview keeps only left arrow after leftward movement starts',
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
-test('plan resize preview switches single arrow direction and returns to bidirectional at origin', () => {
+test('plan resize preview switches single arrow direction and hides guide at origin', () => {
     withDocument(({ listeners }) => {
         const resizeCalls = [];
         const ctx = {
@@ -1705,10 +1810,7 @@ test('plan resize preview switches single arrow direction and returns to bidirec
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 0));
         guide = latestGuide(fixture.grid);
-        assert.ok(guide);
-        assert.equal(guide.getAttribute('class'), 'plan-segment-resize-preview-guide plan-segment-resize-preview-arrow');
-        assert.equal(guide.getAttribute('viewBox'), '0 0 96 28');
-        assert.equal(guide.querySelectorAll('.plan-segment-resize-preview-arrow-shape').length, 2);
+        assert.equal(guide, null);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 0));
 
@@ -1737,12 +1839,14 @@ test('left-edge resize keeps single arrows inside the segment on the right side 
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -100));
         let guide = latestGuide(fixture.grid);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-after'), true);
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
         guide = latestGuide(fixture.grid);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), false);
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-after'), true);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
@@ -1811,7 +1915,8 @@ test('left-edge fast expansion preview guide clamps to the resized segment bound
         const guide = latestGuide(fixture.grid);
         const activeSegment = latestPreviewSegments(fixture.grid)[1];
         assert.ok(guide);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-after'), true);
         assert.equal(guide.style.left, `${(2 / 6) * 100}%`);
         assert.equal(activeSegment.style.width, '100%');
@@ -2377,6 +2482,8 @@ test('plan segment resize preview guide is removed on escape cancel', () => {
 
         attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
         fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
 
         assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
         assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 1);
@@ -2570,7 +2677,7 @@ test('mobile left edge-zone on an adjacent segment uses the previous segment rig
         assert.equal(pointerStart.propagationStopped, true);
         assert.equal(hasClass(firstSegment, 'is-resizing-plan-segment'), true);
         assert.equal(hasClass(secondSegment, 'is-resizing-plan-segment'), false);
-        assert.equal(grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 1);
+        assert.equal(grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
 
         listeners.pointermove(createPointerEvent('pointermove', secondSegment, 120));
         listeners.pointerup(createPointerEvent('pointerup', secondSegment, 120));

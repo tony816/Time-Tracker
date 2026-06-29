@@ -7840,7 +7840,6 @@ class TimeTracker {
             let lastClientY = originY;
             let lastGuideTargetRow = null;
             let lastGuideTargetCol = null;
-            let lastVisibleGuideDirection = 'none';
             let cleanedUp = false;
             let resizeSessionFinalized = false;
             const pointerId = event && event.pointerId;
@@ -7932,6 +7931,7 @@ class TimeTracker {
 
                 const applyResizePreviewGuidePosition = (guide, boundaryMinute, direction) => {
                     if (!guide || !guide.style) return false;
+                    if (!['left', 'right', 'down', 'up'].includes(direction)) return false;
                     const unitsPerRow = 6;
                     const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
                     const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
@@ -7945,10 +7945,7 @@ class TimeTracker {
                         columnUnit = unitsPerRow;
                     }
                     rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
-                    const isDownArrow = direction === 'down';
-                    const leftPercent = isDownArrow
-                        ? (((Math.max(0, Math.min(unitsPerRow - 1, columnUnit - 1)) + 0.5) / unitsPerRow) * 100)
-                        : ((columnUnit / unitsPerRow) * 100);
+                    const leftPercent = (columnUnit / unitsPerRow) * 100;
                     guide.style.left = `${leftPercent}%`;
                     guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
                     guide.style.pointerEvents = 'none';
@@ -7958,12 +7955,16 @@ class TimeTracker {
                 const appendResizePreviewGuide = (layer, boundaryMinute, options = {}) => {
                     try {
                         if (!layer || typeof document === 'undefined' || !document.createElement) return;
-                        const hideLeftArrow = Boolean(options.hideLeftArrow);
-                        const hideRightArrow = Boolean(options.hideRightArrow);
-                        const direction = options.direction === 'down' ? 'down' : 'horizontal';
+                        const direction = ['left', 'right', 'down', 'up'].includes(options.direction)
+                            ? options.direction
+                            : 'none';
+                        if (direction === 'none') return null;
+                        const hideLeftArrow = direction === 'right';
+                        const hideRightArrow = direction === 'left';
                         const isDownArrow = direction === 'down';
-                        const isSingleArrow = isDownArrow || hideLeftArrow || hideRightArrow;
-                        const insidePositionClass = isSingleArrow
+                        const isUpArrow = direction === 'up';
+                        const isHorizontalArrow = direction === 'left' || direction === 'right';
+                        const insidePositionClass = isHorizontalArrow
                             ? (options.insidePosition === 'after'
                                 ? ' plan-segment-resize-preview-arrow-inside-after'
                                 : ' plan-segment-resize-preview-arrow-inside-before')
@@ -7974,18 +7975,16 @@ class TimeTracker {
                                 : document.createElement(tagName)
                         );
                         const guide = createSvgElement('svg');
-                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${isDownArrow ? ' plan-segment-resize-preview-arrow-down' : ''}${!isDownArrow && hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${!isDownArrow && hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}${isDownArrow ? '' : insidePositionClass}`);
-                        guide.setAttribute('viewBox', isDownArrow ? '0 0 40 28' : (hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28')));
-                        guide.setAttribute('width', isDownArrow ? '40' : (isSingleArrow ? '40' : '96'));
+                        guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${isDownArrow ? ' plan-segment-resize-preview-arrow-down' : ''}${isUpArrow ? ' plan-segment-resize-preview-arrow-up' : ''}${isHorizontalArrow && hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${isHorizontalArrow && hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}${insidePositionClass}`);
+                        guide.setAttribute('viewBox', isDownArrow || isUpArrow ? '0 0 40 28' : (hideLeftArrow ? '56 0 40 28' : '0 0 40 28'));
+                        guide.setAttribute('width', '40');
                         guide.setAttribute('height', '28');
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
                         if (guide.style) {
                             applyResizePreviewGuidePosition(guide, boundaryMinute, direction);
-                            if (isSingleArrow) {
-                                guide.style.width = '40px';
-                                guide.style.minWidth = '40px';
-                            }
+                            guide.style.width = '40px';
+                            guide.style.minWidth = '40px';
                         }
                         const idSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
                         const gradientId = `plan-resize-arrow-fill-${idSuffix}`;
@@ -8058,12 +8057,21 @@ class TimeTracker {
                             fill: `url(#${gradientId})`,
                             filter: `url(#${glowId})`,
                         });
+                        const upArrow = setAttributes(createSvgElement('path'), {
+                            class: 'plan-segment-resize-preview-arrow-shape',
+                            d: 'M12.8 4.2V13.4C12.8 15 11.5 16.3 9.9 16.3C8.6 16.3 6.4 17.8 7.2 18.8L18.4 26.1C19.4 27.3 21.2 27.3 22.2 26.1L33.2 18.8C34 17.8 31.8 16.3 30.5 16.3C28.9 16.3 27.6 15 27.6 13.4V4.2C27.6 1.4 25.4 0 22.6 0H17.8C15 0 12.8 1.4 12.8 4.2Z',
+                            fill: `url(#${gradientId})`,
+                            filter: `url(#${glowId})`,
+                            transform: 'rotate(180 20 14)',
+                        });
                         if (isDownArrow) {
                             guide.appendChild(downArrow);
+                        } else if (isUpArrow) {
+                            guide.appendChild(upArrow);
                         } else if (!hideLeftArrow) {
                             guide.appendChild(leftArrow);
                         }
-                        if (!isDownArrow && !hideRightArrow) {
+                        if (isHorizontalArrow && !hideRightArrow) {
                             guide.appendChild(rightArrow);
                         }
 
@@ -8072,30 +8080,42 @@ class TimeTracker {
                                 'M18.2 5.6C15.4 11.2 14.6 16.3 15.2 21.9',
                                 'M22.8 5.6C25.6 11.2 26.4 16.3 25.8 21.9',
                             ] : []),
-                            ...(!isDownArrow && !hideLeftArrow ? [
+                            ...(isUpArrow ? [
+                                'M18.2 5.6C15.4 11.2 14.6 16.3 15.2 21.9',
+                                'M22.8 5.6C25.6 11.2 26.4 16.3 25.8 21.9',
+                            ] : []).map(d => ({ d, transform: 'rotate(180 20 14)' })),
+                            ...(isHorizontalArrow && !hideLeftArrow ? [
                                 'M17 13.8C24.8 11 31.1 10 38.3 10.7',
                                 'M14 16.6C24 18.8 32.2 19.4 38.5 17.7',
                             ] : []),
-                            ...(!isDownArrow && !hideRightArrow ? [
+                            ...(isHorizontalArrow && !hideRightArrow ? [
                                 'M79 13.8C71.2 11 64.9 10 57.7 10.7',
                                 'M82 16.6C72 18.8 63.8 19.4 57.5 17.7',
                             ] : []),
-                        ].forEach((d) => {
-                            guide.appendChild(setAttributes(createSvgElement('path'), {
+                        ].forEach((entry) => {
+                            const sheen = setAttributes(createSvgElement('path'), {
                                 class: 'plan-segment-resize-preview-arrow-sheen',
-                                d,
-                            }));
+                                d: typeof entry === 'string' ? entry : entry.d,
+                            });
+                            if (entry && typeof entry !== 'string' && entry.transform) {
+                                sheen.setAttribute('transform', entry.transform);
+                            }
+                            guide.appendChild(sheen);
                         });
                         [
                             ...(isDownArrow ? [
                                 ['14.2', '7.8', '0.65'],
                                 ['25.8', '20.2', '0.85'],
                             ] : []),
-                            ...(!isDownArrow && !hideLeftArrow ? [
+                            ...(isUpArrow ? [
+                                ['25.8', '20.2', '0.65'],
+                                ['14.2', '7.8', '0.85'],
+                            ] : []),
+                            ...(isHorizontalArrow && !hideLeftArrow ? [
                                 ['16', '20.2', '0.85'],
                                 ['32', '8.6', '0.65'],
                             ] : []),
-                            ...(!isDownArrow && !hideRightArrow ? [
+                            ...(isHorizontalArrow && !hideRightArrow ? [
                                 ['64', '8.6', '0.65'],
                                 ['80', '20.2', '0.85'],
                             ] : []),
@@ -8201,8 +8221,9 @@ class TimeTracker {
                     };
                 };
 
-                const resolveResizePreviewGuideDirection = (targetMinute, targetPosition) => {
+                const resolveResizePreviewGuideDirection = (resizeTarget, targetPosition) => {
                     const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
+                    const targetMinute = Number(resizeTarget && resizeTarget.targetMinute);
                     if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute)) return 'none';
                     if (targetMinute === originalBoundaryMinute) return 'none';
                     const originalPosition = getResizeGuideTargetPosition(originalBoundaryMinute);
@@ -8214,15 +8235,14 @@ class TimeTracker {
                     const previousCol = Number.isInteger(lastGuideTargetCol)
                         ? lastGuideTargetCol
                         : (originalPosition ? originalPosition.col : null);
+                    if (Number.isInteger(previousRow) && comparePosition.row === previousRow && Number.isInteger(previousCol) && comparePosition.col !== previousCol) {
+                        return comparePosition.col > previousCol ? 'right' : 'left';
+                    }
                     if (Number.isInteger(previousRow) && comparePosition.row > previousRow) return 'down';
                     if (Number.isInteger(previousRow) && comparePosition.row < previousRow) return 'up';
-                    if (Number.isInteger(previousCol) && comparePosition.col > previousCol) {
-                        return effectiveEdge === 'left' ? 'left' : 'right';
-                    }
-                    if (Number.isInteger(previousCol) && comparePosition.col < previousCol) {
-                        return effectiveEdge === 'left' ? 'right' : 'left';
-                    }
-                    return lastVisibleGuideDirection || 'none';
+                    if (Number.isInteger(previousCol) && comparePosition.col > previousCol) return 'right';
+                    if (Number.isInteger(previousCol) && comparePosition.col < previousCol) return 'left';
+                    return targetMinute > originalBoundaryMinute ? 'right' : 'left';
                 };
 
                 const getResizeGridRowFromY = (clientY) => {
@@ -8441,7 +8461,7 @@ class TimeTracker {
                     if (!resizeTarget) return;
                     const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes, usesWrappedRow } = resizeTarget;
                     const guideTargetPosition = getResizeGuideTargetPosition(targetMinute);
-                    const previewGuideDirection = resolveResizePreviewGuideDirection(targetMinute, guideTargetPosition);
+                    const previewGuideDirection = resolveResizePreviewGuideDirection(resizeTarget, guideTargetPosition);
                     const layer = ensurePreviewLayer();
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
@@ -8548,7 +8568,6 @@ class TimeTracker {
                         lastGuideTargetRow = guideTargetPosition.row;
                         lastGuideTargetCol = guideTargetPosition.col;
                     }
-                    lastVisibleGuideDirection = previewGuideDirection;
                     previewVisualTargets = [];
                     previewGuideEl = null;
                     layer.innerHTML = '';
@@ -8562,8 +8581,6 @@ class TimeTracker {
                     if (!deletePending) {
                         previewGuideEl = appendResizePreviewGuide(layer, guideBoundaryMinute, {
                             direction: previewGuideDirection,
-                            hideLeftArrow: previewGuideDirection === 'right',
-                            hideRightArrow: previewGuideDirection === 'left',
                             insidePosition: effectiveEdge === 'left' ? 'after' : 'before',
                         });
                     }
