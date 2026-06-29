@@ -7827,7 +7827,11 @@ class TimeTracker {
             }
             if (!Number.isInteger(segmentIndex) || !Number.isFinite(startMinute) || !Number.isFinite(endMinute)) return false;
             let previewLayer = null;
-            let lastPreviewKey = null;
+            let lastPreviewStructureKey = null;
+            let previewVisualTargets = [];
+            let previewGuideEl = null;
+            let pendingResizePreviewFrame = null;
+            let lostPointerCaptureFinalizeTimer = null;
             let deletePending = false;
             const originPoint = getPointFromEvent(event);
             const originX = originPoint && Number.isFinite(originPoint.clientX) ? originPoint.clientX : 0;
@@ -7901,6 +7905,56 @@ class TimeTracker {
                     }
                 };
 
+                const getPreviewAnimationRoot = () => {
+                    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') return window;
+                    if (typeof globalThis !== 'undefined' && typeof globalThis.requestAnimationFrame === 'function') return globalThis;
+                    if (typeof window !== 'undefined') return window;
+                    if (typeof globalThis !== 'undefined') return globalThis;
+                    return null;
+                };
+
+                const requestPreviewFrame = (callback) => {
+                    const root = getPreviewAnimationRoot();
+                    if (root && typeof root.requestAnimationFrame === 'function') {
+                        return root.requestAnimationFrame(callback);
+                    }
+                    callback();
+                    return null;
+                };
+
+                const cancelPreviewFrame = (frameId) => {
+                    if (frameId == null) return;
+                    const root = getPreviewAnimationRoot();
+                    if (root && typeof root.cancelAnimationFrame === 'function') {
+                        root.cancelAnimationFrame(frameId);
+                    }
+                };
+
+                const applyResizePreviewGuidePosition = (guide, boundaryMinute, direction) => {
+                    if (!guide || !guide.style) return false;
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
+                    if (!Number.isFinite(clampedMinute)) return false;
+                    const boundaryUnits = Math.max(0, Math.min(totalUnits, clampedMinute / 10));
+                    let rowIndex = Math.floor(boundaryUnits / unitsPerRow);
+                    let columnUnit = boundaryUnits % unitsPerRow;
+                    if (boundaryUnits > 0 && columnUnit === 0) {
+                        rowIndex -= 1;
+                        columnUnit = unitsPerRow;
+                    }
+                    rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
+                    const isDownArrow = direction === 'down';
+                    const leftPercent = isDownArrow
+                        ? (((Math.max(0, Math.min(unitsPerRow - 1, columnUnit - 1)) + 0.5) / unitsPerRow) * 100)
+                        : ((columnUnit / unitsPerRow) * 100);
+                    guide.style.left = `${leftPercent}%`;
+                    guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
+                    guide.style.pointerEvents = 'none';
+                    return true;
+                };
+
                 const appendResizePreviewGuide = (layer, boundaryMinute, options = {}) => {
                     try {
                         if (!layer || typeof document === 'undefined' || !document.createElement) return;
@@ -7919,20 +7973,6 @@ class TimeTracker {
                                 ? document.createElementNS('http://www.w3.org/2000/svg', tagName)
                                 : document.createElement(tagName)
                         );
-                        const unitsPerRow = 6;
-                        const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
-                        const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
-                        const clampedMinute = Math.max(0, Math.min(blockMinutes, Number(boundaryMinute)));
-                        if (!Number.isFinite(clampedMinute)) return;
-                        const boundaryUnits = Math.max(0, Math.min(totalUnits, clampedMinute / 10));
-                        let rowIndex = Math.floor(boundaryUnits / unitsPerRow);
-                        let columnUnit = boundaryUnits % unitsPerRow;
-                        if (boundaryUnits > 0 && columnUnit === 0) {
-                            rowIndex -= 1;
-                            columnUnit = unitsPerRow;
-                        }
-                        rowIndex = Math.max(0, Math.min(rowCount - 1, rowIndex));
-
                         const guide = createSvgElement('svg');
                         guide.setAttribute('class', `plan-segment-resize-preview-guide plan-segment-resize-preview-arrow${isDownArrow ? ' plan-segment-resize-preview-arrow-down' : ''}${!isDownArrow && hideLeftArrow ? ' plan-segment-resize-preview-arrow-right-only' : ''}${!isDownArrow && hideRightArrow ? ' plan-segment-resize-preview-arrow-left-only' : ''}${isDownArrow ? '' : insidePositionClass}`);
                         guide.setAttribute('viewBox', isDownArrow ? '0 0 40 28' : (hideLeftArrow ? '56 0 40 28' : (hideRightArrow ? '0 0 40 28' : '0 0 96 28')));
@@ -7941,12 +7981,7 @@ class TimeTracker {
                         guide.setAttribute('aria-hidden', 'true');
                         guide.setAttribute('focusable', 'false');
                         if (guide.style) {
-                            const leftPercent = isDownArrow
-                                ? (((Math.max(0, Math.min(unitsPerRow - 1, columnUnit - 1)) + 0.5) / unitsPerRow) * 100)
-                                : ((columnUnit / unitsPerRow) * 100);
-                            guide.style.left = `${leftPercent}%`;
-                            guide.style.top = `${((rowIndex + 0.5) / rowCount) * 100}%`;
-                            guide.style.pointerEvents = 'none';
+                            applyResizePreviewGuidePosition(guide, boundaryMinute, direction);
                             if (isSingleArrow) {
                                 guide.style.width = '40px';
                                 guide.style.minWidth = '40px';
@@ -8073,7 +8108,9 @@ class TimeTracker {
                             }));
                         });
                         layer.appendChild(guide);
+                        return guide;
                     } catch (_) {}
+                    return null;
                 };
 
                 const normalizePreviewLabel = (segment) => {
@@ -8286,11 +8323,44 @@ class TimeTracker {
                     return displaySegments;
                 };
 
+                const applyPreviewSegmentVisualStyle = (previewSegment, segment) => {
+                    if (!previewSegment || !previewSegment.style) return;
+                    const visualDurationMinutes = Number(segment && segment.visualDurationMinutes);
+                    if (!Number.isFinite(visualDurationMinutes)) return;
+                    const span = Number.isFinite(segment && segment.span) ? Math.max(1, Math.floor(segment.span)) : 1;
+                    const chunkStartMinute = Number.isFinite(segment && segment.displayStartMinute)
+                        ? segment.displayStartMinute
+                        : Number(segment && segment.startMinute);
+                    const chunkDurationMinutes = Number.isFinite(segment && segment.displayDurationMinutes)
+                        ? segment.displayDurationMinutes
+                        : span * 10;
+                    const chunkEndMinute = chunkStartMinute + chunkDurationMinutes;
+                    const shouldUseChunkBounds = Boolean(segment && segment.visualUseChunkBounds)
+                        && Number.isFinite(chunkStartMinute)
+                        && Number.isFinite(chunkEndMinute)
+                        && Number.isFinite(segment.visualStartMinute)
+                        && Number.isFinite(segment.visualEndMinute);
+                    const chunkVisualDurationMinutes = shouldUseChunkBounds
+                        ? Math.max(0, Math.min(segment.visualEndMinute, chunkEndMinute) - Math.max(segment.visualStartMinute, chunkStartMinute))
+                        : visualDurationMinutes;
+                    const visualWidthRatio = shouldUseChunkBounds
+                        ? Math.max(0, Math.min(1, chunkVisualDurationMinutes / Math.max(1, chunkDurationMinutes)))
+                        : Math.max(0, visualDurationMinutes / Math.max(1, span * 10));
+                    previewSegment.style.width = `${visualWidthRatio * 100}%`;
+                    previewSegment.style.justifySelf = segment.visualResizeEdge === 'left' ? 'end' : 'start';
+                    if (typeof previewSegment.style.setProperty === 'function') {
+                        previewSegment.style.setProperty('--plan-resize-preview-ratio', String(visualWidthRatio));
+                        previewSegment.style.setProperty('--plan-resize-preview-duration-minutes', String(chunkVisualDurationMinutes));
+                    } else {
+                        previewSegment.style['--plan-resize-preview-ratio'] = String(visualWidthRatio);
+                        previewSegment.style['--plan-resize-preview-duration-minutes'] = String(chunkVisualDurationMinutes);
+                    }
+                };
+
                 const appendPreviewSegment = (layer, segment) => {
                     const span = Number.isFinite(segment && segment.span) ? Math.max(1, Math.floor(segment.span)) : 1;
                     const isVirtualRest = Boolean(segment && (segment.virtual || segment.kind === 'virtual-rest'));
                     const isEmpty = Boolean(segment && segment.empty);
-                    const visualDurationMinutes = Number(segment && segment.visualDurationMinutes);
                     const previewSegment = document.createElement('div');
                     previewSegment.className = isVirtualRest
                         ? 'split-grid-segment split-grid-segment-virtual-rest plan-segment-resize-preview-segment plan-segment-resize-preview-rest'
@@ -8302,34 +8372,8 @@ class TimeTracker {
                         previewSegment.style.gridColumn = `span ${span}`;
                         previewSegment.style.maxWidth = '100%';
                         previewSegment.style.boxSizing = 'border-box';
-                        if (!isVirtualRest && !isEmpty && Number.isFinite(visualDurationMinutes)) {
-                            const chunkStartMinute = Number.isFinite(segment && segment.displayStartMinute)
-                                ? segment.displayStartMinute
-                                : Number(segment && segment.startMinute);
-                            const chunkDurationMinutes = Number.isFinite(segment && segment.displayDurationMinutes)
-                                ? segment.displayDurationMinutes
-                                : span * 10;
-                            const chunkEndMinute = chunkStartMinute + chunkDurationMinutes;
-                            const shouldUseChunkBounds = Boolean(segment && segment.visualUseChunkBounds)
-                                && Number.isFinite(chunkStartMinute)
-                                && Number.isFinite(chunkEndMinute)
-                                && Number.isFinite(segment.visualStartMinute)
-                                && Number.isFinite(segment.visualEndMinute);
-                            const chunkVisualDurationMinutes = shouldUseChunkBounds
-                                ? Math.max(0, Math.min(segment.visualEndMinute, chunkEndMinute) - Math.max(segment.visualStartMinute, chunkStartMinute))
-                                : visualDurationMinutes;
-                            const visualWidthRatio = shouldUseChunkBounds
-                                ? Math.max(0, Math.min(1, chunkVisualDurationMinutes / Math.max(1, chunkDurationMinutes)))
-                                : Math.max(0, visualDurationMinutes / Math.max(1, span * 10));
-                            previewSegment.style.width = `${visualWidthRatio * 100}%`;
-                            previewSegment.style.justifySelf = segment.visualResizeEdge === 'left' ? 'end' : 'start';
-                            if (typeof previewSegment.style.setProperty === 'function') {
-                                previewSegment.style.setProperty('--plan-resize-preview-ratio', String(visualWidthRatio));
-                                previewSegment.style.setProperty('--plan-resize-preview-duration-minutes', String(chunkVisualDurationMinutes));
-                            } else {
-                                previewSegment.style['--plan-resize-preview-ratio'] = String(visualWidthRatio);
-                                previewSegment.style['--plan-resize-preview-duration-minutes'] = String(chunkVisualDurationMinutes);
-                            }
+                        if (!isVirtualRest && !isEmpty) {
+                            applyPreviewSegmentVisualStyle(previewSegment, segment);
                         }
                         if (!isVirtualRest && !isEmpty && typeof this.getSplitColor === 'function') {
                             const color = this.getSplitColor(
@@ -8360,7 +8404,7 @@ class TimeTracker {
                     if (isVirtualRest) {
                         previewSegment.appendChild(duration);
                         layer.appendChild(previewSegment);
-                        return;
+                        return previewSegment;
                     }
                     if (isEmpty) {
                         label.className = 'split-grid-label plan-segment-resize-preview-label';
@@ -8387,6 +8431,7 @@ class TimeTracker {
                         previewSegment.appendChild(graphic);
                     }
                     layer.appendChild(previewSegment);
+                    return previewSegment;
                 };
 
                 const updatePreview = (point) => {
@@ -8397,14 +8442,6 @@ class TimeTracker {
                     const { targetMinute, rawTargetMinute, deltaUnits, deltaMinutes, rawDeltaMinutes, usesWrappedRow } = resizeTarget;
                     const guideTargetPosition = getResizeGuideTargetPosition(targetMinute);
                     const previewGuideDirection = resolveResizePreviewGuideDirection(targetMinute, guideTargetPosition);
-                    const previewKey = `${targetMinute}:${deltaUnits}:${Math.round(rawDeltaMinutes * 100)}:${previewGuideDirection}:${guideTargetPosition ? `${guideTargetPosition.row}:${guideTargetPosition.col}` : 'na'}`;
-                    if (previewKey === lastPreviewKey) return;
-                    lastPreviewKey = previewKey;
-                    if (guideTargetPosition) {
-                        lastGuideTargetRow = guideTargetPosition.row;
-                        lastGuideTargetCol = guideTargetPosition.col;
-                    }
-                    lastVisibleGuideDirection = previewGuideDirection;
                     const layer = ensurePreviewLayer();
                     const planSegmentCore = globalThis.TimeTrackerPlanSegmentCore;
                     if (!layer || !planSegmentCore || typeof planSegmentCore.resizePlanSegmentInList !== 'function') return;
@@ -8441,7 +8478,6 @@ class TimeTracker {
                     const visualDurationMinutes = Math.max(0, visualEndMinute - visualStartMinute);
                     const isShrinking = effectiveEdge === 'left' ? rawDeltaMinutes > 0 : rawDeltaMinutes < 0;
                     const canDeleteByShrink = isShrinking && visualDurationMinutes <= 0;
-                    setDeletePendingState(canDeleteByShrink);
                     const gaps = (typeof planSegmentCore.calculateVirtualRestGaps === 'function')
                         ? planSegmentCore.calculateVirtualRestGaps(resized, { startMinute: 0, endMinute: blockMinutes })
                         : [];
@@ -8469,19 +8505,62 @@ class TimeTracker {
                         };
                     };
                     const visualPreviewSegments = previewSegments.map(applyVisualTarget);
-                    layer.innerHTML = '';
-                    visualPreviewSegments.forEach(segment => appendPreviewSegment(layer, segment));
-                    if (deletePending) {
-                        layer.classList.add('is-delete-pending-plan-resize');
-                    } else {
-                        layer.classList.remove('is-delete-pending-plan-resize');
-                    }
                     let guideBoundaryMinute = effectiveEdge === 'left' ? visualStartMinute : visualEndMinute;
                     if (!Number.isFinite(guideBoundaryMinute) && Number.isFinite(resizedBoundaryMinute)) {
                         guideBoundaryMinute = resizedBoundaryMinute;
                     }
+                    const guideKey = guideTargetPosition ? `${guideTargetPosition.row}:${guideTargetPosition.col}` : 'na';
+                    const previewStructureKey = [
+                        targetMinute,
+                        deltaUnits,
+                        previewGuideDirection,
+                        guideKey,
+                        usesWrappedRow ? 'wrapped' : 'same-row',
+                        canDeleteByShrink ? 'delete' : 'keep',
+                    ].join(':');
+                    setDeletePendingState(canDeleteByShrink);
+                    const applyLayerDeleteClass = () => {
+                        if (deletePending) {
+                            layer.classList.add('is-delete-pending-plan-resize');
+                        } else {
+                            layer.classList.remove('is-delete-pending-plan-resize');
+                        }
+                    };
+                    if (previewStructureKey === lastPreviewStructureKey && previewVisualTargets.length > 0) {
+                        previewVisualTargets.forEach(({ node, segment }) => {
+                            applyPreviewSegmentVisualStyle(node, {
+                                ...segment,
+                                visualDurationMinutes,
+                                visualStartMinute,
+                                visualEndMinute,
+                                visualResizeEdge: effectiveEdge,
+                                visualUseChunkBounds: usesWrappedRow,
+                            });
+                        });
+                        applyLayerDeleteClass();
+                        if (previewGuideEl && !deletePending) {
+                            applyResizePreviewGuidePosition(previewGuideEl, guideBoundaryMinute, previewGuideDirection);
+                        }
+                        return;
+                    }
+                    lastPreviewStructureKey = previewStructureKey;
+                    if (guideTargetPosition) {
+                        lastGuideTargetRow = guideTargetPosition.row;
+                        lastGuideTargetCol = guideTargetPosition.col;
+                    }
+                    lastVisibleGuideDirection = previewGuideDirection;
+                    previewVisualTargets = [];
+                    previewGuideEl = null;
+                    layer.innerHTML = '';
+                    visualPreviewSegments.forEach((segment) => {
+                        const node = appendPreviewSegment(layer, segment);
+                        if (node && Number.isFinite(Number(segment && segment.visualDurationMinutes))) {
+                            previewVisualTargets.push({ node, segment });
+                        }
+                    });
+                    applyLayerDeleteClass();
                     if (!deletePending) {
-                        appendResizePreviewGuide(layer, guideBoundaryMinute, {
+                        previewGuideEl = appendResizePreviewGuide(layer, guideBoundaryMinute, {
                             direction: previewGuideDirection,
                             hideLeftArrow: previewGuideDirection === 'right',
                             hideRightArrow: previewGuideDirection === 'left',
@@ -8490,9 +8569,28 @@ class TimeTracker {
                     }
                 };
 
+                const flushResizePreviewFrame = () => {
+                    pendingResizePreviewFrame = null;
+                    if (cleanedUp) return;
+                    updatePreview({ clientX: lastClientX, clientY: lastClientY });
+                };
+
+                const scheduleResizePreview = () => {
+                    if (pendingResizePreviewFrame != null) return;
+                    pendingResizePreviewFrame = requestPreviewFrame(flushResizePreviewFrame);
+                };
+
                 function cleanup() {
                     if (cleanedUp) return;
                     cleanedUp = true;
+                    if (pendingResizePreviewFrame != null) {
+                        cancelPreviewFrame(pendingResizePreviewFrame);
+                        pendingResizePreviewFrame = null;
+                    }
+                    if (lostPointerCaptureFinalizeTimer != null) {
+                        clearTimeout(lostPointerCaptureFinalizeTimer);
+                        lostPointerCaptureFinalizeTimer = null;
+                    }
                     setDeletePendingState(false);
                     removePreview();
                     if (resizeSurfaceEl.classList && resizeSurfaceEl.classList.remove) {
@@ -8523,7 +8621,7 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientY)) {
                         lastClientY = point.clientY;
                     }
-                    updatePreview({ clientX: lastClientX, clientY: lastClientY });
+                    scheduleResizePreview();
                     if (moveEvent && moveEvent.preventDefault) moveEvent.preventDefault();
                     if (moveEvent && moveEvent.stopPropagation) moveEvent.stopPropagation();
                 }
@@ -8531,6 +8629,14 @@ class TimeTracker {
                 function finish(upEvent) {
                     if (resizeSessionFinalized) return;
                     resizeSessionFinalized = true;
+                    if (pendingResizePreviewFrame != null) {
+                        cancelPreviewFrame(pendingResizePreviewFrame);
+                        pendingResizePreviewFrame = null;
+                    }
+                    if (lostPointerCaptureFinalizeTimer != null) {
+                        clearTimeout(lostPointerCaptureFinalizeTimer);
+                        lostPointerCaptureFinalizeTimer = null;
+                    }
                     const point = getPointFromEvent(upEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -8538,6 +8644,7 @@ class TimeTracker {
                     if (point && Number.isFinite(point.clientY)) {
                         lastClientY = point.clientY;
                     }
+                    updatePreview({ clientX: lastClientX, clientY: lastClientY });
                     const shouldDelete = deletePending;
                     cleanup();
                     const resizeTarget = getResizeTargetFromPoint(lastClientX, lastClientY);
@@ -8579,7 +8686,12 @@ class TimeTracker {
                 }
                 function handleLostPointerCapture(lostEvent) {
                     if (lostEvent && lostEvent.pointerId != null && pointerId != null && lostEvent.pointerId !== pointerId) return;
-                    finish(lostEvent);
+                    if (resizeSessionFinalized || lostPointerCaptureFinalizeTimer != null) return;
+                    lostPointerCaptureFinalizeTimer = setTimeout(() => {
+                        lostPointerCaptureFinalizeTimer = null;
+                        if (resizeSessionFinalized || cleanedUp) return;
+                        finish(lostEvent);
+                    }, 0);
                 }
                 try {
                     updatePreview({ clientX: originX, clientY: originY });

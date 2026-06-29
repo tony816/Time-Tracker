@@ -2150,6 +2150,122 @@ test('plan segment resize commits once when pointer capture is lost after moveme
     });
 });
 
+test('plan segment resize preview does not rebuild layer repeatedly inside the same snapped target', () => {
+    withDocument(({ listeners }) => {
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize() {
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture();
+        let previewLayer = null;
+        let layerClearCount = 0;
+        const appendChild = fixture.grid.appendChild.bind(fixture.grid);
+        fixture.grid.appendChild = (child) => {
+            if (hasClass(child, 'plan-segment-resize-preview-layer')) {
+                previewLayer = child;
+                const descriptor = Object.getOwnPropertyDescriptor(child, 'innerHTML');
+                Object.defineProperty(child, 'innerHTML', {
+                    configurable: true,
+                    get() {
+                        return descriptor.get.call(child);
+                    },
+                    set(value) {
+                        if (String(value || '') === '') layerClearCount += 1;
+                        descriptor.set.call(child, value);
+                    },
+                });
+            }
+            return appendChild(child);
+        };
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        assert.ok(previewLayer);
+        const clearsAfterInitialPreview = layerClearCount;
+
+        for (let i = 0; i < 20; i += 1) {
+            listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 55 + i));
+        }
+
+        assert.equal(layerClearCount - clearsAfterInitialPreview, 1);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 1);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 74));
+    });
+});
+
+test('plan segment resize pointermove preview is coalesced with requestAnimationFrame and commits the latest point', () => {
+    const previousRAF = global.requestAnimationFrame;
+    const previousCancelRAF = global.cancelAnimationFrame;
+    const rafQueue = [];
+    const cancelled = new Set();
+    global.requestAnimationFrame = (callback) => {
+        const id = rafQueue.length + 1;
+        rafQueue.push({ id, callback });
+        return id;
+    };
+    global.cancelAnimationFrame = (id) => {
+        cancelled.add(id);
+    };
+    try {
+        withDocument(({ listeners }) => {
+            const resizeCalls = [];
+            const ctx = {
+                timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+                removePlanSegmentResizePreviewLayer,
+                clearActivePlanSegmentResizeClasses,
+                cleanupPlanSegmentResizeState,
+                getPlanSegmentBaseIndex(index) { return index; },
+                getBlockLength() { return 1; },
+                normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+                applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                    resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                    return true;
+                },
+                closePlanSegmentMobileTextEditor() { return false; },
+                closeInlinePlanDropdown() {},
+            };
+            const fixture = createResizeFixture();
+
+            attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+            fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+            for (let i = 0; i < 20; i += 1) {
+                listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 60 + (i * 10)));
+            }
+
+            assert.equal(rafQueue.length, 1);
+            assert.deepEqual(getRealPreviewDurations(fixture.grid), ['30m']);
+            const frame = rafQueue.shift();
+            assert.equal(cancelled.has(frame.id), false);
+            frame.callback();
+            assert.deepEqual(getRealPreviewDurations(fixture.grid), ['60m']);
+
+            listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 250));
+            assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 60]]);
+        });
+    } finally {
+        if (previousRAF === undefined) {
+            delete global.requestAnimationFrame;
+        } else {
+            global.requestAnimationFrame = previousRAF;
+        }
+        if (previousCancelRAF === undefined) {
+            delete global.cancelAnimationFrame;
+        } else {
+            global.cancelAnimationFrame = previousCancelRAF;
+        }
+    }
+});
+
 test('mobile segment edge zone starts resize without targeting the handle', () => {
     withDocument(({ listeners }) => {
         const resizeCalls = [];
