@@ -7838,6 +7838,7 @@ class TimeTracker {
             let lastGuideTargetCol = null;
             let lastVisibleGuideDirection = 'none';
             let cleanedUp = false;
+            let resizeSessionFinalized = false;
             const pointerId = event && event.pointerId;
             const moveType = isPointerEvent ? 'pointermove' : (isTouchEvent ? 'touchmove' : 'mousemove');
             const upType = isPointerEvent ? 'pointerup' : (isTouchEvent ? 'touchend' : 'mouseup');
@@ -8504,6 +8505,9 @@ class TimeTracker {
                     document.removeEventListener(upType, finish, documentListenerOptions);
                     if (cancelType) document.removeEventListener(cancelType, cancel, documentListenerOptions);
                     document.removeEventListener('keydown', keyCancel, true);
+                    if (isPointerEvent && captureEl && typeof captureEl.removeEventListener === 'function') {
+                        captureEl.removeEventListener('lostpointercapture', handleLostPointerCapture);
+                    }
                     if (isPointerEvent && pointerId != null && captureEl && captureEl.releasePointerCapture) {
                         try {
                             captureEl.releasePointerCapture(pointerId);
@@ -8525,6 +8529,8 @@ class TimeTracker {
                 }
 
                 function finish(upEvent) {
+                    if (resizeSessionFinalized) return;
+                    resizeSessionFinalized = true;
                     const point = getPointFromEvent(upEvent);
                     if (point && Number.isFinite(point.clientX)) {
                         lastClientX = point.clientX;
@@ -8564,11 +8570,16 @@ class TimeTracker {
                 }
 
                 function cancel() {
+                    resizeSessionFinalized = true;
                     cleanup();
                 }
                 function keyCancel(keyEvent) {
                     if (keyEvent && keyEvent.key !== 'Escape') return;
-                    cleanup();
+                    cancel();
+                }
+                function handleLostPointerCapture(lostEvent) {
+                    if (lostEvent && lostEvent.pointerId != null && pointerId != null && lostEvent.pointerId !== pointerId) return;
+                    finish(lostEvent);
                 }
                 try {
                     updatePreview({ clientX: originX, clientY: originY });
@@ -8580,6 +8591,9 @@ class TimeTracker {
                 document.addEventListener(upType, finish, documentListenerOptions);
                 if (cancelType) document.addEventListener(cancelType, cancel, documentListenerOptions);
                 document.addEventListener('keydown', keyCancel, true);
+                if (isPointerEvent && captureEl && typeof captureEl.addEventListener === 'function') {
+                    captureEl.addEventListener('lostpointercapture', handleLostPointerCapture);
+                }
                 return true;
             };
         const handles = entryDiv.querySelectorAll('.plan-segment-resize-handle');

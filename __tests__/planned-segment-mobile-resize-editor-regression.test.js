@@ -2094,6 +2094,62 @@ test('handle target pointerdown is not intercepted by segment edge capture liste
     });
 });
 
+test('plan segment resize commits once when pointer capture is lost after movement', () => {
+    withDocument(({ listeners, listenerCounts }) => {
+        const captureCalls = [];
+        const resizeCalls = [];
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 0, endMinute: 30, durationMinutes: 30 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize(baseIndex, segmentIndex, edge, targetMinute) {
+                resizeCalls.push(['resize', baseIndex, segmentIndex, edge, targetMinute]);
+                return true;
+            },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ captureCalls });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 1);
+
+        fixture.handle.dispatchEvent({
+            type: 'lostpointercapture',
+            target: fixture.handle,
+            pointerId: 7,
+            defaultPrevented: false,
+            propagationStopped: false,
+            preventDefault() {
+                this.defaultPrevented = true;
+            },
+            stopPropagation() {
+                this.propagationStopped = true;
+            },
+        });
+        if (listeners.pointerup) {
+            listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+        }
+
+        assert.deepEqual(resizeCalls, [['resize', 0, 0, 'right', 40]]);
+        assert.deepEqual(captureCalls, [['set', 7], ['release', 7]]);
+        assert.equal(listenerCounts.pointermove, 0);
+        assert.equal(listenerCounts.pointerup, 0);
+        assert.equal(listenerCounts.pointercancel, 0);
+        assert.equal(listenerCounts.keydown, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-layer').length, 0);
+        assert.equal(fixture.grid.querySelectorAll('.plan-segment-resize-preview-guide').length, 0);
+        assert.equal(hasClass(fixture.grid, 'is-previewing-plan-resize'), false);
+        assert.equal(hasClass(fixture.segment, 'is-resizing-plan-segment'), false);
+    });
+});
+
 test('mobile segment edge zone starts resize without targeting the handle', () => {
     withDocument(({ listeners }) => {
         const resizeCalls = [];
