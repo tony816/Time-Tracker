@@ -7840,6 +7840,7 @@ class TimeTracker {
             let lastClientY = originY;
             let lastGuideTargetRow = null;
             let lastGuideTargetCol = null;
+            let lastRawGuideBoundaryMinute = null;
             let cleanedUp = false;
             let resizeSessionFinalized = false;
             const pointerId = event && event.pointerId;
@@ -8224,8 +8225,8 @@ class TimeTracker {
                 const resolveResizePreviewGuideDirection = (resizeTarget, targetPosition) => {
                     const originalBoundaryMinute = effectiveEdge === 'left' ? startMinute : endMinute;
                     const targetMinute = Number(resizeTarget && resizeTarget.targetMinute);
-                    if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute)) return 'none';
-                    if (targetMinute === originalBoundaryMinute) return 'none';
+                    const rawBoundaryMinute = Number(resizeTarget && resizeTarget.rawTargetMinute);
+                    if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute) || !Number.isFinite(rawBoundaryMinute)) return 'none';
                     const originalPosition = getResizeGuideTargetPosition(originalBoundaryMinute);
                     const comparePosition = targetPosition || getResizeGuideTargetPosition(targetMinute);
                     if (!comparePosition) return 'none';
@@ -8235,14 +8236,22 @@ class TimeTracker {
                     const previousCol = Number.isInteger(lastGuideTargetCol)
                         ? lastGuideTargetCol
                         : (originalPosition ? originalPosition.col : null);
+                    const movedFromOrigin = Math.abs(rawBoundaryMinute - originalBoundaryMinute) > 0.001;
+                    const previousRawBoundaryMinute = Number.isFinite(lastRawGuideBoundaryMinute)
+                        ? lastRawGuideBoundaryMinute
+                        : originalBoundaryMinute;
+                    const rawBoundaryDelta = rawBoundaryMinute - previousRawBoundaryMinute;
+                    if (!movedFromOrigin) return 'none';
+                    if (Number.isInteger(previousRow) && comparePosition.row > previousRow) return 'down';
+                    if (Number.isInteger(previousRow) && comparePosition.row < previousRow) return 'up';
+                    if (rawBoundaryDelta > 0.001) return 'right';
+                    if (rawBoundaryDelta < -0.001) return 'left';
                     if (Number.isInteger(previousRow) && comparePosition.row === previousRow && Number.isInteger(previousCol) && comparePosition.col !== previousCol) {
                         return comparePosition.col > previousCol ? 'right' : 'left';
                     }
-                    if (Number.isInteger(previousRow) && comparePosition.row > previousRow) return 'down';
-                    if (Number.isInteger(previousRow) && comparePosition.row < previousRow) return 'up';
                     if (Number.isInteger(previousCol) && comparePosition.col > previousCol) return 'right';
                     if (Number.isInteger(previousCol) && comparePosition.col < previousCol) return 'left';
-                    return targetMinute > originalBoundaryMinute ? 'right' : 'left';
+                    return 'none';
                 };
 
                 const getResizeGridRowFromY = (clientY) => {
@@ -8561,6 +8570,7 @@ class TimeTracker {
                         if (previewGuideEl && !deletePending) {
                             applyResizePreviewGuidePosition(previewGuideEl, guideBoundaryMinute, previewGuideDirection);
                         }
+                        lastRawGuideBoundaryMinute = Number.isFinite(rawTargetMinute) ? rawTargetMinute : targetMinute;
                         return;
                     }
                     lastPreviewStructureKey = previewStructureKey;
@@ -8568,6 +8578,7 @@ class TimeTracker {
                         lastGuideTargetRow = guideTargetPosition.row;
                         lastGuideTargetCol = guideTargetPosition.col;
                     }
+                    lastRawGuideBoundaryMinute = Number.isFinite(rawTargetMinute) ? rawTargetMinute : targetMinute;
                     previewVisualTargets = [];
                     previewGuideEl = null;
                     layer.innerHTML = '';

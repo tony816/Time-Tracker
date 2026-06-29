@@ -1804,8 +1804,8 @@ test('plan resize preview switches single arrow direction and hides guide at ori
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, -80));
         guide = latestGuide(fixture.grid);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
-        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), false);
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-before'), true);
 
         listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 0));
@@ -1850,6 +1850,40 @@ test('left-edge resize keeps single arrows inside the segment on the right side 
         assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-after'), true);
 
         listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('left-edge resize arrow follows raw boundary reversal within the same snapped target', () => {
+    withDocument(({ listeners }) => {
+        const ctx = {
+            timeSlots: [{ planActivities: [{ label: 'Focus', startMinute: 10, endMinute: 30, durationMinutes: 20 }] }],
+            removePlanSegmentResizePreviewLayer,
+            clearActivePlanSegmentResizeClasses,
+            cleanupPlanSegmentResizeState,
+            getPlanSegmentBaseIndex(index) { return index; },
+            getBlockLength() { return 1; },
+            normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+            applyPlanSegmentResize() { return true; },
+            closePlanSegmentMobileTextEditor() { return false; },
+            closeInlinePlanDropdown() {},
+        };
+        const fixture = createResizeFixture({ startMinute: 10, endMinute: 30, handleEdge: 'left' });
+
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 0));
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100));
+        let guide = latestGuide(fixture.grid);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), false);
+
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 80));
+        guide = latestGuide(fixture.grid);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-inside-after'), true);
+
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 80));
     }, { planSegmentCore: realPlanSegmentCore });
 });
 
