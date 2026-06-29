@@ -7841,6 +7841,12 @@ class TimeTracker {
             let lastGuideTargetRow = null;
             let lastGuideTargetCol = null;
             let lastRawGuideBoundaryMinute = null;
+            let stableResizeRow = null;
+            let lastStableResizeRow = null;
+            let verticalGuideHoldDirection = 'none';
+            let verticalGuideHoldRow = null;
+            let verticalGuideHoldBoundaryMinute = null;
+            let verticalGuideHoldClientX = null;
             let cleanedUp = false;
             let resizeSessionFinalized = false;
             const pointerId = event && event.pointerId;
@@ -8227,30 +8233,56 @@ class TimeTracker {
                     const targetMinute = Number(resizeTarget && resizeTarget.targetMinute);
                     const rawBoundaryMinute = Number(resizeTarget && resizeTarget.rawTargetMinute);
                     if (!Number.isFinite(targetMinute) || !Number.isFinite(originalBoundaryMinute) || !Number.isFinite(rawBoundaryMinute)) return 'none';
-                    const originalPosition = getResizeGuideTargetPosition(originalBoundaryMinute);
-                    const comparePosition = targetPosition || getResizeGuideTargetPosition(targetMinute);
-                    if (!comparePosition) return 'none';
-                    const previousRow = Number.isInteger(lastGuideTargetRow)
-                        ? lastGuideTargetRow
-                        : (originalPosition ? originalPosition.row : null);
-                    const previousCol = Number.isInteger(lastGuideTargetCol)
-                        ? lastGuideTargetCol
-                        : (originalPosition ? originalPosition.col : null);
                     const movedFromOrigin = Math.abs(rawBoundaryMinute - originalBoundaryMinute) > 0.001;
+                    if (!movedFromOrigin) {
+                        verticalGuideHoldDirection = 'none';
+                        verticalGuideHoldRow = null;
+                        verticalGuideHoldBoundaryMinute = null;
+                        verticalGuideHoldClientX = null;
+                        return 'none';
+                    }
+                    const originRow = Number.isFinite(originY)
+                        ? getResizeGridRowFromY(originY)
+                        : getBoundaryRowForMinute(originalBoundaryMinute);
+                    const unitsPerRow = 6;
+                    const unitWidth = gridWidth / unitsPerRow;
+                    const horizontalThreshold = Number.isFinite(unitWidth) ? unitWidth * 0.20 : 10;
                     const previousRawBoundaryMinute = Number.isFinite(lastRawGuideBoundaryMinute)
                         ? lastRawGuideBoundaryMinute
                         : originalBoundaryMinute;
                     const rawBoundaryDelta = rawBoundaryMinute - previousRawBoundaryMinute;
-                    if (!movedFromOrigin) return 'none';
-                    if (Number.isInteger(previousRow) && comparePosition.row > previousRow) return 'down';
-                    if (Number.isInteger(previousRow) && comparePosition.row < previousRow) return 'up';
+                    const stableRowJustChanged = lastStableResizeRow != null && lastStableResizeRow !== stableResizeRow;
+                    if (stableRowJustChanged) {
+                        const transitionDirection = lastStableResizeRow < stableResizeRow ? 'down' : 'up';
+                        verticalGuideHoldDirection = transitionDirection;
+                        verticalGuideHoldRow = stableResizeRow;
+                        verticalGuideHoldBoundaryMinute = rawBoundaryMinute;
+                        verticalGuideHoldClientX = lastClientX;
+                        lastStableResizeRow = stableResizeRow;
+                        return transitionDirection;
+                    }
+                    if (stableResizeRow === originRow && verticalGuideHoldDirection !== 'none') {
+                        verticalGuideHoldDirection = 'none';
+                        verticalGuideHoldRow = null;
+                        verticalGuideHoldBoundaryMinute = null;
+                        verticalGuideHoldClientX = null;
+                    }
+                    if (verticalGuideHoldDirection !== 'none') {
+                        const holdBoundaryDelta = rawBoundaryMinute - verticalGuideHoldBoundaryMinute;
+                        const hasHorizontalMove = Math.abs(holdBoundaryDelta) > 0.001
+                            || (Number.isFinite(verticalGuideHoldClientX) && Math.abs(lastClientX - verticalGuideHoldClientX) >= horizontalThreshold);
+                        if (!hasHorizontalMove) {
+                            return verticalGuideHoldDirection;
+                        }
+                    }
                     if (rawBoundaryDelta > 0.001) return 'right';
                     if (rawBoundaryDelta < -0.001) return 'left';
-                    if (Number.isInteger(previousRow) && comparePosition.row === previousRow && Number.isInteger(previousCol) && comparePosition.col !== previousCol) {
-                        return comparePosition.col > previousCol ? 'right' : 'left';
+                    const originalPosition = getResizeGuideTargetPosition(originalBoundaryMinute);
+                    const comparePosition = targetPosition || getResizeGuideTargetPosition(targetMinute);
+                    if (!comparePosition || !originalPosition) return 'none';
+                    if (Number.isInteger(comparePosition.col) && Number.isInteger(originalPosition.col)) {
+                        return comparePosition.col > originalPosition.col ? 'right' : (comparePosition.col < originalPosition.col ? 'left' : 'none');
                     }
-                    if (Number.isInteger(previousCol) && comparePosition.col > previousCol) return 'right';
-                    if (Number.isInteger(previousCol) && comparePosition.col < previousCol) return 'left';
                     return 'none';
                 };
 
@@ -8267,6 +8299,44 @@ class TimeTracker {
                     return Math.max(0, Math.min(rowCount - 1, rowIndex));
                 };
 
+                const STABLE_ROW_HYSTERESIS_MARGIN = 0.15;
+
+                const resolveStableResizeRow = (clientY, options = {}) => {
+                    const unitsPerRow = 6;
+                    const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
+                    const rowCount = Math.max(1, Math.ceil(totalUnits / unitsPerRow));
+                    const rowHeight = getResizeRowHeight();
+                    const top = gridRect && Number.isFinite(gridRect.top) ? gridRect.top : 0;
+                    if (!Number.isFinite(clientY) || !Number.isFinite(rowHeight) || rowHeight <= 0) {
+                        if (stableResizeRow != null) return stableResizeRow;
+                        return getBoundaryRowForMinute(effectiveEdge === 'left' ? startMinute : endMinute);
+                    }
+                    const continuousRow = (clientY - top - 0.5) / rowHeight;
+                    const rawRow = Math.floor(continuousRow);
+                    const clamped = Math.max(0, Math.min(rowCount - 1, rawRow));
+                    if (options.force || stableResizeRow == null) {
+                        stableResizeRow = clamped;
+                        return clamped;
+                    }
+                    if (Math.abs(clamped - stableResizeRow) >= 2) {
+                        lastStableResizeRow = stableResizeRow;
+                        stableResizeRow = clamped;
+                        return clamped;
+                    }
+                    if (clamped > stableResizeRow) {
+                        if (continuousRow >= (stableResizeRow + 1) + STABLE_ROW_HYSTERESIS_MARGIN) {
+                            lastStableResizeRow = stableResizeRow;
+                            stableResizeRow = clamped;
+                        }
+                    } else if (clamped < stableResizeRow) {
+                        if (continuousRow <= stableResizeRow - STABLE_ROW_HYSTERESIS_MARGIN) {
+                            lastStableResizeRow = stableResizeRow;
+                            stableResizeRow = clamped;
+                        }
+                    }
+                    return stableResizeRow;
+                };
+
                 const getResizeTargetFromPoint = (clientX, clientY) => {
                     const unitsPerRow = 6;
                     const totalUnits = Math.max(unitsPerRow, Math.ceil(blockMinutes / 10));
@@ -8277,7 +8347,7 @@ class TimeTracker {
                     const originRow = Number.isFinite(originY)
                         ? getResizeGridRowFromY(originY)
                         : getBoundaryRowForMinute(boundaryMinute);
-                    const currentRow = getResizeGridRowFromY(clientY);
+                    const currentRow = resolveStableResizeRow(clientY);
                     const usesWrappedRow = blockMinutes > 60 && rowCount > 1 && currentRow !== originRow;
                     let targetMinute;
                     let rawTargetMinute;
@@ -8671,6 +8741,9 @@ class TimeTracker {
                     }
                     if (point && Number.isFinite(point.clientY)) {
                         lastClientY = point.clientY;
+                    }
+                    if (Number.isFinite(lastClientY)) {
+                        resolveStableResizeRow(lastClientY, { force: true });
                     }
                     updatePreview({ clientX: lastClientX, clientY: lastClientY });
                     const shouldDelete = deletePending;

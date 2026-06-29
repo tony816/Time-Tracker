@@ -2900,3 +2900,113 @@ test('edge-zone resize remains interactive after renderTimeEntries replaces segm
         assert.equal(container.querySelectorAll('.is-resizing-plan-segment').length, 0);
     });
 });
+
+function createHysteresisFixture(gridHeight = 160, options = {}) {
+    const fixture = createMergedResizeFixture({ handleEdge: 'right', startMinute: 0, endMinute: 60, segmentIndex: 1, ...options });
+    const gridRect = { left: 0, top: 0, right: 600, bottom: gridHeight, width: 600, height: gridHeight };
+    fixture.grid.getBoundingClientRect = () => gridRect;
+    fixture.segment.getBoundingClientRect = () => ({ left: 0, top: 0, right: 600, bottom: gridHeight / 2, width: 600, height: gridHeight / 2 });
+    return fixture;
+}
+
+function createHysteresisContext() {
+    return {
+        timeSlots: [{
+            planActivities: [
+                { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 0, endMinute: 30, durationMinutes: 30, seconds: 1800 },
+                { label: 'Focus', activityText: 'Focus', activityId: 'focus-id', startMinute: 30, endMinute: 60, durationMinutes: 30, seconds: 1800 },
+            ],
+        }],
+        removePlanSegmentResizePreviewLayer,
+        clearActivePlanSegmentResizeClasses,
+        cleanupPlanSegmentResizeState,
+        getPlanSegmentVisualIdentityKey,
+        resolveMergedPlanSegmentResizeGroup,
+        buildMergedPlanSegmentResizeSource,
+        applyPlanSegmentResize,
+        getPlanSegmentBaseIndex(index) { return index; },
+        getBlockLength() { return 2; },
+        normalizeActivityText(value) { return String(value || '').trim(); },
+        normalizePlanActivitiesPreservingSegments(items) { return items.map(item => ({ ...item })); },
+        formatActivitiesSummary(items) { return items.map(item => item.label).join(', '); },
+        renderTimeEntries() {},
+        calculateTotals() {},
+        autoSave() {},
+    };
+}
+
+test('vertical down resize keeps down guide stable across repeated pointermoves in the same lower row', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createHysteresisFixture(160);
+        const ctx = createHysteresisContext();
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        assert.equal(latestGuide(fixture.grid), null);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 110));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 100));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 600, 100));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('row boundary jitter near hysteresis zone keeps down guide without flickering to none or up', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createHysteresisFixture(160);
+        const ctx = createHysteresisContext();
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        assert.equal(latestGuide(fixture.grid), null);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 125));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        for (let i = 0; i < 10; i += 1) {
+            const y = i % 2 === 0 ? 95 : 120;
+            listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, y));
+            const guide = latestGuide(fixture.grid);
+            assert.ok(guide, `guide should exist at oscillation step ${i} y=${y}`);
+            assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), true, `expected down at step ${i} y=${y}`);
+            assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-up'), false);
+        }
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 600, 120));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('down row entry with raw delta zero maintains down guide without falling to none', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createHysteresisFixture(160);
+        const ctx = createHysteresisContext();
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 600, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 600, 120));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
+
+test('down row horizontal movement switches to right-left arrow and preserves normal horizontal reversal', () => {
+    withDocument(({ listeners }) => {
+        const fixture = createHysteresisFixture(160);
+        const ctx = createHysteresisContext();
+        attachPlanSegmentResizeListeners.call(ctx, fixture.entry, 0);
+        fixture.handle.dispatchEvent(createPointerEvent('pointerdown', fixture.handle, 600, 40));
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 50, 120));
+        assert.equal(hasClass(latestGuide(fixture.grid), 'plan-segment-resize-preview-arrow-down'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 150, 120));
+        let guide = latestGuide(fixture.grid);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-down'), false);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), true);
+        listeners.pointermove(createPointerEvent('pointermove', fixture.handle, 100, 120));
+        guide = latestGuide(fixture.grid);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-left-only'), true);
+        assert.equal(hasClass(guide, 'plan-segment-resize-preview-arrow-right-only'), false);
+        listeners.pointerup(createPointerEvent('pointerup', fixture.handle, 100, 120));
+    }, { planSegmentCore: realPlanSegmentCore });
+});
